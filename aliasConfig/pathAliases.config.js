@@ -1,0 +1,15 @@
+module.exports = {
+    "@utils": "backend/helperUtils",
+    "@models": "backend/models",
+    "@config": "backend/config",
+    "@controllersCommonModules": "backend/commonModules/controllers",
+    "@adminServices": "backend/admin/services",
+    "@appServices": "backend/app/services",
+    "@commonServices": "backend/commonModules/services",
+    "@services": "backend/services",
+    "@assets": "backend/assets",
+    "@middlewares": "backend/middlewares",
+    "@notificationsUtil": "backend/commonModules/services/communication/communicationService.js",
+    "@redisCache": "backend/config/redis/redisCache.js",
+    "@socketIo": "backend/config/sockets",
+};

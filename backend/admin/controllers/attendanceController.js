@@ -1,0 +1,175 @@
+const {
+  sendResponse,
+  validateParams,
+  parsePaginationParams,
+} = require("@utils/responseUtil");
+const attendanceService = require("@adminServices/attendance/attendanceService");
+const { handleServiceError } = require("@services/_errors/handleServiceError");
+
+const listAttendanceDays = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta, summary } = await attendanceService.listAttendanceDays({
+      organizationId: req.orgId,
+      page,
+      limit,
+      skip,
+      branchId: req.query.branchId,
+      staffId: req.query.staffId,
+      from: req.query.from,
+      to: req.query.to,
+      presenceStatus: req.query.presenceStatus,
+      leaveType: req.query.leaveType,
+      punctualityStatus: req.query.punctualityStatus,
+      actor: req.user,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { days: data, summary },
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const listAttendanceRota = async (req, res) => {
+  try {
+    const data = await attendanceService.listAttendanceRota({
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      staffId: req.query.staffId,
+      from: req.query.from,
+      to: req.query.to,
+      timezone: req.query.timezone,
+      actor: req.user,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getAttendanceDay = async (req, res) => {
+  try {
+    const data = await attendanceService.getAttendanceDay({
+      attendanceDayId: req.params.attendanceDayId,
+      organizationId: req.orgId,
+      actor: req.user,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const updateAttendanceDay = async (req, res) => {
+  try {
+    const data = await attendanceService.updateAttendanceDay({
+      actor: req.user,
+      organizationId: req.orgId,
+      attendanceDayId: req.params.attendanceDayId,
+      clockInAt: req.body.clockInAt,
+      clockOutAt: req.body.clockOutAt,
+      breaks: req.body.breaks,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_updated_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const listChangeRequests = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await attendanceService.listChangeRequests({
+      organizationId: req.orgId,
+      page,
+      limit,
+      skip,
+      status: req.query.status,
+      actor: req.user,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const approveChangeRequest = async (req, res) => {
+  try {
+    const data = await attendanceService.approveChangeRequest({
+      actor: req.user,
+      organizationId: req.orgId,
+      requestId: req.params.requestId,
+      managerStaffId: req.staffProfile?._id || null,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_change_request_approved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const rejectChangeRequest = async (req, res) => {
+  try {
+    const data = await attendanceService.rejectChangeRequest({
+      actor: req.user,
+      organizationId: req.orgId,
+      requestId: req.params.requestId,
+      managerStaffId: req.staffProfile?._id || null,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_change_request_rejected",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+module.exports = {
+  listAttendanceDays,
+  listAttendanceRota,
+  getAttendanceDay,
+  updateAttendanceDay,
+  listChangeRequests,
+  approveChangeRequest,
+  rejectChangeRequest,
+};

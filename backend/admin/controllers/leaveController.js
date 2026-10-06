@@ -174,6 +174,33 @@ const listEntitlements = async (req, res) => {
   }
 };
 
+const listLeaveScores = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await leaveService.listLeaveScores({
+      organizationId: req.orgId,
+      page,
+      limit,
+      skip,
+      branchId: req.query.branchId,
+      staffId: req.query.staffId,
+      from: req.query.from,
+      to: req.query.to,
+      actor: req.user,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const upsertEntitlement = async (req, res) => {
   if (
     !validateParams(req, res, {
@@ -215,5 +242,6 @@ module.exports = {
   recordManagerLeave,
   closeLeaveRequest,
   listEntitlements,
+  listLeaveScores,
   upsertEntitlement,
 };

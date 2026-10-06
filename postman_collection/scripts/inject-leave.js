@@ -62,6 +62,19 @@ adminPanel.item.push({
     req("list leave requests", "GET", ["admin", "organizations", "{{organizationId}}", "leave-requests"], {
       query: "page=1&limit=10&status=pending",
     }),
+    req("list leave scores", "GET", ["admin", "organizations", "{{organizationId}}", "leave-scores"], {
+      query: "page=1&limit=10",
+    }),
+    req("record sickness", "POST", ["admin", "organizations", "{{organizationId}}", "leave-requests", "record"], {
+      body: {
+        staffId: "{{staffProfileId}}",
+        leaveType: "sick",
+        startDate: "2026-09-15T00:00:00.000Z",
+        endDate: "2026-09-15T00:00:00.000Z",
+        totalDays: 1,
+        reason: "Recorded sickness",
+      },
+    }),
     req("set entitlement", "PUT", ["admin", "organizations", "{{organizationId}}", "leave-entitlements"], {
       body: {
         staffId: "{{staffProfileId}}",
@@ -81,6 +94,7 @@ if (!appFolder.item.some((i) => i.name === "Leave")) {
     name: "Leave",
     item: [
       req("my entitlements", "GET", ["app", "leave-requests", "entitlements"], { header: orgHeader }),
+      req("my leave scores", "GET", ["app", "leave-requests", "scores"], { header: orgHeader }),
       req("submit leave", "POST", ["app", "leave-requests"], {
         header: orgHeader,
         body: {

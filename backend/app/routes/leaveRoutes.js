@@ -13,6 +13,7 @@ router.use(
 );
 
 router.get("/entitlements", leaveController.listMyEntitlements);
+router.get("/scores", leaveController.listMyLeaveScores);
 router.get("/", leaveController.listMyLeaveRequests);
 router.post("/", leaveController.createLeaveRequest);
 router.get("/:requestId", leaveController.getMyLeaveRequest);

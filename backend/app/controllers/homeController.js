@@ -4,7 +4,11 @@ const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const getHome = async (req, res) => {
   try {
-    const data = await homeService.getHome();
+    const data = await homeService.getStaffHome({
+      userId: req.user._id,
+      organizationId: req.orgId,
+      userName: req.user.name,
+    });
     return sendResponse({
       res,
       statusCode: 200,
@@ -12,7 +16,7 @@ const getHome = async (req, res) => {
       data,
     });
   } catch (error) {
-    return handleServiceError(res, error, "internal_server");
+    return handleServiceError(res, error, "some_thing_went_wrong");
   }
 };
 

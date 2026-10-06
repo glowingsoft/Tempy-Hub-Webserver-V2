@@ -5802,7 +5802,7 @@
         "tags": [
           "Leave"
         ],
-        "summary": "Record manager sickness or other leave",
+        "summary": "Record manager sickness or absence",
         "security": [
           {
             "bearerAuth": []
@@ -6201,6 +6201,60 @@
         }
       }
     },
+    "/app/leave-requests/scores": {
+      "get": {
+        "tags": [
+          "Leave"
+        ],
+        "summary": "My sickness and absence scores",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-org-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/app/leave-requests": {
       "get": {
         "tags": [
@@ -6265,7 +6319,7 @@
         "tags": [
           "Leave"
         ],
-        "summary": "Submit leave request",
+        "summary": "Submit holiday (annual) leave request",
         "security": [
           {
             "bearerAuth": []
@@ -8474,12 +8528,8 @@
           "leaveType": {
             "type": "string",
             "enum": [
-              "annual",
               "sick",
-              "unpaid",
-              "compassionate",
-              "parental",
-              "other"
+              "absence"
             ]
           },
           "startDate": {
@@ -8517,12 +8567,7 @@
           "leaveType": {
             "type": "string",
             "enum": [
-              "annual",
-              "sick",
-              "unpaid",
-              "compassionate",
-              "parental",
-              "other"
+              "annual"
             ]
           },
           "startDate": {

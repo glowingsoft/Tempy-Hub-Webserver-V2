@@ -1556,6 +1556,41 @@
               "response": []
             },
             {
+              "name": "my leave scores",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}app/leave-requests/scores",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "leave-requests",
+                    "scores"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "submit leave",
               "event": [
                 {
@@ -5562,6 +5597,78 @@
                     "organizations",
                     "{{organizationId}}",
                     "leave-requests"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "list leave scores",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/leave-scores?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "leave-scores"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "record sickness",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"leaveType\": \"sick\",\n  \"startDate\": \"2026-09-15T00:00:00.000Z\",\n  \"endDate\": \"2026-09-15T00:00:00.000Z\",\n  \"totalDays\": 1,\n  \"reason\": \"Recorded sickness\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/leave-requests/record",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "leave-requests",
+                    "record"
                   ]
                 }
               },

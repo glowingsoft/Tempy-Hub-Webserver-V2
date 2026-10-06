@@ -1,13 +1,11 @@
-const express = require('express');
-const {
-  getHome,
-} = require('../controllers/homeController');
-const auth = require('@middlewares/authMiddleware');
+const express = require("express");
+const { getHome } = require("../controllers/homeController");
+const auth = require("@middlewares/authMiddleware");
+const { requireMembership } = require("@middlewares/membershipMiddleware");
 
 const router = express.Router();
-router.use(auth);
+router.use(auth, requireMembership());
 
-// Get all homes with pagination
-router.get('/', getHome);
+router.get("/", getHome);
 
 module.exports = router;

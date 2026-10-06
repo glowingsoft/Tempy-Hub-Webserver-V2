@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const moment = require("moment-timezone");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { LeaveEntitlement } = require("@models/LeaveEntitlement");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -27,22 +28,28 @@ const assertKnownLeaveType = (leaveType) => {
 
 const FULL_TIME_WEEKLY_HOURS = 37.5;
 const DEFAULT_FULL_YEAR_HOLIDAY_DAYS = 28;
+const DEFAULT_TZ = "Europe/London";
 
 const usesHolidayBalance = (leaveType) => leaveType === LeaveType.ANNUAL;
 
-const ACTIVE_REQUEST_STATUSES = [
+const STAFF_REQUESTABLE_TYPES = [LeaveType.ANNUAL];
+const MANAGER_RECORDABLE_TYPES = [LeaveType.SICK, LeaveType.ABSENCE];
+
+/** Dates that already occupy the calendar (holiday or recorded sick/absence). */
+const OVERLAPPING_LEAVE_STATUSES = [
   LeaveRequestStatus.PENDING,
   LeaveRequestStatus.APPROVED,
+  LeaveRequestStatus.CLOSED,
 ];
 
 const parseLeaveDates = (startDate, endDate) => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  const start = moment.tz(startDate, DEFAULT_TZ).startOf("day");
+  const end = moment.tz(endDate, DEFAULT_TZ).startOf("day");
+  if (!start.isValid() || !end.isValid()) {
     throw new AppError("invalid_leave_dates", 400);
   }
-  if (end < start) throw new AppError("leave_end_before_start", 400);
-  return { startDate: start, endDate: end };
+  if (end.isBefore(start)) throw new AppError("leave_end_before_start", 400);
+  return { startDate: start.toDate(), endDate: end.toDate() };
 };
 
 const requireStaffProfile = async (userId, organizationId) => {
@@ -68,30 +75,20 @@ const getStaffProfileOrThrow = async (staffId, organizationId) => {
 };
 
 const entitlementYearFromDate = (date) => {
-  const d = new Date(date);
-  const year = d.getUTCFullYear();
-  const month = d.getUTCMonth();
-  // UK-style leave year starting April; label as YYYY-YYYY+1 when on/after April
-  if (month >= 3) return `${year}-${year + 1}`;
-  return `${year - 1}-${year}`;
+  const m = date ? moment.tz(date, DEFAULT_TZ) : moment.tz(DEFAULT_TZ);
+  const startYear = m.month() >= 3 ? m.year() : m.year() - 1;
+  return `${startYear}-${startYear + 1}`;
 };
 
 const leaveYearBounds = (yearLabel) => {
   const startYear = Number(String(yearLabel).split("-")[0]);
-  const start = new Date(Date.UTC(startYear, 3, 1));
-  const end = new Date(Date.UTC(startYear + 1, 2, 31, 23, 59, 59, 999));
-  return { start, end };
-};
-
-const daysBetweenUtc = (from, to) => {
-  const ms = startOfUtcDay(to) - startOfUtcDay(from);
-  return Math.max(0, Math.round(ms / 86400000) + 1);
-};
-
-const startOfUtcDay = (date) => {
-  const d = new Date(date);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+  return {
+    start: moment.tz({ year: startYear, month: 3, day: 1 }, DEFAULT_TZ).startOf("day").toDate(),
+    end: moment
+      .tz({ year: startYear + 1, month: 2, day: 31 }, DEFAULT_TZ)
+      .endOf("day")
+      .toDate(),
+  };
 };
 
 /**
@@ -104,14 +101,16 @@ const calculateHolidayEntitlement = ({
   year,
   fullYearDays = DEFAULT_FULL_YEAR_HOLIDAY_DAYS,
 }) => {
-  const yearLabel = year || entitlementYearFromDate(startDate || new Date());
+  const yearLabel = year || entitlementYearFromDate(startDate);
   const { start: yearStart, end: yearEnd } = leaveYearBounds(yearLabel);
-  const yearDays = daysBetweenUtc(yearStart, yearEnd);
+  const yearStartM = moment.tz(yearStart, DEFAULT_TZ).startOf("day");
+  const yearEndM = moment.tz(yearEnd, DEFAULT_TZ).startOf("day");
+  const yearDays = yearEndM.diff(yearStartM, "days") + 1;
 
   const employedFrom = startDate
-    ? new Date(Math.max(startOfUtcDay(startDate).getTime(), yearStart.getTime()))
-    : yearStart;
-  const employedDays = daysBetweenUtc(employedFrom, yearEnd);
+    ? moment.max(moment.tz(startDate, DEFAULT_TZ).startOf("day"), yearStartM)
+    : yearStartM;
+  const employedDays = Math.max(0, yearEndM.diff(employedFrom, "days") + 1);
   const timeFactor = yearDays ? employedDays / yearDays : 1;
   const hoursFactor = Math.min(
     1,
@@ -138,6 +137,90 @@ const remainingDays = (entitlement) => {
     entitlement.takenDays -
     entitlement.pendingDays
   );
+};
+
+const SCORE_LEAVE_TYPES = [LeaveType.SICK, LeaveType.ABSENCE];
+
+const parseScoreRange = (from, to) => {
+  if (!from && !to) return leaveYearBounds(entitlementYearFromDate());
+
+  const start = moment.tz(from || to, DEFAULT_TZ).startOf("day");
+  const end = moment.tz(to || from, DEFAULT_TZ).endOf("day");
+  if (!start.isValid() || !end.isValid()) {
+    throw new AppError("invalid_leave_dates", 400);
+  }
+  if (end.isBefore(start)) throw new AppError("leave_end_before_start", 400);
+  return { from: start.toDate(), to: end.toDate() };
+};
+
+const scoreMatch = (staffIds, from, to) => ({
+  staffId: { $in: staffIds },
+  source: LeaveRequestSource.MANAGER_RECORDED,
+  status: LeaveRequestStatus.CLOSED,
+  leaveType: { $in: SCORE_LEAVE_TYPES },
+  startDate: { $lte: to },
+  endDate: { $gte: from },
+});
+
+const scoreGroup = {
+  _id: "$staffId",
+  sickDays: {
+    $sum: { $cond: [{ $eq: ["$leaveType", LeaveType.SICK] }, "$totalDays", 0] },
+  },
+  sickSpells: {
+    $sum: { $cond: [{ $eq: ["$leaveType", LeaveType.SICK] }, 1, 0] },
+  },
+  absenceDays: {
+    $sum: {
+      $cond: [{ $eq: ["$leaveType", LeaveType.ABSENCE] }, "$totalDays", 0],
+    },
+  },
+  absenceSpells: {
+    $sum: { $cond: [{ $eq: ["$leaveType", LeaveType.ABSENCE] }, 1, 0] },
+  },
+};
+
+const emptyScore = (staffId) => ({
+  staffId,
+  sickDays: 0,
+  sickSpells: 0,
+  absenceDays: 0,
+  absenceSpells: 0,
+  sicknessScore: 0,
+  absenceScore: 0,
+});
+
+const shapeScore = (row) => {
+  const sickDays = row?.sickDays || 0;
+  const absenceDays = row?.absenceDays || 0;
+  return {
+    staffId: row?._id,
+    sickDays,
+    sickSpells: row?.sickSpells || 0,
+    absenceDays,
+    absenceSpells: row?.absenceSpells || 0,
+    sicknessScore: sickDays,
+    absenceScore: absenceDays,
+  };
+};
+
+const attachScoreStaff = async (rows) => {
+  if (!rows.length) return rows;
+  const staffIds = rows.map((row) => row.staffId).filter(Boolean);
+  const profiles = await StaffProfile.find({ _id: { $in: staffIds } })
+    .select("_id userId employeeCode")
+    .lean();
+  const users = await User.find({
+    _id: { $in: profiles.map((profile) => profile.userId) },
+  })
+    .select("name email")
+    .lean();
+  const profileById = new Map(profiles.map((p) => [String(p._id), p]));
+  const userById = new Map(users.map((u) => [String(u._id), u]));
+  return rows.map((row) => ({
+    ...row,
+    staff: staffSummary(profileById.get(String(row.staffId)), userById),
+  }));
 };
 
 const getOrCreateEntitlement = async ({
@@ -203,7 +286,7 @@ const assertSufficientBalance = async ({
 const assertNoOverlap = async (staffId, startDate, endDate, excludeRequestId) => {
   const match = {
     staffId,
-    status: { $in: ACTIVE_REQUEST_STATUSES },
+    status: { $in: OVERLAPPING_LEAVE_STATUSES },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate },
   };
@@ -355,6 +438,9 @@ const createLeaveRequest = async ({
 
   const year = entitlementYearFromDate(dates.startDate);
   const type = leaveType || LeaveType.ANNUAL;
+  if (!STAFF_REQUESTABLE_TYPES.includes(type)) {
+    throw new AppError("staff_leave_type_not_allowed", 400);
+  }
   await assertNoOverlap(profile._id, dates.startDate, dates.endDate);
   await assertSufficientBalance({
     staffId: profile._id,
@@ -475,6 +561,82 @@ const listMyEntitlements = async ({ userId, organizationId, year }) => {
   }));
 };
 
+const listMyLeaveScores = async ({ userId, organizationId, from, to }) => {
+  const profile = await requireStaffProfile(userId, organizationId);
+  const range = parseScoreRange(from, to);
+  const [row] = await LeaveRequest.aggregate([
+    { $match: scoreMatch([profile._id], range.from, range.to) },
+    { $group: scoreGroup },
+  ]);
+
+  return {
+    from: range.from,
+    to: range.to,
+    ...emptyScore(profile._id),
+    ...shapeScore(row || { _id: profile._id }),
+  };
+};
+
+const listLeaveScores = async ({
+  organizationId,
+  page,
+  limit,
+  skip,
+  branchId,
+  staffId,
+  from,
+  to,
+  actor,
+}) => {
+  const standing = await actorStanding(actor, organizationId);
+  const staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    staffId,
+    branchId,
+  });
+
+  const range = parseScoreRange(from, to);
+  const period = { from: range.from, to: range.to };
+
+  if (!staffIds.length) {
+    return {
+      data: [],
+      meta: { page, limit, total: 0, totalPages: 0, ...period },
+    };
+  }
+
+  const [facet] = await LeaveRequest.aggregate([
+    { $match: scoreMatch(staffIds, range.from, range.to) },
+    { $group: scoreGroup },
+    {
+      $facet: {
+        data: [
+          { $sort: { sickDays: -1, absenceDays: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+        ],
+        total: [{ $count: "count" }],
+      },
+    },
+  ]);
+
+  const total = facet.total[0]?.count || 0;
+  const data = await attachScoreStaff((facet.data || []).map(shapeScore));
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: limit ? Math.ceil(total / limit) : 1,
+      ...period,
+    },
+  };
+};
+
 const listLeaveRequests = async ({
   organizationId,
   page,
@@ -507,8 +669,8 @@ const listLeaveRequests = async ({
 
   if (from || to) {
     match.startDate = {};
-    if (from) match.startDate.$gte = new Date(from);
-    if (to) match.startDate.$lte = new Date(to);
+    if (from) match.startDate.$gte = moment.tz(from, DEFAULT_TZ).startOf("day").toDate();
+    if (to) match.startDate.$lte = moment.tz(to, DEFAULT_TZ).endOf("day").toDate();
   }
 
   const { data, meta } = await paginateWithFacet({
@@ -663,11 +825,17 @@ const recordManagerLeave = async ({
   }
 
   const year = entitlementYearFromDate(dates.startDate);
+  const type = leaveType || LeaveType.SICK;
+  if (!MANAGER_RECORDABLE_TYPES.includes(type)) {
+    throw new AppError("manager_leave_type_not_allowed", 400);
+  }
+
+  await assertNoOverlap(profile._id, dates.startDate, dates.endDate);
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const type = leaveType || LeaveType.SICK;
     const request = await LeaveRequest.create(
       [
         {
@@ -814,7 +982,7 @@ const upsertEntitlement = async ({
   assertKnownLeaveType(leaveType);
 
   const type = leaveType || LeaveType.ANNUAL;
-  const yearLabel = year || entitlementYearFromDate(new Date());
+  const yearLabel = year || entitlementYearFromDate();
 
   let days = entitlementDays;
   let calculation = null;
@@ -866,6 +1034,8 @@ module.exports = {
   getMyLeaveRequest,
   cancelLeaveRequest,
   listMyEntitlements,
+  listMyLeaveScores,
+  listLeaveScores,
   listLeaveRequests,
   getLeaveRequest,
   approveLeaveRequest,

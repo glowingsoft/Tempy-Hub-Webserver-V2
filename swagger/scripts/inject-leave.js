@@ -52,7 +52,7 @@ spec.paths["/admin/organizations/{organizationId}/leave-requests"] = {
 spec.paths["/admin/organizations/{organizationId}/leave-requests/record"] = {
   post: {
     tags: tag,
-    summary: "Record manager sickness or other leave",
+    summary: "Record manager sickness or absence",
     security: bearer,
     parameters: [
       { name: "organizationId", in: "path", required: true, schema: { type: "string" } },
@@ -99,6 +99,23 @@ spec.paths["/admin/organizations/{organizationId}/leave-entitlements"] = {
       },
     },
     responses: { 200: ok, 400: { description: "Bad request" }, 403: { description: "Forbidden" } },
+  },
+};
+
+spec.paths["/admin/organizations/{organizationId}/leave-scores"] = {
+  get: {
+    tags: tag,
+    summary: "Sickness and absence scores",
+    security: bearer,
+    parameters: [
+      { name: "organizationId", in: "path", required: true, schema: { type: "string" } },
+      ...pagination,
+      { name: "branchId", in: "query", schema: { type: "string" } },
+      { name: "staffId", in: "query", schema: { type: "string" } },
+      { name: "from", in: "query", schema: { type: "string", format: "date-time" } },
+      { name: "to", in: "query", schema: { type: "string", format: "date-time" } },
+    ],
+    responses: { 200: ok, 403: { description: "Forbidden" } },
   },
 };
 
@@ -167,6 +184,20 @@ spec.paths["/app/leave-requests/entitlements"] = {
   },
 };
 
+spec.paths["/app/leave-requests/scores"] = {
+  get: {
+    tags: tag,
+    summary: "My sickness and absence scores",
+    security: bearer,
+    parameters: [
+      orgHeader,
+      { name: "from", in: "query", schema: { type: "string", format: "date-time" } },
+      { name: "to", in: "query", schema: { type: "string", format: "date-time" } },
+    ],
+    responses: { 200: ok, 403: { description: "Forbidden" } },
+  },
+};
+
 spec.paths["/app/leave-requests"] = {
   get: {
     tags: tag,
@@ -177,7 +208,7 @@ spec.paths["/app/leave-requests"] = {
   },
   post: {
     tags: tag,
-    summary: "Submit leave request",
+    summary: "Submit holiday (annual) leave request",
     security: bearer,
     parameters: [orgHeader],
     requestBody: {
@@ -222,7 +253,7 @@ spec.components.schemas.LeaveRequestCreate = {
   type: "object",
   required: ["startDate", "endDate", "totalDays"],
   properties: {
-    leaveType: { type: "string", enum: ["annual", "sick", "unpaid", "compassionate", "parental", "other"] },
+    leaveType: { type: "string", enum: ["annual"] },
     startDate: { type: "string", format: "date-time" },
     endDate: { type: "string", format: "date-time" },
     totalDays: { type: "number", minimum: 0.5 },
@@ -236,7 +267,7 @@ spec.components.schemas.LeaveRecordRequest = {
   required: ["staffId", "startDate", "endDate", "totalDays"],
   properties: {
     staffId: { type: "string" },
-    leaveType: { type: "string", enum: ["annual", "sick", "unpaid", "compassionate", "parental", "other"] },
+    leaveType: { type: "string", enum: ["sick", "absence"] },
     startDate: { type: "string", format: "date-time" },
     endDate: { type: "string", format: "date-time" },
     totalDays: { type: "number", minimum: 0.5 },

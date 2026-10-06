@@ -299,6 +299,8 @@
   "leave_year_required": "A leave year is required",
   "invalid_leave_entitlement_days": "Entitlement days must be zero or greater",
   "invalid_leave_type": "That leave type is not allowed",
+  "staff_leave_type_not_allowed": "Staff can only submit holiday (annual) leave",
+  "manager_leave_type_not_allowed": "Managers can only record sickness or absence here",
   "invalid_break_bands": "Break bands must be a list of min hours and unpaid hours",
   "leave_request_created": "Leave request submitted successfully",
   "leave_request_cancelled": "Leave request cancelled",

@@ -108,10 +108,31 @@ const listMyEntitlements = async (req, res) => {
   }
 };
 
+const listMyLeaveScores = async (req, res) => {
+  try {
+    const data = await leaveService.listMyLeaveScores({
+      userId: req.user._id,
+      organizationId: req.orgId,
+      from: req.query.from,
+      to: req.query.to,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   createLeaveRequest,
   listMyLeaveRequests,
   getMyLeaveRequest,
   cancelLeaveRequest,
   listMyEntitlements,
+  listMyLeaveScores,
 };

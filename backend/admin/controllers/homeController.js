@@ -1,10 +1,9 @@
 const { sendResponse } = require("@utils/responseUtil");
-const homeService = require("@commonServices/home/homeService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const getHome = async (req, res) => {
   try {
-    const data = await homeService.getHome();
+    const data = [];
     return sendResponse({
       res,
       statusCode: 200,

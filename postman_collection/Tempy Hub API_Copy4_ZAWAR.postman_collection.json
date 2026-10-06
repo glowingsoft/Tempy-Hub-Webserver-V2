@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "2fbd193b-a3b8-4a3d-8f5b-ad7a51fc520e",
-    "name": "Tempy Hub API Copy 4",
-    "description": "Tempy Hub Backend — care-home SaaS API.\nImport only this collection (variables live on the collection).\nBase: {{url}} = http://localhost:6060/api/v1/\nAccounts are created by an administrator; there is no public signup.\nRun App → Auth → Login to save token into collection variables.\nNote: communications/* email helpers and send-notification are not mounted in commonRoutes by default.\nAuth: POST auth/login and GET auth/me return the same `access` block (memberships, modules, moduleMenu, moduleAccess, organizations). `/auth/me` also returns `user`, `staffProfile`, and `hasDirectReports`.",
+    "_postman_id": "c4e91b20-6a7d-4f18-9b33-8a1e0d5c7f42",
+    "name": "Tempy Hub Zawar 06-Oct-2026",
+    "description": "Tempy Hub Backend — care-home SaaS API.\nImport only this collection (variables live on the collection).\nBase: {{url}} = http://localhost:6060/api/v1/\nAccounts are created by an administrator; there is no public signup.\nRun App → Auth → Login to save token into collection variables.\nNote: communications/* email helpers and send-notification are not mounted in commonRoutes by default.\nAuth: POST auth/login and GET auth/me return the same `access` block (memberships, modules, moduleMenu, moduleAccess, organizations). `/auth/me` also returns `user`, `staffProfile`, and `hasDirectReports`.\nUpdated 2026-10-06: App Leave has my leave scores, get leave request, cancel leave. Admin Leave has list leave scores, record sickness, reject leave. Re-import this file to see them.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "29977018",
     "_collection_link": "https://go.postman.co/collection/29977018-2fbd193b-a3b8-4a3d-8f5b-ad7a51fc520e?source=collection_link"
@@ -866,21 +866,25 @@
           "item": [
             {
               "name": "home",
-              "protocolProfileBehavior": {
-                "disableBodyPruning": true
-              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "method": "GET",
-                "header": [],
-                "body": {
-                  "mode": "raw",
-                  "raw": "",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
                   }
-                },
+                ],
                 "url": {
                   "raw": "{{url}}/app/home",
                   "host": [
@@ -1519,6 +1523,122 @@
           "name": "Leave",
           "item": [
             {
+              "name": "my leave scores",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/leave-requests/scores?from=&to=",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "leave-requests",
+                    "scores"
+                  ],
+                  "query": [
+                    {
+                      "key": "from",
+                      "value": ""
+                    },
+                    {
+                      "key": "to",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get leave request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/leave-requests/{{leaveRequestId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "leave-requests",
+                    "{{leaveRequestId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "cancel leave",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/leave-requests/{{leaveRequestId}}/cancel",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "leave-requests",
+                    "{{leaveRequestId}}",
+                    "cancel"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "my entitlements",
               "event": [
                 {
@@ -1620,13 +1740,23 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/leave-requests",
+                  "raw": "{{url}}/app/leave-requests?page=1&limit=10",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "app",
                     "leave-requests"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
                   ]
                 }
               },
@@ -4992,7 +5122,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/leave-requests",
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/leave-requests?page=1&limit=10&status=pending",
                   "host": [
                     "{{url}}"
                   ],
@@ -5001,6 +5131,20 @@
                     "organizations",
                     "{{organizationId}}",
                     "leave-requests"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "pending"
+                    }
                   ]
                 }
               },
@@ -5077,6 +5221,133 @@
                     "leave-approvals",
                     "{{leaveRequestId}}",
                     "approve"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "list leave scores",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/leave-scores?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "leave-scores"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "record sickness",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"leaveType\": \"sick\",\n  \"startDate\": \"2026-09-15T00:00:00.000Z\",\n  \"endDate\": \"2026-09-15T00:00:00.000Z\",\n  \"totalDays\": 1,\n  \"reason\": \"Recorded sickness\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/leave-requests/record",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "leave-requests",
+                    "record"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "reject leave",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Not enough cover\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/leave-approvals/{{leaveRequestId}}/reject",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "leave-approvals",
+                    "{{leaveRequestId}}",
+                    "reject"
                   ]
                 }
               },

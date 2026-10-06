@@ -251,6 +251,12 @@ scoped.get(
   requirePermission(LEAVE_VIEW),
   leaveController.listEntitlements
 );
+scoped.get(
+  "/leave-scores",
+  requireModule(ModuleSlug.LEAVE),
+  requirePermission(LEAVE_VIEW),
+  leaveController.listLeaveScores
+);
 scoped.put(
   "/leave-entitlements",
   requireRoles(MANAGERS),

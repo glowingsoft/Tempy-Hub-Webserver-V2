@@ -42,13 +42,16 @@ const OVERLAPPING_LEAVE_STATUSES = [
   LeaveRequestStatus.CLOSED,
 ];
 
-const parseLeaveDates = (startDate, endDate) => {
+const parseLeaveDates = (startDate, endDate, { allowPast = false } = {}) => {
   const start = moment.tz(startDate, DEFAULT_TZ).startOf("day");
   const end = moment.tz(endDate, DEFAULT_TZ).startOf("day");
   if (!start.isValid() || !end.isValid()) {
     throw new AppError("invalid_leave_dates", 400);
   }
   if (end.isBefore(start)) throw new AppError("leave_end_before_start", 400);
+  if (!allowPast && start.isBefore(moment.tz(DEFAULT_TZ).startOf("day"))) {
+    throw new AppError("leave_start_in_past", 400);
+  }
   return { startDate: start.toDate(), endDate: end.toDate() };
 };
 
@@ -819,7 +822,7 @@ const recordManagerLeave = async ({
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, profile.branchId);
 
-  const dates = parseLeaveDates(startDate, endDate);
+  const dates = parseLeaveDates(startDate, endDate, { allowPast: true });
   if (totalDays == null || totalDays <= 0) {
     throw new AppError("invalid_leave_total_days", 400);
   }
@@ -1006,14 +1009,11 @@ const upsertEntitlement = async ({
     {
       $set: {
         organizationId,
+        branchId: profile.branchId,
         entitlementDays: days,
         carriedOverDays: carriedOverDays ?? 0,
       },
       $setOnInsert: {
-        staffId: profile._id,
-        organizationId,
-        year: yearLabel,
-        leaveType: type,
         takenDays: 0,
         pendingDays: 0,
       },

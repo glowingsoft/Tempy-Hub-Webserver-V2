@@ -292,6 +292,7 @@
   "attendance_rota_range_too_large": "Attendance rota range cannot exceed 8 weeks",
   "invalid_leave_dates": "Leave start and end dates are required",
   "leave_end_before_start": "Leave end date must be on or after the start date",
+  "leave_start_in_past": "Leave start date cannot be in the past",
   "invalid_leave_total_days": "Leave total days must be greater than zero",
   "leave_dates_overlap": "These dates overlap with another leave request",
   "insufficient_leave_balance": "Not enough leave balance for this request",

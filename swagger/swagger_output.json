@@ -82,7 +82,8 @@
                 "deviceId": "web-8f21c4",
                 "deviceType": "web",
                 "timezone": "Europe/London",
-                "audience": "staff"
+                "audience": "staff",
+                "surface": "staffApp"
               }
             }
           }
@@ -7684,6 +7685,238 @@
           }
         }
       }
+    },
+    "/auth/change-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change password while logged in",
+        "description": "Requires the current password. Use forgot-password + reset-password when the user cannot sign in.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "oldPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "oldPassword": {
+                    "type": "string"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 6
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Wrong or same password"
+          }
+        }
+      }
+    },
+    "/app/users/profile": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get my profile",
+        "description": "Returns the User profile. Send x-org-id to also attach staffProfile for that organisation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-org-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update my profile",
+        "description": "Updates User name/phone/photo. With x-org-id also updates StaffProfile phone and photoUrl.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-org-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "phoneNumber": {
+                    "type": "string"
+                  },
+                  "profileIcon": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/app/site-live": {
+      "get": {
+        "tags": [
+          "site-live"
+        ],
+        "summary": "Site Manager Live home",
+        "description": "One payload for Site Live: on-site counts, active evacuation, walk-ins awaiting approval, planned visits, kiosks, own attendance status. Roles: superAdmin, owner, siteManager.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-org-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role not allowed"
+          }
+        }
+      }
+    },
+    "/admin/organizations/{organizationId}/site-live": {
+      "get": {
+        "tags": [
+          "site-live"
+        ],
+        "summary": "Site Manager Live home (admin org scope)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7749,6 +7982,18 @@
             ],
             "default": "staff",
             "description": "Client surface the token is issued for."
+          },
+          "surface": {
+            "type": "string",
+            "enum": [
+              "staffApp",
+              "managerApp",
+              "ownerAdmin",
+              "platformAdmin",
+              "residentApp",
+              "visitorApp"
+            ],
+            "description": "Which product is logging in. Higher membership rank may open a lower portal. Omit for backward-compatible login."
           }
         }
       },

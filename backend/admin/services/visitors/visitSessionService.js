@@ -221,6 +221,7 @@ const listVisitSessions = async ({
   branchId,
   personType,
   status,
+  method,
   from,
   to,
   externalPersonId,
@@ -256,6 +257,7 @@ const listVisitSessions = async ({
   if (externalPersonId) {
     match.externalPersonId = toObjectId(externalPersonId);
   }
+  if (method) match.method = parseMethod(method);
   const { fromDate, toDate } = parseDateRange({ from, to });
   if (fromDate || toDate) {
     match.checkInAt = {};

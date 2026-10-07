@@ -68,7 +68,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"email\": \"{{email}}\",\n    \"password\": \"{{password}}\",\n    \"deviceType\": \"android\",\n    \"deviceId\": \"1234\",\n    \"timezone\": \"Asia/Karachi\",\n    \"audience\": \"staff\"\n}",
+                  "raw": "{\n    \"email\": \"{{email}}\",\n    \"password\": \"{{password}}\",\n    \"deviceType\": \"android\",\n    \"deviceId\": \"1234\",\n    \"timezone\": \"Asia/Karachi\",\n    \"audience\": \"staff\",\n    \"surface\": \"staffApp\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -187,23 +187,27 @@
             },
             {
               "name": "profile",
-              "protocolProfileBehavior": {
-                "disableBodyPruning": true
-              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "method": "GET",
-                "header": [],
-                "body": {
-                  "mode": "raw",
-                  "raw": "",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
                   }
-                },
+                ],
                 "url": {
-                  "raw": "{{url}}app/users/profile",
+                  "raw": "{{url}}/app/users/profile",
                   "host": [
                     "{{url}}"
                   ],
@@ -222,32 +226,24 @@
                 {
                   "listen": "test",
                   "script": {
-                    "exec": [
-                      ""
-                    ],
                     "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
-                  }
-                },
-                {
-                  "listen": "prerequest",
-                  "script": {
                     "exec": [
-                      ""
-                    ],
-                    "type": "text/javascript",
-                    "packages": {},
-                    "requests": {}
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
                   }
                 }
               ],
               "request": {
                 "method": "PUT",
-                "header": [],
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"name\": \"Boiler\",\n    \"profileIcon\" : \"{{$randomAvatarImage}}\"\n}",
+                  "raw": "{\n  \"name\": \"John Doe\",\n  \"phoneNumber\": \"+441234567890\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -255,7 +251,7 @@
                   }
                 },
                 "url": {
-                  "raw": "{{url}}app/users/profile",
+                  "raw": "{{url}}/app/users/profile",
                   "host": [
                     "{{url}}"
                   ],
@@ -266,68 +262,7 @@
                   ]
                 }
               },
-              "response": [
-                {
-                  "name": "verify Otp",
-                  "originalRequest": {
-                    "method": "POST",
-                    "header": [],
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n    \"email\": \"{{email}}\",\n    \"otp\":\"{{otp}}\"\n}",
-                      "options": {
-                        "raw": {
-                          "language": "json"
-                        }
-                      }
-                    },
-                    "url": {
-                      "raw": "{{url}}auth/verifyOtp",
-                      "host": [
-                        "{{url}}auth"
-                      ],
-                      "path": [
-                        "verifyOtp"
-                      ]
-                    }
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "X-Powered-By",
-                      "value": "Express"
-                    },
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json; charset=utf-8"
-                    },
-                    {
-                      "key": "Content-Length",
-                      "value": "866"
-                    },
-                    {
-                      "key": "ETag",
-                      "value": "W/\"362-hnLwvPjaUjoiyxI9asYYMkkmNNA\""
-                    },
-                    {
-                      "key": "Date",
-                      "value": "Sat, 07 Sep 2024 07:08:41 GMT"
-                    },
-                    {
-                      "key": "Connection",
-                      "value": "keep-alive"
-                    },
-                    {
-                      "key": "Keep-Alive",
-                      "value": "timeout=5"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n    \"message\": \"OTP verified successfully\",\n    \"data\": {\n        \"basicInfo\": {\n            \"_id\": \"66dbfbd9bdc2225f6d6ae086\",\n            \"profileIcon\": \"http://localhost:4001/api/upload/file-1724144046518.png\",\n            \"name\": \"Jameson97\",\n            \"annonymousName\": \"Breanne7\",\n            \"email\": \"haleigh87@gmail.com\",\n            \"phoneNumber\": \"426-410-7389\",\n            \"phoneNote\": \"Personal number\",\n            \"isAnonymous\": true\n        },\n        \"accountState\": {\n            \"role\": \"staff\",\n            \"status\": \"active\",\n            \"verificationStatus\": \"verified\"\n        },\n        \"profileCompletionStatus\": {\n            \"personalDetails\": false,\n            \"pregnancyDetails\": false,\n            \"lossDetails\": false,\n            \"healingDetails\": false\n        },\n        \"metadata\": {\n            \"timezone\": \"Asia/Karachi\",\n            \"createdAt\": \"2024-09-07T07:08:10.002Z\",\n            \"updatedAt\": \"2024-09-07T07:08:41.279Z\",\n            \"__v\": 0\n        },\n        \"otpInfo\": {\n            \"otp\": \"\",\n            \"otpUsed\": true,\n            \"otpExpires\": null\n        },\n        \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2NmRiZmJkOWJkYzIyMjVmNmQ2YWUwODYiLCJpYXQiOjE3MjU2OTI5MjF9.CBmR3MlhX7tutIdAwlvKo-y9YSqKaMYqAiVaF_rX3Ds\"\n    }\n}"
-                }
-              ]
+              "response": []
             },
             {
               "name": "verify Otp",
@@ -856,6 +791,44 @@
                     "invitations",
                     "{{inviteToken}}",
                     "accept"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "change password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"oldPassword\": \"OldPass1\",\n  \"newPassword\": \"NewPass1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/auth/change-password",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "change-password"
                   ]
                 }
               },
@@ -2947,6 +2920,51 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Site Live",
+          "item": [
+            {
+              "name": "site live",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -3309,6 +3327,44 @@
                     "auth",
                     "resend-otp",
                     "email"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "change password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"oldPassword\": \"OldPass1\",\n  \"newPassword\": \"NewPass1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/auth/change-password",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "change-password"
                   ]
                 }
               },
@@ -5927,6 +5983,48 @@
                     "visit-sessions",
                     "{{visitSessionId}}",
                     "approve"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Site Live",
+          "item": [
+            {
+              "name": "site live",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/site-live?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "site-live"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
                   ]
                 }
               },

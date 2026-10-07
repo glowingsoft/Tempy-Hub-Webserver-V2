@@ -69,11 +69,17 @@ const parseEvacuationType = (type) => {
   return type;
 };
 
+/** Figma smoke "waiting" is rollcall unknown — not a fourth stored status. */
+const CHECK_STATUS_ALIASES = {
+  waiting: EvacCheckStatus.UNKNOWN,
+};
+
 const parseCheckStatus = (status) => {
-  if (!Object.values(EvacCheckStatus).includes(status)) {
+  const resolved = CHECK_STATUS_ALIASES[status] || status;
+  if (!Object.values(EvacCheckStatus).includes(resolved)) {
     throw new AppError("invalid_evac_check_status", 400);
   }
-  return status;
+  return resolved;
 };
 
 const parsePersonKind = (personKind) => {

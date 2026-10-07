@@ -6,6 +6,7 @@ const {
   me,
   generateOtp,
   resetPassword,
+  changePassword,
   verifyOtp,
   logout,
   deleteAccount,
@@ -49,6 +50,12 @@ router.post("/verify-otp/phone", verifyOtpRateLimiter, (req, res, next) => {
   verifyOtp(req, res, next);
 });
 router.post("/reset-password", resetPasswordRateLimiter, resetPassword);
+router.post(
+  "/change-password",
+  auth,
+  resetPasswordRateLimiter,
+  changePassword
+);
 
 // Token-gated, not self-registration: an admin issued the invitation. Rate
 // limited because the token is guessable in principle.

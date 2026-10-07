@@ -134,6 +134,7 @@ const listVisitSessions = async (req, res) => {
       branchId: req.query.branchId,
       personType: req.query.personType || req.query.type,
       status: req.query.status,
+      method: req.query.method,
       from: req.query.from,
       to: req.query.to,
       externalPersonId: req.query.externalPersonId,

@@ -1,7 +1,7 @@
 const { sendResponse, validateParams } = require("@utils/responseUtil");
 const authService = require("@commonServices/auth/authService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
-const { AuthAudience } = require("@models/domainEnums");
+const { AuthAudience, AppSurface } = require("@models/domainEnums");
 
 const membershipService = require("@adminServices/organizations/membershipService");
 
@@ -103,7 +103,7 @@ const register = async (req, res) => {
 };
 
 const login = async (req, res) => {
-  const { email, password, deviceId, deviceType, timezone } = req.body;
+  const { email, password, deviceId, deviceType, timezone, surface } = req.body;
   const audience = req.body.audience || AuthAudience.STAFF;
 
   const validationOptions = {
@@ -114,6 +114,7 @@ const login = async (req, res) => {
         AuthAudience.VISITOR,
         AuthAudience.RESIDENT,
       ],
+      surface: Object.values(AppSurface),
     },
   };
   if (!validateParams(req, res, validationOptions)) {
@@ -128,6 +129,7 @@ const login = async (req, res) => {
       deviceType,
       timezone,
       audience,
+      surface,
       adminAccessToken: req.header("x-admin-access-token"),
     });
 
@@ -211,6 +213,34 @@ const verifyOtp = async (req, res) => {
     });
   } catch (error) {
     return handleServiceError(res, error, "an_error");
+  }
+};
+
+const changePassword = async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+
+  const validationOptions = {
+    rawData: ["oldPassword", "newPassword"],
+    minLengthFields: { newPassword: 6 },
+  };
+  if (!validateParams(req, res, validationOptions)) {
+    return;
+  }
+
+  try {
+    await authService.changePassword({
+      userId: req.user._id,
+      oldPassword,
+      newPassword,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "password_changed",
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "an_error_1");
   }
 };
 
@@ -328,6 +358,7 @@ module.exports = {
   generateOtp,
   verifyOtp,
   resetPassword,
+  changePassword,
   logout,
   deleteAccount,
   socialAuth,

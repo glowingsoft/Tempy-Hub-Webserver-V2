@@ -1,5 +1,6 @@
 const { User, generateResetToken } = require("@models/UserModel");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const moment = require("moment-timezone");
 const { formatUserResponse } = require("@utils/userResponseUtil");
 const {
@@ -25,6 +26,7 @@ const {
   ActiveInactiveStatus,
   MembershipRole,
 } = require("@models/domainEnums");
+const { assertSurfaceAccess } = require("./surfaceAccess");
 
 const register = async ({
   email,
@@ -303,6 +305,7 @@ const login = async ({
   deviceType,
   timezone,
   audience = AuthAudience.STAFF,
+  surface,
   adminAccessToken,
 }) => {
   const user = await User.findByCredentials(email, password);
@@ -347,13 +350,15 @@ const login = async ({
   }
 
   const access = await assertAudienceAccess(user, audience);
+  assertSurfaceAccess({ surface, audience, access });
 
   user.timezone = timezone;
 
-  const token = user.generateAuthToken(audience);
+  const token = user.generateAuthToken(audience, surface);
 
   const response = formatUserResponse(user, token, [], ["resetToken"]);
   response.audience = audience;
+  response.surface = surface || null;
   // Without this the client cannot tell an owner from a staff member, since the
   // rest of the payload is identical for every account.
   response.access = access;
@@ -512,6 +517,22 @@ const resetPassword = async ({ email, newPassword, resetToken }) => {
   ]);
 
   return formatUserResponse(updatedUser, token);
+};
+
+const changePassword = async ({ userId, oldPassword, newPassword }) => {
+  if (oldPassword === newPassword) {
+    throw new AppError("password_same_as_old", 400);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) throw new AppError("user_not", 404);
+
+  const matches = await bcrypt.compare(oldPassword, user.password || "");
+  if (!matches) throw new AppError("incorrect_password", 400);
+
+  user.password = newPassword;
+  user.resetToken = "";
+  await user.save();
 };
 
 const logout = async ({ userId, deviceId }) => {
@@ -682,6 +703,7 @@ module.exports = {
   generateOtp,
   verifyOtp,
   resetPassword,
+  changePassword,
   logout,
   deleteAccount,
   socialAuth,

@@ -122,6 +122,7 @@ const getUserProfile = async (req, res, next, fieldsToPopulate = []) => {
     const data = await userService.getUserProfile({
       userId: req.user._id,
       fieldsToPopulate,
+      organizationId: req.orgId || req.header("x-org-id"),
     });
     return sendResponse({
       res,
@@ -172,6 +173,7 @@ const updateUserProfile = async (req, res) => {
       currencySymbol,
       currencyCode,
       allowCurrencyUpdate: true,
+      organizationId: req.orgId || req.header("x-org-id"),
     });
     return sendResponse({
       res,

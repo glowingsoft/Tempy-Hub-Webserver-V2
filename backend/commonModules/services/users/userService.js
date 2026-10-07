@@ -1,9 +1,14 @@
 const moment = require("moment");
+const mongoose = require("mongoose");
 const validator = require("validator");
 const fs = require("fs");
 const path = require("path");
 const { User, SubscriptionType } = require("@models/UserModel");
 const Review = require("@models/Review");
+const { StaffProfile } = require("@models/StaffProfile");
+const { Branch } = require("@models/Branch");
+const { JobTitle } = require("@models/JobTitle");
+const { StaffProfileStatus } = require("@models/domainEnums");
 const { formatUserResponse } = require("@utils/userResponseUtil");
 const { userCache } = require("@config/nodeCache");
 const { AppError } = require("@services/_errors/AppError");
@@ -184,7 +189,60 @@ const getUserWithPopulatedFields = async (userId, fieldsToPopulate = []) => {
   }
 };
 
-const getUserProfile = async ({ userId, fieldsToPopulate = [] }) => {
+const loadStaffCard = async (userId, organizationId) => {
+  if (!organizationId || !mongoose.Types.ObjectId.isValid(organizationId)) {
+    return undefined;
+  }
+
+  const profile = await StaffProfile.findOne({
+    userId,
+    organizationId,
+    status: StaffProfileStatus.ACTIVE,
+  }).lean();
+
+  if (!profile) return null;
+
+  const [branch, jobTitle] = await Promise.all([
+    Branch.findById(profile.branchId).select("name code").lean(),
+    profile.jobTitleId
+      ? JobTitle.findById(profile.jobTitleId).select("name level").lean()
+      : null,
+  ]);
+
+  return {
+    _id: profile._id,
+    employeeCode: profile.employeeCode,
+    phone: profile.phone,
+    photoUrl: profile.photoUrl,
+    bannerUrl: profile.bannerUrl,
+    ward: profile.ward,
+    locationLabel: profile.locationLabel,
+    branchId: profile.branchId,
+    branch: branch
+      ? { _id: branch._id, name: branch.name, code: branch.code }
+      : null,
+    jobTitleId: profile.jobTitleId,
+    jobTitle: jobTitle
+      ? { _id: jobTitle._id, name: jobTitle.name, level: jobTitle.level }
+      : null,
+    reportsToStaffId: profile.reportsToStaffId,
+    contractedWeeklyHours: profile.contractedWeeklyHours,
+    startDate: profile.startDate,
+    status: profile.status,
+  };
+};
+
+const withStaffCard = async (payload, userId, organizationId) => {
+  if (!organizationId) return payload;
+  payload.staffProfile = await loadStaffCard(userId, organizationId);
+  return payload;
+};
+
+const getUserProfile = async ({
+  userId,
+  fieldsToPopulate = [],
+  organizationId,
+}) => {
   let query = User.findById(userId);
   if (fieldsToPopulate.length > 0) {
     fieldsToPopulate.forEach((field) => {
@@ -200,7 +258,11 @@ const getUserProfile = async ({ userId, fieldsToPopulate = [] }) => {
     throw new AppError("user_not", 404);
   }
 
-  return formatUserResponse(user, null, [], ["resetToken"]);
+  return withStaffCard(
+    formatUserResponse(user, null, [], ["resetToken"]),
+    userId,
+    organizationId
+  );
 };
 
 const getOtherUserProfile = async ({ userId }) => {
@@ -244,6 +306,7 @@ const updateUserProfile = async ({
   currencySymbol,
   currencyCode,
   allowCurrencyUpdate = false,
+  organizationId,
 }) => {
   const user = await User.findById(userId);
   if (!user) {
@@ -299,7 +362,27 @@ const updateUserProfile = async ({
   await user.save();
   userCache.del(userId.toString());
 
-  return formatUserResponse(user, null, [], ["resetToken"]);
+  if (organizationId && mongoose.Types.ObjectId.isValid(organizationId)) {
+    const staffUpdate = {};
+    if (phoneNumber) staffUpdate.phone = phoneNumber;
+    if (profileIcon) staffUpdate.photoUrl = profileIcon;
+    if (Object.keys(staffUpdate).length) {
+      await StaffProfile.updateOne(
+        {
+          userId,
+          organizationId,
+          status: StaffProfileStatus.ACTIVE,
+        },
+        { $set: staffUpdate }
+      );
+    }
+  }
+
+  return withStaffCard(
+    formatUserResponse(user, null, [], ["resetToken"]),
+    userId,
+    organizationId
+  );
 };
 
 const listAllUsers = async () => {

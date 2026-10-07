@@ -21,6 +21,7 @@ const { staffInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
 const {
   MembershipRole,
+  MembershipRoleRank,
   ActiveInactiveStatus,
   StaffInvitationStatus,
 } = require("@models/domainEnums");
@@ -31,13 +32,7 @@ const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
  * Most to least privileged. Used to stop anyone granting a role above their own,
  * which would otherwise let a site manager invite themselves back as an owner.
  */
-const ROLE_RANK = {
-  [MembershipRole.SUPER_ADMIN]: 5,
-  [MembershipRole.OWNER]: 4,
-  [MembershipRole.SITE_MANAGER]: 3,
-  [MembershipRole.LINE_MANAGER]: 2,
-  [MembershipRole.STAFF]: 1,
-};
+const ROLE_RANK = MembershipRoleRank;
 
 /** Roles that own a specific site rather than the whole organization. */
 const BRANCH_SCOPED_ROLES = [

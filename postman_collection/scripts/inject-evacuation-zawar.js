@@ -358,7 +358,7 @@ const appEvac = [
     header: orgHeader,
     body: {
       branchId: "{{branchId}}",
-      status: "unknown",
+      status: "waiting",
       locationLabel: "Ward 2 corridor",
       clientEventId: "postman-evac-self-smoke-1",
     },

@@ -27,6 +27,7 @@ const leaveController = require("../controllers/leaveController");
 const evacuationController = require("../controllers/evacuationController");
 const externalPersonController = require("../controllers/externalPersonController");
 const visitSessionController = require("../controllers/visitSessionController");
+const siteLiveController = require("../../app/controllers/siteLiveController");
 const visitorInvitationController = require("../controllers/visitorInvitationController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const {
@@ -77,7 +78,11 @@ const scoped = express.Router({ mergeParams: true });
 
 scoped.use(requireMembership());
 
-
+scoped.get(
+  "/site-live",
+  requireRoles(MANAGERS),
+  siteLiveController.getSiteLive
+);
 
 scoped.get("/", organizationController.getOrganization);
 

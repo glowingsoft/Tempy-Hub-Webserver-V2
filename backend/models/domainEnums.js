@@ -11,6 +11,29 @@ const MembershipRole = {
   STAFF: "staff",
 };
 
+/** Higher number = more privilege. One map for grants, login surfaces, and APIs. */
+const MembershipRoleRank = {
+  [MembershipRole.SUPER_ADMIN]: 5,
+  [MembershipRole.OWNER]: 4,
+  [MembershipRole.SITE_MANAGER]: 3,
+  [MembershipRole.LINE_MANAGER]: 2,
+  [MembershipRole.STAFF]: 1,
+};
+
+/**
+ * Which product the client is (not the same as Membership.role).
+ * Login may send this so a line manager cannot enter the owner/platform portal.
+ * Higher membership rank may open a lower-ranked portal.
+ */
+const AppSurface = {
+  STAFF_APP: "staffApp",
+  MANAGER_APP: "managerApp",
+  OWNER_ADMIN: "ownerAdmin",
+  PLATFORM_ADMIN: "platformAdmin",
+  RESIDENT_APP: "residentApp",
+  VISITOR_APP: "visitorApp",
+};
+
 /** Which client surface a JWT was issued for; route groups validate this. */
 const AuthAudience = {
   STAFF: "staff",
@@ -303,6 +326,8 @@ const PersonCategoryAppliesTo = {
 
 module.exports = {
   MembershipRole,
+  MembershipRoleRank,
+  AppSurface,
   StaffInvitationStatus,
   AuthAudience,
   ModuleSlug,

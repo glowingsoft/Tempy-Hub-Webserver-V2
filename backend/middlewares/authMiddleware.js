@@ -87,6 +87,7 @@ const auth = async (req, res, next) => {
     req.user = user;
     // Tokens issued before audiences existed are treated as staff-surface tokens.
     req.audience = decoded.audience || AuthAudience.STAFF;
+    req.surface = decoded.surface || null;
 
     next(); // Move to the next middleware/route handler
   } catch (error) {

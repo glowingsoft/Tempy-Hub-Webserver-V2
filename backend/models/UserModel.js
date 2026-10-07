@@ -253,12 +253,11 @@ userSchema.pre("save", async function (next) {
 });
 
 // Generate JWT token
-userSchema.methods.generateAuthToken = function (audience = "staff") {
+userSchema.methods.generateAuthToken = function (audience = "staff", surface) {
   const user = this;
-  const token = jwt.sign(
-    { _id: user._id, audience },
-    process.env.JWT_SECRET
-  );
+  const payload = { _id: user._id, audience };
+  if (surface) payload.surface = surface;
+  const token = jwt.sign(payload, process.env.JWT_SECRET);
   return token;
 };
 

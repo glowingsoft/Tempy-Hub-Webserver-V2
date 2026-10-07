@@ -28,9 +28,9 @@ const securityMiddleware = (app, options = {}) => {
         },
       },
       referrerPolicy: { policy: "no-referrer" },
-      crossOriginEmbedderPolicy: true,
+      crossOriginEmbedderPolicy: false,
       crossOriginOpenerPolicy: { policy: "same-origin" },
-      crossOriginResourcePolicy: { policy: "same-origin" },
+      crossOriginResourcePolicy: { policy: "cross-origin" },
       hsts: { maxAge: 31536000, includeSubDomains: true },
     })
   );
@@ -73,7 +73,15 @@ const securityMiddleware = (app, options = {}) => {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-admin-access-token"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "x-admin-access-token",
+      "x-org-id",
+      "x-branch-id",
+      "x-kiosk-token",
+    ],
   };
 
   app.use(cors(corsOptions));

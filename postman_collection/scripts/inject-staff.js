@@ -80,6 +80,10 @@ adminPanel.item.push({
     req("list departments", "GET", ["admin", "organizations", "{{organizationId}}", "departments"], {
       query: "page=1&limit=10",
     }),
+    req("get department", "GET", ["admin", "organizations", "{{organizationId}}", "departments", "{{departmentId}}"], {}),
+    req("update department", "PATCH", ["admin", "organizations", "{{organizationId}}", "departments", "{{departmentId}}"], {
+      body: { name: "Kitchen", sortOrder: 1, active: true },
+    }),
     req("create job title (Head Chef)", "POST", ["admin", "organizations", "{{organizationId}}", "job-titles"], {
       body: { name: "Head Chef", level: "siteManagement" },
       test: saveId201("jobTitleId"),
@@ -100,6 +104,9 @@ adminPanel.item.push({
     }),
     req("list job titles", "GET", ["admin", "organizations", "{{organizationId}}", "job-titles"], {
       query: "page=1&limit=10",
+    }),
+    req("update job title", "PATCH", ["admin", "organizations", "{{organizationId}}", "job-titles", "{{jobTitleId}}"], {
+      body: { name: "Head Chef", level: "siteManagement", active: true },
     }),
     req("create staff profile", "POST", ["admin", "organizations", "{{organizationId}}", "staff-profiles"], {
       body: {

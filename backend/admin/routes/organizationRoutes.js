@@ -164,6 +164,14 @@ scoped.post(
 
 scoped.get("/departments", staffController.listDepartments);
 
+scoped.get("/departments/:departmentId", staffController.getDepartment);
+
+scoped.patch(
+  "/departments/:departmentId",
+  requireRoles(MANAGERS),
+  staffController.updateDepartment
+);
+
 
 
 scoped.post(
@@ -177,6 +185,12 @@ scoped.post(
 );
 
 scoped.get("/job-titles", staffController.listJobTitles);
+
+scoped.patch(
+  "/job-titles/:jobTitleId",
+  requireRoles(MANAGERS),
+  staffController.updateJobTitle
+);
 
 
 

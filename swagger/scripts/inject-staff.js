@@ -27,6 +27,36 @@ const okList = {
 
 const staffTag = ["Staff"];
 
+spec.paths["/admin/organizations/{organizationId}/departments/{departmentId}"] = {
+  get: {
+    tags: staffTag,
+    summary: "Get department",
+    security: bearer,
+    parameters: [
+      { name: "organizationId", in: "path", required: true, schema: { type: "string" } },
+      { name: "departmentId", in: "path", required: true, schema: { type: "string" } },
+    ],
+    responses: { 200: okList, 401: { description: "Unauthorized" }, 403: { description: "Forbidden" }, 404: { description: "Not found" } },
+  },
+  patch: {
+    tags: staffTag,
+    summary: "Update department",
+    security: bearer,
+    parameters: [
+      { name: "organizationId", in: "path", required: true, schema: { type: "string" } },
+      { name: "departmentId", in: "path", required: true, schema: { type: "string" } },
+    ],
+    requestBody: {
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/DepartmentUpdateRequest" },
+        },
+      },
+    },
+    responses: { 200: okList, 400: { description: "Bad request" }, 404: { description: "Not found" }, 409: { description: "Duplicate name" } },
+  },
+};
+
 spec.paths["/admin/organizations/{organizationId}/departments"] = {
   post: {
     tags: staffTag,
@@ -81,6 +111,26 @@ spec.paths["/admin/departments/{departmentId}"] = {
       content: {
         "application/json": {
           schema: { $ref: "#/components/schemas/DepartmentUpdateRequest" },
+        },
+      },
+    },
+    responses: { 200: okList, 400: { description: "Bad request" }, 404: { description: "Not found" }, 409: { description: "Duplicate name" } },
+  },
+};
+
+spec.paths["/admin/organizations/{organizationId}/job-titles/{jobTitleId}"] = {
+  patch: {
+    tags: staffTag,
+    summary: "Update job title",
+    security: bearer,
+    parameters: [
+      { name: "organizationId", in: "path", required: true, schema: { type: "string" } },
+      { name: "jobTitleId", in: "path", required: true, schema: { type: "string" } },
+    ],
+    requestBody: {
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/JobTitleUpdateRequest" },
         },
       },
     },

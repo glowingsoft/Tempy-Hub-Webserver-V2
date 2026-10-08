@@ -62,6 +62,8 @@ const listDepartments = async (req, res) => {
 };
 
 const getDepartment = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["departmentId"] })) return;
+
   try {
     const data = await staffService.getDepartment({
       departmentId: req.params.departmentId,
@@ -80,6 +82,8 @@ const getDepartment = async (req, res) => {
 };
 
 const updateDepartment = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["departmentId"] })) return;
+
   try {
     const data = await staffService.updateDepartment({
       actor: req.user,
@@ -169,6 +173,8 @@ const getJobTitle = async (req, res) => {
 };
 
 const updateJobTitle = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["jobTitleId"] })) return;
+
   try {
     const data = await staffService.updateJobTitle({
       actor: req.user,

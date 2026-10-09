@@ -527,6 +527,18 @@ const listInvitations = async ({
   });
 };
 
+const getInvitation = async ({ invitationId, organizationId }) => {
+  const invitation = await StaffInvitation.findOne({
+    _id: invitationId,
+    organizationId,
+  }).lean();
+
+  if (!invitation) throw new AppError("invitation_not_found", 404);
+
+  const { tokenHash, ...safe } = invitation;
+  return safe;
+};
+
 /** Issues a fresh token: the old one is unrecoverable, only its hash was kept. */
 const resendInvitation = async ({ actor, invitationId, organizationId }) => {
   const invitation = await StaffInvitation.findOne({
@@ -907,6 +919,7 @@ module.exports = {
   deactivateMembership,
   inviteMember,
   listInvitations,
+  getInvitation,
   resendInvitation,
   revokeInvitation,
   previewInvitation,

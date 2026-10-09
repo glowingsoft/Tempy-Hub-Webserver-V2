@@ -310,6 +310,12 @@ const ResidentMediaType = {
   DOCUMENT: "document",
 };
 
+const ResidentMediaReviewStatus = {
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
 const VisitRequestStatus = {
   PENDING: "pending",
   APPROVED: "approved",
@@ -368,6 +374,7 @@ module.exports = {
   LeaveRequestStatus,
   LeaveRequestSource,
   ResidentMediaType,
+  ResidentMediaReviewStatus,
   VisitRequestStatus,
   PersonCategoryAppliesTo,
 };

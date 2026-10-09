@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
-const { ResidentMediaType } = require("./domainEnums");
+const {
+  ResidentMediaType,
+  ResidentMediaReviewStatus,
+} = require("./domainEnums");
 
 const residentMediaSchema = new mongoose.Schema(
   {
@@ -26,6 +29,19 @@ const residentMediaSchema = new mongoose.Schema(
     takenAt: { type: Date, default: null },
     /** Photography consent is re-checked at upload time, not inherited. */
     consentVerified: { type: Boolean, default: false },
+    reviewStatus: {
+      type: String,
+      enum: Object.values(ResidentMediaReviewStatus),
+      default: ResidentMediaReviewStatus.PENDING,
+      index: true,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    reviewedAt: { type: Date, default: null },
+    reviewReason: { type: String, default: "" },
     /** Controls whether linked family members see this item in the resident app. */
     visibleToFamily: { type: Boolean, default: true },
     uploadedBy: {
@@ -38,6 +54,7 @@ const residentMediaSchema = new mongoose.Schema(
 );
 
 residentMediaSchema.index({ residentId: 1, createdAt: -1 });
+residentMediaSchema.index({ branchId: 1, reviewStatus: 1, createdAt: -1 });
 
 const ResidentMedia =
   mongoose.models.ResidentMedia ||

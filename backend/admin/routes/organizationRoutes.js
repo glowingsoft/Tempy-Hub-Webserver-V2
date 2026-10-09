@@ -29,6 +29,7 @@ const externalPersonController = require("../controllers/externalPersonControlle
 const visitSessionController = require("../controllers/visitSessionController");
 const siteLiveController = require("../../app/controllers/siteLiveController");
 const visitorInvitationController = require("../controllers/visitorInvitationController");
+const residentMediaController = require("../controllers/residentMediaController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const {
   ATTENDANCE_VIEW,
@@ -148,6 +149,12 @@ scoped.get(
 
   membershipController.listInvitations
 
+);
+
+scoped.get(
+  "/invitations/:invitationId",
+  requireRoles(MANAGERS),
+  membershipController.getInvitation
 );
 
 
@@ -369,6 +376,17 @@ scoped.get(
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),
   visitSessionController.listVisitSessions
+);
+
+scoped.get(
+  "/resident-media",
+  requireRoles(MANAGERS),
+  residentMediaController.listResidentMedia
+);
+scoped.post(
+  "/resident-media/:mediaId/review",
+  requireRoles(MANAGERS),
+  residentMediaController.reviewResidentMedia
 );
 
 router.use("/:organizationId", scoped);

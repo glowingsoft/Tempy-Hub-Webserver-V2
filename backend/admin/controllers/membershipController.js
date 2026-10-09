@@ -164,6 +164,26 @@ const listInvitations = async (req, res) => {
   }
 };
 
+const getInvitation = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["invitationId"] })) return;
+
+  try {
+    const data = await membershipService.getInvitation({
+      invitationId: req.params.invitationId,
+      organizationId: req.orgId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const resendInvitation = async (req, res) => {
   try {
     const data = await membershipService.resendInvitation({
@@ -210,6 +230,7 @@ module.exports = {
   deactivateMembership,
   inviteMember,
   listInvitations,
+  getInvitation,
   resendInvitation,
   revokeInvitation,
 };

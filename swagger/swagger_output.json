@@ -2782,6 +2782,58 @@
         }
       }
     },
+    "/admin/organizations/{organizationId}/invitations/{invitationId}": {
+      "get": {
+        "tags": [
+          "memberships"
+        ],
+        "summary": "Get one invitation for the organization",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token"
+          },
+          "403": {
+            "description": "Role or membership does not allow this action"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/admin/memberships/{membershipId}": {
       "get": {
         "tags": [

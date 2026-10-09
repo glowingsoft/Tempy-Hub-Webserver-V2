@@ -4739,6 +4739,40 @@
               "response": []
             },
             {
+              "name": "get invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Invitation fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/invitations/{{invitationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "invitations",
+                    "{{invitationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "get membership",
               "event": [
                 {
@@ -6066,6 +6100,46 @@
               "response": []
             },
             {
+              "name": "4 deny walk-in visit",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}admin/visit-sessions/{{visitSessionId}}/deny",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "visit-sessions",
+                    "{{visitSessionId}}",
+                    "deny"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "4 approve walk-in visit",
               "event": [
                 {
@@ -6142,6 +6216,93 @@
                       "key": "branchId",
                       "value": "{{branchId}}"
                     }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "list resident media",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/resident-media?page=1&limit=10&status=pending",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "resident-media"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "pending"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "review resident media",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decision\": \"approved\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/resident-media/{{mediaId}}/review",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "resident-media",
+                    "{{mediaId}}",
+                    "review"
                   ]
                 }
               },
@@ -6352,6 +6513,11 @@
     },
     {
       "key": "externalPersonId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mediaId",
       "value": "",
       "type": "string"
     }

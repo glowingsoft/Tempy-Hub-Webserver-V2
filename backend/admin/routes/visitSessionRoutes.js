@@ -44,5 +44,11 @@ router.post(
   requirePermission(VISIT_MANAGE),
   visitSessionController.approve
 );
+router.post(
+  "/:visitSessionId/deny",
+  requireRoles(MANAGERS),
+  requirePermission(VISIT_MANAGE),
+  visitSessionController.deny
+);
 
 module.exports = router;

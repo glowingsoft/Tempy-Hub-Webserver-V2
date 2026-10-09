@@ -104,6 +104,8 @@ const checkOut = async (req, res) => {
 };
 
 const approve = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["visitSessionId"] })) return;
+
   try {
     const data = await visitSessionService.approveVisitSession({
       actor: req.user,
@@ -115,6 +117,27 @@ const approve = async (req, res) => {
       res,
       statusCode: 200,
       translationKey: "visit_checked_in_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const deny = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["visitSessionId"] })) return;
+
+  try {
+    const data = await visitSessionService.denyVisitSession({
+      actor: req.user,
+      organizationId: req.orgId,
+      visitSessionId: req.params.visitSessionId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "visit_denied_successfully",
       data,
     });
   } catch (error) {
@@ -222,6 +245,7 @@ module.exports = {
   registerAndCheckIn,
   checkOut,
   approve,
+  deny,
   listVisitSessions,
   getVisitSession,
   getOnSiteCounts,

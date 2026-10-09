@@ -127,7 +127,7 @@ const checkIn = async ({
   });
 };
 
-const approveVisitSession = async ({
+const loadManagedVisitSession = async ({
   actor,
   organizationId,
   visitSessionId,
@@ -138,13 +138,46 @@ const approveVisitSession = async ({
   await assertBranchInOrganization(session.branchId, organizationId);
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, session.branchId);
+  return session;
+};
 
+const requireAwaitingApproval = (session) => {
   if (session.status !== VisitSessionStatus.AWAITING_APPROVAL) {
     throw new AppError("visit_not_awaiting_approval", 409);
   }
+};
+
+const approveVisitSession = async ({
+  actor,
+  organizationId,
+  visitSessionId,
+}) => {
+  const session = await loadManagedVisitSession({
+    actor,
+    organizationId,
+    visitSessionId,
+  });
+  requireAwaitingApproval(session);
 
   session.status = VisitSessionStatus.ON_SITE;
   if (!session.checkInAt) session.checkInAt = new Date();
+  await session.save();
+  return session.toObject();
+};
+
+const denyVisitSession = async ({
+  actor,
+  organizationId,
+  visitSessionId,
+}) => {
+  const session = await loadManagedVisitSession({
+    actor,
+    organizationId,
+    visitSessionId,
+  });
+  requireAwaitingApproval(session);
+
+  session.status = VisitSessionStatus.DENIED;
   await session.save();
   return session.toObject();
 };
@@ -364,6 +397,7 @@ module.exports = {
   registerAndCheckIn,
   checkOut,
   approveVisitSession,
+  denyVisitSession,
   listVisitSessions,
   getVisitSession,
   getOnSiteCounts,

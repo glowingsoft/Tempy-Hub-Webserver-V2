@@ -178,6 +178,7 @@ const PeepConsentStatus = {
 const ExternalPersonType = {
   VISITOR: "visitor",
   CONTRACTOR: "contractor",
+  PROFESSIONAL: "professional",
   GUEST: "guest",
 };
 

@@ -28,9 +28,11 @@ const evacuationController = require("../controllers/evacuationController");
 const externalPersonController = require("../controllers/externalPersonController");
 const visitSessionController = require("../controllers/visitSessionController");
 const siteLiveController = require("../../app/controllers/siteLiveController");
+const teamLiveController = require("../../app/controllers/teamLiveController");
 const visitorInvitationController = require("../controllers/visitorInvitationController");
 const residentMediaController = require("../controllers/residentMediaController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
+const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
   ATTENDANCE_VIEW,
   ATTENDANCE_APPROVE,
@@ -80,9 +82,33 @@ const scoped = express.Router({ mergeParams: true });
 scoped.use(requireMembership());
 
 scoped.get(
+  "/site-live/activity",
+  requireRoles(MANAGERS),
+  siteLiveController.getSiteLiveActivity
+);
+
+scoped.get(
   "/site-live",
   requireRoles(MANAGERS),
   siteLiveController.getSiteLive
+);
+
+scoped.get(
+  "/team-live/activity",
+  requireRoles(TEAM_APPROVER_ROLES),
+  teamLiveController.getTeamLiveActivity
+);
+
+scoped.get(
+  "/team-live/rota",
+  requireRoles(TEAM_APPROVER_ROLES),
+  teamLiveController.getTeamRota
+);
+
+scoped.get(
+  "/team-live",
+  requireRoles(TEAM_APPROVER_ROLES),
+  teamLiveController.getTeamLive
 );
 
 scoped.get("/", organizationController.getOrganization);

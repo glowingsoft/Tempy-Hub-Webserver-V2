@@ -18,6 +18,7 @@ const listMembers = async (req, res) => {
       role: req.query.role,
       branchId: req.query.branchId,
       status: req.query.status,
+      hasStaffProfile: req.query.hasStaffProfile,
     });
 
     return sendResponse({
@@ -51,6 +52,8 @@ const listGrantablePermissions = async (req, res) => {
 };
 
 const getMembership = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["membershipId"] })) return;
+
   try {
     const data = await membershipService.getMembership({
       membershipId: req.params.membershipId,

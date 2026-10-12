@@ -64,6 +64,10 @@ for (const FILE of FILES) {
         header: orgHeader,
         query: "branchId={{branchId}}",
       }),
+      req("site live activity", "GET", ["app", "site-live", "activity"], {
+        header: orgHeader,
+        query: "page=1&limit=20&branchId={{branchId}}",
+      }),
     ]);
   }
   if (adminPanel) {
@@ -73,6 +77,12 @@ for (const FILE of FILES) {
         "GET",
         ["admin", "organizations", "{{organizationId}}", "site-live"],
         { query: "branchId={{branchId}}" }
+      ),
+      req(
+        "site live activity",
+        "GET",
+        ["admin", "organizations", "{{organizationId}}", "site-live", "activity"],
+        { query: "page=1&limit=20&branchId={{branchId}}" }
       ),
     ]);
   }

@@ -28,6 +28,7 @@ const createExternalPerson = async (req, res) => {
       phone: req.body.phone,
       photoUrl: req.body.photoUrl,
       carRegistration: req.body.carRegistration,
+      departmentId: req.body.departmentId,
       categoryId: req.body.categoryId,
       visitorCategory: req.body.visitorCategory,
     });
@@ -53,7 +54,9 @@ const listExternalPeople = async (req, res) => {
       limit,
       skip,
       branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
       type: req.query.type,
+      siteStatus: req.query.siteStatus,
       keyword: req.query.keyword,
     });
 
@@ -99,6 +102,7 @@ const updateExternalPerson = async (req, res) => {
       phone: req.body.phone,
       photoUrl: req.body.photoUrl,
       carRegistration: req.body.carRegistration,
+      departmentId: req.body.departmentId,
       categoryId: req.body.categoryId,
       visitorCategory: req.body.visitorCategory,
       type: req.body.type,

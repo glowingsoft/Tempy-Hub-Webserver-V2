@@ -6,6 +6,7 @@ const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
 const { paginateWithFacet } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
   ShiftStatus,
@@ -19,6 +20,7 @@ const {
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
+  applyLineManagerStaffScope,
 } = require("./shiftAccess");
 
 const EARLY_CLOCK_IN_MINUTES = 15;
@@ -207,12 +209,26 @@ const listShifts = async ({
     } else if (branchId) {
       match.branchId = new mongoose.Types.ObjectId(String(branchId));
     }
+
+    const inScope = await applyLineManagerStaffScope({
+      match,
+      standing,
+      actor,
+      organizationId,
+      staffId,
+      staffIdField: "staffId",
+    });
+    if (!inScope) {
+      return { data: [], meta: generateMeta(page, limit, 0) };
+    }
   } else if (branchId) {
     match.branchId = new mongoose.Types.ObjectId(String(branchId));
   }
 
   if (status) match.status = status;
-  if (staffId) match.staffId = new mongoose.Types.ObjectId(String(staffId));
+  if (!actor && staffId) {
+    match.staffId = new mongoose.Types.ObjectId(String(staffId));
+  }
 
   if (from || to) {
     match.startsAt = {};

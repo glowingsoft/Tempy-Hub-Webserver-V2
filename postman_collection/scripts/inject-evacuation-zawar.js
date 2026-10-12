@@ -188,10 +188,30 @@ const adminVisitors = [
     }
   ),
   req(
+    "create external person (professional)",
+    "POST",
+    ["admin", "organizations", "{{organizationId}}", "external-people"],
+    {
+      body: {
+        branchId: "{{branchId}}",
+        type: "professional",
+        name: "Postman Professional",
+        email: "professional.postman@example.com",
+        phone: "+447700900003",
+        departmentId: "{{departmentId}}",
+      },
+      test: saveId("externalPersonId", 201),
+    }
+  ),
+  req(
     "list external people",
     "GET",
     ["admin", "organizations", "{{organizationId}}", "external-people"],
-    { query: "page=1&limit=10&branchId={{branchId}}&type=" }
+    {
+      header: orgHeader,
+      query:
+        "page=1&limit=10&branchId={{branchId}}&departmentId={{departmentId}}&type=visitor,contractor,professional&siteStatus=&keyword=",
+    }
   ),
   req(
     "get external person",

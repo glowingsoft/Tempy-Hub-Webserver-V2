@@ -326,7 +326,8 @@
   "evacuation_started": "Evacuation started",
   "evacuation_closed": "Evacuation closed",
   "evac_check_saved": "Evacuation check saved",
-  "invalid_external_person_type": "Person type must be visitor, contractor, or guest",
+  "invalid_external_person_type": "Person type must be visitor, contractor, professional, or guest",
+  "invalid_site_status": "Site status must be onSite or offSite",
   "invalid_visit_session_status": "Invalid visit session status",
   "invalid_visit_method": "Invalid visit check-in method",
   "invalid_visit_group_by": "groupBy must be type, branch, day, or status",
@@ -374,5 +375,7 @@
   "kiosk_updated_successfully": "Kiosk updated successfully",
   "kiosk_locked_successfully": "Kiosk locked",
   "kiosk_unlocked_successfully": "Kiosk unlocked",
-  "kiosk_locked": "This kiosk is locked"
+  "kiosk_locked": "This kiosk is locked",
+  "invalid_period": "Period must be daily, weekly, or monthly",
+  "invalid_view": "View must be day or week"
 }

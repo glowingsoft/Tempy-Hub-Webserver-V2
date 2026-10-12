@@ -15,7 +15,9 @@ const {
   getPermission,
   enabledModuleSlugs,
 } = require("./permissionCatalogue");
+const { StaffProfile } = require("@models/StaffProfile");
 const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { staffInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
@@ -163,6 +165,172 @@ const assertNotLastOwner = async (membership) => {
   if (!others) throw new AppError("cannot_remove_last_owner", 400);
 };
 
+/**
+ * One pipeline for list + get: user, site (branch), assigned job title /
+ * departments from StaffProfile, and departments that exist on that site.
+ */
+const membershipDetailStages = [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "userId",
+      foreignField: "_id",
+      as: "user",
+      pipeline: [
+        { $project: { name: 1, email: 1, profileIcon: 1, phoneNumber: 1 } },
+      ],
+    },
+  },
+  { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      as: "_branch",
+      pipeline: [
+        {
+          $project: {
+            name: 1,
+            code: 1,
+            status: 1,
+            address: 1,
+            timezone: 1,
+            assemblyPoint: 1,
+            managerUserId: 1,
+          },
+        },
+      ],
+    },
+  },
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      let: { uid: "$userId", oid: "$organizationId" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$userId", "$$uid"] },
+                { $eq: ["$organizationId", "$$oid"] },
+              ],
+            },
+          },
+        },
+        {
+          $project: {
+            employeeCode: 1,
+            jobTitleId: 1,
+            departmentIds: 1,
+            branchId: 1,
+            status: 1,
+            startDate: 1,
+            ward: 1,
+            locationLabel: 1,
+          },
+        },
+      ],
+      as: "_staff",
+    },
+  },
+  { $unwind: { path: "$_staff", preserveNullAndEmptyArrays: true } },
+  {
+    $lookup: {
+      from: JobTitle.collection.name,
+      localField: "_staff.jobTitleId",
+      foreignField: "_id",
+      as: "_jobTitle",
+      pipeline: [{ $project: { name: 1, level: 1, active: 1, branchId: 1 } }],
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "_staff.departmentIds",
+      foreignField: "_id",
+      as: "departments",
+      pipeline: [
+        { $project: { name: 1, active: 1, sortOrder: 1, branchId: 1 } },
+        { $sort: { sortOrder: 1, name: 1 } },
+      ],
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      let: { bid: "$branchId", oid: "$organizationId" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $ne: ["$$bid", null] },
+                { $eq: ["$organizationId", "$$oid"] },
+                { $eq: ["$branchId", "$$bid"] },
+              ],
+            },
+          },
+        },
+        { $project: { name: 1, active: 1, sortOrder: 1 } },
+        { $sort: { sortOrder: 1, name: 1 } },
+      ],
+      as: "_branchDepartments",
+    },
+  },
+  {
+    $addFields: {
+      jobTitle: { $arrayElemAt: ["$_jobTitle", 0] },
+      staffProfile: {
+        $cond: [
+          { $ifNull: ["$_staff._id", false] },
+          {
+            _id: "$_staff._id",
+            employeeCode: "$_staff.employeeCode",
+            status: "$_staff.status",
+            startDate: "$_staff.startDate",
+            ward: "$_staff.ward",
+            locationLabel: "$_staff.locationLabel",
+          },
+          null,
+        ],
+      },
+      branch: {
+        $cond: [
+          { $gt: [{ $size: { $ifNull: ["$_branch", []] } }, 0] },
+          {
+            $mergeObjects: [
+              { $arrayElemAt: ["$_branch", 0] },
+              { departments: "$_branchDepartments" },
+            ],
+          },
+          null,
+        ],
+      },
+    },
+  },
+  {
+    $project: {
+      _branch: 0,
+      _staff: 0,
+      _jobTitle: 0,
+      _branchDepartments: 0,
+    },
+  },
+];
+
+const parseOptionalBool = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (value === true || value === "true" || value === "1") return true;
+  if (value === false || value === "false" || value === "0") return false;
+  return null;
+};
+
+const emptyMemberPage = (page, limit) => ({
+  data: [],
+  meta: generateMeta(page, limit, 0),
+});
+
 const listMembers = async ({
   organizationId,
   page,
@@ -172,53 +340,61 @@ const listMembers = async ({
   role,
   branchId,
   status,
+  hasStaffProfile,
 }) => {
   const match = { organizationId: toObjectId(organizationId) };
   if (role) match.role = role;
   if (branchId) match.branchId = toObjectId(branchId);
   if (status) match.status = status;
 
-  const { data, meta } = await paginateWithFacet({
+  const term = keyword != null ? String(keyword).trim() : "";
+  if (term) {
+    const users = await User.find({
+      $or: [
+        { name: { $regex: term, $options: "i" } },
+        { email: { $regex: term, $options: "i" } },
+      ],
+    })
+      .select("_id")
+      .lean();
+    if (!users.length) return emptyMemberPage(page, limit);
+    match.userId = { $in: users.map((row) => row._id) };
+  }
+
+  const wantProfile = parseOptionalBool(hasStaffProfile);
+  if (wantProfile !== null) {
+    const withProfile = await StaffProfile.find({ organizationId }).distinct(
+      "userId"
+    );
+    const profileSet = new Set(withProfile.map(String));
+    const keywordIds = match.userId?.$in || null;
+
+    if (wantProfile) {
+      if (!withProfile.length) return emptyMemberPage(page, limit);
+      match.userId = {
+        $in: keywordIds
+          ? keywordIds.filter((id) => profileSet.has(String(id)))
+          : withProfile,
+      };
+      if (!match.userId.$in.length) return emptyMemberPage(page, limit);
+    } else if (keywordIds) {
+      match.userId = {
+        $in: keywordIds.filter((id) => !profileSet.has(String(id))),
+      };
+      if (!match.userId.$in.length) return emptyMemberPage(page, limit);
+    } else {
+      match.userId = { $nin: withProfile };
+    }
+  }
+
+  return paginateWithFacet({
     model: Membership,
     match,
     page,
     limit,
     skip,
-    extraDataStages: [
-      {
-        $lookup: {
-          from: "users",
-          localField: "userId",
-          foreignField: "_id",
-          as: "user",
-          pipeline: [{ $project: { name: 1, email: 1, profileImage: 1 } }],
-        },
-      },
-      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-      {
-        $lookup: {
-          from: "branches",
-          localField: "branchId",
-          foreignField: "_id",
-          as: "branch",
-          pipeline: [{ $project: { name: 1, code: 1 } }],
-        },
-      },
-      { $unwind: { path: "$branch", preserveNullAndEmptyArrays: true } },
-    ],
+    extraDataStages: membershipDetailStages,
   });
-
-  // Name and email live on the joined user, so filtering happens after $lookup.
-  const or = keywordOr(keyword, ["user.name", "user.email"], { trim: true });
-  if (!or) return { data, meta };
-
-  const pattern = new RegExp(String(keyword), "i");
-  return {
-    data: data.filter(
-      (row) => pattern.test(row.user?.name || "") || pattern.test(row.user?.email || "")
-    ),
-    meta,
-  };
 };
 
 /**
@@ -270,10 +446,15 @@ const listGrantablePermissions = async ({ actor, organizationId }) => {
 };
 
 const getMembership = async ({ membershipId, organizationId }) => {
-  const membership = await Membership.findOne({
-    _id: membershipId,
-    organizationId,
-  }).lean();
+  const [membership] = await Membership.aggregate([
+    {
+      $match: {
+        _id: toObjectId(membershipId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
+    ...membershipDetailStages,
+  ]);
 
   if (!membership) throw new AppError("membership_not_found", 404);
   return membership;
@@ -334,7 +515,7 @@ const updateMembership = async ({
     throw error;
   }
 
-  return membership.toObject();
+  return getMembership({ membershipId, organizationId });
 };
 
 const deactivateMembership = async ({ actor, membershipId, organizationId }) => {

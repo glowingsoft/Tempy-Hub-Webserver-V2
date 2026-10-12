@@ -5,7 +5,10 @@ const {
   requireRoles,
 } = require("@middlewares/membershipMiddleware");
 const { MembershipRole } = require("@models/domainEnums");
-const { getSiteLive } = require("../controllers/siteLiveController");
+const {
+  getSiteLive,
+  getSiteLiveActivity,
+} = require("../controllers/siteLiveController");
 
 const router = express.Router();
 
@@ -19,6 +22,7 @@ router.use(
   ])
 );
 
+router.get("/activity", getSiteLiveActivity);
 router.get("/", getSiteLive);
 
 module.exports = router;

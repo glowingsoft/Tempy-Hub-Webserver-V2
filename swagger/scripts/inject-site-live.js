@@ -32,10 +32,47 @@ spec.paths["/app/site-live"] = {
     tags: ["site-live"],
     summary: "Site Manager Live home",
     description:
-      "One payload for Site Live: on-site counts, active evacuation, walk-ins awaiting approval, planned visits, kiosks, own attendance status. Roles: superAdmin, owner, siteManager.",
+      "One payload for Site Live: on-site counts, active evacuation, walk-ins awaiting approval, planned visits, kiosks, own attendance status, recent activity preview (5). Roles: superAdmin, owner, siteManager.",
     security: bearer,
     parameters: [orgHeader, branchQuery],
     responses: { 200: ok, 403: { description: "Role not allowed" } },
+  },
+};
+
+spec.paths["/app/site-live/activity"] = {
+  get: {
+    tags: ["site-live"],
+    summary: "Site Live recent activity (See All)",
+    description:
+      "Same rows as home recentActivity.items, paginated. Last 30 days. Roles: superAdmin, owner, siteManager.",
+    security: bearer,
+    parameters: [
+      orgHeader,
+      branchQuery,
+      { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+      { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+    ],
+    responses: { 200: ok, 403: { description: "Role not allowed" } },
+  },
+};
+
+spec.paths["/admin/organizations/{organizationId}/site-live/activity"] = {
+  get: {
+    tags: ["site-live"],
+    summary: "Site Live recent activity (admin org scope)",
+    security: bearer,
+    parameters: [
+      {
+        name: "organizationId",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      branchQuery,
+      { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+      { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+    ],
+    responses: { 200: ok },
   },
 };
 

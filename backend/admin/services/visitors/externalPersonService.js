@@ -1,8 +1,15 @@
+const mongoose = require("mongoose");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { Branch } = require("@models/Branch");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { Department } = require("@models/Department");
+const { VisitSession } = require("@models/VisitSession");
+const { keywordOr, facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
-const { ExternalPersonType } = require("@models/domainEnums");
+const {
+  ExternalPersonType,
+  VisitSessionStatus,
+} = require("@models/domainEnums");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -10,11 +17,49 @@ const {
   scopeBranchFilter,
 } = require("./visitorAccess");
 
+const DIRECTORY_TYPES = [
+  ExternalPersonType.VISITOR,
+  ExternalPersonType.CONTRACTOR,
+  ExternalPersonType.PROFESSIONAL,
+];
+
+const SITE_STATUSES = ["onSite", "offSite"];
+
+const toOid = (value, key = "invalid_id") => {
+  if (!value || !mongoose.Types.ObjectId.isValid(String(value))) {
+    throw new AppError(key, 400);
+  }
+  return new mongoose.Types.ObjectId(String(value));
+};
+
 const parsePersonType = (type) => {
   if (!Object.values(ExternalPersonType).includes(type)) {
     throw new AppError("invalid_external_person_type", 400);
   }
   return type;
+};
+
+const parseDirectoryTypes = (type) => {
+  if (type === undefined || type === null || type === "" || type === "all") {
+    return DIRECTORY_TYPES;
+  }
+  const list = Array.isArray(type)
+    ? type
+    : String(type)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+  return [...new Set(list.map(parsePersonType))];
+};
+
+const parseSiteStatus = (value) => {
+  if (value === undefined || value === null || value === "" || value === "all") {
+    return null;
+  }
+  if (!SITE_STATUSES.includes(value)) {
+    throw new AppError("invalid_site_status", 400);
+  }
+  return value;
 };
 
 const createExternalPersonAtBranch = async ({
@@ -25,6 +70,7 @@ const createExternalPersonAtBranch = async ({
   phone,
   photoUrl,
   carRegistration,
+  departmentId,
   categoryId,
   visitorCategory,
 }) => {
@@ -39,6 +85,7 @@ const createExternalPersonAtBranch = async ({
     phone: phone ? String(phone).trim() : "",
     photoUrl: photoUrl || "",
     carRegistration: carRegistration || "",
+    departmentId: departmentId || null,
     categoryId: categoryId || null,
     visitorCategory: visitorCategory || "",
   });
@@ -56,6 +103,7 @@ const createExternalPerson = async ({
   phone,
   photoUrl,
   carRegistration,
+  departmentId,
   categoryId,
   visitorCategory,
 }) => {
@@ -71,10 +119,70 @@ const createExternalPerson = async ({
     phone,
     photoUrl,
     carRegistration,
+    departmentId,
     categoryId,
     visitorCategory,
   });
 };
+
+const directoryLookups = [
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      as: "_branch",
+      pipeline: [{ $project: { name: 1, code: 1, status: 1 } }],
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentId",
+      foreignField: "_id",
+      as: "_department",
+      pipeline: [{ $project: { name: 1 } }],
+    },
+  },
+  {
+    $lookup: {
+      from: VisitSession.collection.name,
+      let: { personId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$externalPersonId", "$$personId"] },
+                { $eq: ["$status", VisitSessionStatus.ON_SITE] },
+              ],
+            },
+          },
+        },
+        { $project: { _id: 1, checkInAt: 1 } },
+        { $limit: 1 },
+      ],
+      as: "_onSite",
+    },
+  },
+  {
+    $addFields: {
+      branch: { $arrayElemAt: ["$_branch", 0] },
+      department: { $arrayElemAt: ["$_department", 0] },
+      siteStatus: {
+        $cond: [{ $gt: [{ $size: "$_onSite" }, 0] }, "onSite", "offSite"],
+      },
+      onSite: { $gt: [{ $size: "$_onSite" }, 0] },
+    },
+  },
+  {
+    $project: {
+      _branch: 0,
+      _department: 0,
+      _onSite: 0,
+    },
+  },
+];
 
 const listExternalPeople = async ({
   actor,
@@ -83,7 +191,9 @@ const listExternalPeople = async ({
   limit,
   skip,
   branchId,
+  departmentId,
   type,
+  siteStatus,
   keyword,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -96,27 +206,43 @@ const listExternalPeople = async ({
   }
 
   const branches = await Branch.find(branchFilter).select("_id").lean();
-  const branchIds = branches.map((b) => b._id);
+  const branchIds = branches.map((row) => row._id);
   if (!branchIds.length) {
-    return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    return {
+      data: [],
+      meta: generateMeta(page, limit, 0),
+    };
   }
 
   const match = {
     branchId: { $in: branchIds },
+    type: { $in: parseDirectoryTypes(type) },
   };
-  if (type) match.type = parsePersonType(type);
+  if (departmentId) match.departmentId = toOid(departmentId, "invalid_object_ids");
 
   const or = keywordOr(keyword, ["name", "email", "phone"], { trim: true });
   if (or) match.$or = or;
 
-  return paginateWithFacet({
-    model: ExternalPerson,
-    match,
-    page,
-    limit,
-    skip,
-    sort: { createdAt: -1 },
-  });
+  const statusFilter = parseSiteStatus(siteStatus);
+  const afterStatus = statusFilter ? [{ $match: { siteStatus: statusFilter } }] : [];
+
+  const [result] = await ExternalPerson.aggregate([
+    { $match: match },
+    ...directoryLookups,
+    ...afterStatus,
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        data: [{ $skip: skip }, { $limit: limit }],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ]);
+
+  return {
+    data: result?.data || [],
+    meta: generateMeta(page, limit, facetCount(result?.totalCount)),
+  };
 };
 
 const getExternalPerson = async ({
@@ -146,6 +272,7 @@ const updateExternalPerson = async ({
   phone,
   photoUrl,
   carRegistration,
+  departmentId,
   categoryId,
   visitorCategory,
   type,
@@ -168,6 +295,7 @@ const updateExternalPerson = async ({
   if (carRegistration !== undefined) {
     update.carRegistration = carRegistration || "";
   }
+  if (departmentId !== undefined) update.departmentId = departmentId || null;
   if (categoryId !== undefined) update.categoryId = categoryId || null;
   if (visitorCategory !== undefined) {
     update.visitorCategory = visitorCategory || "";
@@ -182,6 +310,7 @@ const updateExternalPerson = async ({
 };
 
 module.exports = {
+  DIRECTORY_TYPES,
   parsePersonType,
   createExternalPersonAtBranch,
   createExternalPerson,

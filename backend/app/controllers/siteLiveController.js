@@ -1,4 +1,4 @@
-const { sendResponse } = require("@utils/responseUtil");
+const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const siteLiveService = require("@adminServices/siteLive/siteLiveService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
@@ -21,4 +21,28 @@ const getSiteLive = async (req, res) => {
   }
 };
 
-module.exports = { getSiteLive };
+const getSiteLiveActivity = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await siteLiveService.getSiteLiveActivity({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+module.exports = { getSiteLive, getSiteLiveActivity };

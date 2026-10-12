@@ -33,6 +33,12 @@ const externalPersonSchema = new mongoose.Schema(
     phone: { type: String, default: "" },
     photoUrl: { type: String, default: "" },
     carRegistration: { type: String, default: "" },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+      index: true,
+    },
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PersonCategory",
@@ -53,6 +59,7 @@ const externalPersonSchema = new mongoose.Schema(
 
 // List/filter: branch (+ optional type), newest first. Covers branchId-only lookups too.
 externalPersonSchema.index({ branchId: 1, type: 1, createdAt: -1 });
+externalPersonSchema.index({ branchId: 1, departmentId: 1, createdAt: -1 });
 
 // Optional identity links — sparse so many nulls are allowed; unique only when set.
 externalPersonSchema.index({ userId: 1 }, { unique: true, sparse: true });

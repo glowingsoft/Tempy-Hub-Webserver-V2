@@ -4,6 +4,7 @@ const router = express.Router();
 
 const homeRoutes = require("./homeRoutes");
 const siteLiveRoutes = require("./siteLiveRoutes");
+const teamLiveRoutes = require("./teamLiveRoutes");
 const usersRoutes = require("./userRoutes");
 const notificationsRoutes = require("./notificationsRoutes");
 const settingsRoutes = require("./settingsRoutes");
@@ -29,6 +30,7 @@ router.use("/settings", settingsRoutes);
 router.use("/notifications", notificationsRoutes);
 router.use("/home", homeRoutes);
 router.use("/site-live", siteLiveRoutes);
+router.use("/team-live", teamLiveRoutes);
 router.use("/users", usersRoutes);
 
 

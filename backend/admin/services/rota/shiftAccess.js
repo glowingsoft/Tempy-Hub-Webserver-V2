@@ -5,6 +5,7 @@ const {
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
+  applyLineManagerStaffScope,
 } = require("@adminServices/staff/staffAccess");
 
 const ROTA_VIEW = permissionKey(ModuleSlug.ROTA_SCHEDULING, PermissionVerb.VIEW);
@@ -19,4 +20,5 @@ module.exports = {
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
+  applyLineManagerStaffScope,
 };

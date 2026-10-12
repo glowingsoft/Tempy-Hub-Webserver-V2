@@ -3,8 +3,8 @@ const {
   VisitSessionStatus,
   VisitMethod,
   InvitationStatus,
-  PresenceStatus,
 } = require("@models/domainEnums");
+const { loadMyStatus } = require("./myStatus");
 const {
   actorStanding,
   scopeBranchFilter,
@@ -14,7 +14,10 @@ const evacuationService = require("@adminServices/evacuation/evacuationService")
 const visitSessionService = require("@adminServices/visitors/visitSessionService");
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
 const kioskService = require("@adminServices/kiosk/kioskService");
-const attendanceService = require("@adminServices/attendance/attendanceService");
+const {
+  ACTIVITY_PREVIEW_LIMIT,
+  listSiteActivity,
+} = require("./siteActivityQuery");
 
 const WALK_IN_PREVIEW = 5;
 const PLANNED_PREVIEW = 5;
@@ -37,30 +40,6 @@ const shapeKiosk = (row) => ({
   kioskMode: row.kioskMode || null,
 });
 
-const myStatusFromAttendance = (today) => {
-  const presence = today?.attendance?.presenceStatus || null;
-  if (presence === PresenceStatus.ON_SITE) {
-    return { label: "On Shift", presenceStatus: presence };
-  }
-  if (presence === PresenceStatus.ON_BREAK) {
-    return { label: "On Break", presenceStatus: presence };
-  }
-  return { label: "Normal", presenceStatus: presence };
-};
-
-const loadMyStatus = async ({ userId, organizationId }) => {
-  try {
-    const today = await attendanceService.getTodayAttendance({
-      userId,
-      organizationId,
-    });
-    return myStatusFromAttendance(today);
-  } catch (error) {
-    if (error.translationKey === "staff_profile_not_found") return null;
-    throw error;
-  }
-};
-
 const getSiteLive = async ({ actor, organizationId, branchId }) => {
   const liveBranchId = await resolveLiveBranchId({
     actor,
@@ -75,6 +54,7 @@ const getSiteLive = async ({ actor, organizationId, branchId }) => {
     planned,
     kiosks,
     myStatus,
+    activity,
   ] = await Promise.all([
     evacuationService.getOnSiteSummary({
       organizationId,
@@ -113,6 +93,12 @@ const getSiteLive = async ({ actor, organizationId, branchId }) => {
       skip: 0,
     }),
     loadMyStatus({ userId: actor._id, organizationId }),
+    listSiteActivity({
+      branchId: liveBranchId,
+      page: 1,
+      limit: ACTIVITY_PREVIEW_LIMIT,
+      skip: 0,
+    }),
   ]);
 
   return {
@@ -139,7 +125,32 @@ const getSiteLive = async ({ actor, organizationId, branchId }) => {
       offline: kiosks.meta?.offline ?? 0,
     },
     myStatus,
+    recentActivity: {
+      items: activity.data,
+      hasMore: (activity.meta?.totalRecords || 0) > ACTIVITY_PREVIEW_LIMIT,
+    },
   };
 };
 
-module.exports = { getSiteLive };
+const getSiteLiveActivity = async ({
+  actor,
+  organizationId,
+  branchId,
+  page,
+  limit,
+  skip,
+}) => {
+  const liveBranchId = await resolveLiveBranchId({
+    actor,
+    organizationId,
+    branchId,
+  });
+  return listSiteActivity({
+    branchId: liveBranchId,
+    page,
+    limit,
+    skip,
+  });
+};
+
+module.exports = { getSiteLive, getSiteLiveActivity };

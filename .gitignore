@@ -131,7 +131,8 @@ dist
 .env.qa
 .env.prod
 .env.dev
-uploads*
+/uploads
+/uploads/**
 secretAssets/*
 .cursor
 docs/*

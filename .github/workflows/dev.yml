@@ -97,7 +97,7 @@ jobs:
             # Check if PM2 is running the app
             if ! pm2 list | grep -q 'server-dev'; then
               echo "PM2 app not found. Starting new app..."
-              pm2 start "npm run server" --name server-dev
+              pm2 start "npm run dev" --name server-dev
             else
               echo "PM2 app is already running. Restarting..."
               pm2 restart server-dev

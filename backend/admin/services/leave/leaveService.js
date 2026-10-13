@@ -348,7 +348,14 @@ const attachLeaveRequestDetails = async (requests) => {
   }));
 };
 
+const assertObjectId = (value) => {
+  if (!value || !mongoose.Types.ObjectId.isValid(String(value))) {
+    throw new AppError("invalid_id", 400);
+  }
+};
+
 const getLeaveRequestOrThrow = async (requestId, organizationId) => {
+  assertObjectId(requestId);
   const request = await LeaveRequest.findById(requestId).lean();
   if (!request) throw new AppError("leave_request_not_found", 404);
 
@@ -710,6 +717,7 @@ const approveLeaveRequest = async ({
   decisionNote,
   managerStaffId = null,
 }) => {
+  assertObjectId(requestId);
   const request = await LeaveRequest.findOne({
     _id: requestId,
     status: LeaveRequestStatus.PENDING,
@@ -779,6 +787,7 @@ const rejectLeaveRequest = async ({
   decisionNote,
   managerStaffId = null,
 }) => {
+  assertObjectId(requestId);
   const request = await LeaveRequest.findOne({
     _id: requestId,
     status: LeaveRequestStatus.PENDING,
@@ -881,6 +890,7 @@ const recordManagerLeave = async ({
 };
 
 const closeLeaveRequest = async ({ actor, organizationId, requestId }) => {
+  assertObjectId(requestId);
   const request = await LeaveRequest.findOne({
     _id: requestId,
     status: LeaveRequestStatus.APPROVED,

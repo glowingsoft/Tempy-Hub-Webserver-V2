@@ -136,6 +136,7 @@
   "organization_not_found": "Organization not found",
   "organization_name_taken": "An organization with this name already exists",
   "organization_suspended": "This organization is suspended",
+  "invalid_id": "That id is not valid",
   "insufficient_role": "Your role does not allow this action",
   "insufficient_permission": "You do not have permission for this action",
   "module_not_enabled": "The {module} module is not enabled for this organization",

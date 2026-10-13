@@ -1,4 +1,4 @@
-require("dotenv").config({ path: require("path").join(__dirname, "..", ".env.dev") });
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 
 const path = require("path");
 const moduleAlias = require("module-alias");

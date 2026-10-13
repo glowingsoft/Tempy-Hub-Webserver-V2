@@ -19,7 +19,7 @@ global.logger = logger;
  * ------------------------------------------------
  */
 require("dotenv").config({
-  path: `.env.${process.env.NODE_ENV || "dev"}`,
+  path: require("path").join(__dirname, "..", ".env"),
 });
 
 require("express-async-errors");

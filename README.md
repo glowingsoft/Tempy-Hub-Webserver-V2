@@ -9,7 +9,7 @@ Zawar Ahmad
 ## Setup
 
 1. `npm install`
-2. Ensure `.env.dev` exists (created from `.env.example`)
+2. Ensure `.env` exists (created from `.env.example`)
 3. Generate JWT secrets if needed: `node ./backend/helperUtils/jwtSecret.js`
 4. Run MongoDB as a replica set — transactions require it (see Notes below)
 5. Add Firebase `serviceAccountKey.json` when push notifications are required

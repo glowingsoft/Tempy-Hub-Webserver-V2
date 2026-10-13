@@ -8,7 +8,7 @@
  *   SEED_ORG_ID, SEED_BRANCH_ID
  */
 require("dotenv").config({
-  path: require("path").join(__dirname, "..", ".env.dev"),
+  path: require("path").join(__dirname, "..", ".env"),
 });
 
 const path = require("path");

@@ -5,7 +5,7 @@ const { ShiftClaim } = require("@models/ShiftClaim");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -25,6 +25,30 @@ const {
 
 const EARLY_CLOCK_IN_MINUTES = 15;
 const DEFAULT_TZ = "Europe/London";
+
+const EMPTY_SHIFT_STATUS_COUNTS = { open: 0, filled: 0, cancelled: 0 };
+
+/** Tab counts ignore `status` so Open / Filled / Cancelled stay independent of the list filter. */
+const shiftStatusCountFacets = (countMatch) => ({
+  openCount: [
+    { $match: { ...countMatch, status: ShiftStatus.OPEN } },
+    { $count: "count" },
+  ],
+  filledCount: [
+    { $match: { ...countMatch, status: ShiftStatus.SCHEDULED } },
+    { $count: "count" },
+  ],
+  cancelledCount: [
+    { $match: { ...countMatch, status: ShiftStatus.CANCELLED } },
+    { $count: "count" },
+  ],
+});
+
+const shiftStatusCountsFromFacet = (result) => ({
+  open: facetCount(result.openCount),
+  filled: facetCount(result.filledCount),
+  cancelled: facetCount(result.cancelledCount),
+});
 
 const branchTimezone = async (branchId) => {
   const branch = await Branch.findById(branchId).select("timezone").lean();
@@ -219,13 +243,18 @@ const listShifts = async ({
       staffIdField: "staffId",
     });
     if (!inScope) {
-      return { data: [], meta: generateMeta(page, limit, 0) };
+      return {
+        data: [],
+        meta: {
+          ...generateMeta(page, limit, 0),
+          counts: { ...EMPTY_SHIFT_STATUS_COUNTS },
+        },
+      };
     }
   } else if (branchId) {
     match.branchId = new mongoose.Types.ObjectId(String(branchId));
   }
 
-  if (status) match.status = status;
   if (!actor && staffId) {
     match.staffId = new mongoose.Types.ObjectId(String(staffId));
   }
@@ -236,18 +265,22 @@ const listShifts = async ({
     if (to) match.startsAt.$lte = new Date(to);
   }
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  if (status) match.status = status;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: Shift,
     match,
     page,
     limit,
     skip,
     sort: { startsAt: 1 },
+    extraFacets: shiftStatusCountFacets(countMatch),
   });
 
   return {
     data: await attachShiftDetails(data),
-    meta,
+    meta: { ...meta, counts: shiftStatusCountsFromFacet(result) },
   };
 };
 

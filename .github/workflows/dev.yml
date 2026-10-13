@@ -1,0 +1,122 @@
+name: CI/CD for Dev Environment
+
+on:
+  push:
+    branches:
+      - dev  # Run the workflow on every commit to the 'cicd' branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Ensures we can compare changes properly
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: "20"
+
+      - name: Debug host
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "length: ${#HOST}"   # should be 42
+          getent hosts "$HOST" || echo "DNS lookup failed"
+
+      - name: Create PEM file from Secret
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+
+      - name: Ensure the target directory exists on EC2
+        run: |
+            ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/backend-dev && sudo chmod -R 777 ~/backend-dev"
+
+      - name: Set up Server - Install Node, npm, pm2, nginx if needed
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            # Check if Node.js is installed
+            if ! command -v node -v &>/dev/null; then
+              echo "Node.js not found. Installing Node.js..."
+              sudo apt update
+              sudo apt install nodejs -y
+            else
+              echo "Node.js is already installed"
+            fi
+            
+            # Check if npm is installed
+            if ! command -v npm -v &>/dev/null; then
+              echo "npm not found. Installing npm..."
+              sudo apt install npm -y
+            else
+              echo "npm is already installed"
+            fi
+
+            # Check if pm2 is installed
+            if ! command -v pm2 &>/dev/null; then
+              echo "pm2 not found. Installing pm2..."
+              sudo npm install pm2 -g
+            else
+              echo "pm2 is already installed"
+            fi
+
+            # Check if nginx is installed
+            if ! command -v nginx &>/dev/null; then
+              echo "nginx not found. Installing nginx..."
+              sudo apt install nginx -y
+            else
+              echo "nginx is already installed"
+            fi
+          EOF
+
+      - name: Copy files to EC2
+        run: |
+          # Copy all files to the remote EC2 directory
+          scp -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no -r * ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/backend-dev/
+
+      - name: Fix permissions on EC2
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
+            sudo chown -R ubuntu:ubuntu ~/backend-dev &&
+            sudo chmod -R 755 ~/backend-dev
+          "
+
+      - name: Install dependencies
+        run: |
+          # Install dependencies if package.json was changed
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd ~/backend-dev && npm install --force"
+
+      - name: Setup pm2 to auto-start
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd ~/backend-dev
+            # Check if PM2 is running the app
+            if ! pm2 list | grep -q 'server-dev'; then
+              echo "PM2 app not found. Starting new app..."
+              pm2 start "npm run server" --name server-dev
+            else
+              echo "PM2 app is already running. Restarting..."
+              pm2 restart server-dev
+            fi
+
+            # Set up PM2 startup and auto-restart
+            pm2 startup systemd -u ubuntu --hp /home/ubuntu
+            pm2 save
+          EOF
+
+      - name: Restart server service on EC2
+        run: |
+          # Restart PM2 to apply changes
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} 'pm2 restart all'
+      - name: Restart Nginx
+        run: |
+          # Restart Nginx to apply changes
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} 'sudo systemctl restart nginx'
+      - name: Clean up
+        run: |
+          # Clean up the PEM file
+          rm -f ~/.ssh/ec2_key.pem

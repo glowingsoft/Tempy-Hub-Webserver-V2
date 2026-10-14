@@ -47,6 +47,7 @@ const listDepartments = async (req, res) => {
       keyword: req.query.keyword,
       branchId: req.query.branchId,
       active: req.query.active,
+      status: req.query.status,
     });
 
     return sendResponse({
@@ -139,6 +140,7 @@ const listJobTitles = async (req, res) => {
       keyword: req.query.keyword,
       branchId: req.query.branchId,
       active: req.query.active,
+      status: req.query.status,
       level: req.query.level,
     });
 

@@ -4,7 +4,7 @@ const { Membership } = require("@models/Membership");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const { User } = require("@models/UserModel");
 const { StaffInvitation } = require("@models/StaffInvitation");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -183,6 +183,25 @@ const activateOrganization = async ({ organizationId, ownerUserId, session }) =>
   );
 };
 
+const organizationStatusCountFacets = (countMatch) => {
+  const facets = {};
+  for (const status of Object.values(OrganizationStatus)) {
+    facets[`${status}Count`] = [
+      { $match: { ...countMatch, status } },
+      { $count: "count" },
+    ];
+  }
+  return facets;
+};
+
+const organizationStatusCountsFromFacet = (result) => {
+  const counts = {};
+  for (const status of Object.values(OrganizationStatus)) {
+    counts[status] = facetCount(result[`${status}Count`]);
+  }
+  return counts;
+};
+
 const listOrganizations = async ({ actor, page, limit, skip, keyword, status }) => {
   const match = {};
 
@@ -197,22 +216,29 @@ const listOrganizations = async ({ actor, page, limit, skip, keyword, status }) 
     match._id = { $in: memberships.map((m) => m.organizationId) };
   }
 
-  if (status) match.status = status;
-
   const or = keywordOr(keyword, ["name"], { trim: true });
   if (or) match.$or = or;
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  if (status) {
+    if (!Object.values(OrganizationStatus).includes(status)) {
+      throw new AppError("invalid_organization_status", 400);
+    }
+    match.status = status;
+  }
+
+  const { data, meta, result } = await paginateWithFacet({
     model: Organization,
     match,
     page,
     limit,
     skip,
+    extraFacets: organizationStatusCountFacets(countMatch),
   });
 
   return {
     data: await attachOwnersToOrganizations(data),
-    meta,
+    meta: { ...meta, counts: organizationStatusCountsFromFacet(result) },
   };
 };
 

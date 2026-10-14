@@ -6,7 +6,7 @@ const { Organization } = require("@models/Organization");
 const { BranchActivationCode } = require("@models/BranchActivationCode");
 const { User } = require("@models/UserModel");
 const { Membership } = require("@models/Membership");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -326,6 +326,25 @@ const createBranch = async ({
   }
 };
 
+const branchStatusCountFacets = (countMatch) => {
+  const facets = {};
+  for (const status of Object.values(BranchStatus)) {
+    facets[`${status}Count`] = [
+      { $match: { ...countMatch, status } },
+      { $count: "count" },
+    ];
+  }
+  return facets;
+};
+
+const branchStatusCountsFromFacet = (result) => {
+  const counts = {};
+  for (const status of Object.values(BranchStatus)) {
+    counts[status] = facetCount(result[`${status}Count`]);
+  }
+  return counts;
+};
+
 const listBranches = async ({
   organizationId,
   page,
@@ -337,12 +356,31 @@ const listBranches = async ({
   const match = {
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
   };
-  if (status) match.status = status;
 
   const or = keywordOr(keyword, ["name", "code"], { trim: true });
   if (or) match.$or = or;
 
-  return paginateWithFacet({ model: Branch, match, page, limit, skip });
+  const countMatch = { ...match };
+  if (status) {
+    if (!Object.values(BranchStatus).includes(status)) {
+      throw new AppError("invalid_branch_status", 400);
+    }
+    match.status = status;
+  }
+
+  const { data, meta, result } = await paginateWithFacet({
+    model: Branch,
+    match,
+    page,
+    limit,
+    skip,
+    extraFacets: branchStatusCountFacets(countMatch),
+  });
+
+  return {
+    data,
+    meta: { ...meta, counts: branchStatusCountsFromFacet(result) },
+  };
 };
 
 /**

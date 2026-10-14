@@ -31,6 +31,7 @@ const siteLiveController = require("../../app/controllers/siteLiveController");
 const teamLiveController = require("../../app/controllers/teamLiveController");
 const visitorInvitationController = require("../controllers/visitorInvitationController");
 const residentMediaController = require("../controllers/residentMediaController");
+const floorPlanController = require("../controllers/floorPlanController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
@@ -50,6 +51,10 @@ const {
   VISIT_VIEW,
   VISIT_MANAGE,
 } = require("@adminServices/visitors/visitorAccess");
+const {
+  PEEP_VIEW,
+  PEEP_MANAGE,
+} = require("@adminServices/peep/floorPlanAccess");
 
 
 
@@ -402,6 +407,20 @@ scoped.get(
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),
   visitSessionController.listVisitSessions
+);
+
+scoped.get(
+  "/floor-plans",
+  requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
+  requirePermission(PEEP_VIEW),
+  floorPlanController.listFloorPlans
+);
+scoped.post(
+  "/floor-plans",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
+  requirePermission(PEEP_MANAGE),
+  floorPlanController.createFloorPlan
 );
 
 scoped.get(

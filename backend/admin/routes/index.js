@@ -35,6 +35,7 @@ const visitSessionRoutes = require("./visitSessionRoutes.js");
 const visitorInvitationRoutes = require("./visitorInvitationRoutes.js");
 const residentRoutes = require("./residentRoutes.js");
 const kioskAdminRoutes = require("./kioskAdminRoutes.js");
+const floorPlanRoutes = require("./floorPlanRoutes.js");
 
 const {
 
@@ -77,6 +78,7 @@ router.use("/visit-sessions", visitSessionRoutes);
 router.use("/visitor-invitations", visitorInvitationRoutes);
 router.use("/residents", residentRoutes);
 router.use("/kiosks", kioskAdminRoutes);
+router.use("/floor-plans", floorPlanRoutes);
 
 router.get("/module-definitions", auth, listModuleDefinitions);
 

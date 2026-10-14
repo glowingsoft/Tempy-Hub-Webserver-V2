@@ -8,7 +8,7 @@ const { Membership } = require("@models/Membership");
 const { User } = require("@models/UserModel");
 const { Organization } = require("@models/Organization");
 const { Branch } = require("@models/Branch");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   JobTitleLevel,
@@ -305,6 +305,32 @@ const createDepartment = async ({
   }
 };
 
+const parseActiveInactiveFilter = (active, status) => {
+  if (active !== undefined && active !== null && String(active) !== "") {
+    if (active === true || active === "true" || active === "1") return true;
+    if (active === false || active === "false" || active === "0") return false;
+  }
+  if (status === "active") return true;
+  if (status === "inactive") return false;
+  return null;
+};
+
+const activeInactiveCountFacets = (countMatch) => ({
+  activeCount: [
+    { $match: { ...countMatch, active: true } },
+    { $count: "count" },
+  ],
+  inactiveCount: [
+    { $match: { ...countMatch, active: false } },
+    { $count: "count" },
+  ],
+});
+
+const activeInactiveCountsFromFacet = (result) => ({
+  active: facetCount(result.activeCount),
+  inactive: facetCount(result.inactiveCount),
+});
+
 const listDepartments = async ({
   organizationId,
   page,
@@ -313,6 +339,7 @@ const listDepartments = async ({
   keyword,
   branchId,
   active,
+  status,
 }) => {
   const match = {
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
@@ -324,23 +351,26 @@ const listDepartments = async ({
       : null;
   }
 
-  if (active !== undefined) match.active = active === true || active === "true";
-
   const or = keywordOr(keyword, ["name"], { trim: true });
   if (or) match.$or = or;
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  const activeFilter = parseActiveInactiveFilter(active, status);
+  if (activeFilter !== null) match.active = activeFilter;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: Department,
     match,
     page,
     limit,
     skip,
     sort: { sortOrder: 1, name: 1 },
+    extraFacets: activeInactiveCountFacets(countMatch),
   });
 
   return {
     data: await attachOrgAndBranchDetails(data),
-    meta,
+    meta: { ...meta, counts: activeInactiveCountsFromFacet(result) },
   };
 };
 
@@ -429,6 +459,7 @@ const listJobTitles = async ({
   keyword,
   branchId,
   active,
+  status,
   level,
 }) => {
   const match = {
@@ -441,24 +472,28 @@ const listJobTitles = async ({
       : null;
   }
 
-  if (active !== undefined) match.active = active === true || active === "true";
   if (level) match.level = level;
 
   const or = keywordOr(keyword, ["name"], { trim: true });
   if (or) match.$or = or;
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  const activeFilter = parseActiveInactiveFilter(active, status);
+  if (activeFilter !== null) match.active = activeFilter;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: JobTitle,
     match,
     page,
     limit,
     skip,
     sort: { name: 1 },
+    extraFacets: activeInactiveCountFacets(countMatch),
   });
 
   return {
     data: await attachOrgAndBranchDetails(data),
-    meta,
+    meta: { ...meta, counts: activeInactiveCountsFromFacet(result) },
   };
 };
 

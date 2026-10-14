@@ -378,5 +378,16 @@
   "kiosk_unlocked_successfully": "Kiosk unlocked",
   "kiosk_locked": "This kiosk is locked",
   "invalid_period": "Period must be daily, weekly, or monthly",
-  "invalid_view": "View must be day or week"
+  "invalid_view": "View must be day or week",
+  "floor_plan_name_required": "A floor plan name is required",
+  "floor_plan_name_taken": "A floor plan with this name already exists on this site",
+  "floor_plan_not_found": "Floor plan not found",
+  "floor_plan_pin_not_found": "Floor plan pin not found",
+  "floor_plan_image_required": "Upload a floor plan image before placing pins",
+  "invalid_floor_plan_status": "Status must be uploaded, notUploaded, or all",
+  "invalid_floor_plan_pin": "Pin coordinates must be numbers between 0 and 1",
+  "floor_plan_created_successfully": "Floor plan created successfully",
+  "floor_plan_updated_successfully": "Floor plan updated successfully",
+  "floor_plan_pin_saved_successfully": "Floor plan pin saved",
+  "floor_plan_pin_deleted_successfully": "Floor plan pin deleted"
 }

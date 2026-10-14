@@ -6,6 +6,7 @@ const { Organization } = require("@models/Organization");
 const { BranchActivationCode } = require("@models/BranchActivationCode");
 const { User } = require("@models/UserModel");
 const { Membership } = require("@models/Membership");
+const { StaffProfile } = require("@models/StaffProfile");
 const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
@@ -235,25 +236,31 @@ const assignExistingBranchManager = async ({
   const existing = await Membership.findOne({
     userId,
     organizationId,
-    branchId,
   });
 
-  if (existing) {
+  if (existing?.status === ActiveInactiveStatus.ACTIVE) {
+    if (existing.role === MembershipRole.OWNER) {
+      throw new AppError("owner_cannot_be_branch_manager", 400);
+    }
+    if (existing.role !== MembershipRole.SITE_MANAGER) {
+      const hasProfile = await StaffProfile.exists({ userId, organizationId });
+      if (hasProfile) throw new AppError("manager_cannot_have_staff_profile", 400);
+    }
+    existing.role = MembershipRole.SITE_MANAGER;
+    existing.branchId = branchId;
+    existing.status = ActiveInactiveStatus.ACTIVE;
+    await existing.save({ validateModifiedOnly: true });
+  } else if (existing) {
     if (existing.role === MembershipRole.OWNER && !existing.branchId) {
       throw new AppError("owner_cannot_be_branch_manager", 400);
     }
     existing.role = MembershipRole.SITE_MANAGER;
+    existing.branchId = branchId;
     existing.status = ActiveInactiveStatus.ACTIVE;
     await existing.save({ validateModifiedOnly: true });
   } else {
-    const orgWideOwner = await Membership.findOne({
-      userId,
-      organizationId,
-      role: MembershipRole.OWNER,
-      branchId: null,
-      status: ActiveInactiveStatus.ACTIVE,
-    });
-    if (orgWideOwner) throw new AppError("owner_cannot_be_branch_manager", 400);
+    const hasProfile = await StaffProfile.exists({ userId, organizationId });
+    if (hasProfile) throw new AppError("manager_cannot_have_staff_profile", 400);
 
     try {
       await Membership.create({

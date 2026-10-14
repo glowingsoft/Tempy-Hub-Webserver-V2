@@ -37,15 +37,14 @@ const membershipSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-membershipSchema.index({ userId: 1, organizationId: 1 });
 membershipSchema.index({ branchId: 1, role: 1 });
 
 /**
- * One active membership per user per scope. Inactive rows are excluded so a
- * revoked membership can be reissued later without tripping the constraint.
+ * One active role per person per organisation (1 email = 1 role).
+ * Inactive rows are excluded so a revoked membership can be reissued.
  */
 membershipSchema.index(
-  { userId: 1, organizationId: 1, branchId: 1 },
+  { userId: 1, organizationId: 1 },
   {
     unique: true,
     partialFilterExpression: { status: ActiveInactiveStatus.ACTIVE },

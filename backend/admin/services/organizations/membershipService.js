@@ -27,6 +27,10 @@ const {
   ActiveInactiveStatus,
   StaffInvitationStatus,
 } = require("@models/domainEnums");
+const {
+  STAFF_PROFILE_ROLES,
+  assertRoleMayHaveStaffProfile,
+} = require("@adminServices/staff/staffAccess");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
@@ -498,6 +502,14 @@ const updateMembership = async ({
 
   await assertBranchInOrganization(nextBranchId, organizationId);
 
+  if (!STAFF_PROFILE_ROLES.includes(nextRole)) {
+    const hasProfile = await StaffProfile.exists({
+      userId: membership.userId,
+      organizationId,
+    });
+    if (hasProfile) throw new AppError("manager_cannot_have_staff_profile", 400);
+  }
+
   const losingOwnership =
     (role && role !== MembershipRole.OWNER) ||
     status === ActiveInactiveStatus.INACTIVE;
@@ -605,6 +617,7 @@ const inviteMember = async ({
     if (role === MembershipRole.OWNER) {
       throw new AppError("owner_cannot_be_branch_scoped", 400);
     }
+    assertRoleMayHaveStaffProfile(role);
     const staffService = require("@adminServices/staff/staffService");
     employment = await staffService.validateEmploymentAssignment({
       organizationId,
@@ -625,7 +638,6 @@ const inviteMember = async ({
     const alreadyMember = await Membership.exists({
       userId: existingUser._id,
       organizationId,
-      branchId: scopedBranchId,
       status: ActiveInactiveStatus.ACTIVE,
     });
     if (alreadyMember) throw new AppError("membership_already_exists", 409);
@@ -984,11 +996,15 @@ const redeemInvitation = async ({
       const existing = await Membership.findOne({
         userId: user._id,
         organizationId: invitation.organizationId,
-        branchId: invitation.branchId,
       }).session(session);
+
+      if (existing?.status === ActiveInactiveStatus.ACTIVE) {
+        throw new AppError("membership_already_exists", 409);
+      }
 
       if (existing) {
         existing.role = invitation.role;
+        existing.branchId = invitation.branchId;
         existing.permissions = invitation.permissions;
         existing.status = ActiveInactiveStatus.ACTIVE;
         await existing.save({ session });
@@ -1027,7 +1043,11 @@ const redeemInvitation = async ({
         });
       }
 
-      if (invitation.jobTitleId && invitation.branchId) {
+      if (
+        invitation.jobTitleId &&
+        invitation.branchId &&
+        STAFF_PROFILE_ROLES.includes(invitation.role)
+      ) {
         const staffService = require("@adminServices/staff/staffService");
         staffProfile = await staffService.insertStaffProfile({
           userId: user._id,
@@ -1038,6 +1058,7 @@ const redeemInvitation = async ({
           reportsToStaffId: invitation.reportsToStaffId,
           startDate: invitation.startDate,
           employeeCode: invitation.employeeCode,
+          role: invitation.role,
           session,
         });
       }

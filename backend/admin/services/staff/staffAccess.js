@@ -28,6 +28,12 @@ const TEAM_APPROVER_ROLES = [
   MembershipRole.LINE_MANAGER,
 ];
 
+/** Clock-in / rota profile. Owner and Site Manager are manager logins only. */
+const STAFF_PROFILE_ROLES = [
+  MembershipRole.STAFF,
+  MembershipRole.LINE_MANAGER,
+];
+
 const isPlatformAdmin = (actor) => actor?.userType === "admin";
 
 const actorStanding = async (actor, organizationId) => {
@@ -243,11 +249,29 @@ const applyLineManagerStaffScope = async ({
 const duplicateKey = (error) =>
   error?.code === 11000 || error?.code === 11001;
 
+const assertOneActiveMembershipPerOrg = async (userId, organizationId) => {
+  const exists = await Membership.exists({
+    userId,
+    organizationId,
+    status: ActiveInactiveStatus.ACTIVE,
+  });
+  if (exists) throw new AppError("membership_already_exists", 409);
+};
+
+const assertRoleMayHaveStaffProfile = (role) => {
+  if (!STAFF_PROFILE_ROLES.includes(role)) {
+    throw new AppError("manager_cannot_have_staff_profile", 400);
+  }
+};
+
 module.exports = {
   MANAGER_ROLES,
   TEAM_APPROVER_ROLES,
+  STAFF_PROFILE_ROLES,
   actorStanding,
   assertMayManageStaff,
+  assertOneActiveMembershipPerOrg,
+  assertRoleMayHaveStaffProfile,
   assertMayApproveForStaff,
   assertBranchInOrganization,
   scopeBranchFilter,

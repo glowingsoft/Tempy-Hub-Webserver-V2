@@ -10,8 +10,10 @@ const { nameKeyOf } = require("@utils/nameKey");
 const { Membership } = require("@models/Membership");
 const {
     MembershipRole,
+    MembershipRoleRank,
     ModuleSlug,
     OrganizationStatus,
+    ActiveInactiveStatus,
 } = require("@models/domainEnums");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -129,8 +131,64 @@ const MODULE_DEFINITIONS = [
     },
 ];
 
+async function enforceOneMembershipPerOrg() {
+    const groups = await Membership.aggregate([
+        { $match: { status: ActiveInactiveStatus.ACTIVE } },
+        {
+            $group: {
+                _id: { userId: "$userId", organizationId: "$organizationId" },
+                docs: { $push: { _id: "$_id", role: "$role" } },
+                n: { $sum: 1 },
+            },
+        },
+        { $match: { n: { $gt: 1 } } },
+    ]);
+
+    let inactivated = 0;
+    for (const group of groups) {
+        const ranked = [...group.docs].sort(
+            (a, b) =>
+                (MembershipRoleRank[b.role] || 0) -
+                (MembershipRoleRank[a.role] || 0)
+        );
+        const drop = ranked.slice(1).map((row) => row._id);
+        const result = await Membership.updateMany(
+            { _id: { $in: drop } },
+            { $set: { status: ActiveInactiveStatus.INACTIVE } }
+        );
+        inactivated += result.modifiedCount;
+    }
+    if (inactivated) {
+        console.log(
+            `✅ inactivated ${inactivated} duplicate membership(s) (one role per email per org)`
+        );
+    }
+
+    for (const name of [
+        "userId_1_organizationId_1_branchId_1",
+        "userId_1_organizationId_1",
+    ]) {
+        try {
+            await Membership.collection.dropIndex(name);
+            console.log(`✅ dropped Membership.${name}`);
+        } catch (dropErr) {
+            if (dropErr?.codeName !== "IndexNotFound" && dropErr?.code !== 27) {
+                console.warn(`⚠️ Membership ${name} drop:`, dropErr.message);
+            }
+        }
+    }
+
+    try {
+        await Membership.syncIndexes();
+    } catch (indexErr) {
+        console.warn("⚠️ Membership index sync:", indexErr.message);
+    }
+}
+
 async function runDBBootstrap() {
     try {
+        await enforceOneMembershipPerOrg();
+
         const existing = await Bootstrap.findOne();
         if (existing?.version >= BOOTSTRAP_VERSION) {
             console.log("ℹ️ Bootstrap already up-to-date");
@@ -306,7 +364,7 @@ async function runDBBootstrap() {
                 const hasMembership = await Membership.exists({
                     userId: user._id,
                     organizationId: organization._id,
-                    role: membershipRole,
+                    status: ActiveInactiveStatus.ACTIVE,
                 });
 
                 if (!hasMembership) {
@@ -364,12 +422,15 @@ async function runDBBootstrap() {
             branchId: { $ne: null },
         })
             .select(
-                "acceptedByUserId organizationId branchId jobTitleId departmentIds reportsToStaffId startDate employeeCode"
+                "acceptedByUserId organizationId branchId jobTitleId departmentIds reportsToStaffId startDate employeeCode role"
             )
             .lean();
 
         let repaired = 0;
+        const { STAFF_PROFILE_ROLES } = require("@adminServices/staff/staffAccess");
+
         for (const invitation of acceptedWithEmployment) {
+            if (!STAFF_PROFILE_ROLES.includes(invitation.role)) continue;
             const created = await staffService.insertStaffProfile({
                 userId: invitation.acceptedByUserId,
                 organizationId: invitation.organizationId,

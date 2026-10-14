@@ -125,6 +125,44 @@ const createExternalPerson = async ({
   });
 };
 
+const onSiteVisitLookup = {
+  $lookup: {
+    from: VisitSession.collection.name,
+    let: { personId: "$_id" },
+    pipeline: [
+      {
+        $match: {
+          $expr: {
+            $and: [
+              { $eq: ["$externalPersonId", "$$personId"] },
+              { $eq: ["$status", VisitSessionStatus.ON_SITE] },
+            ],
+          },
+        },
+      },
+      { $project: { _id: 1, checkInAt: 1 } },
+      { $limit: 1 },
+    ],
+    as: "_onSite",
+  },
+};
+
+/** Tab totals ignore the current siteStatus filter (same pattern as floor-plan counts). */
+const siteStatusCountFacets = (countMatch) => ({
+  onSiteCount: [
+    { $match: countMatch },
+    onSiteVisitLookup,
+    { $match: { $expr: { $gt: [{ $size: "$_onSite" }, 0] } } },
+    { $count: "count" },
+  ],
+  offSiteCount: [
+    { $match: countMatch },
+    onSiteVisitLookup,
+    { $match: { $expr: { $eq: [{ $size: "$_onSite" }, 0] } } },
+    { $count: "count" },
+  ],
+});
+
 const directoryLookups = [
   {
     $lookup: {
@@ -144,27 +182,7 @@ const directoryLookups = [
       pipeline: [{ $project: { name: 1 } }],
     },
   },
-  {
-    $lookup: {
-      from: VisitSession.collection.name,
-      let: { personId: "$_id" },
-      pipeline: [
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ["$externalPersonId", "$$personId"] },
-                { $eq: ["$status", VisitSessionStatus.ON_SITE] },
-              ],
-            },
-          },
-        },
-        { $project: { _id: 1, checkInAt: 1 } },
-        { $limit: 1 },
-      ],
-      as: "_onSite",
-    },
-  },
+  onSiteVisitLookup,
   {
     $addFields: {
       branch: { $arrayElemAt: ["$_branch", 0] },
@@ -210,7 +228,10 @@ const listExternalPeople = async ({
   if (!branchIds.length) {
     return {
       data: [],
-      meta: generateMeta(page, limit, 0),
+      meta: {
+        ...generateMeta(page, limit, 0),
+        counts: { onSite: 0, offSite: 0 },
+      },
     };
   }
 
@@ -223,25 +244,41 @@ const listExternalPeople = async ({
   const or = keywordOr(keyword, ["name", "email", "phone"], { trim: true });
   if (or) match.$or = or;
 
+  const countMatch = { ...match };
   const statusFilter = parseSiteStatus(siteStatus);
   const afterStatus = statusFilter ? [{ $match: { siteStatus: statusFilter } }] : [];
 
   const [result] = await ExternalPerson.aggregate([
-    { $match: match },
-    ...directoryLookups,
-    ...afterStatus,
-    { $sort: { createdAt: -1 } },
     {
       $facet: {
-        data: [{ $skip: skip }, { $limit: limit }],
-        totalCount: [{ $count: "count" }],
+        data: [
+          { $match: match },
+          ...directoryLookups,
+          ...afterStatus,
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+        ],
+        totalCount: [
+          { $match: match },
+          ...directoryLookups,
+          ...afterStatus,
+          { $count: "count" },
+        ],
+        ...siteStatusCountFacets(countMatch),
       },
     },
   ]);
 
   return {
     data: result?.data || [],
-    meta: generateMeta(page, limit, facetCount(result?.totalCount)),
+    meta: {
+      ...generateMeta(page, limit, facetCount(result?.totalCount)),
+      counts: {
+        onSite: facetCount(result?.onSiteCount),
+        offSite: facetCount(result?.offSiteCount),
+      },
+    },
   };
 };
 

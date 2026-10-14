@@ -23,6 +23,7 @@ const {
   duplicateKey,
   applyLineManagerStaffScope,
   resolveSubordinateStaffIds,
+  assertRoleMayHaveStaffProfile,
 } = require("./staffAccess");
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -226,8 +227,23 @@ const insertStaffProfile = async ({
   startDate,
   employeeCode,
   contractedWeeklyHours,
+  role,
   session,
 }) => {
+  let membershipRole = role;
+  if (!membershipRole) {
+    const membershipQuery = Membership.findOne({
+      userId,
+      organizationId,
+      status: ActiveInactiveStatus.ACTIVE,
+    }).select("role");
+    if (session) membershipQuery.session(session);
+    const membership = await membershipQuery.lean();
+    membershipRole = membership?.role;
+  }
+  if (!membershipRole) throw new AppError("no_membership_for_scope", 403);
+  assertRoleMayHaveStaffProfile(membershipRole);
+
   const existsQuery = StaffProfile.exists({ userId, organizationId });
   if (session) existsQuery.session(session);
   if (await existsQuery) return null;
@@ -612,6 +628,7 @@ const createStaffProfile = async ({
   }).lean();
 
   if (!membership) throw new AppError("no_membership_for_scope", 403);
+  assertRoleMayHaveStaffProfile(membership.role);
 
   if (
     membership.branchId &&
@@ -656,6 +673,7 @@ const createStaffProfile = async ({
       startDate: employment.startDate,
       employeeCode: employment.employeeCode,
       contractedWeeklyHours,
+      role: membership.role,
     });
 
     if (pinHash || phone || photoUrl || bannerUrl || ward || locationLabel || status) {

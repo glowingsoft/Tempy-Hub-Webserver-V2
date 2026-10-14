@@ -226,6 +226,8 @@ const requireModule = (moduleSlug) => (req, res, next) => {
       translationKey: "no_membership_for_scope",
     });
   }
+  console.log("req.organization", req.organization);
+  console.log("moduleSlug", moduleSlug);
 
   // Module gating is commercial. Owners are still bound by what they bought;
   // only the platform operator sees everything.

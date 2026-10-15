@@ -442,7 +442,24 @@ const register = async (req, res) => {
 
 };
 
+const verifyAdminPin = async (req, res) => {
+  try {
+    const data = await kioskService.verifyKioskAdminPin({
+      branchId: req.body.branchId,
+      deviceId: req.body.deviceId,
+      adminPin: req.body.adminPin,
+    });
 
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "kiosk_admin_pin_verified",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
 
 const getMe = async (req, res) => {
 
@@ -662,6 +679,8 @@ module.exports = {
   scanFromPhone,
 
   register,
+
+  verifyAdminPin,
 
   getMe,
 

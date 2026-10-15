@@ -58,12 +58,12 @@ function printStartupUrls({ port, tunnelEnabled = true }) {
     `Local:    ${local}`,
     `API:      ${local}/api/v1`,
     `Health:   ${local}/health`,
-    `Docs:     ${local}/api-docs`,
+    `Docs:     ${local}/api/v1/docs`,
     ...(networkBases.length
       ? networkBases.flatMap((base) => [
           `Network:  ${base}`,
           `          ${base}/api/v1`,
-          `          ${base}/api-docs`,
+          `          ${base}/api/v1/docs`,
         ])
       : ["Network:  (no LAN IPv4 found)"]),
     tunnelLine,
@@ -101,7 +101,7 @@ function printTunnelUrls(tunnelUrl) {
     `Tunnel:   ${https}`,
     `API:      ${https}/api/v1`,
     `Health:   ${https}/health`,
-    `Docs:     ${https}/api-docs`,
+    `Docs:     ${https}/api/v1/docs`,
   ]);
 
   printBlock("Sockets (Socket.IO)", [

@@ -26,6 +26,7 @@ require("express-async-errors");
 const express = require("express");
 const morgan = require("morgan");
 const path = require("path");
+const fs = require("fs");
 const moduleAlias = require("module-alias");
 
 /**
@@ -69,41 +70,8 @@ const {
  */
 const { createSocketServer } = require("@socketIo/socketServer");
 
-/**
- * ------------------------------------------------
- * Swagger
- * ------------------------------------------------
- */
 const swaggerUi = require("swagger-ui-express");
-const fs = require("fs");
-
-const swaggerDir = path.join(__dirname, "..", "swagger");
-const swaggerFilePath = path.join(swaggerDir, "swagger_output.json");
-
-if (!fs.existsSync(swaggerDir)) {
-  fs.mkdirSync(swaggerDir, { recursive: true });
-}
-
-if (!fs.existsSync(swaggerFilePath)) {
-  const defaultSwagger = {
-    openapi: "3.0.0",
-    info: {
-      title: "Tempy Hub API",
-      description: "saas sytem for care homes",
-      version: "1.0.0",
-    },
-    servers: [{ url: "http://localhost:8080/api/v1", description: "Development server" }],
-    paths: {},
-    components: {
-      securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
-      },
-    },
-  };
-  fs.writeFileSync(swaggerFilePath, JSON.stringify(defaultSwagger, null, 2));
-}
-
-const swaggerFile = require("../swagger/swagger_output.json");
+const { buildOpenApi } = require("./config/swagger/buildOpenApi");
 const { allowedOrigins } = require("@config/origins");
 
 /**
@@ -179,8 +147,30 @@ app.use("/api/v1/app", appRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1", routes);
 
-// Swagger
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
+const openApiSpec = buildOpenApi({
+  adminRouter: adminRoutes,
+  appRouter: appRoutes,
+  commonRouter: routes,
+  port: process.env.PORT || 8080,
+});
+
+app.get("/api/v1/openapi.json", (_req, res) => res.json(openApiSpec));
+app.use(
+  "/api/v1/docs",
+  swaggerUi.serve,
+  swaggerUi.setup(openApiSpec, {
+    customSiteTitle: "Tempy Hub API",
+    customJsStr: fs.readFileSync(
+      path.join(__dirname, "config/swagger/swaggerAuthInline.js"),
+      "utf8"
+    ),
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+    },
+  })
+);
+app.get("/api-docs", (_req, res) => res.redirect(302, "/api/v1/docs"));
 
 // Fallback
 app.use((req, res) => {

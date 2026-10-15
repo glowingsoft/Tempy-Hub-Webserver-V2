@@ -772,6 +772,37 @@ const registerKiosk = async ({
   };
 };
 
+const verifyKioskAdminPin = async ({ branchId, deviceId, adminPin }) => {
+  if (!branchId) throw new AppError("branch_scope_required", 400);
+  if (!deviceId || !String(deviceId).trim()) {
+    throw new AppError("kiosk_device_id_required", 400);
+  }
+  if (!/^\d{4,8}$/.test(String(adminPin))) {
+    throw new AppError("invalid_kiosk_admin_pin", 400);
+  }
+
+  const kiosk = await Kiosk.findOne({
+    deviceId: String(deviceId).trim(),
+    branchId,
+  });
+
+  if (!kiosk) throw new AppError("kiosk_not_found", 404);
+  if (kiosk.setupStatus !== KioskSetupStatus.REGISTERED) {
+    throw new AppError("kiosk_not_registered", 400);
+  }
+  if (
+    !kiosk.adminPinHash ||
+    !(await bcrypt.compare(String(adminPin), kiosk.adminPinHash))
+  ) {
+    throw new AppError("kiosk_admin_pin_incorrect", 401);
+  }
+
+  return {
+    token: signKioskToken(kiosk),
+    kiosk: sanitizeKiosk(kiosk),
+  };
+};
+
 const assertKioskUnlocked = async (kioskOrId) => {
   const kiosk =
     kioskOrId && kioskOrId.kioskMode !== undefined
@@ -1345,6 +1376,7 @@ module.exports = {
   confirmPairingAndClockIn,
   cancelPairing,
   registerKiosk,
+  verifyKioskAdminPin,
   getKioskSession,
   clockInAtKiosk,
   clockOutAtKiosk,

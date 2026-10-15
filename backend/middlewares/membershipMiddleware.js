@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { sendResponse } = require("@utils/responseUtil");
 const { Membership } = require("@models/Membership");
 const { Organization } = require("@models/Organization");
+const { Branch } = require("@models/Branch");
 const { StaffProfile } = require("@models/StaffProfile");
 const {
   MembershipRole,
@@ -45,8 +46,17 @@ const requireMembership = (options = {}) => {
         });
       }
 
-      const organizationId = toObjectId(readScope(req, "organizationId"));
+      let organizationId = toObjectId(readScope(req, "organizationId"));
       const branchId = toObjectId(readScope(req, "branchId"));
+
+      if (!organizationId && branchId) {
+        const branch = await Branch.findById(branchId)
+          .select("organizationId")
+          .lean();
+        if (branch?.organizationId) {
+          organizationId = toObjectId(branch.organizationId);
+        }
+      }
 
       if (!organizationId) {
         return sendResponse({
@@ -154,6 +164,7 @@ const requireMembership = (options = {}) => {
       req.membership = membership;
       req.isPlatformAdmin = isPlatformAdmin;
       req.organization = organization;
+      req.organizationId = organizationId;
       req.orgId = organizationId;
       req.branchId = branchId || membership.branchId || null;
 
@@ -226,7 +237,6 @@ const requireModule = (moduleSlug) => (req, res, next) => {
       translationKey: "no_membership_for_scope",
     });
   }
-  console.log("req.organization", req.organization);
   console.log("moduleSlug", moduleSlug);
 
   // Module gating is commercial. Owners are still bound by what they bought;

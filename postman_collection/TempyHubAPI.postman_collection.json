@@ -44,6 +44,11 @@
                       "            }",
                       "        });",
                       "    }",
+                      "    if (jsonData.data && jsonData.data.access && jsonData.data.access.memberships && jsonData.data.access.memberships.length) {",
+                      "        var membership = jsonData.data.access.memberships[0];",
+                      "        if (membership.organizationId) pm.collectionVariables.set(\"organizationId\", String(membership.organizationId));",
+                      "        if (membership.branchId) pm.collectionVariables.set(\"branchId\", String(membership.branchId));",
+                      "    }",
                       "});"
                     ],
                     "type": "text/javascript",
@@ -1685,6 +1690,49 @@
                     "app",
                     "kiosk",
                     "register"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "verify kiosk admin pin",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data.token) {",
+                      "  pm.collectionVariables.set(\"kioskToken\", json.data.token);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"deviceId\": \"dummy-kiosk-device-1\",\n  \"adminPin\": \"121212\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}app/kiosk/session",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "kiosk",
+                    "session"
                   ]
                 }
               },
@@ -6951,6 +6999,275 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "PEEP records",
+          "item": [
+            {
+              "name": "peep floor summary",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/peep-floor-summary?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "peep-floor-summary"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "list peep records",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/peep-records?page=1&limit=10&branchId={{branchId}}&peepLevel=&keyword=",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "peep-records"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "peepLevel",
+                      "value": ""
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    }
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "create peep record",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.response.to.have.status(201));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"peepRecordId\", json.data._id);",
+                      "if (json.data && json.data.residentId) pm.collectionVariables.set(\"residentId\", String(json.data.residentId));",
+                      "if (json.data && json.data.floorPlanId) pm.collectionVariables.set(\"floorPlanId\", String(json.data.floorPlanId));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"peepLevel\": \"high\",\n  \"supportNeeds\": \"Full assistance during evacuation.\",\n  \"primaryRoute\": \"Main stairwell\",\n  \"secondaryRoute\": \"Lift lobby to rear exit\",\n  \"equipmentRequired\": \"Evac chair\",\n  \"responsibleStaff\": \"Night coordinator\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/peep-records",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "peep-records"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "get peep record by resident",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.response.to.have.status(200));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"peepRecordId\", json.data._id);",
+                      "if (json.data && json.data.residentId) pm.collectionVariables.set(\"residentId\", String(json.data.residentId));",
+                      "if (json.data && json.data.floorPlanId) pm.collectionVariables.set(\"floorPlanId\", String(json.data.floorPlanId));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/residents/{{residentId}}/peep-record",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "residents",
+                    "{{residentId}}",
+                    "peep-record"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "get peep record",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.response.to.have.status(200));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"peepRecordId\", json.data._id);",
+                      "if (json.data && json.data.residentId) pm.collectionVariables.set(\"residentId\", String(json.data.residentId));",
+                      "if (json.data && json.data.floorPlanId) pm.collectionVariables.set(\"floorPlanId\", String(json.data.floorPlanId));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}admin/peep-records/{{peepRecordId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "peep-records",
+                    "{{peepRecordId}}"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "update peep record",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.response.to.have.status(200));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"peepRecordId\", json.data._id);",
+                      "if (json.data && json.data.residentId) pm.collectionVariables.set(\"residentId\", String(json.data.residentId));",
+                      "if (json.data && json.data.floorPlanId) pm.collectionVariables.set(\"floorPlanId\", String(json.data.floorPlanId));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"peepLevel\": \"medium\",\n  \"supportNeeds\": \"Partial assistance on stairs.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/peep-records/{{peepRecordId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "peep-records",
+                    "{{peepRecordId}}"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
@@ -7174,6 +7491,11 @@
     {
       "key": "residentId",
       "value": ""
+    },
+    {
+      "key": "peepRecordId",
+      "value": "",
+      "type": "string"
     }
   ]
 }

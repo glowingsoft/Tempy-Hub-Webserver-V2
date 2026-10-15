@@ -20,7 +20,7 @@
     "pm2:save": "pm2 save",
     "pm2:startup": "pm2 startup",
     "update:alias": "node aliasConfig/update-aliases.js",
-    "swagger:serve-hint": "echo Open Swagger UI at http://localhost:6060/api-docs",
+    "swagger:serve-hint": "echo Open Swagger UI at http://localhost:6060/api/v1/docs",
     "swagger:validate": "node -e \"JSON.parse(require('fs').readFileSync('swagger/swagger_output.json','utf8')); console.log('swagger_output.json OK')\"",
     "postman:normalize": "node postman_collection/scripts/normalize-collection.js",
     "postman:build": "npm run postman:normalize && npm run postman:validate",

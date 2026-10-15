@@ -23,15 +23,14 @@ const upload = multer({
 
 // Check file type
 function checkFileType(file, cb) {
-  const filetypes = /jpeg|jpg|png|gif|bmp|tiff|webp/; // Allowed file types
-  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = filetypes.test(file.mimetype);
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExt = /\.(jpe?g|png|gif|bmp|tiff|webp|pdf)$/;
+  const allowedMime = /^(image\/(jpeg|jpg|png|gif|bmp|tiff|webp)|application\/pdf)$/i;
 
-  if (mimetype && extname) {
+  if (allowedExt.test(ext) && allowedMime.test(file.mimetype)) {
     return cb(null, true);
-  } else {
-    cb("Error: Images Only!");
   }
+  cb(new Error("Invalid file type. Only images and PDF are allowed."));
 }
 
 module.exports = upload;

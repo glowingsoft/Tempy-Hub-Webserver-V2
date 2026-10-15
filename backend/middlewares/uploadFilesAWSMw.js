@@ -15,16 +15,14 @@ const uploads3Mw = multer({
 
 // Function to check file type
 function checkFileType(file, cb) {
-  const filetypes = /jpeg|jpg|png|gif|bmp|tiff|webp/;
-  const extname = filetypes.test(
-    file.originalname.toLowerCase()
-  );
-  const mimetype = filetypes.test(file.mimetype);
+  const name = file.originalname.toLowerCase();
+  const allowedExt = /\.(jpe?g|png|gif|bmp|tiff|webp|pdf)$/;
+  const allowedMime = /^(image\/(jpeg|jpg|png|gif|bmp|tiff|webp)|application\/pdf)$/i;
 
-  if (extname && mimetype) {
+  if (allowedExt.test(name) && allowedMime.test(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Invalid file type. Only images are allowed!"));
+    cb(new Error("Invalid file type. Only images and PDF are allowed."));
   }
 }
 

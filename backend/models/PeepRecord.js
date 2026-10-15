@@ -1,8 +1,14 @@
 const mongoose = require("mongoose");
-const { PeepConsentStatus } = require("./domainEnums");
+const { PeepConsentStatus, CareLevel } = require("./domainEnums");
 
 const peepRecordSchema = new mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+      index: true,
+    },
     residentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Resident",
@@ -15,12 +21,22 @@ const peepRecordSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    reviewDueAt: { type: Date, required: true },
+    peepLevel: {
+      type: String,
+      enum: Object.values(CareLevel),
+      required: true,
+    },
+    supportNeeds: { type: String, default: "" },
+    primaryRoute: { type: String, default: "" },
+    secondaryRoute: { type: String, default: "" },
+    equipmentRequired: { type: String, default: "" },
+    responsibleStaff: { type: String, default: "" },
+    reviewDueAt: { type: Date, default: null },
     lastReviewedAt: { type: Date, default: null },
     consentStatus: {
       type: String,
       enum: Object.values(PeepConsentStatus),
-      required: true,
+      default: PeepConsentStatus.CONSENT,
     },
     mcaBestInterestNotes: { type: String, default: "" },
     mobilityNotes: { type: String, default: "" },
@@ -29,6 +45,8 @@ const peepRecordSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+peepRecordSchema.index({ organizationId: 1, branchId: 1, peepLevel: 1 });
 
 const PeepRecord =
   mongoose.models.PeepRecord || mongoose.model("PeepRecord", peepRecordSchema);

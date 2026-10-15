@@ -9,10 +9,10 @@ const { AppError } = require("@services/_errors/AppError");
 const { AdmissionStatus, CareLevel } = require("@models/domainEnums");
 const {
   actorStanding,
-  assertMayManageStaff,
+  assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
-} = require("@adminServices/staff/staffAccess");
+} = require("./residentAccess");
 
 const PASSCODE_PATTERN = /^[A-Za-z0-9-]{4,32}$/;
 const QR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -92,7 +92,7 @@ const requireResidentInOrg = async ({
 
   const standing = await actorStanding(actor, organizationId);
   if (manage) {
-    assertMayManageStaff(standing, resident.branchId);
+    assertMayAccessResidents(standing, resident.branchId);
   } else {
     const scoped = scopeBranchFilter(standing, resident.branchId);
     if (scoped && String(scoped) !== String(resident.branchId)) {
@@ -106,7 +106,7 @@ const loadBranch = async ({ actor, organizationId, branchId, manage }) => {
   if (!branchId) throw new AppError("branch_required", 400);
   await assertBranchInOrganization(branchId, organizationId);
   const standing = await actorStanding(actor, organizationId);
-  if (manage) assertMayManageStaff(standing, branchId);
+  if (manage) assertMayAccessResidents(standing, branchId);
   const branch = await Branch.findOne({ _id: branchId, organizationId })
     .select("_id name code organizationId")
     .lean();
@@ -140,7 +140,7 @@ const listResidents = async ({
   keyword,
 }) => {
   const standing = await actorStanding(actor, organizationId);
-  assertMayManageStaff(standing, scopeBranchFilter(standing, branchId));
+  assertMayAccessResidents(standing, scopeBranchFilter(standing, branchId));
 
   const scopedBranchId = scopeBranchFilter(standing, branchId);
   if (scopedBranchId) {

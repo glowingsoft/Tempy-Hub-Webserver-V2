@@ -16,10 +16,11 @@ const floorPlanSchema = new mongoose.Schema(
     },
     /** Floor label, e.g. "Ground Floor". */
     name: { type: String, required: true, trim: true },
-    /** Rendered plan (PDF converted on the client). Empty until uploaded. */
+    /** Rendered plan image. Empty until an image is uploaded. */
     imageUrl: { type: String, default: "" },
+    /** Source PDF. A plan is uploaded when imageUrl or pdfUrl is set. */
     pdfUrl: { type: String, default: "" },
-    /** Bumped when the image is replaced. */
+    /** Bumped when the image or PDF is replaced. */
     version: { type: Number, default: 0, min: 0 },
     meta: { type: mongoose.Schema.Types.Mixed, default: null },
   },

@@ -151,6 +151,8 @@
   "kiosk_registered_successfully": "Kiosk registered successfully",
   "kiosk_device_already_registered": "This device is already registered as a kiosk",
   "invalid_kiosk_admin_pin": "The kiosk admin PIN must be 4 to 8 digits",
+  "kiosk_admin_pin_incorrect": "The kiosk admin PIN is incorrect",
+  "kiosk_admin_pin_verified": "Kiosk admin PIN verified",
   "staff_identification_required": "Identify staff with NFC, employee code and PIN, or staff ID (dev only)",
   "staff_identification_failed": "Staff could not be identified",
   "staff_not_at_kiosk_branch": "This staff member is not assigned to this branch",
@@ -390,5 +392,11 @@
   "floor_plan_created_successfully": "Floor plan created successfully",
   "floor_plan_updated_successfully": "Floor plan updated successfully",
   "floor_plan_pin_saved_successfully": "Floor plan pin saved",
-  "floor_plan_pin_deleted_successfully": "Floor plan pin deleted"
+  "floor_plan_pin_deleted_successfully": "Floor plan pin deleted",
+  "peep_record_not_found": "PEEP record not found",
+  "peep_record_already_exists": "This resident already has a PEEP record",
+  "invalid_peep_level": "PEEP level must be low, medium, or high",
+  "invalid_peep_consent_status": "Consent status is not valid",
+  "peep_record_created_successfully": "PEEP record created successfully",
+  "peep_record_updated_successfully": "PEEP record updated successfully"
 }

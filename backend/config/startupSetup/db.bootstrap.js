@@ -89,6 +89,12 @@ const MODULE_DEFINITIONS = [
             "Personal emergency evacuation plans and site floor plans.",
     },
     {
+        slug: ModuleSlug.RESIDENTS,
+        name: "Residents",
+        description:
+            "Resident directory, rooms, and occupancy for a site.",
+    },
+    {
         slug: ModuleSlug.DOCUMENTS_ESIGN,
         name: "Documents & e-sign",
         description: "Versioned documents and signature capture.",
@@ -128,6 +134,12 @@ const MODULE_DEFINITIONS = [
         slug: ModuleSlug.AGENCY_SHIFT_BIDS,
         name: "Agency shift bids",
         description: "Agency worker sourcing and shift bids.",
+    },
+    {
+        slug: ModuleSlug.FAMILY_ENGAGEMENT,
+        name: "Family engagement",
+        description:
+            "Family overview, groups, community wall, newsletters, gazettes, and moderation.",
     },
 ];
 
@@ -185,9 +197,37 @@ async function enforceOneMembershipPerOrg() {
     }
 }
 
+async function ensureModuleCatalogue() {
+    await ModuleDefinition.bulkWrite(
+        MODULE_DEFINITIONS.map((definition) => ({
+            updateOne: {
+                filter: { slug: definition.slug },
+                update: { $setOnInsert: { ...definition, active: true } },
+                upsert: true,
+            },
+        }))
+    );
+
+    // Care-home directory: existing tenants keep Residents on so SM/LM
+    // routes do not 403 until Owner turns the module off.
+    await Organization.updateMany(
+        { "moduleAccess.moduleSlug": { $ne: ModuleSlug.RESIDENTS } },
+        {
+            $push: {
+                moduleAccess: {
+                    moduleSlug: ModuleSlug.RESIDENTS,
+                    enabled: true,
+                    purchasedAt: new Date(),
+                },
+            },
+        }
+    );
+}
+
 async function runDBBootstrap() {
     try {
         await enforceOneMembershipPerOrg();
+        await ensureModuleCatalogue();
 
         const existing = await Bootstrap.findOne();
         if (existing?.version >= BOOTSTRAP_VERSION) {
@@ -206,24 +246,6 @@ async function runDBBootstrap() {
             console.log("✅ Admin settings created");
         }
   
-        // Sellable module catalogue. Upserted with $setOnInsert so a later
-        // bootstrap adds new slugs without overwriting names edited in the panel.
-        const moduleWrites = await ModuleDefinition.bulkWrite(
-            MODULE_DEFINITIONS.map((definition) => ({
-                updateOne: {
-                    filter: { slug: definition.slug },
-                    update: { $setOnInsert: { ...definition, active: true } },
-                    upsert: true,
-                },
-            }))
-        );
-
-        if (moduleWrites.upsertedCount) {
-            console.log(
-                `✅ ${moduleWrites.upsertedCount} module definition(s) created`
-            );
-        }
-
         // `leaveShiftBidding` split into `leave` + `shiftBidding`. Anyone holding
         // the old slug keeps both capabilities, so nobody silently loses access.
         const legacyLeaveSlug = "leaveShiftBidding";

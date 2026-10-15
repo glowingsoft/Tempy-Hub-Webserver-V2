@@ -23,7 +23,29 @@ const toOid = (value) => {
   return new mongoose.Types.ObjectId(String(value));
 };
 
-const hasImageUrl = (url) => Boolean(url && String(url).trim());
+const hasAssetUrl = (url) => Boolean(url && String(url).trim());
+
+const publicAssetUrl = (value) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const bucket = process.env.S3_BUCKET_NAME;
+  const region = process.env.AWS_S3_REGION;
+  if (!bucket || !region) return trimmed;
+  return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURIComponent(trimmed)}`;
+};
+
+const withPublicAssetUrls = (row) => {
+  if (!row) return row;
+  return {
+    ...row,
+    imageUrl: publicAssetUrl(row.imageUrl),
+    pdfUrl: publicAssetUrl(row.pdfUrl),
+  };
+};
+
+const hasPlanFile = (plan = {}) =>
+  hasAssetUrl(plan.imageUrl) || hasAssetUrl(plan.pdfUrl);
 
 const parsePlanStatus = (status) => {
   if (status == null || status === "" || status === "all") return null;
@@ -41,11 +63,32 @@ const parsePinCoord = (value) => {
   return n;
 };
 
-const emptyImageMatch = {
-  $or: [{ imageUrl: "" }, { imageUrl: null }, { imageUrl: { $exists: false } }],
+const emptyFieldMatch = (field) => ({
+  $or: [{ [field]: "" }, { [field]: null }, { [field]: { $exists: false } }],
+});
+
+const emptyPlanFileMatch = {
+  $and: [emptyFieldMatch("imageUrl"), emptyFieldMatch("pdfUrl")],
 };
 
-const withImageMatch = { imageUrl: { $nin: ["", null] } };
+const withPlanFileMatch = {
+  $or: [
+    { imageUrl: { $nin: ["", null] } },
+    { pdfUrl: { $nin: ["", null] } },
+  ],
+};
+
+const hasPlanFileExpr = {
+  $gt: [
+    {
+      $add: [
+        { $strLenCP: { $ifNull: ["$imageUrl", ""] } },
+        { $strLenCP: { $ifNull: ["$pdfUrl", ""] } },
+      ],
+    },
+    0,
+  ],
+};
 
 const andMatch = (base, extra) => {
   const clauses = [base, extra].filter(
@@ -57,11 +100,11 @@ const andMatch = (base, extra) => {
 
 const floorPlanStatusCountFacets = (countMatch) => ({
   uploadedCount: [
-    { $match: andMatch(countMatch, withImageMatch) },
+    { $match: andMatch(countMatch, withPlanFileMatch) },
     { $count: "count" },
   ],
   notUploadedCount: [
-    { $match: andMatch(countMatch, emptyImageMatch) },
+    { $match: andMatch(countMatch, emptyPlanFileMatch) },
     { $count: "count" },
   ],
 });
@@ -109,11 +152,7 @@ const planEnrichStages = (withPins) => [
     $addFields: {
       pinsCount: { $size: withPins ? "$pins" : "$_pins" },
       status: {
-        $cond: [
-          { $gt: [{ $strLenCP: { $ifNull: ["$imageUrl", ""] } }, 0] },
-          "uploaded",
-          "notUploaded",
-        ],
+        $cond: [hasPlanFileExpr, "uploaded", "notUploaded"],
       },
       branch: {
         $let: {
@@ -145,7 +184,7 @@ const loadShapedPlan = async (
     ...planEnrichStages(withPins),
   ]);
   if (!row) throw new AppError("floor_plan_not_found", 404);
-  return row;
+  return withPublicAssetUrls(row);
 };
 
 const loadPlanForWrite = async (floorPlanId, organizationId, { residentId } = {}) => {
@@ -227,8 +266,8 @@ const listFloorPlans = async ({
   const countMatch = { ...match };
   const tab = parsePlanStatus(status);
   let listMatch = match;
-  if (tab === "uploaded") listMatch = andMatch(match, withImageMatch);
-  if (tab === "notUploaded") listMatch = andMatch(match, emptyImageMatch);
+  if (tab === "uploaded") listMatch = andMatch(match, withPlanFileMatch);
+  if (tab === "notUploaded") listMatch = andMatch(match, emptyPlanFileMatch);
 
   const { data, meta, result } = await paginateWithFacet({
     model: FloorPlan,
@@ -242,7 +281,7 @@ const listFloorPlans = async ({
   });
 
   return {
-    data,
+    data: data.map(withPublicAssetUrls),
     meta: {
       ...meta,
       counts: {
@@ -269,15 +308,16 @@ const createFloorPlan = async ({
   assertMayManageStaff(standing, scoped);
   await assertBranchInOrganization(scoped, organizationId);
 
-  const image = imageUrl != null ? String(imageUrl).trim() : "";
+  const image = publicAssetUrl(imageUrl);
+  const pdf = publicAssetUrl(pdfUrl);
   try {
     const plan = await FloorPlan.create({
       organizationId,
       branchId: scoped,
       name: String(name).trim(),
       imageUrl: image,
-      pdfUrl: pdfUrl != null ? String(pdfUrl).trim() : "",
-      version: hasImageUrl(image) ? 1 : 0,
+      pdfUrl: pdf,
+      version: hasPlanFile({ imageUrl: image, pdfUrl: pdf }) ? 1 : 0,
       meta: meta ?? null,
     });
     return loadShapedPlan(plan._id, organizationId);
@@ -313,16 +353,22 @@ const updateFloorPlan = async ({
 
   const updates = {};
   if (name !== undefined) updates.name = String(name).trim();
-  if (imageUrl !== undefined) updates.imageUrl = String(imageUrl).trim();
-  if (pdfUrl !== undefined) updates.pdfUrl = String(pdfUrl).trim();
+  if (imageUrl !== undefined) updates.imageUrl = publicAssetUrl(imageUrl);
+  if (pdfUrl !== undefined) updates.pdfUrl = publicAssetUrl(pdfUrl);
   if (meta !== undefined) updates.meta = meta;
 
   if (!Object.keys(updates).length) throw new AppError("nothing_to_update", 400);
 
   const imageChanged =
     updates.imageUrl !== undefined &&
-    String(updates.imageUrl) !== String(plan.imageUrl);
-  if (imageChanged && hasImageUrl(updates.imageUrl)) {
+    String(updates.imageUrl) !== String(publicAssetUrl(plan.imageUrl));
+  const pdfChanged =
+    updates.pdfUrl !== undefined &&
+    String(updates.pdfUrl) !== String(publicAssetUrl(plan.pdfUrl));
+  const fileReplaced =
+    (imageChanged && hasAssetUrl(updates.imageUrl)) ||
+    (pdfChanged && hasAssetUrl(updates.pdfUrl));
+  if (fileReplaced) {
     updates.version = (plan.version || 0) + 1;
     await FloorPlanPin.deleteMany({ floorPlanId: plan._id });
   }
@@ -351,7 +397,7 @@ const upsertFloorPlanPin = async ({
   await assertMayAccessPlan(actor, organizationId, plan.branchId, {
     manage: true,
   });
-  if (!hasImageUrl(plan.imageUrl)) {
+  if (!hasPlanFile(plan)) {
     throw new AppError("floor_plan_image_required", 400);
   }
   if (!plan._resident?.length) throw new AppError("resident_not_found", 404);

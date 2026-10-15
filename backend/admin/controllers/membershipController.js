@@ -119,7 +119,7 @@ const inviteMember = async (req, res) => {
   try {
     const data = await membershipService.inviteMember({
       actor: req.user,
-      organizationId: req.orgId,
+      organizationId: req.params.organizationId || req.orgId,
       email: req.body.email,
       name: req.body.name,
       role: req.body.role,

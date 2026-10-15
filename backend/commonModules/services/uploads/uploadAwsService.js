@@ -6,27 +6,30 @@ const {
   S3Client,
 } = require("@aws-sdk/client-s3");
 
-const getBucket = () => process.env.AWS_S3_BUCKET || process.env.AWS_BUCKET_NAME;
+const getBucket = () => process.env.S3_BUCKET_NAME;
 
 const getClient = () => new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+  region: process.env.AWS_S3_REGION,
+  credentials: process.env.AWS_S3_ACCESS_KEY_ID && process.env.AWS_S3_SECRET_ACCESS_KEY
     ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY,
       }
     : undefined,
 });
 
 const requireBucket = () => {
   const bucket = getBucket();
+  console.log("bucket", bucket);
   if (!bucket) throw new Error("AWS S3 bucket is not configured");
   return bucket;
 };
 
 const uploadFiles = async (files) => {
   const bucket = requireBucket();
+  console.log("bucket", bucket);
   const client = getClient();
+  console.log("client", client);
 
   return Promise.all(files.map(async (file) => {
     const key = `${randomUUID()}${path.extname(file.originalname)}`;
@@ -42,7 +45,7 @@ const uploadFiles = async (files) => {
       filename: file.originalname,
       contentType: file.mimetype,
       size: file.size,
-      url: `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${encodeURIComponent(key)}`,
+      url: `https://${bucket}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(key)}`,
     };
   }));
 };

@@ -32,6 +32,7 @@ const teamLiveController = require("../../app/controllers/teamLiveController");
 const visitorInvitationController = require("../controllers/visitorInvitationController");
 const residentMediaController = require("../controllers/residentMediaController");
 const floorPlanController = require("../controllers/floorPlanController");
+const peepRecordController = require("../controllers/peepRecordController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
@@ -69,6 +70,7 @@ router.use(auth);
 const OWNER_OR_SA = [MembershipRole.SUPER_ADMIN, MembershipRole.OWNER];
 
 const MANAGERS = [...OWNER_OR_SA, MembershipRole.SITE_MANAGER];
+const INVITERS = [...MANAGERS, MembershipRole.LINE_MANAGER];
 
 
 
@@ -156,7 +158,7 @@ scoped.get(
 
   "/grantable-permissions",
 
-  requireRoles(MANAGERS),
+  requireRoles(INVITERS),
 
   membershipController.listGrantablePermissions
 
@@ -166,7 +168,7 @@ scoped.post(
 
   "/invitations",
 
-  requireRoles(MANAGERS),
+  requireRoles(INVITERS),
 
   membershipController.inviteMember
 
@@ -421,6 +423,32 @@ scoped.post(
   requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
   requirePermission(PEEP_MANAGE),
   floorPlanController.createFloorPlan
+);
+
+scoped.get(
+  "/peep-floor-summary",
+  requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
+  requirePermission(PEEP_VIEW),
+  peepRecordController.getPeepFloorSummary
+);
+scoped.get(
+  "/peep-records",
+  requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
+  requirePermission(PEEP_VIEW),
+  peepRecordController.listPeepRecords
+);
+scoped.post(
+  "/peep-records",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
+  requirePermission(PEEP_MANAGE),
+  peepRecordController.createPeepRecord
+);
+scoped.get(
+  "/residents/:residentId/peep-record",
+  requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
+  requirePermission(PEEP_VIEW),
+  peepRecordController.getPeepRecordByResident
 );
 
 scoped.get(

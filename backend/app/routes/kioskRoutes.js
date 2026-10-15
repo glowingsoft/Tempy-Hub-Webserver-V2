@@ -23,6 +23,7 @@ router.get(
   kioskController.searchBranches
 );
 router.post("/register", kioskController.register);
+router.post("/session", kioskController.verifyAdminPin);
 
 router.post(
   "/scan",

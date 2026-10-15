@@ -54,6 +54,7 @@ const ModuleSlug = {
   ROTA_SCHEDULING: "rotaScheduling",
   FIRE_DRILL_EVACUATION: "fireDrillEvacuation",
   PEEP_FLOOR_PLAN: "peepFloorPlan",
+  RESIDENTS: "residents",
   DOCUMENTS_ESIGN: "documentsEsign",
   /**
    * Split from the former `leaveShiftBidding`: a customer may run leave in
@@ -66,6 +67,7 @@ const ModuleSlug = {
   PAYROLL_FORECASTING: "payrollForecasting",
   VISITOR_COMMS: "visitorComms",
   AGENCY_SHIFT_BIDS: "agencyShiftBids",
+  FAMILY_ENGAGEMENT: "familyEngagement",
 };
 
 const OrganizationStatus = {

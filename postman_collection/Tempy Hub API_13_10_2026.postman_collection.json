@@ -6738,6 +6738,52 @@
               ]
             },
             {
+              "name": "verify emergency pin",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-kiosk-token",
+                    "value": "{{kioskToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"emergencyPin\": \"123456\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/kiosk/evacuations/emergency-pin",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "kiosk",
+                    "evacuations",
+                    "emergency-pin"
+                  ]
+                },
+                "description": "Figma Screen 79. Compares against the site (branch) emergency PIN, not kiosk login adminPin. Set the PIN with PATCH /admin/branches/:branchId { emergencyPin: 6 digits }."
+              },
+              "response": []
+            },
+            {
               "name": "evac start",
               "event": [
                 {
@@ -9889,7 +9935,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"assemblyPoint\": \"Rear garden gate\",\n  \"emergencyPin\": \"4821\",\n  \"settings\": {\n    \"allowPhoneCheckIn\": true,\n    \"lateGraceMinutes\": 10\n  }\n}\n",
+                  "raw": "{\n  \"assemblyPoint\": \"Rear garden gate\",\n  \"emergencyPin\": \"123456\",\n  \"settings\": {\n    \"allowPhoneCheckIn\": true,\n    \"lateGraceMinutes\": 10\n  }\n}\n",
                   "options": {
                     "raw": {
                       "language": "json"

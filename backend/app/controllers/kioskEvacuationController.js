@@ -22,6 +22,26 @@ const getOnSiteSummary = async (req, res) => {
   }
 };
 
+/** Figma Screen 79 — site emergency PIN (not kiosk login PIN). */
+const verifyEmergencyPin = async (req, res) => {
+  try {
+    const data = await kioskService.verifyKioskEmergencyPin({
+      kiosk: req.kiosk,
+      branchId: req.branchId,
+      emergencyPin: req.body.emergencyPin || req.body.pin,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "emergency_pin_verified",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 /** Kiosk Screen 85 type + Screen 86 Start Evacuation. */
 const startEvacuation = async (req, res) => {
   try {
@@ -86,6 +106,7 @@ const closeEvacuation = async (req, res) => {
 
 module.exports = {
   getOnSiteSummary,
+  verifyEmergencyPin,
   startEvacuation,
   getActiveEvacuation,
   closeEvacuation,

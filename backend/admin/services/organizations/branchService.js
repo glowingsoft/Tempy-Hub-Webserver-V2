@@ -450,7 +450,7 @@ const updateBranch = async ({
   }
 
   if (emergencyPin !== undefined) {
-    if (!/^\d{4,8}$/.test(String(emergencyPin))) {
+    if (!/^\d{6}$/.test(String(emergencyPin))) {
       throw new AppError("invalid_emergency_pin", 400);
     }
     update.emergencyPinHash = await bcrypt.hash(String(emergencyPin), 10);

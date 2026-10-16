@@ -971,6 +971,23 @@ const assertKioskFireEvacuationEnabled = (kiosk) => {
   }
 };
 
+const verifyKioskEmergencyPin = async ({ kiosk, branchId, emergencyPin }) => {
+  assertKioskFireEvacuationEnabled(kiosk);
+  const pin = String(emergencyPin == null ? "" : emergencyPin);
+  if (!/^\d{6}$/.test(pin)) throw new AppError("invalid_emergency_pin", 400);
+
+  const branch = await Branch.findById(branchId)
+    .select("emergencyPinHash")
+    .lean();
+  if (!branch) throw new AppError("branch_not_found", 404);
+  if (!branch.emergencyPinHash) throw new AppError("emergency_pin_not_set", 400);
+
+  const ok = await bcrypt.compare(pin, branch.emergencyPinHash);
+  if (!ok) throw new AppError("emergency_pin_incorrect", 401);
+
+  return { verified: true };
+};
+
 const touchLastCheckIn = (kioskId) =>
   Kiosk.updateOne({ _id: kioskId }, { $set: { lastCheckInAt: new Date() } }).catch(
     () => {}
@@ -1536,6 +1553,7 @@ module.exports = {
   getKioskSession,
   updateKioskSettings,
   assertKioskFireEvacuationEnabled,
+  verifyKioskEmergencyPin,
   clockInAtKiosk,
   clockOutAtKiosk,
   getTodayAtKiosk,

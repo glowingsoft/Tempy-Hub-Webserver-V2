@@ -16,6 +16,7 @@ const router = express.Router();
 const branchSearchLimiter = createRateLimiter("kiosk-branch-search", 15, 40);
 const staffSearchLimiter = createRateLimiter("kiosk-staff-search", 15, 60);
 const otpLimiter = createRateLimiter("kiosk-check-in-otp", 15, 20);
+const emergencyPinLimiter = createRateLimiter("kiosk-emergency-pin", 15, 20);
 
 router.get(
   "/branches/search",
@@ -44,6 +45,13 @@ router.get(
   requireKioskSession,
   requireKioskModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   kioskEvacuationController.getActiveEvacuation
+);
+router.post(
+  "/evacuations/emergency-pin",
+  requireKioskSession,
+  requireKioskModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  emergencyPinLimiter,
+  kioskEvacuationController.verifyEmergencyPin
 );
 router.post(
   "/evacuations",

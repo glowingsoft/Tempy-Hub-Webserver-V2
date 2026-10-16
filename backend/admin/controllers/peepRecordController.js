@@ -38,7 +38,7 @@ const getPeepFloorSummary = async (req, res) => {
     const data = await peepRecordService.getPeepFloorSummary({
       actor: req.user,
       organizationId: req.orgId,
-      branchId: req.query.branchId,
+      branchId: req.query.branchId || req.query.siteId,
     });
 
     return sendResponse({

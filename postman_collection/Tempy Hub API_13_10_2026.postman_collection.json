@@ -9038,6 +9038,129 @@
               "response": []
             },
             {
+              "name": "list faqs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/settings/faqs?page=1&limit=10&keyword=",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "faqs"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "create faq",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Created\", () => pm.expect(pm.response.code).to.eql(201));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"faqId\", json.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"How do I clock in at a kiosk?\",\n  \"answer\": \"Select your site, enter the kiosk admin PIN if asked, then identify with PIN or NFC.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/settings/faqs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "faqs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update faq",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"question\": \"How do I clock in at a kiosk?\",\n  \"answer\": \"Updated: use PIN, NFC, or the check-in code sent to your phone.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/settings/faqs/{{faqId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "faqs",
+                    "{{faqId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete faq",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/settings/faqs/{{faqId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "faqs",
+                    "{{faqId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "create settings",
               "request": {
                 "method": "POST",
@@ -18590,11 +18713,11 @@
     },
     {
       "key": "adminEmail",
-      "value": "admin@tempyhub.com"
+      "value": "superadmin@tempyhub.com"
     },
     {
       "key": "adminPassword",
-      "value": "adminTempy11"
+      "value": "superTempy11"
     },
     {
       "key": "phoneNumber",
@@ -18722,6 +18845,10 @@
     },
     {
       "key": "floorPlanPinId",
+      "value": ""
+    },
+    {
+      "key": "faqId",
       "value": ""
     }
   ]

@@ -127,6 +127,22 @@ const BODIES = [
   },
   {
     method: "POST",
+    test: (path) => path.endsWith("/settings/faqs") || path === "/admin/settings/faqs",
+    body: jsonBody({
+      question: "How do I clock in at a kiosk?",
+      answer: "Select your site, enter the kiosk admin PIN if asked, then identify with PIN or NFC.",
+    }),
+  },
+  {
+    method: "PUT",
+    test: (path) => /\/settings\/faqs\/\{[^}]+}$/.test(path),
+    body: jsonBody({
+      question: "How do I clock in at a kiosk?",
+      answer: "Updated answer for this FAQ.",
+    }),
+  },
+  {
+    method: "POST",
     test: (path) => path === "/app/kiosk/session" || path.endsWith("/kiosk/session"),
     body: jsonBody({
       branchId: "branchId",

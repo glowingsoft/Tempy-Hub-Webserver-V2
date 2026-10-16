@@ -20,6 +20,7 @@ const { JobTitle } = require("@models/JobTitle");
 const { Department } = require("@models/Department");
 const { VisitSession } = require("@models/VisitSession");
 const { ExternalPerson } = require("@models/ExternalPerson");
+const { EvacuationEvent } = require("@models/EvacuationEvent");
 const { AppError } = require("@services/_errors/AppError");
 const { signKioskToken } = require("@middlewares/kioskMiddleware");
 const { verifyActivationCode, issueActivationCode } = require("@adminServices/organizations/branchService");
@@ -37,6 +38,7 @@ const {
   StaffProfileStatus,
   CheckInMethod,
   VisitSessionStatus,
+  EvacuationStatus,
 } = require("@models/domainEnums");
 
 const MIN_SEARCH_LENGTH = 2;
@@ -146,10 +148,27 @@ const searchBranchesForKiosk = async ({
                 : { $exists: true, $nin: ["", null] },
             },
           },
-          { $project: { deviceId: 1 } },
+          { $project: { deviceId: 1, receptionIdentifier: 1 } },
           { $limit: 1 },
         ],
         as: "_registeredKiosk",
+      },
+    },
+    {
+      $lookup: {
+        from: EvacuationEvent.collection.name,
+        let: { siteId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$branchId", "$$siteId"] },
+              status: EvacuationStatus.ACTIVE,
+            },
+          },
+          { $project: { _id: 1 } },
+          { $limit: 1 },
+        ],
+        as: "_activeEvacuation",
       },
     },
     {
@@ -175,6 +194,17 @@ const searchBranchesForKiosk = async ({
                   null,
                 ],
               },
+              receptionIdentifier: {
+                $ifNull: [
+                  {
+                    $arrayElemAt: ["$_registeredKiosk.receptionIdentifier", 0],
+                  },
+                  null,
+                ],
+              },
+              fireEvacuation: {
+                $gt: [{ $size: "$_activeEvacuation" }, 0],
+              },
             },
           },
         ],
@@ -189,6 +219,8 @@ const searchBranchesForKiosk = async ({
       address: publicAddress(row.address),
       isRegistered: Boolean(row.isRegistered),
       deviceId: row.deviceId || null,
+      receptionIdentifier: row.receptionIdentifier || null,
+      fireEvacuation: Boolean(row.fireEvacuation),
     })),
     meta: generateMeta(page, limit, facetCount(result?.totalCount)),
   };
@@ -650,6 +682,22 @@ const sanitizeKiosk = (kiosk) => ({
   updatedAt: kiosk.updatedAt,
 });
 
+const kioskAuthPayload = async (kiosk) => {
+  const shaped = sanitizeKiosk(kiosk);
+  const fireEvacuation = Boolean(
+    await EvacuationEvent.exists({
+      branchId: kiosk.branchId,
+      status: EvacuationStatus.ACTIVE,
+    })
+  );
+  return {
+    token: signKioskToken(kiosk),
+    kiosk: shaped,
+    receptionIdentifier: shaped.receptionIdentifier || null,
+    fireEvacuation,
+  };
+};
+
 const resolveStaffForKiosk = async ({
   organizationId,
   branchId,
@@ -797,10 +845,7 @@ const registerKiosk = async ({
     );
   }
 
-  return {
-    token: signKioskToken(kiosk),
-    kiosk: sanitizeKiosk(kiosk),
-  };
+  return kioskAuthPayload(kiosk);
 };
 
 const verifyKioskAdminPin = async ({ branchId, deviceId, adminPin }) => {
@@ -828,10 +873,7 @@ const verifyKioskAdminPin = async ({ branchId, deviceId, adminPin }) => {
     throw new AppError("kiosk_admin_pin_incorrect", 401);
   }
 
-  return {
-    token: signKioskToken(kiosk),
-    kiosk: sanitizeKiosk(kiosk),
-  };
+  return kioskAuthPayload(kiosk);
 };
 
 const assertKioskUnlocked = async (kioskOrId) => {
@@ -845,14 +887,26 @@ const assertKioskUnlocked = async (kioskOrId) => {
   }
 };
 
-const getKioskSession = async ({ kiosk, branch }) => ({
-  kiosk: sanitizeKiosk(kiosk),
-  branch: {
-    _id: branch._id,
-    name: branch.name,
-    timezone: branch.timezone,
-  },
-});
+const getKioskSession = async ({ kiosk, branch }) => {
+  const fireEvacuation = Boolean(
+    await EvacuationEvent.exists({
+      branchId: branch._id,
+      status: EvacuationStatus.ACTIVE,
+    })
+  );
+
+  const shaped = sanitizeKiosk(kiosk);
+  return {
+    kiosk: shaped,
+    branch: {
+      _id: branch._id,
+      name: branch.name,
+      timezone: branch.timezone,
+    },
+    receptionIdentifier: shaped.receptionIdentifier || null,
+    fireEvacuation,
+  };
+};
 
 const touchLastCheckIn = (kioskId) =>
   Kiosk.updateOne({ _id: kioskId }, { $set: { lastCheckInAt: new Date() } }).catch(

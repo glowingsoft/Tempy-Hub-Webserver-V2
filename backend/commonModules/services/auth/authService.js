@@ -318,8 +318,6 @@ const login = async ({
     }
   }
 
-  // Platform operators carry a second factor: the admin panel must send
-  // x-admin-access-token alongside the credentials.
   if (user.accountState.userType === "admin") {
     if (!adminAccessToken) {
       throw new AppError("admin_access_token_missing", 403);

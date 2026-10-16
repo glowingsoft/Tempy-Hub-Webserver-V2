@@ -7,6 +7,11 @@ const {
   createAdminSettings,
   getFaqs
 } = require("../../commonModules/controllers/settingsController");
+const {
+  createFaq,
+  updateFaq,
+  deleteFaq,
+} = require("../controllers/adminPanelController");
 const auth = require("@middlewares/authMiddleware");
 const createRateLimiter = require("@utils/rateLimiter");
 const roleMiddleware = require("@middlewares/roleMiddleware");
@@ -27,6 +32,9 @@ router.get("/privacy-policy", apiRateLimiter, getPrivacyPolicy);
 
 // Route to fetch privacy policy with rate limiting
 router.get("/faqs", apiRateLimiter, getFaqs);
+router.post("/faqs", auth, roleMiddleware(["admin"]), createFaq);
+router.put("/faqs/:id", auth, roleMiddleware(["admin"]), updateFaq);
+router.delete("/faqs/:id", auth, roleMiddleware(["admin"]), deleteFaq);
 
 // Route to create admin settings (requires auth and admin privileges)
 router.post("/create", auth, roleMiddleware(["admin"]), createAdminSettings);

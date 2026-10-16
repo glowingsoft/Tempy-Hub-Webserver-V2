@@ -185,6 +185,7 @@ const updateJobTitle = async (req, res) => {
       organizationId: req.orgId,
       name: req.body.name,
       level: req.body.level,
+      branchId: req.body.branchId,
       active: req.body.active,
     });
 

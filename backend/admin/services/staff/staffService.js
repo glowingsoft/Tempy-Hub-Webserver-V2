@@ -9,11 +9,13 @@ const { User } = require("@models/UserModel");
 const { Organization } = require("@models/Organization");
 const { Branch } = require("@models/Branch");
 const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
   JobTitleLevel,
   StaffProfileStatus,
   ActiveInactiveStatus,
+  MembershipRole,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -541,6 +543,7 @@ const updateJobTitle = async ({
   organizationId,
   name,
   level,
+  branchId,
   active,
 }) => {
   const jobTitle = await JobTitle.findOne({ _id: jobTitleId, organizationId });
@@ -557,6 +560,16 @@ const updateJobTitle = async ({
     jobTitle.level = level;
   }
   if (active !== undefined) jobTitle.active = Boolean(active);
+  if (branchId !== undefined) {
+    const nextBranchId = branchId
+      ? scopeBranchFilter(standing, branchId)
+      : null;
+    if (nextBranchId) {
+      assertMayManageStaff(standing, nextBranchId);
+      await assertBranchInOrganization(nextBranchId, organizationId);
+    }
+    jobTitle.branchId = nextBranchId;
+  }
 
   if (!jobTitle.isModified()) throw new AppError("nothing_to_update", 400);
 
@@ -599,6 +612,48 @@ const staffListStages = [
     },
   },
 ];
+
+const COUNTED_STAFF_ROLES = [
+  MembershipRole.STAFF,
+  MembershipRole.LINE_MANAGER,
+  MembershipRole.SITE_MANAGER,
+];
+
+const emptyStaffRoleCounts = () => ({
+  staff: 0,
+  lineManager: 0,
+  siteManager: 0,
+});
+
+/** Same filters as the list. Role comes from Membership, not StaffProfile. */
+const countStaffProfilesByRole = async (match) => {
+  const rows = await StaffProfile.aggregate([
+    { $match: match },
+    {
+      $lookup: {
+        from: Membership.collection.name,
+        localField: "userId",
+        foreignField: "userId",
+        as: "_mem",
+      },
+    },
+    { $unwind: "$_mem" },
+    {
+      $match: {
+        "_mem.organizationId": match.organizationId,
+        "_mem.status": ActiveInactiveStatus.ACTIVE,
+        "_mem.role": { $in: COUNTED_STAFF_ROLES },
+      },
+    },
+    { $group: { _id: "$_mem.role", count: { $sum: 1 } } },
+  ]);
+
+  const counts = emptyStaffRoleCounts();
+  for (const row of rows) {
+    if (counts[row._id] !== undefined) counts[row._id] = row.count;
+  }
+  return counts;
+};
 
 const createStaffProfile = async ({
   actor,
@@ -758,7 +813,13 @@ const listStaffProfiles = async ({
       staffIdField: "_id",
     });
     if (!inScope) {
-      return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+      return {
+        data: [],
+        meta: {
+          ...generateMeta(page, limit, 0),
+          counts: emptyStaffRoleCounts(),
+        },
+      };
     }
   } else if (branchId) {
     match.branchId = new mongoose.Types.ObjectId(String(branchId));
@@ -791,14 +852,39 @@ const listStaffProfiles = async ({
     ];
   }
 
-  return paginateWithFacet({
-    model: StaffProfile,
-    match,
-    page,
-    limit,
-    skip,
-    extraDataStages: staffListStages,
+  const memberUserIds = await Membership.distinct("userId", {
+    organizationId: match.organizationId,
+    status: ActiveInactiveStatus.ACTIVE,
+    role: { $in: COUNTED_STAFF_ROLES },
   });
+  if (!memberUserIds.length) {
+    return {
+      data: [],
+      meta: { ...generateMeta(page, limit, 0), counts: emptyStaffRoleCounts() },
+    };
+  }
+  match.userId = { $in: memberUserIds };
+
+  const [pageResult, counts, totalRecords] = await Promise.all([
+    paginateWithFacet({
+      model: StaffProfile,
+      match,
+      page,
+      limit,
+      skip,
+      extraDataStages: staffListStages,
+    }),
+    countStaffProfilesByRole(match),
+    StaffProfile.countDocuments(match),
+  ]);
+
+  return {
+    data: pageResult.data,
+    meta: {
+      ...generateMeta(page, limit, totalRecords),
+      counts,
+    },
+  };
 };
 
 /** Live team list for the caller — direct reports only, never cached. */

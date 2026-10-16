@@ -665,6 +665,25 @@ const getEvacuationEvent = async ({
   return data;
 };
 
+const emptyEvacuationStatusCounts = () => ({
+  [EvacuationStatus.ACTIVE]: 0,
+  [EvacuationStatus.CLOSED]: 0,
+});
+
+/** Same branch/type scope as the list; status is grouped, not filtered. */
+const countEvacuationsByStatus = async (match) => {
+  const rows = await EvacuationEvent.aggregate([
+    { $match: match },
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]);
+
+  const counts = emptyEvacuationStatusCounts();
+  for (const row of rows) {
+    if (counts[row._id] !== undefined) counts[row._id] = row.count;
+  }
+  return counts;
+};
+
 const listEvacuations = async ({
   organizationId,
   actor,
@@ -691,24 +710,57 @@ const listEvacuations = async ({
     if (!branchIds.length) {
       return {
         data: [],
-        meta: { currentPage: page, totalPages: 0, totalRecords: 0, limit },
+        meta: {
+          currentPage: page,
+          totalPages: 0,
+          totalRecords: 0,
+          limit,
+          counts: emptyEvacuationStatusCounts(),
+        },
       };
     }
   }
 
   const match = { branchId: { $in: branchIds } };
-  if (status) match.status = status;
   if (type) match.type = parseEvacuationType(type);
 
-  const { data, meta } = await paginateWithFacet({
-    model: EvacuationEvent,
-    match,
-    page,
-    limit,
-    skip,
-    sort: { startedAt: -1 },
-    extraDataStages: [
-      ...branchLookupPipeline,
+  const listMatch = status ? { ...match, status } : match;
+
+  const [{ data, meta }, counts] = await Promise.all([
+    paginateWithFacet({
+      model: EvacuationEvent,
+      match: listMatch,
+      page,
+      limit,
+      skip,
+      sort: { startedAt: -1 },
+      extraDataStages: [
+        ...branchLookupPipeline,
+      {
+        $lookup: {
+          from: COLLECTIONS.evacChecks,
+          localField: "_id",
+          foreignField: "evacuationEventId",
+          pipeline: [
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                safe: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$status", EvacCheckStatus.SAFE] },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+          as: "rollcallAgg",
+        },
+      },
       {
         $project: {
           type: 1,
@@ -725,12 +777,22 @@ const listEvacuations = async ({
             name: "$branchDoc.name",
             assemblyPoint: { $ifNull: ["$branchDoc.assemblyPoint", ""] },
           },
+          rollcall: {
+            safe: {
+              $ifNull: [{ $arrayElemAt: ["$rollcallAgg.safe", 0] }, 0],
+            },
+            total: {
+              $ifNull: [{ $arrayElemAt: ["$rollcallAgg.total", 0] }, 0],
+            },
+          },
         },
       },
     ],
-  });
+    }),
+    countEvacuationsByStatus(match),
+  ]);
 
-  return { data, meta };
+  return { data, meta: { ...meta, counts } };
 };
 
 const closeEvacuation = async ({

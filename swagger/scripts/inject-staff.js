@@ -277,6 +277,7 @@ spec.components.schemas.DepartmentUpdateRequest = {
   type: "object",
   properties: {
     name: { type: "string" },
+    branchId: { type: "string", nullable: true },
     sortOrder: { type: "integer" },
     active: { type: "boolean" },
   },

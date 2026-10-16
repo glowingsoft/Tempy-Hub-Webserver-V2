@@ -11,6 +11,7 @@ const kioskSchema = new mongoose.Schema(
     },
     deviceId: { type: String, trim: true },
     receptionIdentifier: { type: String, default: "" },
+    fireEvacuation: { type: Boolean, default: true },
     locationLabel: { type: String, default: "" },
     deviceType: {
       type: String,

@@ -380,7 +380,7 @@ const listDepartments = async ({
     page,
     limit,
     skip,
-    sort: { sortOrder: 1, name: 1 },
+    sort: { createdAt: -1 },
     extraFacets: activeInactiveCountFacets(countMatch),
   });
 
@@ -406,6 +406,7 @@ const updateDepartment = async ({
   departmentId,
   organizationId,
   name,
+  branchId,
   sortOrder,
   active,
 }) => {
@@ -418,6 +419,16 @@ const updateDepartment = async ({
   if (name !== undefined) department.name = name;
   if (sortOrder !== undefined) department.sortOrder = Number(sortOrder);
   if (active !== undefined) department.active = Boolean(active);
+  if (branchId !== undefined) {
+    const nextBranchId = branchId
+      ? scopeBranchFilter(standing, branchId)
+      : null;
+    if (nextBranchId) {
+      assertMayManageStaff(standing, nextBranchId);
+      await assertBranchInOrganization(nextBranchId, organizationId);
+    }
+    department.branchId = nextBranchId;
+  }
 
   if (!department.isModified()) throw new AppError("nothing_to_update", 400);
 

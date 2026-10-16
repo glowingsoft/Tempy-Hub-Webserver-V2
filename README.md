@@ -30,7 +30,7 @@ Zawar Ahmad
 
 ## Postman
 
-Import [`postman_collection/TempyHubAPI.postman_collection.json`](./postman_collection/TempyHubAPI.postman_collection.json) only (variables are on the collection). Details: [`docs/api.md`](./docs/api.md).
+Import [`postman_collection/Tempy Hub API_13_10_2026.postman_collection.json`](./postman_collection/Tempy%20Hub%20API_13_10_2026.postman_collection.json) only (or download `GET /api/v1/postman`). Collection `organizationId` defaults to `6ac72d4be20e26c247a731b3`. Details: [`docs/api.md`](./docs/api.md).
 
 ## Documentation
 

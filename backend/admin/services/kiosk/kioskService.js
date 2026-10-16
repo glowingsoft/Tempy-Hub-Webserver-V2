@@ -148,7 +148,7 @@ const searchBranchesForKiosk = async ({
                 : { $exists: true, $nin: ["", null] },
             },
           },
-          { $project: { deviceId: 1, receptionIdentifier: 1 } },
+          { $project: { deviceId: 1, receptionIdentifier: 1, fireEvacuation: 1 } },
           { $limit: 1 },
         ],
         as: "_registeredKiosk",
@@ -203,6 +203,19 @@ const searchBranchesForKiosk = async ({
                 ],
               },
               fireEvacuation: {
+                $ne: [
+                  {
+                    $ifNull: [
+                      {
+                        $arrayElemAt: ["$_registeredKiosk.fireEvacuation", 0],
+                      },
+                      true,
+                    ],
+                  },
+                  false,
+                ],
+              },
+              evacuationActive: {
                 $gt: [{ $size: "$_activeEvacuation" }, 0],
               },
             },
@@ -220,7 +233,8 @@ const searchBranchesForKiosk = async ({
       isRegistered: Boolean(row.isRegistered),
       deviceId: row.deviceId || null,
       receptionIdentifier: row.receptionIdentifier || null,
-      fireEvacuation: Boolean(row.fireEvacuation),
+      fireEvacuation: row.fireEvacuation !== false,
+      evacuationActive: Boolean(row.evacuationActive),
     })),
     meta: generateMeta(page, limit, facetCount(result?.totalCount)),
   };
@@ -666,11 +680,35 @@ const assertAttendanceModule = async (organizationId) => {
   return organization;
 };
 
+const fireEvacuationEnabled = (kiosk) => kiosk?.fireEvacuation !== false;
+
+const parseOptionalBoolean = (value, errorKey) => {
+  if (value === undefined) return undefined;
+  if (value === true || value === "true" || value === 1 || value === "1") {
+    return true;
+  }
+  if (value === false || value === "false" || value === 0 || value === "0") {
+    return false;
+  }
+  throw new AppError(errorKey, 400);
+};
+
+const deviceKioskFlags = async (kiosk) => ({
+  fireEvacuation: fireEvacuationEnabled(kiosk),
+  evacuationActive: Boolean(
+    await EvacuationEvent.exists({
+      branchId: kiosk.branchId,
+      status: EvacuationStatus.ACTIVE,
+    })
+  ),
+});
+
 const sanitizeKiosk = (kiosk) => ({
   _id: kiosk._id,
   branchId: kiosk.branchId,
   deviceId: kiosk.deviceId || null,
   receptionIdentifier: kiosk.receptionIdentifier || "",
+  fireEvacuation: fireEvacuationEnabled(kiosk),
   locationLabel: kiosk.locationLabel || "",
   deviceType: kiosk.deviceType || null,
   nfcTagId: kiosk.nfcTagId || null,
@@ -683,18 +721,14 @@ const sanitizeKiosk = (kiosk) => ({
 });
 
 const kioskAuthPayload = async (kiosk) => {
-  const shaped = sanitizeKiosk(kiosk);
-  const fireEvacuation = Boolean(
-    await EvacuationEvent.exists({
-      branchId: kiosk.branchId,
-      status: EvacuationStatus.ACTIVE,
-    })
-  );
+  const row = kiosk.toObject ? kiosk.toObject() : kiosk;
+  const shaped = sanitizeKiosk(row);
+  const flags = await deviceKioskFlags(row);
   return {
-    token: signKioskToken(kiosk),
+    token: signKioskToken(row),
     kiosk: shaped,
     receptionIdentifier: shaped.receptionIdentifier || null,
-    fireEvacuation,
+    ...flags,
   };
 };
 
@@ -777,6 +811,7 @@ const registerKiosk = async ({
   receptionIdentifier,
   locationLabel,
   deviceType,
+  fireEvacuation,
 }) => {
   const branch = await Branch.findById(branchId)
     .select("organizationId status")
@@ -797,6 +832,10 @@ const registerKiosk = async ({
   }
 
   const type = parseDeviceType(deviceType);
+  const nextFireEvacuation = parseOptionalBoolean(
+    fireEvacuation,
+    "invalid_fire_evacuation"
+  );
   const trimmedDeviceId = String(deviceId).trim();
   const taken = await Kiosk.findOne({ deviceId: trimmedDeviceId }).lean();
   if (taken) throw new AppError("kiosk_device_already_registered", 409);
@@ -824,6 +863,10 @@ const registerKiosk = async ({
     if (type) kiosk.deviceType = type;
     if (receptionIdentifier) kiosk.receptionIdentifier = receptionIdentifier;
     if (locationLabel) kiosk.locationLabel = locationLabel;
+    kiosk.fireEvacuation =
+      nextFireEvacuation !== undefined
+        ? nextFireEvacuation
+        : fireEvacuationEnabled(kiosk);
     await kiosk.save();
   } else {
     kiosk = await Kiosk.create({
@@ -832,6 +875,8 @@ const registerKiosk = async ({
       adminPinHash,
       receptionIdentifier: receptionIdentifier || "",
       locationLabel: locationLabel || "",
+      fireEvacuation:
+        nextFireEvacuation !== undefined ? nextFireEvacuation : true,
       ...(type ? { deviceType: type } : {}),
       setupStatus: KioskSetupStatus.REGISTERED,
       kioskMode: KioskMode.LOCKED,
@@ -888,14 +933,8 @@ const assertKioskUnlocked = async (kioskOrId) => {
 };
 
 const getKioskSession = async ({ kiosk, branch }) => {
-  const fireEvacuation = Boolean(
-    await EvacuationEvent.exists({
-      branchId: branch._id,
-      status: EvacuationStatus.ACTIVE,
-    })
-  );
-
   const shaped = sanitizeKiosk(kiosk);
+  const flags = await deviceKioskFlags(kiosk);
   return {
     kiosk: shaped,
     branch: {
@@ -904,8 +943,32 @@ const getKioskSession = async ({ kiosk, branch }) => {
       timezone: branch.timezone,
     },
     receptionIdentifier: shaped.receptionIdentifier || null,
-    fireEvacuation,
+    fireEvacuation: flags.fireEvacuation,
+    evacuationActive: flags.evacuationActive,
   };
+};
+
+const updateKioskSettings = async ({ kiosk, branch, fireEvacuation }) => {
+  const next = parseOptionalBoolean(
+    fireEvacuation,
+    "invalid_fire_evacuation"
+  );
+  if (next === undefined) throw new AppError("nothing_to_update", 400);
+
+  const saved = await Kiosk.findByIdAndUpdate(
+    kiosk._id,
+    { $set: { fireEvacuation: next } },
+    { new: true, runValidators: true }
+  ).lean();
+  if (!saved) throw new AppError("kiosk_not_found", 404);
+
+  return getKioskSession({ kiosk: saved, branch });
+};
+
+const assertKioskFireEvacuationEnabled = (kiosk) => {
+  if (!fireEvacuationEnabled(kiosk)) {
+    throw new AppError("fire_evacuation_disabled", 403);
+  }
 };
 
 const touchLastCheckIn = (kioskId) =>
@@ -1393,9 +1456,17 @@ const updateKioskForAdmin = async ({
   locationLabel,
   deviceType,
   branchId,
+  fireEvacuation,
 }) => {
   const current = await getKioskForAdmin({ actor, organizationId, kioskId });
   const update = {};
+  const nextFireEvacuation = parseOptionalBoolean(
+    fireEvacuation,
+    "invalid_fire_evacuation"
+  );
+  if (nextFireEvacuation !== undefined) {
+    update.fireEvacuation = nextFireEvacuation;
+  }
   if (receptionIdentifier !== undefined) {
     if (!String(receptionIdentifier).trim()) {
       throw new AppError("kiosk_name_required", 400);
@@ -1463,6 +1534,8 @@ module.exports = {
   registerKiosk,
   verifyKioskAdminPin,
   getKioskSession,
+  updateKioskSettings,
+  assertKioskFireEvacuationEnabled,
   clockInAtKiosk,
   clockOutAtKiosk,
   getTodayAtKiosk,

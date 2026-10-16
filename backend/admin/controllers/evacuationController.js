@@ -10,6 +10,7 @@ const getOnSiteSummary = async (req, res) => {
     const data = await evacuationService.getOnSiteSummary({
       organizationId: req.orgId,
       branchId: req.query.branchId || req.params.branchId,
+      actor: req.user,
     });
 
     return sendResponse({

@@ -91,6 +91,7 @@ const updateDepartment = async (req, res) => {
       departmentId: req.params.departmentId,
       organizationId: req.orgId,
       name: req.body.name,
+      branchId: req.body.branchId,
       sortOrder: req.body.sortOrder,
       active: req.body.active,
     });

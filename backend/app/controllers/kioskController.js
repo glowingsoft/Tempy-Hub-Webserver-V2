@@ -420,6 +420,8 @@ const register = async (req, res) => {
 
       deviceType: req.body.deviceType,
 
+      fireEvacuation: req.body.fireEvacuation,
+
     });
 
 
@@ -495,6 +497,25 @@ const getMe = async (req, res) => {
 
   }
 
+};
+
+const updateMe = async (req, res) => {
+  try {
+    const data = await kioskService.updateKioskSettings({
+      kiosk: req.kiosk,
+      branch: req.branch,
+      fireEvacuation: req.body.fireEvacuation,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "kiosk_updated_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
 };
 
 
@@ -685,6 +706,8 @@ module.exports = {
   verifyAdminPin,
 
   getMe,
+
+  updateMe,
 
   clockIn,
 

@@ -185,114 +185,86 @@ const assertSiteManagerBranch = (standing, branchId) => {
 };
 
 /**
- * One round-trip: branch + on-site counts (staff / residents / visitors / contractors).
- * Figma Screen 86 — "People Currently On Site".
+ * People currently on site (staff / residents / visitors / contractors).
+ * With branchId: one site. Without: all sites in the org (Owner / SA).
+ * Site Manager is always limited to their site.
  */
-const getOnSiteSummary = async ({ branchId, organizationId }) => {
-  const branchOid = toObjectId(branchId);
-  const workDate = startOfUtcDay(new Date());
-  const match = { _id: branchOid };
-  if (organizationId) match.organizationId = toObjectId(organizationId);
+const getOnSiteSummary = async ({ branchId, organizationId, actor }) => {
+  const orgOid = toObjectId(organizationId);
+  const standing = actor
+    ? await actorStanding(actor, organizationId)
+    : null;
+  const scopedBranchId = standing
+    ? scopeBranchFilter(standing, branchId || null)
+    : branchId || null;
 
-  const [row] = await Branch.aggregate([
-    { $match: match },
-    {
-      $facet: {
-        branch: [{ $project: { name: 1, assemblyPoint: 1, organizationId: 1 } }],
-        staff: [
-          {
-            $lookup: {
-              from: COLLECTIONS.attendanceDays,
-              let: { branchId: "$_id" },
-              pipeline: [
-                {
-                  $match: {
-                    $expr: {
-                      $and: [
-                        { $eq: ["$branchId", "$$branchId"] },
-                        { $eq: ["$workDate", workDate] },
-                        { $in: ["$presenceStatus", ON_SITE_PRESENCE] },
-                        { $eq: ["$clockOutAt", null] },
-                      ],
-                    },
-                  },
-                },
-                { $count: "count" },
-              ],
-              as: "rows",
-            },
-          },
-          { $project: { count: { $ifNull: [{ $arrayElemAt: ["$rows.count", 0] }, 0] } } },
-        ],
-        residents: [
-          {
-            $lookup: {
-              from: COLLECTIONS.residents,
-              let: { branchId: "$_id" },
-              pipeline: [
-                {
-                  $match: {
-                    $expr: {
-                      $and: [
-                        { $eq: ["$branchId", "$$branchId"] },
-                        { $eq: ["$admissionStatus", AdmissionStatus.ADMITTED] },
-                      ],
-                    },
-                  },
-                },
-                { $count: "count" },
-              ],
-              as: "rows",
-            },
-          },
-          { $project: { count: { $ifNull: [{ $arrayElemAt: ["$rows.count", 0] }, 0] } } },
-        ],
-        visits: [
-          {
-            $lookup: {
-              from: COLLECTIONS.visitSessions,
-              let: { branchId: "$_id" },
-              pipeline: [
-                {
-                  $match: {
-                    $expr: {
-                      $and: [
-                        { $eq: ["$branchId", "$$branchId"] },
-                        { $eq: ["$status", VisitSessionStatus.ON_SITE] },
-                        { $eq: ["$checkOutAt", null] },
-                      ],
-                    },
-                  },
-                },
-                { $group: { _id: "$personType", count: { $sum: 1 } } },
-              ],
-              as: "rows",
-            },
-          },
-          { $project: { rows: 1 } },
-        ],
-      },
+  const branchFilter = { organizationId: orgOid };
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+    branchFilter._id = toObjectId(scopedBranchId);
+  }
+
+  const branches = await Branch.find(branchFilter)
+    .select("name assemblyPoint")
+    .lean();
+
+  if (scopedBranchId && !branches.length) {
+    throw new AppError("branch_not_found", 404);
+  }
+
+  const site = scopedBranchId ? branches[0] : null;
+  const empty = {
+    branchId: site?._id || null,
+    branchName: site?.name || null,
+    assemblyPoint: site?.assemblyPoint || "",
+    counts: {
+      staff: 0,
+      residents: 0,
+      visitors: 0,
+      contractors: 0,
+      total: 0,
     },
+  };
+
+  const branchIds = branches.map((row) => row._id);
+  if (!branchIds.length) return empty;
+
+  const workDate = startOfUtcDay(new Date());
+  const [staff, residents, visitRows] = await Promise.all([
+    AttendanceDay.countDocuments({
+      branchId: { $in: branchIds },
+      workDate,
+      presenceStatus: { $in: ON_SITE_PRESENCE },
+      clockOutAt: null,
+    }),
+    Resident.countDocuments({
+      branchId: { $in: branchIds },
+      admissionStatus: AdmissionStatus.ADMITTED,
+    }),
+    VisitSession.aggregate([
+      {
+        $match: {
+          branchId: { $in: branchIds },
+          status: VisitSessionStatus.ON_SITE,
+          checkOutAt: null,
+        },
+      },
+      { $group: { _id: "$personType", count: { $sum: 1 } } },
+    ]),
   ]);
-
-  const branch = row?.branch?.[0];
-  if (!branch) throw new AppError("branch_not_found", 404);
-
-  const staff = row.staff?.[0]?.count || 0;
-  const residents = row.residents?.[0]?.count || 0;
-  const visitRows = row.visits?.[0]?.rows || [];
 
   let visitors = 0;
   let contractors = 0;
   for (const visit of visitRows) {
-    if (visit._id === ExternalPersonType.CONTRACTOR) contractors += visit.count;
-    else visitors += visit.count;
+    if (visit._id === ExternalPersonType.CONTRACTOR) {
+      contractors += visit.count;
+    } else {
+      visitors += visit.count;
+    }
   }
 
   return {
-    branchId: branch._id,
-    branchName: branch.name,
-    assemblyPoint: branch.assemblyPoint || "",
+    ...empty,
     counts: {
       staff,
       residents,

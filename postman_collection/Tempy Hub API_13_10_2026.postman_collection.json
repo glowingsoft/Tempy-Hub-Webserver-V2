@@ -4865,7 +4865,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"activationCode\": \"{{activationCode}}\",\n  \"deviceId\": \"postman-kiosk-1\",\n  \"adminPin\": \"1234\",\n  \"locationLabel\": \"Reception\"\n}",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"activationCode\": \"{{activationCode}}\",\n  \"deviceId\": \"postman-kiosk-1\",\n  \"adminPin\": \"1234\",\n  \"locationLabel\": \"Reception\",\n  \"fireEvacuation\": true\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -4892,7 +4892,7 @@
                     "header": [],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"activationCode\": \"{{activationCode}}\",\n  \"deviceId\": \"postman-kiosk-1\",\n  \"adminPin\": \"1234\",\n  \"locationLabel\": \"Reception\"\n}",
+                      "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"activationCode\": \"{{activationCode}}\",\n  \"deviceId\": \"postman-kiosk-1\",\n  \"adminPin\": \"1234\",\n  \"locationLabel\": \"Reception\",\n  \"fireEvacuation\": true\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -5061,6 +5061,51 @@
               "response": []
             },
             {
+              "name": "update kiosk fire evacuation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-kiosk-token",
+                    "value": "{{kioskToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fireEvacuation\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/kiosk/me",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "kiosk",
+                    "me"
+                  ]
+                },
+                "description": "Screen 109 Fire Evacuation toggle. Stores show/hide of the kiosk evac flow on this device. Does not start or stop an event. Read the same flag on GET /app/kiosk/me, register, and session (`kiosk.fireEvacuation` and top-level `fireEvacuation`). Use GET /app/kiosk/evacuations/active for a running event (`evacuationActive`)."
+              },
+              "response": []
+            },
+            {
               "name": "kiosk me",
               "event": [
                 {
@@ -5218,7 +5263,7 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"kiosk\": {\n      \"_id\": \"6ab3cd37acd57c285e2365d5\",\n      \"branchId\": \"6ab3b752455870e6cbd5d7fe\",\n      \"deviceId\": \"postman-kiosk-1\",\n      \"receptionIdentifier\": \"\",\n      \"locationLabel\": \"Reception\",\n      \"setupStatus\": \"registered\",\n      \"kioskMode\": \"locked\",\n      \"lastHeartbeatAt\": null,\n      \"lastCheckInAt\": null\n    },\n    \"branch\": {\n      \"_id\": \"6ab3b752455870e6cbd5d7fe\",\n      \"name\": \"Willow House\",\n      \"timezone\": \"Europe/London\"\n    }\n  }\n}"
+                  "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"kiosk\": {\n      \"_id\": \"6ab3cd37acd57c285e2365d5\",\n      \"branchId\": \"6ab3b752455870e6cbd5d7fe\",\n      \"deviceId\": \"postman-kiosk-1\",\n      \"receptionIdentifier\": \"Main Entrance\",\n      \"fireEvacuation\": true,\n      \"locationLabel\": \"Reception\",\n      \"setupStatus\": \"registered\",\n      \"kioskMode\": \"locked\",\n      \"lastHeartbeatAt\": null,\n      \"lastCheckInAt\": null\n    },\n    \"branch\": {\n      \"_id\": \"6ab3b752455870e6cbd5d7fe\",\n      \"name\": \"Willow House\",\n      \"timezone\": \"Europe/London\"\n    },\n    \"receptionIdentifier\": \"Main Entrance\",\n    \"fireEvacuation\": true,\n    \"evacuationActive\": false\n  }\n}"
                 }
               ]
             },
@@ -5380,7 +5425,7 @@
                     }
                   ],
                   "cookie": [],
-                  "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"kiosk\": {\n      \"_id\": \"6ab3cd37acd57c285e2365d5\",\n      \"branchId\": \"6ab3b752455870e6cbd5d7fe\",\n      \"deviceId\": \"postman-kiosk-1\",\n      \"receptionIdentifier\": \"\",\n      \"locationLabel\": \"Reception\",\n      \"setupStatus\": \"registered\",\n      \"kioskMode\": \"locked\",\n      \"lastHeartbeatAt\": null,\n      \"lastCheckInAt\": null\n    },\n    \"branch\": {\n      \"_id\": \"6ab3b752455870e6cbd5d7fe\",\n      \"name\": \"Willow House\",\n      \"timezone\": \"Europe/London\"\n    }\n  }\n}"
+                  "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"kiosk\": {\n      \"_id\": \"6ab3cd37acd57c285e2365d5\",\n      \"branchId\": \"6ab3b752455870e6cbd5d7fe\",\n      \"deviceId\": \"postman-kiosk-1\",\n      \"receptionIdentifier\": \"Main Entrance\",\n      \"fireEvacuation\": true,\n      \"locationLabel\": \"Reception\",\n      \"setupStatus\": \"registered\",\n      \"kioskMode\": \"locked\",\n      \"lastHeartbeatAt\": null,\n      \"lastCheckInAt\": null\n    },\n    \"branch\": {\n      \"_id\": \"6ab3b752455870e6cbd5d7fe\",\n      \"name\": \"Willow House\",\n      \"timezone\": \"Europe/London\"\n    },\n    \"receptionIdentifier\": \"Main Entrance\",\n    \"fireEvacuation\": true,\n    \"evacuationActive\": false\n  }\n}"
                 }
               ]
             },
@@ -10422,7 +10467,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Kitchen\",\n  \"sortOrder\": 1\n}",
+                  "raw": "{\n  \"name\": \"Kitchen\",\n  \"branchId\": \"{{branchId}}\",\n  \"sortOrder\": 1\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -18745,7 +18790,7 @@
     },
     {
       "key": "organizationId",
-      "value": ""
+      "value": "6ac72d4be20e26c247a731b3"
     },
     {
       "key": "branchId",

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const FILE = "./postman_collection/TempyHubAPI.postman_collection.json";
+const FILE = "./postman_collection/Tempy Hub API_13_10_2026.postman_collection.json";
 const collection = JSON.parse(fs.readFileSync(FILE, "utf8"));
 
 const adminPanel = collection.item.find((i) => i.name === "Admin Panel");

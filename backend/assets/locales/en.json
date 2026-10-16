@@ -153,6 +153,8 @@
   "invalid_kiosk_admin_pin": "The kiosk admin PIN must be 4 to 8 digits",
   "kiosk_admin_pin_incorrect": "The kiosk admin PIN is incorrect",
   "kiosk_admin_pin_verified": "Kiosk admin PIN verified",
+  "invalid_fire_evacuation": "fireEvacuation must be true or false",
+  "fire_evacuation_disabled": "Fire evacuation is turned off for this kiosk",
   "staff_identification_required": "Identify staff with NFC, employee code and PIN, or staff ID (dev only)",
   "staff_identification_failed": "Staff could not be identified",
   "staff_not_at_kiosk_branch": "This staff member is not assigned to this branch",

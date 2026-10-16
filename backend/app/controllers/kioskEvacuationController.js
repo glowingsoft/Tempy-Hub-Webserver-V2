@@ -1,5 +1,6 @@
 const { sendResponse } = require("@utils/responseUtil");
 const evacuationService = require("@adminServices/evacuation/evacuationService");
+const kioskService = require("@adminServices/kiosk/kioskService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 /** Kiosk Screen 86 — people currently on site before Start Evacuation. */
@@ -24,6 +25,7 @@ const getOnSiteSummary = async (req, res) => {
 /** Kiosk Screen 85 type + Screen 86 Start Evacuation. */
 const startEvacuation = async (req, res) => {
   try {
+    kioskService.assertKioskFireEvacuationEnabled(req.kiosk);
     const data = await evacuationService.startEvacuation({
       organizationId: req.orgId,
       branchId: req.branchId,

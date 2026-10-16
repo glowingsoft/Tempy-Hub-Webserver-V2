@@ -88,6 +88,7 @@ const updateKiosk = async (req, res) => {
       locationLabel: req.body.locationLabel,
       deviceType: req.body.deviceType,
       branchId: req.body.branchId,
+      fireEvacuation: req.body.fireEvacuation,
     });
     return sendResponse({
       res,

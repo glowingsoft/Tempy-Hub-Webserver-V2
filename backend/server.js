@@ -168,7 +168,7 @@ app.get("/api/v1/postman", (_req, res) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader(
     "Content-Disposition",
-    'inline; filename="Tempy-Hub-API.postman_collection.json"'
+    'attachment; filename="Tempy-Hub-API.postman_collection.json"'
   );
   return res.sendFile(path.resolve(collectionPath));
 });

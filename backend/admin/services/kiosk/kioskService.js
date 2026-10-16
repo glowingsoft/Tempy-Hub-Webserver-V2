@@ -75,92 +75,123 @@ const isModuleEnabled = (organization, moduleSlug) => {
   );
 };
 
-const loadEligibleOrganizations = async () => {
-  const orgs = await Organization.find({ status: OrganizationStatus.ACTIVE })
-    .select("_id name moduleAccess")
-    .lean();
-
-  return orgs.filter((org) =>
-    isModuleEnabled(org, ModuleSlug.SIGN_IN_ATTENDANCE)
-  );
-};
-
 /**
- * Public branch lookup for kiosk setup. Single keyword matches organization
- * name, branch name, branch code, or address/postcode fields.
+ * Public branch lookup for kiosk setup. Keyword matches org name, branch
+ * name, code, or address. Only sites with sign-in attendance enabled.
  */
-const searchBranchesForKiosk = async ({ keyword, page, limit, skip }) => {
+const searchBranchesForKiosk = async ({
+  keyword,
+  page,
+  limit,
+  skip,
+  deviceId,
+}) => {
   const term = String(keyword ?? "").trim();
   if (term.length < MIN_SEARCH_LENGTH) {
     throw new AppError("kiosk_branch_search_term_too_short", 400);
   }
 
-  const eligibleOrgs = await loadEligibleOrganizations();
-  if (!eligibleOrgs.length) {
-    return { data: [], meta: generateMeta(page, limit, 0) };
-  }
-
-  const orgById = new Map(eligibleOrgs.map((org) => [String(org._id), org]));
   const regex = { $regex: escapeRegex(term), $options: "i" };
-  const matchingOrgIds = eligibleOrgs
-    .filter((org) => new RegExp(escapeRegex(term), "i").test(org.name))
-    .map((org) => org._id);
+  const thisDeviceId = deviceId ? String(deviceId).trim() : "";
+  const now = new Date();
 
-  const or = [
-    { name: regex },
-    { code: regex },
-    { "address.line1": regex },
-    { "address.line2": regex },
-    { "address.city": regex },
-    { "address.postcode": regex },
-    { "address.county": regex },
-  ];
-
-  if (matchingOrgIds.length) {
-    or.unshift({ organizationId: { $in: matchingOrgIds } });
-  }
-
-  const branchMatch = {
-    status: BranchStatus.ACTIVE,
-    organizationId: { $in: eligibleOrgs.map((org) => org._id) },
-    $or: or,
-  };
-
-  const { data, meta } = await paginateWithFacet({
-    model: Branch,
-    match: branchMatch,
-    page,
-    limit,
-    skip,
-    sort: { name: 1 },
-    extraDataStages: [
-      {
-        $project: {
-          _id: 1,
-          organizationId: 1,
-          name: 1,
-          code: 1,
-          address: 1,
-          timezone: 1,
-        },
+  const [result] = await Branch.aggregate([
+    { $match: { status: BranchStatus.ACTIVE } },
+    {
+      $lookup: {
+        from: Organization.collection.name,
+        localField: "organizationId",
+        foreignField: "_id",
+        as: "_org",
       },
-    ],
-  });
+    },
+    { $unwind: "$_org" },
+    {
+      $match: {
+        "_org.status": OrganizationStatus.ACTIVE,
+        "_org.moduleAccess": {
+          $elemMatch: {
+            moduleSlug: ModuleSlug.SIGN_IN_ATTENDANCE,
+            enabled: true,
+            $or: [
+              { expiresAt: { $exists: false } },
+              { expiresAt: null },
+              { expiresAt: { $gt: now } },
+            ],
+          },
+        },
+        $or: [
+          { name: regex },
+          { code: regex },
+          { "address.line1": regex },
+          { "address.line2": regex },
+          { "address.city": regex },
+          { "address.postcode": regex },
+          { "address.county": regex },
+          { "_org.name": regex },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: Kiosk.collection.name,
+        let: { siteId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$branchId", "$$siteId"] },
+              setupStatus: KioskSetupStatus.REGISTERED,
+              deviceId: thisDeviceId
+                ? thisDeviceId
+                : { $exists: true, $nin: ["", null] },
+            },
+          },
+          { $project: { deviceId: 1 } },
+          { $limit: 1 },
+        ],
+        as: "_registeredKiosk",
+      },
+    },
+    {
+      $facet: {
+        data: [
+          { $sort: { name: 1 } },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 0,
+              branchId: "$_id",
+              branchName: "$name",
+              branchCode: "$code",
+              organizationId: 1,
+              organizationName: "$_org.name",
+              address: 1,
+              timezone: 1,
+              isRegistered: { $gt: [{ $size: "$_registeredKiosk" }, 0] },
+              deviceId: {
+                $ifNull: [
+                  { $arrayElemAt: ["$_registeredKiosk.deviceId", 0] },
+                  null,
+                ],
+              },
+            },
+          },
+        ],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ]);
 
-  const mapped = data.map((branch) => {
-    const org = orgById.get(String(branch.organizationId));
-    return {
-      branchId: branch._id,
-      branchName: branch.name,
-      branchCode: branch.code,
-      organizationId: branch.organizationId,
-      organizationName: org?.name || "",
-      address: publicAddress(branch.address),
-      timezone: branch.timezone,
-    };
-  });
-
-  return { data: mapped, meta };
+  return {
+    data: (result?.data || []).map((row) => ({
+      ...row,
+      address: publicAddress(row.address),
+      isRegistered: Boolean(row.isRegistered),
+      deviceId: row.deviceId || null,
+    })),
+    meta: generateMeta(page, limit, facetCount(result?.totalCount)),
+  };
 };
 
 const shapeStaffPreview = async (profile) => {

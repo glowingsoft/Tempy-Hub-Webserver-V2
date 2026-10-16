@@ -16,6 +16,8 @@ const searchBranches = async (req, res) => {
 
       keyword: req.query.keyword,
 
+      deviceId: req.query.deviceId,
+
       page,
 
       limit,

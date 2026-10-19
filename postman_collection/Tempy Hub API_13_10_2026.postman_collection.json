@@ -1352,6 +1352,136 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "Login Family",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    var jsonData = pm.response.json();",
+                      "    if (jsonData.data && jsonData.data.token) {",
+                      "        pm.collectionVariables.set(\"token\", jsonData.data.token);",
+                      "    }",
+                      "    pm.test(\"Family access lists linked residents\", function () {",
+                      "        pm.expect(jsonData.data.access.residents).to.be.an(\"array\");",
+                      "        pm.expect(jsonData.data.access.defaultSurface).to.eql(\"familyApp\");",
+                      "    });",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{familyInviteEmail}}\",\n  \"password\": \"{{password}}\",\n  \"deviceType\": \"android\",\n  \"deviceId\": \"1234\",\n  \"timezone\": \"Europe/London\",\n  \"audience\": \"family\",\n  \"surface\": \"familyApp\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/auth/login",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Same login as every other surface with audience=family. Fails with 403 family_profile_not_found when the account has no active family link."
+              },
+              "response": []
+            },
+            {
+              "name": "preview family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitation preview fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/auth/family-invitations/{{familyInviteToken}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "family-invitations",
+                    "{{familyInviteToken}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "accept family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitation accepted\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "noauth"
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Jane Doe\",\n  \"password\": \"{{password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/auth/family-invitations/{{familyInviteToken}}/accept",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "family-invitations",
+                    "{{familyInviteToken}}",
+                    "accept"
+                  ]
+                },
+                "description": "Public and token-gated. A new person gets an email-verified account; an existing account keeps its password and only gains the link to the resident. Does not log the person in."
+              },
+              "response": []
             }
           ]
         },
@@ -8276,6 +8406,108 @@
                   "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"view\": \"day\",\n    \"from\": \"2026-08-18\",\n    \"to\": \"2026-08-18\",\n    \"items\": []\n  }\n}"
                 }
               ]
+            }
+          ]
+        },
+        {
+          "name": "Family Invitations",
+          "item": [
+            {
+              "name": "list my family invitations",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"My family invitations fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family-invitations?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-invitations"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get my family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"My family invitation fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family-invitations/{{familyInvitationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-invitations",
+                    "{{familyInvitationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "accept my family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"My family invitation accepted\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family-invitations/{{familyInvitationId}}/accept",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-invitations",
+                    "{{familyInvitationId}}",
+                    "accept"
+                  ]
+                },
+                "description": "A signed-in user accepts an invitation addressed to their email. No password; used to link an existing account to another resident."
+              },
+              "response": []
             }
           ]
         }
@@ -18747,6 +18979,230 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Family Invitations",
+          "item": [
+            {
+              "name": "invite family member",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitation created\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "// The token only exists in this response (acceptUrl) and in the mailer preview.",
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.data && jsonData.data._id) {",
+                      "    pm.collectionVariables.set(\"familyInvitationId\", jsonData.data._id);",
+                      "}",
+                      "if (jsonData.data && jsonData.data.acceptUrl) {",
+                      "    pm.collectionVariables.set(\"familyInviteToken\", jsonData.data.acceptUrl.split(\"/\").pop());",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes without an organization segment.",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{familyInviteEmail}}\",\n  \"name\": \"Jane Doe\",\n  \"residentId\": \"{{residentId}}\",\n  \"relationship\": \"child\",\n  \"isPrimaryContact\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/family-invitations",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family-invitations"
+                  ]
+                },
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, child, parent, sibling, grandchild, friend, legalGuardian, other. Requires the Residents module."
+              },
+              "response": []
+            },
+            {
+              "name": "list family invitations",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitations fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes without an organization segment.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family-invitations?page=1&limit=10&status=pending&residentId={{residentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family-invitations"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitation fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes without an organization segment.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family-invitations",
+                    "{{familyInvitationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "resend family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitation resent\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.data && jsonData.data.acceptUrl) {",
+                      "    pm.collectionVariables.set(\"familyInviteToken\", jsonData.data.acceptUrl.split(\"/\").pop());",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes without an organization segment.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}/resend",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family-invitations",
+                    "{{familyInvitationId}}",
+                    "resend"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "revoke family invitation",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family invitation revoked\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes without an organization segment.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}/revoke",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family-invitations",
+                    "{{familyInvitationId}}",
+                    "revoke"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
@@ -18941,6 +19397,21 @@
     {
       "key": "faqId",
       "value": ""
+    },
+    {
+      "key": "familyInviteEmail",
+      "value": "family.member@example.com",
+      "type": "string"
+    },
+    {
+      "key": "familyInvitationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "familyInviteToken",
+      "value": "",
+      "type": "string"
     }
   ]
 }

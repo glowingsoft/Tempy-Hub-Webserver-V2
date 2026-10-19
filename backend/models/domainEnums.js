@@ -84,6 +84,12 @@ const FamilyMemberStatus = {
   REMOVED: "removed",
 };
 
+/** A family code is active until a newer one replaces it (voided) or it expires. */
+const FamilyCodeStatus = {
+  ACTIVE: "active",
+  VOIDED: "voided",
+};
+
 /** How a family link came to exist. */
 const FamilyJoinSource = {
   INVITATION: "invitation",
@@ -384,6 +390,7 @@ module.exports = {
   FamilyRelationship,
   FamilyMemberStatus,
   FamilyJoinSource,
+  FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,
   OrganizationStatus,

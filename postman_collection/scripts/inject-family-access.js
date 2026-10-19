@@ -23,6 +23,15 @@ const req = (name, method, pathParts, { query, tests, description } = {}) => ({
       raw: `{{url}}/${pathParts.join("/")}${query ? `?${query}` : ""}`,
       host: ["{{url}}"],
       path: pathParts,
+      // Postman reads the Params tab from this list, not from the raw string.
+      ...(query
+        ? {
+            query: query.split("&").map((pair) => {
+              const [key, ...rest] = pair.split("=");
+              return { key, value: rest.join("=") };
+            }),
+          }
+        : {}),
     },
     ...(description ? { description } : {}),
   },
@@ -59,6 +68,171 @@ const requests = [
   }),
 ];
 
+const jsonBody = (body) => ({
+  mode: "raw",
+  raw: JSON.stringify(body, null, 2),
+  options: { raw: { language: "json" } },
+});
+
+requests.push(
+  req("current family code", "GET", ["app", "family", "codes", "current"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Current family code fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      "    pm.expect(data).to.have.property(\"code\");",
+      "    if (data.code) {",
+      "        pm.expect(data.code).to.match(/^[A-Z]{2,3}-\\d{2}-[A-Z0-9]{4}$/);",
+      '        pm.collectionVariables.set("familyCode", data.code);',
+      "    }",
+      "});",
+    ],
+    description:
+      "The resident's current family code and when it expires. code is null when there is none or it has expired, so the app shows Make A New Code. Next of kin only: 403 for another family member, 404 when the resident isn't one of yours, 400 when residentId is missing. Figma screen: Invite Family (family code card).",
+  }),
+  {
+    ...req("make new family code", "POST", ["app", "family", "codes"], {
+      tests: [
+        'pm.test("New family code created", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        "    pm.expect(data.code).to.match(/^[A-Z]{2,3}-\\d{2}-[A-Z0-9]{4}$/);",
+        '    pm.collectionVariables.set("familyCode", data.code);',
+        "});",
+      ],
+      description:
+        "Make A New Code: creates a code valid for 14 days and voids the old one. The code never contains the resident's room number. Next of kin only. Figma screen: Invite Family (Make A New Code).",
+    }),
+  }
+);
+requests[requests.length - 1].request.body = jsonBody({ residentId: "{{residentId}}" });
+
+// ---------------------------------------------------------------- Join A Family
+const withBody = (request, body) => {
+  request.request.body = jsonBody(body);
+  return request;
+};
+
+requests.push(
+  req("check family code", "GET", ["app", "family", "join", "preview"], {
+    query: "code={{familyCode}}",
+    tests: [
+      'pm.test("Code accepted", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      "    pm.expect(data.valid).to.eql(true);",
+      "    pm.expect(data.homeName).to.be.a(\"string\");",
+      "    pm.expect(data).to.not.have.property(\"residentId\");",
+      "});",
+    ],
+    description:
+      "The Code Accepted card: checks a typed code and returns the home name only (the resident stays hidden until approval). Wrong 404, expired or replaced 410, and 429 after 5 wrong tries in 15 minutes (the message says how many minutes are left). Figma screen: Join A Family (code entry, Wrong, Expired, Locked).",
+  }),
+  withBody(
+    req("send join request", "POST", ["app", "family", "join"], {
+      tests: [
+        'pm.test("Join request sent", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("pending");',
+        '    pm.collectionVariables.set("joinRequestId", data.requestId);',
+        "});",
+      ],
+      description:
+        "Send Join Request: body code and relationship (one of the values from relationship options). Creates a pending request for the next of kin or the home to approve. Errors: 400 invalid_relationship, 404/410/429 for the code, 409 join_request_pending (one at a time), 409 family_link_exists, 409 email_used_by_staff. Figma screen: Join A Family.",
+    }),
+    { code: "{{familyCode}}", relationship: "grandson" }
+  ),
+  req("current join request", "GET", ["app", "family", "join-requests", "current"], {
+    tests: [
+      'pm.test("Current join request fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      "    if (data) {",
+      '        pm.expect(data.status).to.eql("pending");',
+      '        pm.collectionVariables.set("joinRequestId", data.requestId);',
+      "    }",
+      "});",
+    ],
+    description:
+      "The member's pending request (home name, Waiting), or null when there is none. Figma screen: Join A Family (Request Sent, Waiting).",
+  }),
+  req("cancel join request", "POST", ["app", "family", "join-requests", "{{joinRequestId}}", "cancel"], {
+    tests: [
+      'pm.test("Join request cancelled", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("cancelled");',
+      "});",
+    ],
+    description:
+      "Cancel Request, after the confirmation dialog. Only the member who asked, and only while it is pending (409 otherwise, 404 for anyone else's request). Figma screen: Join A Family (Cancel Request).",
+  })
+);
+
+// ---------------------------------------------------------------- My Family
+requests.push(
+  req("my family", "GET", ["app", "family", "members"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("My Family fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data.members).to.be.an("array");',
+      "    const removable = data.members.find((m) => m.canRemove);",
+      '    if (removable) pm.collectionVariables.set("memberId", removable.memberId);',
+      "    const review = data.members.find((m) => m.canReview);",
+      '    if (review) pm.collectionVariables.set("joinRequestId", review.memberId);',
+      "});",
+    ],
+    description:
+      "My Family: the people linked to the resident, with name, photo, relationship, Next Of Kin badge, status and isYou. The next of kin also sees people who asked to join (status pending, canReview true); everyone else sees active members only. canRemove and canReview say which buttons to show. Figma screen: My Family.",
+  }),
+  req("join requests to review", "GET", ["app", "family", "join-requests"], {
+    query: "residentId={{residentId}}&page=1&limit=10",
+    tests: [
+      'pm.test("Join requests fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.be.an("array");',
+      "    const first = pm.response.json().data[0];",
+      '    if (first) pm.collectionVariables.set("joinRequestId", first.requestId);',
+      "});",
+    ],
+    description:
+      "Requests waiting for review, oldest first, paginated. Next of kin only (403 for another member, 404 when the resident isn't yours, 400 without residentId). Figma screen: My Family (Review).",
+  }),
+  req("approve join request", "POST", ["app", "family", "join-requests", "{{joinRequestId}}", "approve"], {
+    tests: [
+      'pm.test("Join request approved", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("active");',
+      "});",
+    ],
+    description:
+      "Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review).",
+  }),
+  req("reject join request", "POST", ["app", "family", "join-requests", "{{joinRequestId}}", "reject"], {
+    tests: [
+      'pm.test("Join request rejected", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("rejected");',
+      "});",
+    ],
+    description:
+      "Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review).",
+  }),
+  req("remove family member", "DELETE", ["app", "family", "members", "{{memberId}}"], {
+    tests: [
+      'pm.test("Family member removed", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("removed");',
+      "});",
+    ],
+    description:
+      "Removes an active member; their access ends on their next request. Only the resident's next of kin. 409 for the next of kin (hand over first) or for someone who hasn't been approved (reject the request instead); 404 for anyone else's member. Figma screen: My Family (Remove).",
+  })
+);
+
 let folder = appFolder.item.find((i) => i.name === "Family");
 if (!folder) {
   folder = { name: "Family", item: [] };
@@ -85,6 +259,14 @@ if (invite && invite.request.body) {
     "relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down."
   );
 }
+
+const vars = collection.variable || [];
+for (const key of ["familyCode", "joinRequestId", "memberId"]) {
+  if (!vars.find((v) => v.key === key)) {
+    vars.push({ key, value: "", type: "string" });
+  }
+}
+collection.variable = vars;
 
 fs.writeFileSync(FILE, JSON.stringify(collection, null, 2));
 console.log("postman family access updated");

@@ -3,6 +3,7 @@ const { Organization } = require("@models/Organization");
 const { Branch } = require("@models/Branch");
 const { Resident } = require("@models/Resident");
 const { FamilyMember } = require("@models/FamilyMember");
+const { Membership } = require("@models/Membership");
 const {
   FamilyMemberStatus,
   FamilyRelationship,
@@ -156,7 +157,23 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   }));
 };
 
+/**
+ * One email holds one role. An account with any staff membership, or a platform
+ * admin, is a staff account and cannot be a family member.
+ */
+const isStaffAccount = async (user) => {
+  if (user?.accountState?.userType === "admin") return true;
+
+  const [membership] = await Membership.aggregate([
+    { $match: { userId: toObjectId(user._id) } },
+    { $limit: 1 },
+    { $project: { _id: 1 } },
+  ]);
+  return Boolean(membership);
+};
+
 module.exports = {
+  isStaffAccount,
   listRelationships,
   isFamilyModuleActive,
   listActiveLinks,

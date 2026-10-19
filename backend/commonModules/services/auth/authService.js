@@ -15,7 +15,10 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
-const { resolveFamilyResidents } = require("@appServices/family/familyAccessService");
+const {
+  isStaffAccount,
+  resolveFamilyResidents,
+} = require("@appServices/family/familyAccessService");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const {
   effectivePermissions,
@@ -310,11 +313,12 @@ const assertAudienceAccess = async (user, audience) => {
   }
 
   if (audience === AuthAudience.FAMILY) {
-    const access = await resolveFamilyAccess(user);
-    if (!access.residents.length) {
+    // A new member has no link yet, and must be able to sign in to ask to join a
+    // family. Staff accounts are the exception: one email holds one role.
+    if (await isStaffAccount(user)) {
       throw new AppError("family_profile_not_found", 403);
     }
-    return access;
+    return resolveFamilyAccess(user);
   }
 
   throw new AppError("wrong_token_audience", 400);

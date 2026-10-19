@@ -20,8 +20,9 @@ const notFound = (res) =>
  * off, cuts access on the very next call. With no usable link the answer is 404.
  *
  * Pass `{ param: "residentId" }` to also require a link to the resident named in
- * that route parameter. Sets `req.familyLinks` and, when a param is given,
- * `req.familyLink`.
+ * that route parameter. Use `{ param: "residentId", in: "query" }` (or "body") when
+ * the id is not part of the path; a missing id is then a 400. Sets
+ * `req.familyLinks` and, when a param is given, `req.familyLink`.
  */
 const requireFamilyAccess =
   (options = {}) =>
@@ -32,7 +33,16 @@ const requireFamilyAccess =
 
       let link = null;
       if (options.param) {
-        const residentId = req.params[options.param];
+        const source = options.in || "params";
+        const residentId = (req[source] || {})[options.param];
+
+        if (source !== "params" && !residentId) {
+          return sendResponse({
+            res,
+            statusCode: 400,
+            translationKey: "resident_id_required",
+          });
+        }
         if (!mongoose.Types.ObjectId.isValid(residentId)) return notFound(res);
 
         link = links.find((l) => String(l.residentId) === String(residentId));

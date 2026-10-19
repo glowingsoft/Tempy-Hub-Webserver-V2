@@ -26,29 +26,33 @@ const {
 const EARLY_CLOCK_IN_MINUTES = 15;
 const DEFAULT_TZ = "Europe/London";
 
-const EMPTY_SHIFT_STATUS_COUNTS = { open: 0, filled: 0, cancelled: 0 };
+const SHIFT_STATUSES = Object.values(ShiftStatus);
 
-/** Tab counts ignore `status` so Open / Filled / Cancelled stay independent of the list filter. */
-const shiftStatusCountFacets = (countMatch) => ({
-  openCount: [
-    { $match: { ...countMatch, status: ShiftStatus.OPEN } },
-    { $count: "count" },
-  ],
-  filledCount: [
-    { $match: { ...countMatch, status: ShiftStatus.SCHEDULED } },
-    { $count: "count" },
-  ],
-  cancelledCount: [
-    { $match: { ...countMatch, status: ShiftStatus.CANCELLED } },
-    { $count: "count" },
-  ],
-});
+const emptyShiftStatusCounts = () =>
+  Object.fromEntries(SHIFT_STATUSES.map((status) => [status, 0]));
 
-const shiftStatusCountsFromFacet = (result) => ({
-  open: facetCount(result.openCount),
-  filled: facetCount(result.filledCount),
-  cancelled: facetCount(result.cancelledCount),
-});
+/** Tab counts ignore `status` so each status total stays independent of the list filter. */
+const shiftStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    SHIFT_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const shiftStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    SHIFT_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const parseShiftStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!SHIFT_STATUSES.includes(value)) throw new AppError("invalid_shift_status", 400);
+  return value;
+};
 
 const branchTimezone = async (branchId) => {
   const branch = await Branch.findById(branchId).select("timezone").lean();
@@ -247,7 +251,7 @@ const listShifts = async ({
         data: [],
         meta: {
           ...generateMeta(page, limit, 0),
-          counts: { ...EMPTY_SHIFT_STATUS_COUNTS },
+          counts: emptyShiftStatusCounts(),
         },
       };
     }
@@ -266,7 +270,8 @@ const listShifts = async ({
   }
 
   const countMatch = { ...match };
-  if (status) match.status = status;
+  const shiftStatus = parseShiftStatus(status);
+  if (shiftStatus) match.status = shiftStatus;
 
   const { data, meta, result } = await paginateWithFacet({
     model: Shift,
@@ -492,6 +497,73 @@ const withdrawClaim = async ({ userId, organizationId, claimId }) => {
   return claim.toObject();
 };
 
+const claimUserProject = [{ $project: { name: 1, email: 1 } }];
+
+/** Lookups run after paging, and only for ids that are set. */
+const claimDetailStages = [
+  {
+    $lookup: {
+      from: Shift.collection.name,
+      localField: "shiftId",
+      foreignField: "_id",
+      pipeline: [{ $project: { startsAt: 1, endsAt: 1, status: 1, branchId: 1 } }],
+      as: "shift",
+    },
+  },
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, code: 1, status: 1 } }],
+      as: "branch",
+    },
+  },
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      localField: "staffId",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $lookup: {
+            from: User.collection.name,
+            localField: "userId",
+            foreignField: "_id",
+            pipeline: claimUserProject,
+            as: "user",
+          },
+        },
+        {
+          $project: {
+            employeeCode: 1,
+            name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+            email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+          },
+        },
+      ],
+      as: "staff",
+    },
+  },
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "decidedBy",
+      foreignField: "_id",
+      pipeline: claimUserProject,
+      as: "decidedByUser",
+    },
+  },
+  {
+    $addFields: {
+      shift: { $ifNull: [{ $arrayElemAt: ["$shift", 0] }, null] },
+      branch: { $ifNull: [{ $arrayElemAt: ["$branch", 0] }, null] },
+      staff: { $ifNull: [{ $arrayElemAt: ["$staff", 0] }, null] },
+      decidedByUser: { $ifNull: [{ $arrayElemAt: ["$decidedByUser", 0] }, null] },
+    },
+  },
+];
+
 const listClaims = async ({
   organizationId,
   page,
@@ -522,9 +594,30 @@ const listClaims = async ({
     limit,
     skip,
     sort: { createdAt: -1 },
+    extraDataStages: claimDetailStages,
   });
 
   return { data, meta };
+};
+
+const getClaim = async ({ actor, organizationId, claimId }) => {
+  if (!mongoose.Types.ObjectId.isValid(String(claimId))) {
+    throw new AppError("invalid_id", 400);
+  }
+
+  const match = {
+    _id: new mongoose.Types.ObjectId(String(claimId)),
+    organizationId: new mongoose.Types.ObjectId(String(organizationId)),
+  };
+  const standing = await actorStanding(actor, organizationId);
+  if (standing.branchId) match.branchId = standing.branchId;
+
+  const [claim] = await ShiftClaim.aggregate([
+    { $match: match },
+    ...claimDetailStages,
+  ]);
+  if (!claim) throw new AppError("shift_claim_not_found", 404);
+  return claim;
 };
 
 const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) => {
@@ -626,6 +719,7 @@ module.exports = {
   createClaim,
   withdrawClaim,
   listClaims,
+  getClaim,
   approveClaim,
   rejectClaim,
   ModuleSlug,

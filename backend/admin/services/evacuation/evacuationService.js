@@ -158,7 +158,7 @@ const branchLookupPipeline = [
 
 const formatEventDoc = (doc) => {
   if (!doc) return null;
-  const { branchDoc, statRows, ...event } = doc;
+  const { branchDoc, statRows, rollcall, ...event } = doc;
   const formatted = {
     ...event,
     branch: branchDoc
@@ -169,7 +169,10 @@ const formatEventDoc = (doc) => {
         }
       : undefined,
   };
-  if (statRows) {
+  if (rollcall) {
+    formatted.rollcallStats = statsFromGroupedRows(rollcall.stats);
+    formatted.checks = rollcall.checks || [];
+  } else if (statRows) {
     formatted.rollcallStats = statsFromGroupedRows(statRows);
   }
   return formatted;
@@ -550,10 +553,51 @@ const checkPersonLookupStages = [
   },
 ];
 
+/** One scan of this event's checks: counts for the header, cards for the list. */
+const rollcallDetailLookup = (eventIdExpr = "$_id") => [
+  {
+    $lookup: {
+      from: COLLECTIONS.evacChecks,
+      let: { eventId: eventIdExpr },
+      pipeline: [
+        { $match: { $expr: { $eq: ["$evacuationEventId", "$$eventId"] } } },
+        {
+          $facet: {
+            stats: [
+              {
+                $group: {
+                  _id: { kind: "$personKind", status: "$status" },
+                  count: { $sum: 1 },
+                },
+              },
+            ],
+            checks: [
+              { $sort: { status: 1, updatedAt: -1 } },
+              ...checkPersonLookupStages,
+            ],
+          },
+        },
+      ],
+      as: "rollcall",
+    },
+  },
+  {
+    $set: {
+      rollcall: {
+        $ifNull: [
+          { $arrayElemAt: ["$rollcall", 0] },
+          { stats: [], checks: [] },
+        ],
+      },
+    },
+  },
+];
+
 const loadEventWithBranchAndStats = async ({
   match,
   organizationId,
   includeStats = true,
+  includeChecks = false,
 }) => {
   const pipeline = [
     { $match: match },
@@ -569,7 +613,9 @@ const loadEventWithBranchAndStats = async ({
     });
   }
 
-  if (includeStats) {
+  if (includeChecks) {
+    pipeline.push(...rollcallDetailLookup("$_id"));
+  } else if (includeStats) {
     pipeline.push(...rollcallStatsPipeline("$_id"));
   }
 
@@ -652,7 +698,7 @@ const getEvacuationEvent = async ({
   const data = await loadEventWithBranchAndStats({
     match: { _id: eventOid },
     organizationId,
-    includeStats: true,
+    includeChecks: true,
   });
 
   if (!data) throw new AppError("evacuation_event_not_found", 404);
@@ -762,12 +808,32 @@ const listEvacuations = async ({
         },
       },
       {
+        $lookup: {
+          from: COLLECTIONS.users,
+          localField: "startedByUserId",
+          foreignField: "_id",
+          pipeline: [
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                email: 1,
+                image: { $ifNull: ["$profileIcon", ""] },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "startedBy",
+        },
+      },
+      {
         $project: {
           type: 1,
           status: 1,
           startedAt: 1,
           closedAt: 1,
           startedByUserId: 1,
+          startedBy: { $ifNull: [{ $arrayElemAt: ["$startedBy", 0] }, null] },
           kioskId: 1,
           branchId: 1,
           createdAt: 1,

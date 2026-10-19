@@ -8278,6 +8278,45 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Supervision",
+          "item": [
+            {
+              "name": "my supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}app/supervision",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "supervision"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -18747,6 +18786,256 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Supervision",
+          "item": [
+            {
+              "name": "update org supervision interval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"settings\": {\n    \"defaultSupervisionIntervalMonths\": 3\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update staff supervision settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"supervisorStaffId\": \"{{supervisorStaffId}}\",\n  \"supervisionIntervalMonths\": 3\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/staff-profiles/{{staffProfileId}}/supervision-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-profiles",
+                    "{{staffProfileId}}",
+                    "supervision-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "list team supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/supervision?branchId={{branchId}}&staffId={{staffProfileId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "{{staffProfileId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "book supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Created\", () => pm.response.to.have.status(201));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"supervisionId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"actionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"status\": \"scheduled\",\n  \"scheduledAt\": \"2026-11-16T09:00:00\",\n  \"locationLabel\": \"Office\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/supervision",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "save completed supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Created\", () => pm.response.to.have.status(201));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"supervisionId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"actionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"status\": \"completed\",\n  \"topics\": [\n    \"Wellbeing\",\n    \"Training\"\n  ],\n  \"notes\": \"Meeting held\",\n  \"actionPoints\": [\n    \"Book the next review\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/supervision",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "sign off action point",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/supervision/{{supervisionId}}/action-points/{{actionPointId}}/sign-off",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision",
+                    "{{supervisionId}}",
+                    "action-points",
+                    "{{actionPointId}}",
+                    "sign-off"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
@@ -18941,6 +19230,21 @@
     {
       "key": "faqId",
       "value": ""
+    },
+    {
+      "key": "supervisionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "actionPointId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supervisorStaffId",
+      "value": "",
+      "type": "string"
     }
   ]
 }

@@ -16,6 +16,7 @@ const leaveRoutes = require("./leaveRoutes");
 const kioskRoutes = require("./kioskRoutes");
 const invitationRoutes = require("./invitationRoutes");
 const evacuationRoutes = require("./evacuationRoutes");
+const supervisionRoutes = require("./supervisionRoutes");
 
 
 router.use("/support", supportRoutes);
@@ -26,6 +27,7 @@ router.use("/shift-claims", shiftClaimRoutes);
 router.use("/attendance", attendanceRoutes);
 router.use("/leave-requests", leaveRoutes);
 router.use("/evacuations", evacuationRoutes);
+router.use("/supervision", supervisionRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/notifications", notificationsRoutes);
 router.use("/home", homeRoutes);

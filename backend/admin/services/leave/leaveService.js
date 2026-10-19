@@ -4,8 +4,9 @@ const { LeaveRequest } = require("@models/LeaveRequest");
 const { LeaveEntitlement } = require("@models/LeaveEntitlement");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
+const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   LeaveType,
@@ -313,39 +314,88 @@ const staffSummary = (profile, userById) => {
   };
 };
 
-const attachLeaveRequestDetails = async (requests) => {
+const userLookup = (localField, as) => ({
+  $lookup: {
+    from: User.collection.name,
+    localField,
+    foreignField: "_id",
+    pipeline: [{ $project: { _id: 1, name: 1, email: 1 } }],
+    as,
+  },
+});
+
+const attachLeaveRequestDetails = async (requests, { withOrganization = false } = {}) => {
   if (!requests?.length) return requests;
 
-  const staffIds = [...new Set(requests.map((r) => String(r.staffId)))];
-  const branchIds = [
-    ...new Set(requests.filter((r) => r.branchId).map((r) => String(r.branchId))),
-  ];
-
-  const [staffProfiles, branches] = await Promise.all([
-    StaffProfile.find({ _id: { $in: staffIds } })
-      .select("_id userId employeeCode")
-      .lean(),
-    Branch.find({ _id: { $in: branchIds } })
-      .select("_id name code status")
-      .lean(),
+  const rows = await LeaveRequest.aggregate([
+    { $match: { _id: { $in: requests.map((request) => request._id) } } },
+    {
+      $lookup: {
+        from: StaffProfile.collection.name,
+        localField: "staffId",
+        foreignField: "_id",
+        pipeline: [
+          {
+            $lookup: {
+              from: User.collection.name,
+              localField: "userId",
+              foreignField: "_id",
+              pipeline: [{ $project: { _id: 1, name: 1, email: 1 } }],
+              as: "user",
+            },
+          },
+          {
+            $project: {
+              employeeCode: 1,
+              name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+              email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+            },
+          },
+        ],
+        as: "staff",
+      },
+    },
+    {
+      $lookup: {
+        from: Branch.collection.name,
+        localField: "branchId",
+        foreignField: "_id",
+        pipeline: [{ $project: { name: 1, code: 1, status: 1 } }],
+        as: "branch",
+      },
+    },
+    ...(withOrganization
+      ? [
+          {
+            $lookup: {
+              from: Organization.collection.name,
+              localField: "organizationId",
+              foreignField: "_id",
+              pipeline: [{ $project: { _id: 1, name: 1, status: 1 } }],
+              as: "organization",
+            },
+          },
+        ]
+      : []),
+    userLookup("decidedBy", "decidedByUser"),
+    userLookup("recordedByUserId", "recordedByUser"),
+    userLookup("createdBy", "createdByUser"),
+    {
+      $addFields: {
+        staff: { $ifNull: [{ $arrayElemAt: ["$staff", 0] }, null] },
+        branch: { $ifNull: [{ $arrayElemAt: ["$branch", 0] }, null] },
+        ...(withOrganization
+          ? { organization: { $ifNull: [{ $arrayElemAt: ["$organization", 0] }, null] } }
+          : {}),
+        decidedByUser: { $ifNull: [{ $arrayElemAt: ["$decidedByUser", 0] }, null] },
+        recordedByUser: { $ifNull: [{ $arrayElemAt: ["$recordedByUser", 0] }, null] },
+        createdByUser: { $ifNull: [{ $arrayElemAt: ["$createdByUser", 0] }, null] },
+      },
+    },
   ]);
 
-  const userIds = staffProfiles.map((p) => p.userId);
-  const users = userIds.length
-    ? await User.find({ _id: { $in: userIds } })
-        .select("name email")
-        .lean()
-    : [];
-
-  const staffById = new Map(staffProfiles.map((p) => [String(p._id), p]));
-  const userById = new Map(users.map((u) => [String(u._id), u]));
-  const branchById = new Map(branches.map((b) => [String(b._id), b]));
-
-  return requests.map((request) => ({
-    ...request,
-    staff: staffSummary(staffById.get(String(request.staffId)), userById),
-    branch: branchById.get(String(request.branchId)) || null,
-  }));
+  const byId = new Map(rows.map((row) => [String(row._id), row]));
+  return requests.map((request) => byId.get(String(request._id)) || request);
 };
 
 const assertObjectId = (value) => {
@@ -511,7 +561,9 @@ const getMyLeaveRequest = async ({ userId, organizationId, requestId }) => {
   }).lean();
 
   if (!request) throw new AppError("leave_request_not_found", 404);
-  const [enriched] = await attachLeaveRequestDetails([request]);
+  const [enriched] = await attachLeaveRequestDetails([request], {
+    withOrganization: true,
+  });
   return enriched;
 };
 
@@ -647,6 +699,65 @@ const listLeaveScores = async ({
   };
 };
 
+const LEAVE_REQUEST_STATUSES = Object.values(LeaveRequestStatus);
+
+const emptyLeaveStatusCounts = () =>
+  Object.fromEntries(LEAVE_REQUEST_STATUSES.map((status) => [status, 0]));
+
+/** Tab counts ignore `status` so each status total stays independent of the list filter. */
+const leaveStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    LEAVE_REQUEST_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const leaveStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    LEAVE_REQUEST_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Staff in scope whose user name or email matches the keyword. */
+const staffIdsMatchingKeyword = async (staffIds, keyword) => {
+  const term = String(keyword || "").trim();
+  if (!term || !staffIds.length) return staffIds;
+
+  const regex = { $regex: escapeRegex(term), $options: "i" };
+  const rows = await StaffProfile.aggregate([
+    { $match: { _id: { $in: staffIds } } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "userId",
+        foreignField: "_id",
+        pipeline: [
+          { $match: { $or: [{ name: regex }, { email: regex }] } },
+          { $project: { _id: 1 } },
+        ],
+        as: "user",
+      },
+    },
+    { $match: { user: { $ne: [] } } },
+    { $project: { _id: 1 } },
+  ]);
+
+  return rows.map((row) => row._id);
+};
+
+const parseLeaveRequestStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!LEAVE_REQUEST_STATUSES.includes(value)) {
+    throw new AppError("invalid_leave_request_status", 400);
+  }
+  return value;
+};
+
 const listLeaveRequests = async ({
   organizationId,
   page,
@@ -658,6 +769,7 @@ const listLeaveRequests = async ({
   leaveType,
   from,
   to,
+  keyword,
   actor,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -669,12 +781,16 @@ const listLeaveRequests = async ({
     branchId,
   });
 
-  if (!staffIds.length) {
-    return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+  const matchedStaffIds = await staffIdsMatchingKeyword(staffIds, keyword);
+  if (!matchedStaffIds.length) {
+    return {
+      data: [],
+      meta: { page, limit, total: 0, totalPages: 0, counts: emptyLeaveStatusCounts() },
+    };
   }
 
-  const match = { staffId: { $in: staffIds } };
-  if (status) match.status = status;
+  const match = { staffId: { $in: matchedStaffIds } };
+  const leaveStatus = parseLeaveRequestStatus(status);
   if (leaveType) match.leaveType = leaveType;
 
   if (from || to) {
@@ -683,16 +799,23 @@ const listLeaveRequests = async ({
     if (to) match.startDate.$lte = moment.tz(to, DEFAULT_TZ).endOf("day").toDate();
   }
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  if (leaveStatus) match.status = leaveStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: LeaveRequest,
     match,
     page,
     limit,
     skip,
     sort: { startDate: -1 },
+    extraFacets: leaveStatusCountFacets(countMatch),
   });
 
-  return { data: await attachLeaveRequestDetails(data), meta };
+  return {
+    data: await attachLeaveRequestDetails(data),
+    meta: { ...meta, counts: leaveStatusCountsFromFacet(result) },
+  };
 };
 
 const getLeaveRequest = async ({ requestId, organizationId, actor }) => {
@@ -706,7 +829,9 @@ const getLeaveRequest = async ({ requestId, organizationId, actor }) => {
     );
   }
 
-  const [enriched] = await attachLeaveRequestDetails([request]);
+  const [enriched] = await attachLeaveRequestDetails([request], {
+    withOrganization: true,
+  });
   return enriched;
 };
 

@@ -352,6 +352,35 @@ const branchStatusCountsFromFacet = (result) => {
   return counts;
 };
 
+/** Latest activation code for each branch on this page. Hash stays in the database. */
+const activationCodeLookup = (organizationId) => [
+  {
+    $lookup: {
+      from: BranchActivationCode.collection.name,
+      let: { branchId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $eq: ["$branchId", "$$branchId"] },
+            organizationId,
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+        { $project: { codeHash: 0 } },
+      ],
+      as: "activationCode",
+    },
+  },
+  {
+    $set: {
+      activationCode: {
+        $ifNull: [{ $arrayElemAt: ["$activationCode", 0] }, null],
+      },
+    },
+  },
+];
+
 const listBranches = async ({
   organizationId,
   page,
@@ -382,6 +411,7 @@ const listBranches = async ({
     limit,
     skip,
     extraFacets: branchStatusCountFacets(countMatch),
+    extraDataStages: activationCodeLookup(match.organizationId),
   });
 
   return {

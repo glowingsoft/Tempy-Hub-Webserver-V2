@@ -21,6 +21,7 @@ const branchController = require("../controllers/branchController");
 const membershipController = require("../controllers/membershipController");
 
 const staffController = require("../controllers/staffController");
+const supervisionController = require("../controllers/supervisionController");
 const shiftController = require("../controllers/shiftController");
 const attendanceController = require("../controllers/attendanceController");
 const leaveController = require("../controllers/leaveController");
@@ -251,6 +252,31 @@ scoped.get(
 
 scoped.get("/staff-profiles", staffController.listStaffProfiles);
 
+scoped.patch(
+  "/staff-profiles/:staffProfileId/supervision-settings",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.updateSupervisionSettings
+);
+scoped.get(
+  "/supervision",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.listTeamSupervision
+);
+scoped.post(
+  "/supervision",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.createSupervision
+);
+scoped.post(
+  "/supervision/:supervisionId/action-points/:actionPointId/sign-off",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.signOffActionPoint
+);
+
 scoped.post(
   "/shifts",
   requireRoles(MANAGERS),
@@ -269,6 +295,13 @@ scoped.get(
   requireModule(ModuleSlug.ROTA_SCHEDULING),
   requirePermission(ROTA_APPROVE),
   shiftController.listClaims
+);
+scoped.get(
+  "/shift-claims/:claimId",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.ROTA_SCHEDULING),
+  requirePermission(ROTA_APPROVE),
+  shiftController.getClaim
 );
 
 scoped.get(
@@ -296,6 +329,12 @@ scoped.get(
   requireModule(ModuleSlug.LEAVE),
   requirePermission(LEAVE_VIEW),
   leaveController.listLeaveRequests
+);
+scoped.get(
+  "/leave-requests/:requestId",
+  requireModule(ModuleSlug.LEAVE),
+  requirePermission(LEAVE_VIEW),
+  leaveController.getLeaveRequest
 );
 scoped.post(
   "/leave-requests/record",

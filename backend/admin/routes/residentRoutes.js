@@ -3,9 +3,7 @@ const auth = require("@middlewares/authMiddleware");
 const {
   requireMembership,
   requireRoles,
-  requireModule,
 } = require("@middlewares/membershipMiddleware");
-const { ModuleSlug } = require("@models/domainEnums");
 const residentController = require("../controllers/residentController");
 const {
   RESIDENT_HANDLER_ROLES,
@@ -13,12 +11,7 @@ const {
 
 const router = express.Router();
 
-router.use(
-  auth,
-  requireMembership(),
-  requireModule(ModuleSlug.RESIDENTS),
-  requireRoles(RESIDENT_HANDLER_ROLES)
-);
+router.use(auth, requireMembership(), requireRoles(RESIDENT_HANDLER_ROLES));
 
 router.get("/", residentController.listResidents);
 router.post("/", residentController.createResident);

@@ -20,6 +20,7 @@ const listLeaveRequests = async (req, res) => {
       leaveType: req.query.leaveType,
       from: req.query.from,
       to: req.query.to,
+      keyword: req.query.keyword || req.query.search,
       actor: req.user,
     });
 

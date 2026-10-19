@@ -108,7 +108,17 @@ const updateDepartment = async (req, res) => {
 };
 
 const createJobTitle = async (req, res) => {
-  if (!validateParams(req, res, { formFields: ["name"] })) return;
+  if (
+    !validateParams(req, res, {
+      formFields: ["name"],
+      objectIdFields: [
+        ...(req.body?.branchId ? ["branchId"] : []),
+        ...(req.body?.departmentId ? ["departmentId"] : []),
+      ],
+    })
+  ) {
+    return;
+  }
 
   try {
     const data = await staffService.createJobTitle({
@@ -116,6 +126,7 @@ const createJobTitle = async (req, res) => {
       organizationId: req.orgId,
       name: req.body.name,
       branchId: req.body.branchId,
+      departmentId: req.body.departmentId,
       level: req.body.level,
     });
 
@@ -140,6 +151,7 @@ const listJobTitles = async (req, res) => {
       skip,
       keyword: req.query.keyword,
       branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
       active: req.query.active,
       status: req.query.status,
       level: req.query.level,
@@ -176,7 +188,16 @@ const getJobTitle = async (req, res) => {
 };
 
 const updateJobTitle = async (req, res) => {
-  if (!validateParams(req, res, { objectIdFields: ["jobTitleId"] })) return;
+  if (
+    !validateParams(req, res, {
+      objectIdFields: [
+        "jobTitleId",
+        ...(req.body?.departmentId ? ["departmentId"] : []),
+      ],
+    })
+  ) {
+    return;
+  }
 
   try {
     const data = await staffService.updateJobTitle({
@@ -186,6 +207,7 @@ const updateJobTitle = async (req, res) => {
       name: req.body.name,
       level: req.body.level,
       branchId: req.body.branchId,
+      departmentId: req.body.departmentId,
       active: req.body.active,
     });
 
@@ -254,6 +276,7 @@ const listStaffProfiles = async (req, res) => {
       departmentId: req.query.departmentId,
       jobTitleId: req.query.jobTitleId,
       status: req.query.status,
+      role: req.query.role,
       actor: req.user,
     });
 

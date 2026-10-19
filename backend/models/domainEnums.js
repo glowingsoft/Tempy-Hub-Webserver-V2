@@ -282,6 +282,19 @@ const ComplianceRecordStatus = {
   CANCELLED: "cancelled",
 };
 
+/** Stored on a supervision or appraisal row. Due and overdue are calculated. */
+const ComplianceMeetingStatus = {
+  SCHEDULED: "scheduled",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+};
+
+/** Only `annual` drives the appraisal due date and lock. */
+const AppraisalKind = {
+  ANNUAL: "annual",
+  OTHER: "other",
+};
+
 const LeaveType = {
   ANNUAL: "annual",
   SICK: "sick",
@@ -373,6 +386,8 @@ module.exports = {
   DocumentScope,
   DocumentCategory,
   ComplianceRecordStatus,
+  ComplianceMeetingStatus,
+  AppraisalKind,
   LeaveType,
   LeaveRequestStatus,
   LeaveRequestSource,

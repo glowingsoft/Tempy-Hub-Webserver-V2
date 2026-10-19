@@ -16,6 +16,14 @@ const {
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
+const supervisionIntervalMonths = (value) => {
+  const months = Number(value);
+  if (!Number.isInteger(months) || months < 1 || months > 12) {
+    throw new AppError("invalid_supervision_interval", 400);
+  }
+  return months;
+};
+
 const ownerSummaryFromUser = (user) =>
   user
     ? { _id: user._id, name: user.name || "", email: user.email || "" }
@@ -138,6 +146,13 @@ const createOrganization = async ({
       moduleAccess: normalizedModules,
       settings: {
         emergencyNotifyOffsite: Boolean(settings?.emergencyNotifyOffsite),
+        ...(settings?.defaultSupervisionIntervalMonths !== undefined
+          ? {
+              defaultSupervisionIntervalMonths: supervisionIntervalMonths(
+                settings.defaultSupervisionIntervalMonths
+              ),
+            }
+          : {}),
       },
     });
   } catch (error) {
@@ -260,6 +275,11 @@ const updateOrganization = async ({ organizationId, name, settings, status }) =>
   if (settings?.emergencyNotifyOffsite !== undefined) {
     update["settings.emergencyNotifyOffsite"] = Boolean(
       settings.emergencyNotifyOffsite
+    );
+  }
+  if (settings?.defaultSupervisionIntervalMonths !== undefined) {
+    update["settings.defaultSupervisionIntervalMonths"] = supervisionIntervalMonths(
+      settings.defaultSupervisionIntervalMonths
     );
   }
   if (status !== undefined) {

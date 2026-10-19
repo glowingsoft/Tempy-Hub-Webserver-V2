@@ -36,6 +36,15 @@ const organizationSchema = new mongoose.Schema(
     moduleAccess: { type: [moduleAccessSchema], default: [] },
     settings: {
       emergencyNotifyOffsite: { type: Boolean, default: false },
+      /** Null on a staff profile means this interval. */
+      defaultSupervisionIntervalMonths: { type: Number, default: 3, min: 1 },
+      /** Line managers allowed to write appraisals. Empty means site managers only. */
+      appraisalWriterStaffIds: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "StaffProfile",
+        },
+      ],
     },
   },
   { timestamps: true }

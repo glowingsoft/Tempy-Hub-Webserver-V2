@@ -34,13 +34,27 @@ const trimText = (value) =>
 const isAllFilter = (value) =>
   value == null || value === "" || String(value).trim().toLowerCase() === "all";
 
+const PEEP_LEVELS = Object.values(CareLevel);
+
+const emptyPeepLevelCounts = () =>
+  Object.fromEntries(PEEP_LEVELS.map((level) => [level, 0]));
+
+/** Tab counts ignore the selected level so each total stays independent of that filter. */
+const peepLevelCountsFromGroup = (rows) => {
+  const counts = emptyPeepLevelCounts();
+  for (const row of rows || []) {
+    if (counts[row._id] != null) counts[row._id] = row.count;
+  }
+  return counts;
+};
+
 const parsePeepLevel = (value, { required = false } = {}) => {
   if (isAllFilter(value)) {
     if (required) throw new AppError("invalid_peep_level", 400);
     return undefined;
   }
   const level = String(value).trim().toLowerCase();
-  if (!Object.values(CareLevel).includes(level)) {
+  if (!PEEP_LEVELS.includes(level)) {
     throw new AppError("invalid_peep_level", 400);
   }
   return level;
@@ -192,7 +206,12 @@ const listPeepRecords = async ({
   else if (siteId) match.branchId = toOid(siteId);
 
   const level = parsePeepLevel(peepLevel);
-  if (level) match.peepLevel = level;
+  const levelMatch = level ? [{ $match: { peepLevel: level } }] : [];
+  const pageStages = [
+    { $sort: { updatedAt: -1 } },
+    { $skip: skip },
+    { $limit: limit },
+  ];
 
   const afterLookups = [];
   const search = keyword != null ? String(keyword).trim() : "";
@@ -210,22 +229,32 @@ const listPeepRecords = async ({
     afterLookups.push({ $match: { floorPlanId: toOid(floorPlanId) } });
   }
 
+  // Level is on the record, so filter it before the joins. Keyword and floor
+  // come from those joins, so they narrow the set first when they are set.
+  const narrowFirst = afterLookups.length > 0;
   const [result] = await PeepRecord.aggregate([
     { $match: match },
-    ...recordShapeStages,
-    ...afterLookups,
+    ...(narrowFirst ? [...recordShapeStages, ...afterLookups] : []),
     {
       $facet: {
-        data: [{ $sort: { updatedAt: -1 } }, { $skip: skip }, { $limit: limit }],
-        totalCount: [{ $count: "count" }],
+        counts: [{ $group: { _id: "$peepLevel", count: { $sum: 1 } } }],
+        data: [
+          ...levelMatch,
+          ...pageStages,
+          ...(narrowFirst ? [] : recordShapeStages),
+        ],
+        totalCount: [...levelMatch, { $count: "count" }],
       },
     },
   ]);
 
-  const totalRecords = facetCount(result.totalCount);
+  const totalRecords = facetCount(result?.totalCount);
   return {
-    data: result.data,
-    meta: generateMeta(page, limit, totalRecords),
+    data: result?.data || [],
+    meta: {
+      ...generateMeta(page, limit, totalRecords),
+      counts: peepLevelCountsFromGroup(result?.counts),
+    },
   };
 };
 
@@ -394,6 +423,8 @@ const emptyLevels = () => ({
   [CareLevel.HIGH]: 0,
 });
 
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const hasUploadedPlanExpr = {
   $gt: [
     {
@@ -406,25 +437,44 @@ const hasUploadedPlanExpr = {
   ],
 };
 
-const getPeepFloorSummary = async ({ actor, organizationId, branchId }) => {
+const emptySummary = () => ({
+  totals: { ...emptyLevels(), records: 0 },
+  floors: { total: 0, uploaded: 0 },
+  sites: [],
+});
+
+const emptyDetail = () => ({
+  site: null,
+  levels: { ...emptyLevels(), total: 0 },
+  floorPlans: [],
+});
+
+const getPeepFloorSummary = async ({ actor, organizationId, branchId, keyword }) => {
   const standing = await actorStanding(actor, organizationId);
   const scoped = scopeBranchFilter(standing, branchId);
   const orgId = toOid(organizationId);
-  const siteFilter = {};
-  if (scoped) siteFilter.branchId = toOid(scoped);
-  else if (branchId) siteFilter.branchId = toOid(branchId);
+  const siteId = scoped || branchId;
 
-  if (siteFilter.branchId) {
-    await assertBranchInOrganization(siteFilter.branchId, organizationId);
-  }
+  if (siteId) await assertBranchInOrganization(siteId, organizationId);
 
-  const recordMatch = { organizationId: orgId, ...siteFilter };
+  const branchMatch = { organizationId: orgId };
+  if (siteId) branchMatch._id = toOid(siteId);
+  const term = String(keyword || "").trim();
+  if (term) branchMatch.name = { $regex: escapeRegex(term), $options: "i" };
 
-  const [orgBranches, levelRows, planRows] = await Promise.all([
-    Branch.find({ organizationId: orgId, ...siteFilter })
-      .select("name code")
-      .sort({ name: 1 })
-      .lean(),
+  const orgBranches = await Branch.aggregate([
+    { $match: branchMatch },
+    { $project: { name: 1, code: 1 } },
+    { $sort: { name: 1 } },
+  ]);
+  if (!orgBranches.length) return siteId ? emptyDetail() : emptySummary();
+
+  const recordMatch = {
+    organizationId: orgId,
+    branchId: { $in: orgBranches.map((branch) => branch._id) },
+  };
+
+  const [levelRows, planRows] = await Promise.all([
     PeepRecord.aggregate([
       { $match: recordMatch },
       {
@@ -436,11 +486,22 @@ const getPeepFloorSummary = async ({ actor, organizationId, branchId }) => {
     ]),
     FloorPlan.aggregate([
       { $match: recordMatch },
+      { $sort: { createdAt: 1, name: 1 } },
       {
-        $group: {
-          _id: "$branchId",
-          total: { $sum: 1 },
-          uploaded: { $sum: { $cond: [hasUploadedPlanExpr, 1, 0] } },
+        $lookup: {
+          from: FloorPlanPin.collection.name,
+          localField: "_id",
+          foreignField: "floorPlanId",
+          pipeline: [{ $count: "count" }],
+          as: "_pins",
+        },
+      },
+      {
+        $project: {
+          branchId: 1,
+          name: 1,
+          pinsCount: { $ifNull: [{ $arrayElemAt: ["$_pins.count", 0] }, 0] },
+          status: { $cond: [hasUploadedPlanExpr, "uploaded", "notUploaded"] },
         },
       },
     ]),
@@ -457,14 +518,23 @@ const getPeepFloorSummary = async ({ actor, organizationId, branchId }) => {
 
   let floorsTotal = 0;
   let floorsUploaded = 0;
-  const plansByBranch = new Map();
-  for (const row of planRows) {
-    floorsTotal += row.total;
-    floorsUploaded += row.uploaded;
-    plansByBranch.set(String(row._id), {
-      total: row.total,
-      uploaded: row.uploaded,
+  const floorsByBranch = new Map();
+  for (const floor of planRows) {
+    const key = String(floor.branchId);
+    const summary = floorsByBranch.get(key) || { total: 0, uploaded: 0, floors: [] };
+    summary.total += 1;
+    floorsTotal += 1;
+    if (floor.status === "uploaded") {
+      summary.uploaded += 1;
+      floorsUploaded += 1;
+    }
+    summary.floors.push({
+      _id: floor._id,
+      name: floor.name,
+      pinsCount: floor.pinsCount,
+      status: floor.status,
     });
+    floorsByBranch.set(key, summary);
   }
 
   const levelsByBranch = new Map();
@@ -477,32 +547,27 @@ const getPeepFloorSummary = async ({ actor, organizationId, branchId }) => {
     levelsByBranch.set(key, entry);
   }
 
-  const byId = new Map(orgBranches.map((branch) => [String(branch._id), branch]));
-  const missingIds = [
-    ...levelsByBranch.keys(),
-    ...plansByBranch.keys(),
-  ].filter((id) => !byId.has(id) && mongoose.Types.ObjectId.isValid(id));
-  if (missingIds.length) {
-    const extra = await Branch.find({ _id: { $in: missingIds } })
-      .select("name code")
-      .lean();
-    for (const branch of extra) byId.set(String(branch._id), branch);
-  }
-
-  const siteIds = [
-    ...new Set([...byId.keys(), ...levelsByBranch.keys(), ...plansByBranch.keys()]),
-  ];
-
-  const sites = siteIds.map((id) => {
-    const branch = byId.get(id);
+  const sites = orgBranches.map((branch) => {
+    const id = String(branch._id);
+    const levels = levelsByBranch.get(id) || emptyLevels();
     return {
-      branch: branch
-        ? { _id: branch._id, name: branch.name, code: branch.code }
-        : { _id: id, name: "", code: "" },
-      levels: levelsByBranch.get(id) || emptyLevels(),
-      floorsSummary: plansByBranch.get(id) || { total: 0, uploaded: 0 },
+      branch: { _id: branch._id, name: branch.name, code: branch.code },
+      levels: {
+        ...levels,
+        total: levels.low + levels.medium + levels.high,
+      },
+      floorsSummary: floorsByBranch.get(id) || { total: 0, uploaded: 0, floors: [] },
     };
   });
+
+  if (siteId) {
+    const detail = sites[0];
+    return {
+      site: detail.branch,
+      levels: detail.levels,
+      floorPlans: detail.floorsSummary.floors,
+    };
+  }
 
   return {
     totals: { ...totals, records },

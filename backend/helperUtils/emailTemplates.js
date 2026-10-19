@@ -263,6 +263,52 @@ const staffInvitationEmailTemplate = ({
   </html>
 `;
 
+const familyInvitationEmailTemplate = ({
+  inviteeName,
+  residentName,
+  organizationName,
+  branchName,
+  acceptUrl,
+  expiresInDays,
+}) => `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        .email-container { font-family: Arial, sans-serif; line-height: 1.5; color: #333; }
+        .email-header { background-color: #118A01; color: white; text-align: center; padding: 10px 0; }
+        .email-body { margin: 20px; }
+        .cta { display: inline-block; background-color: #118A01; color: white; padding: 12px 24px; border-radius: 4px; text-decoration: none; font-weight: bold; }
+        .fallback { word-break: break-all; color: #555; font-size: 0.9em; }
+        .footer { text-align: center; margin-top: 20px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="email-header">
+          <h2>Join ${APP_NAME} as family</h2>
+        </div>
+        <div class="email-body">
+          <p>Hello${inviteeName ? ` ${inviteeName}` : ""},</p>
+          <p>
+            <strong>${organizationName}</strong>${
+  branchName ? ` (${branchName})` : ""
+} has invited you to stay connected with <strong>${residentName}</strong>.
+          </p>
+          <p>Set your password to activate your family account:</p>
+          <p><a class="cta" href="${acceptUrl}">Accept invitation</a></p>
+          <p class="fallback">Or paste this link into your browser: ${acceptUrl}</p>
+          <p>This invitation expires in ${expiresInDays} days.</p>
+          <p>If you were not expecting this, you can ignore this email.</p>
+        </div>
+        <div class="footer">
+          &copy; ${currentYear} ${APP_NAME}. All rights reserved.
+        </div>
+      </div>
+    </body>
+  </html>
+`;
+
 const visitorInvitationEmailTemplate = ({
   visitorName,
   organizationName,
@@ -310,5 +356,6 @@ module.exports = {
   forgotPasswordOtpEmailTemplate,
   stripeEmailTemplate,
   staffInvitationEmailTemplate,
+  familyInvitationEmailTemplate,
   visitorInvitationEmailTemplate,
 };

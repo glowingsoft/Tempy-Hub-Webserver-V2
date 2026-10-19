@@ -32,6 +32,7 @@ const AppSurface = {
   PLATFORM_ADMIN: "platformAdmin",
   RESIDENT_APP: "residentApp",
   VISITOR_APP: "visitorApp",
+  FAMILY_APP: "familyApp",
 };
 
 /** Which client surface a JWT was issued for; route groups validate this. */
@@ -39,6 +40,7 @@ const AuthAudience = {
   STAFF: "staff",
   VISITOR: "visitor",
   RESIDENT: "resident",
+  FAMILY: "family",
   KIOSK: "kiosk",
 };
 
@@ -47,6 +49,20 @@ const StaffInvitationStatus = {
   ACCEPTED: "accepted",
   REVOKED: "revoked",
   EXPIRED: "expired",
+};
+
+const FamilyInvitationStatus = { ...StaffInvitationStatus };
+
+const FamilyRelationship = {
+  SPOUSE: "spouse",
+  PARTNER: "partner",
+  CHILD: "child",
+  PARENT: "parent",
+  SIBLING: "sibling",
+  GRANDCHILD: "grandchild",
+  FRIEND: "friend",
+  LEGAL_GUARDIAN: "legalGuardian",
+  OTHER: "other",
 };
 
 const ModuleSlug = {
@@ -338,6 +354,8 @@ module.exports = {
   MembershipRoleRank,
   AppSurface,
   StaffInvitationStatus,
+  FamilyInvitationStatus,
+  FamilyRelationship,
   AuthAudience,
   ModuleSlug,
   OrganizationStatus,

@@ -205,6 +205,8 @@
   "invitation_code_verified_successfully": "Invitation code verified successfully",
   "invitation_revoked_successfully": "Invitation revoked successfully",
   "invitation_accepted_successfully": "Invitation accepted successfully",
+  "family_profile_not_found": "No family profile found for this account",
+  "family_member_already_exists": "This person already has family access to this resident",
   "password_required": "Password is required to set up your account",
   "email_required": "Email is required",
   "owner_email_required": "An owner email is required to create an organization",

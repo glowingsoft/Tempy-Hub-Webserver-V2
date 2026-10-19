@@ -15,6 +15,7 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
+const { FamilyMember } = require("@models/FamilyMember");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const {
   effectivePermissions,
@@ -243,6 +244,39 @@ const resolveStaffAccess = async (user) => {
   };
 };
 
+/**
+ * What a family-audience account may see: one row per resident it is linked to.
+ * Unlike staff there are no roles or permissions — the link itself is the grant.
+ */
+const resolveFamilyAccess = async (user) => {
+  const links = await FamilyMember.find({
+    userId: user._id,
+    status: ActiveInactiveStatus.ACTIVE,
+  })
+    .select("organizationId branchId residentId relationship isPrimaryContact")
+    .lean();
+
+  const residents = await Resident.find({
+    _id: { $in: links.map((link) => link.residentId) },
+  })
+    .select("name photoUrl")
+    .lean();
+  const residentById = new Map(residents.map((r) => [String(r._id), r]));
+
+  return {
+    isPlatformAdmin: false,
+    memberships: [],
+    highestRole: null,
+    defaultSurface: "familyApp",
+    ...emptyStaffAccessFields(),
+    residents: links.map((link) => ({
+      ...link,
+      residentName: residentById.get(String(link.residentId))?.name || "",
+      residentPhotoUrl: residentById.get(String(link.residentId))?.photoUrl || "",
+    })),
+  };
+};
+
 const emptyStaffAccessFields = () => ({
   moduleMenu: {},
   moduleAccess: {},
@@ -293,6 +327,14 @@ const assertAudienceAccess = async (user, audience) => {
       defaultSurface: "visitorApp",
       ...emptyStaffAccessFields(),
     };
+  }
+
+  if (audience === AuthAudience.FAMILY) {
+    const access = await resolveFamilyAccess(user);
+    if (!access.residents.length) {
+      throw new AppError("family_profile_not_found", 403);
+    }
+    return access;
   }
 
   throw new AppError("wrong_token_audience", 400);
@@ -657,6 +699,14 @@ const me = async ({ userId, audience = AuthAudience.STAFF }) => {
   }
 
   const profile = formatUserResponse(user, null, [], ["resetToken"]);
+
+  if (audience === AuthAudience.FAMILY) {
+    return {
+      user: profile,
+      audience,
+      access: await resolveFamilyAccess(user),
+    };
+  }
 
   if (audience !== AuthAudience.STAFF) {
     return {

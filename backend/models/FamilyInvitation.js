@@ -48,7 +48,7 @@ const familyInvitationSchema = new mongoose.Schema(
       enum: Object.values(FamilyRelationship),
       default: FamilyRelationship.OTHER,
     },
-    isPrimaryContact: { type: Boolean, default: false },
+    isNextOfKin: { type: Boolean, default: false },
     /** Only the hash is stored; the plaintext is mailed once at issue. */
     tokenHash: { type: String, required: true, select: false },
     status: {

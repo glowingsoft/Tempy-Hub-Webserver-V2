@@ -8510,6 +8510,85 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Family",
+          "item": [
+            {
+              "name": "relationship options",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Relationship options fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.be.an(\"array\");",
+                      "    pm.expect(data[0]).to.have.keys([\"value\", \"label\"]);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/relationships",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "relationships"
+                  ]
+                },
+                "description": "Options for the Relationship dropdowns (Grandson, Daughter, Niece...). Needs a family token but no active link, so the Join A Family screen can use it. Figma screens: Join A Family, Invite Family."
+              },
+              "response": []
+            },
+            {
+              "name": "my residents",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"My residents fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.be.an(\"array\");",
+                      "    if (data.length) {",
+                      "        pm.expect(data.filter((r) => r.isActive)).to.have.lengthOf(1);",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/residents?residentId={{residentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "residents"
+                  ]
+                },
+                "description": "Residents the member is actively linked to, with the active one flagged (Who are you viewing?). residentId is optional: the resident the app is showing; without it the first one is flagged. Residents of a home with Family Engagement off are left out. Returns an empty list when the member has no active link yet. Built as one aggregation (links joined to organization, resident and home). Figma screen: Home Family Tab (Who are you viewing? and the header dropdown)."
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -19019,7 +19098,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{familyInviteEmail}}\",\n  \"name\": \"Jane Doe\",\n  \"residentId\": \"{{residentId}}\",\n  \"relationship\": \"child\",\n  \"isPrimaryContact\": false\n}",
+                  "raw": "{\n  \"email\": \"{{familyInviteEmail}}\",\n  \"name\": \"Jane Doe\",\n  \"residentId\": \"{{residentId}}\",\n  \"relationship\": \"daughter\",\n  \"isNextOfKin\": false\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -19036,7 +19115,7 @@
                     "family-invitations"
                   ]
                 },
-                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, child, parent, sibling, grandchild, friend, legalGuardian, other. Requires the Residents module."
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
               },
               "response": []
             },

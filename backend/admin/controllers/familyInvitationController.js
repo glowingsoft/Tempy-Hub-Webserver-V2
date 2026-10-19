@@ -27,7 +27,7 @@ const inviteFamilyMember = async (req, res) => {
       name: req.body.name,
       phone: req.body.phone,
       relationship: req.body.relationship,
-      isPrimaryContact: req.body.isPrimaryContact,
+      isNextOfKin: req.body.isNextOfKin,
     });
 
     return sendResponse({

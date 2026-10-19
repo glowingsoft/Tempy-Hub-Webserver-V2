@@ -15,7 +15,7 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
-const { FamilyMember } = require("@models/FamilyMember");
+const { resolveFamilyResidents } = require("@appServices/family/familyAccessService");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const {
   effectivePermissions,
@@ -248,34 +248,14 @@ const resolveStaffAccess = async (user) => {
  * What a family-audience account may see: one row per resident it is linked to.
  * Unlike staff there are no roles or permissions — the link itself is the grant.
  */
-const resolveFamilyAccess = async (user) => {
-  const links = await FamilyMember.find({
-    userId: user._id,
-    status: ActiveInactiveStatus.ACTIVE,
-  })
-    .select("organizationId branchId residentId relationship isPrimaryContact")
-    .lean();
-
-  const residents = await Resident.find({
-    _id: { $in: links.map((link) => link.residentId) },
-  })
-    .select("name photoUrl")
-    .lean();
-  const residentById = new Map(residents.map((r) => [String(r._id), r]));
-
-  return {
-    isPlatformAdmin: false,
-    memberships: [],
-    highestRole: null,
-    defaultSurface: "familyApp",
-    ...emptyStaffAccessFields(),
-    residents: links.map((link) => ({
-      ...link,
-      residentName: residentById.get(String(link.residentId))?.name || "",
-      residentPhotoUrl: residentById.get(String(link.residentId))?.photoUrl || "",
-    })),
-  };
-};
+const resolveFamilyAccess = async (user) => ({
+  isPlatformAdmin: false,
+  memberships: [],
+  highestRole: null,
+  defaultSurface: "familyApp",
+  ...emptyStaffAccessFields(),
+  residents: await resolveFamilyResidents(user._id),
+});
 
 const emptyStaffAccessFields = () => ({
   moduleMenu: {},

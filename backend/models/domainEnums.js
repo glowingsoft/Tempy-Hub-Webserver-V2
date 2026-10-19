@@ -53,16 +53,42 @@ const StaffInvitationStatus = {
 
 const FamilyInvitationStatus = { ...StaffInvitationStatus };
 
+/** Options for the Relationship dropdowns (Figma: Grandson, Daughter, Niece...). */
 const FamilyRelationship = {
   SPOUSE: "spouse",
   PARTNER: "partner",
-  CHILD: "child",
-  PARENT: "parent",
-  SIBLING: "sibling",
-  GRANDCHILD: "grandchild",
+  SON: "son",
+  DAUGHTER: "daughter",
+  GRANDSON: "grandson",
+  GRANDDAUGHTER: "granddaughter",
+  BROTHER: "brother",
+  SISTER: "sister",
+  NEPHEW: "nephew",
+  NIECE: "niece",
   FRIEND: "friend",
   LEGAL_GUARDIAN: "legalGuardian",
   OTHER: "other",
+};
+
+/**
+ * A family member's link to one resident.
+ * pending: asked to join with a code and waiting for approval.
+ * active: can see the resident. rejected / cancelled: the join request ended.
+ * removed: access taken away (by the next of kin, the home, or themselves).
+ */
+const FamilyMemberStatus = {
+  PENDING: "pending",
+  ACTIVE: "active",
+  REJECTED: "rejected",
+  CANCELLED: "cancelled",
+  REMOVED: "removed",
+};
+
+/** How a family link came to exist. */
+const FamilyJoinSource = {
+  INVITATION: "invitation",
+  CODE: "code",
+  HOME: "home",
 };
 
 const ModuleSlug = {
@@ -356,6 +382,8 @@ module.exports = {
   StaffInvitationStatus,
   FamilyInvitationStatus,
   FamilyRelationship,
+  FamilyMemberStatus,
+  FamilyJoinSource,
   AuthAudience,
   ModuleSlug,
   OrganizationStatus,

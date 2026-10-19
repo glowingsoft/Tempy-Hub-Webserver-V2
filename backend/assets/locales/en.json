@@ -206,6 +206,7 @@
   "invitation_revoked_successfully": "Invitation revoked successfully",
   "invitation_accepted_successfully": "Invitation accepted successfully",
   "family_profile_not_found": "No family profile found for this account",
+  "next_of_kin_only": "Only the next of kin can do this",
   "family_member_already_exists": "This person already has family access to this resident",
   "password_required": "Password is required to set up your account",
   "email_required": "Email is required",

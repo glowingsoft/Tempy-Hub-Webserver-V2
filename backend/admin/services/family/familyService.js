@@ -13,8 +13,9 @@ const { sendTransactionalEmail } = require("@utils/mailer");
 const { familyInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
 const {
-  ActiveInactiveStatus,
   FamilyInvitationStatus,
+  FamilyJoinSource,
+  FamilyMemberStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -97,7 +98,7 @@ const inviteFamilyMember = async ({
   name,
   phone,
   relationship,
-  isPrimaryContact = false,
+  isNextOfKin = false,
 }) => {
   const organization = await Organization.findById(organizationId)
     .select("name")
@@ -122,7 +123,7 @@ const inviteFamilyMember = async ({
     const alreadyLinked = await FamilyMember.exists({
       userId: existingUser._id,
       residentId,
-      status: ActiveInactiveStatus.ACTIVE,
+      status: FamilyMemberStatus.ACTIVE,
     });
     if (alreadyLinked) throw new AppError("family_member_already_exists", 409);
   }
@@ -149,7 +150,7 @@ const inviteFamilyMember = async ({
       name: name || "",
       phone: phone || "",
       relationship,
-      isPrimaryContact: Boolean(isPrimaryContact),
+      isNextOfKin: Boolean(isNextOfKin),
       tokenHash: await bcrypt.hash(token, 10),
       expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000),
       invitedByUserId: actor._id,
@@ -437,15 +438,38 @@ const redeemInvitation = async ({
         residentId: invitation.residentId,
       }).session(session);
 
-      if (existing?.status === ActiveInactiveStatus.ACTIVE) {
+      if (existing?.status === FamilyMemberStatus.ACTIVE) {
         throw new AppError("family_member_already_exists", 409);
       }
 
+      // One next of kin per resident, enforced by a unique index, so the
+      // previous one has to step down before this one is saved.
+      if (invitation.isNextOfKin) {
+        await FamilyMember.updateMany(
+          {
+            residentId: invitation.residentId,
+            userId: { $ne: user._id },
+            isNextOfKin: true,
+          },
+          { $set: { isNextOfKin: false } },
+          { session }
+        );
+      }
+
+      const linkFields = {
+        relationship: invitation.relationship,
+        isNextOfKin: invitation.isNextOfKin,
+        phone: invitation.phone,
+        status: FamilyMemberStatus.ACTIVE,
+        joinedVia: FamilyJoinSource.INVITATION,
+        decidedBy: invitation.invitedByUserId,
+        decidedAt: new Date(),
+        removedBy: null,
+        removedAt: null,
+      };
+
       if (existing) {
-        existing.relationship = invitation.relationship;
-        existing.isPrimaryContact = invitation.isPrimaryContact;
-        existing.phone = invitation.phone;
-        existing.status = ActiveInactiveStatus.ACTIVE;
+        Object.assign(existing, linkFields);
         await existing.save({ session });
         familyMember = existing;
       } else {
@@ -456,24 +480,12 @@ const redeemInvitation = async ({
               organizationId: invitation.organizationId,
               branchId: invitation.branchId,
               residentId: invitation.residentId,
-              relationship: invitation.relationship,
-              isPrimaryContact: invitation.isPrimaryContact,
-              phone: invitation.phone,
-              status: ActiveInactiveStatus.ACTIVE,
+              ...linkFields,
             },
           ],
           { session }
         );
         familyMember = created;
-      }
-
-      // One primary contact per resident; the newest acceptance takes it.
-      if (invitation.isPrimaryContact) {
-        await FamilyMember.updateMany(
-          { residentId: invitation.residentId, userId: { $ne: user._id } },
-          { $set: { isPrimaryContact: false } },
-          { session }
-        );
       }
 
       invitation.status = FamilyInvitationStatus.ACCEPTED;

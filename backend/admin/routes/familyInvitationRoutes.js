@@ -13,7 +13,6 @@ const familyInvitationController = require("../controllers/familyInvitationContr
 
 const router = express.Router();
 
-// Scope arrives as the x-org-id header (or ?organizationId=).
 router.use(
   auth,
   requireMembership(),

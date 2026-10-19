@@ -4,25 +4,14 @@ const {
   listActiveLinks,
 } = require("@appServices/family/familyAccessService");
 
-/**
- * Anything the caller may not see is reported as not found, never forbidden, so
- * the existence of a resident, post or upload is not revealed.
- */
+// 404 rather than 403, so a resident's existence is not revealed.
 const notFound = (res) =>
   sendResponse({ res, statusCode: 404, translationKey: "route_not_found" });
 
 /**
- * Gate for family-app routes that act on a resident. Run it after `auth` and
- * `requireAudience([AuthAudience.FAMILY])`.
- *
- * The caller's links are read from the database on every request rather than
- * trusted from the token, so removing a member, or switching Family Engagement
- * off, cuts access on the very next call. With no usable link the answer is 404.
- *
- * Pass `{ param: "residentId" }` to also require a link to the resident named in
- * that route parameter. Use `{ param: "residentId", in: "query" }` (or "body") when
- * the id is not part of the path; a missing id is then a 400. Sets
- * `req.familyLinks` and, when a param is given, `req.familyLink`.
+ * Reads the caller's links live on every request, so a removed member or a module
+ * switched off loses access at once. Pass { param, in } to require a link to a
+ * specific resident (in: "params" by default, or "query" / "body").
  */
 const requireFamilyAccess =
   (options = {}) =>
@@ -62,7 +51,6 @@ const requireFamilyAccess =
     }
   };
 
-/** Requires `requireFamilyAccess({ param })` to have run first. */
 const requireNextOfKin = (req, res, next) => {
   if (!req.familyLink?.isNextOfKin) {
     return sendResponse({

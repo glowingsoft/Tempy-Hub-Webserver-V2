@@ -12,7 +12,6 @@ const {
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
-/** Labels for the Relationship dropdowns, in the order the app shows them. */
 const RELATIONSHIP_LABELS = {
   [FamilyRelationship.SPOUSE]: "Spouse",
   [FamilyRelationship.PARTNER]: "Partner",
@@ -35,7 +34,6 @@ const listRelationships = () =>
     label: RELATIONSHIP_LABELS[value] || value,
   }));
 
-/** True when the organization currently has Family Engagement switched on. */
 const isFamilyModuleActive = (organization, now = new Date()) => {
   const entry = (organization?.moduleAccess || []).find(
     (m) => m.moduleSlug === ModuleSlug.FAMILY_ENGAGEMENT
@@ -45,11 +43,7 @@ const isFamilyModuleActive = (organization, now = new Date()) => {
   );
 };
 
-/**
- * Matches organizations that currently have Family Engagement switched on. Runs
- * on the joined `organization` document, so a link in a home with the module off
- * is dropped in the database rather than filtered afterwards.
- */
+// Runs on the joined organization, so links in a home with the module off are dropped in the database.
 const moduleActiveStage = (now) => ({
   $match: {
     "organization.moduleAccess": {
@@ -62,11 +56,6 @@ const moduleActiveStage = (now) => ({
   },
 });
 
-/**
- * Active links of a user, joined to their organization and limited to those whose
- * organization has the module on. Oldest link first, so "the first resident" is
- * stable.
- */
 const activeLinkStages = (userId, now = new Date()) => [
   { $match: { userId: toObjectId(userId), status: FamilyMemberStatus.ACTIVE } },
   {
@@ -82,11 +71,7 @@ const activeLinkStages = (userId, now = new Date()) => [
   { $sort: { createdAt: 1 } },
 ];
 
-/**
- * The links a user may act through, read live from the database on every request.
- * Links in an organization that has Family Engagement switched off are left out,
- * so turning the module off hides the data without deleting it.
- */
+/** Read live on every request; links in a home with Family Engagement off are left out. */
 const listActiveLinks = (userId) =>
   FamilyMember.aggregate([
     ...activeLinkStages(userId),
@@ -103,11 +88,7 @@ const listActiveLinks = (userId) =>
     },
   ]);
 
-/**
- * Linked residents with display fields, for the resident picker and login, in one
- * aggregation. `activeResidentId` is the resident the app is currently showing;
- * when it is missing or not linked, the member's first resident is flagged.
- */
+/** activeResidentId is the resident the app is showing; if missing or not linked, the first is flagged. */
 const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   const rows = await FamilyMember.aggregate([
     ...activeLinkStages(userId),
@@ -157,10 +138,7 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   }));
 };
 
-/**
- * One email holds one role. An account with any staff membership, or a platform
- * admin, is a staff account and cannot be a family member.
- */
+/** One email holds one role: any staff membership, or a platform admin, makes it a staff account. */
 const isStaffAccount = async (user) => {
   if (user?.accountState?.userType === "admin") return true;
 

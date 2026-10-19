@@ -6,7 +6,6 @@ const familyMemberService = require("@appServices/family/familyMemberService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
-/** Who am I viewing? Drives the resident picker and the header dropdown. */
 const listMyResidents = async (req, res) => {
   try {
     const data = await familyAccessService.resolveFamilyResidents(req.user._id, {
@@ -24,7 +23,6 @@ const listMyResidents = async (req, res) => {
   }
 };
 
-/** Options for the Relationship dropdowns. */
 const listRelationships = async (req, res) => {
   try {
     return sendResponse({
@@ -38,7 +36,6 @@ const listRelationships = async (req, res) => {
   }
 };
 
-/** Invite Family: the code the next of kin can share. */
 const getCurrentFamilyCode = async (req, res) => {
   try {
     const data = await familyCodeService.getCurrentCode({ link: req.familyLink });
@@ -54,7 +51,6 @@ const getCurrentFamilyCode = async (req, res) => {
   }
 };
 
-/** Make A New Code: the old code stops working. */
 const createFamilyCode = async (req, res) => {
   try {
     const data = await familyCodeService.createCode({
@@ -73,7 +69,6 @@ const createFamilyCode = async (req, res) => {
   }
 };
 
-/** Join A Family: the Code Accepted card, after the member types a code. */
 const previewJoinCode = async (req, res) => {
   try {
     const data = await familyJoinService.previewCode({
@@ -92,7 +87,6 @@ const previewJoinCode = async (req, res) => {
   }
 };
 
-/** Join A Family: Send Join Request. */
 const requestToJoin = async (req, res) => {
   try {
     const data = await familyJoinService.requestToJoin({
@@ -112,7 +106,6 @@ const requestToJoin = async (req, res) => {
   }
 };
 
-/** Request Sent / Waiting: null when the member has no pending request. */
 const getCurrentJoinRequest = async (req, res) => {
   try {
     const data = await familyJoinService.getCurrentRequest(req.user._id);
@@ -128,7 +121,6 @@ const getCurrentJoinRequest = async (req, res) => {
   }
 };
 
-/** Cancel Request, after the confirmation dialog. */
 const cancelJoinRequest = async (req, res) => {
   try {
     const data = await familyJoinService.cancelRequest({
@@ -147,7 +139,6 @@ const cancelJoinRequest = async (req, res) => {
   }
 };
 
-/** My Family: members of a resident, with what the caller may do with each. */
 const listMembers = async (req, res) => {
   try {
     const data = await familyMemberService.listMembers({
@@ -166,7 +157,6 @@ const listMembers = async (req, res) => {
   }
 };
 
-/** My Family: Remove. */
 const removeMember = async (req, res) => {
   try {
     const data = await familyMemberService.removeMember({
@@ -185,7 +175,6 @@ const removeMember = async (req, res) => {
   }
 };
 
-/** My Family: people waiting for review. */
 const listJoinRequests = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);

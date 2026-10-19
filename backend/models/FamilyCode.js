@@ -2,12 +2,8 @@ const mongoose = require("mongoose");
 const { FamilyCodeStatus } = require("./domainEnums");
 
 /**
- * The code a family shares so a relative can ask to join (Figma: Invite Family,
- * Join A Family). It is shown to the next of kin, so it is stored as typed rather
- * than hashed; it protects nothing by itself, because anyone who uses it still
- * needs approval, and entry is rate limited.
- *
- * A resident has at most one active code. Making a new one voids the old one.
+ * Stored as typed, not hashed: it is shown to the next of kin, and anyone using it
+ * still needs approval. A resident has one active code; a new one voids the old.
  */
 const familyCodeSchema = new mongoose.Schema(
   {
@@ -26,7 +22,6 @@ const familyCodeSchema = new mongoose.Schema(
       ref: "Resident",
       required: true,
     },
-    /** Looks like FH-12-7Q4K. Never contains the resident's room number. */
     code: { type: String, required: true, trim: true, uppercase: true },
     status: {
       type: String,
@@ -49,10 +44,8 @@ const familyCodeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/** Joining looks the code up by value. */
 familyCodeSchema.index({ code: 1 }, { unique: true });
 
-/** One active code per resident; a second one cannot be created alongside it. */
 familyCodeSchema.index(
   { residentId: 1 },
   {

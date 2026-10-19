@@ -1,12 +1,8 @@
 const mongoose = require("mongoose");
 
-/**
- * One row per wrong or expired family code a member typed. Five rows inside the
- * lock window lock code entry for that member. Rows delete themselves after the
- * window, so nothing needs cleaning up.
- */
 const FAMILY_CODE_LOCK_MINUTES = 15;
 
+/** One row per wrong or expired code a member typed; rows delete themselves after the lock window. */
 const familyCodeFailureSchema = new mongoose.Schema(
   {
     userId: {

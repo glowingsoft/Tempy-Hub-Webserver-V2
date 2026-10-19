@@ -247,10 +247,6 @@ const resolveStaffAccess = async (user) => {
   };
 };
 
-/**
- * What a family-audience account may see: one row per resident it is linked to.
- * Unlike staff there are no roles or permissions — the link itself is the grant.
- */
 const resolveFamilyAccess = async (user) => ({
   isPlatformAdmin: false,
   memberships: [],
@@ -313,8 +309,7 @@ const assertAudienceAccess = async (user, audience) => {
   }
 
   if (audience === AuthAudience.FAMILY) {
-    // A new member has no link yet, and must be able to sign in to ask to join a
-    // family. Staff accounts are the exception: one email holds one role.
+    // a new member has no link yet but must be able to sign in to ask to join; staff accounts are excluded
     if (await isStaffAccount(user)) {
       throw new AppError("family_profile_not_found", 403);
     }

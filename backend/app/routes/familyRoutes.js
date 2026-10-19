@@ -12,18 +12,14 @@ const router = express.Router();
 
 router.use(auth, requireAudience([AuthAudience.FAMILY]));
 
-// Usable before the member has an active link, so the Join A Family screen works.
 router.get("/relationships", familyController.listRelationships);
 router.get("/residents", familyController.listMyResidents);
 
-// Join A Family: for members who have no active link yet.
 router.get("/join/preview", familyController.previewJoinCode);
 router.post("/join", familyController.requestToJoin);
 router.get("/join-requests/current", familyController.getCurrentJoinRequest);
 router.post("/join-requests/:id/cancel", familyController.cancelJoinRequest);
 
-// My Family. The next of kin reviews requests and removes members; the
-// request or member id in the path is checked against the caller's own families.
 router.get(
   "/members",
   requireFamilyAccess({ param: "residentId", in: "query" }),
@@ -39,7 +35,6 @@ router.get(
 router.post("/join-requests/:id/approve", familyController.approveJoinRequest);
 router.post("/join-requests/:id/reject", familyController.rejectJoinRequest);
 
-// Family code: next of kin only; the resident comes in the query or the body.
 router.get(
   "/codes/current",
   requireFamilyAccess({ param: "residentId", in: "query" }),

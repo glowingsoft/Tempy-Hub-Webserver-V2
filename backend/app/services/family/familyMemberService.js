@@ -9,7 +9,6 @@ const { isFamilyModuleActive } = require("./familyAccessService");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
-/** Name and photo of the person behind a link, joined in one step. */
 const userStages = [
   {
     $lookup: {
@@ -22,13 +21,7 @@ const userStages = [
   { $unwind: "$user" },
 ];
 
-/**
- * Loads a link together with whether the caller is the next of kin of that
- * resident's family, and whether the home still has Family Engagement on, in one
- * aggregation. Anything the caller may not act on is a 404, so another family's
- * members and requests are never revealed. Everything is read live, so a removed
- * next of kin, or a module switched off, stops working at once.
- */
+/** Anything the caller may not act on is a 404, so other families' members and requests stay hidden. */
 const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
   if (!mongoose.Types.ObjectId.isValid(linkId)) throw new AppError(notFoundKey, 404);
 
@@ -89,11 +82,7 @@ const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
   return row;
 };
 
-/**
- * My Family: the people linked to a resident. Everyone linked sees the active
- * members; only the next of kin also sees (and can act on) people who asked to
- * join. Next of kin first, then members in the order they joined, then requests.
- */
+/** The next of kin also sees (and can act on) people who asked to join; everyone else sees active members only. */
 const listMembers = async ({ userId, link }) => {
   const canManage = Boolean(link.isNextOfKin);
 
@@ -150,7 +139,6 @@ const listMembers = async ({ userId, link }) => {
   };
 };
 
-/** Requests waiting for the next of kin to review, oldest first. */
 const listJoinRequests = ({ link, page, limit, skip }) =>
   paginateWithFacet({
     model: FamilyMember,
@@ -177,7 +165,6 @@ const listJoinRequests = ({ link, page, limit, skip }) =>
     ],
   });
 
-/** Approve or reject a pending request. Only the resident's next of kin may. */
 const decideJoinRequest = async ({ userId, requestId, decision }) => {
   const row = await loadForNextOfKin({
     userId,
@@ -205,10 +192,7 @@ const decideJoinRequest = async ({ userId, requestId, decision }) => {
   return { requestId: row._id, status: decision };
 };
 
-/**
- * Remove a family member. The next of kin cannot be removed here (they hand over
- * first), and a request that has not been approved is rejected, not removed.
- */
+/** The next of kin can't be removed (they hand over first); an unapproved request is rejected, not removed. */
 const removeMember = async ({ userId, memberId }) => {
   const row = await loadForNextOfKin({
     userId,

@@ -53,7 +53,6 @@ const StaffInvitationStatus = {
 
 const FamilyInvitationStatus = { ...StaffInvitationStatus };
 
-/** Options for the Relationship dropdowns (Figma: Grandson, Daughter, Niece...). */
 const FamilyRelationship = {
   SPOUSE: "spouse",
   PARTNER: "partner",
@@ -71,10 +70,8 @@ const FamilyRelationship = {
 };
 
 /**
- * A family member's link to one resident.
- * pending: asked to join with a code and waiting for approval.
- * active: can see the resident. rejected / cancelled: the join request ended.
- * removed: access taken away (by the next of kin, the home, or themselves).
+ * pending: asked to join, waiting for approval. rejected / cancelled: the request ended.
+ * removed: access taken away.
  */
 const FamilyMemberStatus = {
   PENDING: "pending",
@@ -84,13 +81,11 @@ const FamilyMemberStatus = {
   REMOVED: "removed",
 };
 
-/** A family code is active until a newer one replaces it (voided) or it expires. */
 const FamilyCodeStatus = {
   ACTIVE: "active",
   VOIDED: "voided",
 };
 
-/** How a family link came to exist. */
 const FamilyJoinSource = {
   INVITATION: "invitation",
   CODE: "code",

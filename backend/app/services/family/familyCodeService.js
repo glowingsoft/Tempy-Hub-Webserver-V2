@@ -10,12 +10,11 @@ const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
 const CODE_TTL_DAYS = Number(process.env.FAMILY_CODE_TTL_DAYS || 14);
 
-/** No 0, O, 1 or I, so a code read out over the phone is hard to get wrong. */
+// no 0, O, 1 or I, so a code read out over the phone is hard to get wrong
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 const MAX_ATTEMPTS = 5;
 
-/** Up to three capital letters from the home's name: "Florence House" gives FH. */
 const codePrefix = (name) => {
   const initials = String(name || "")
     .split(/[^A-Za-z]+/)
@@ -29,11 +28,7 @@ const codePrefix = (name) => {
 const randomChars = (length) =>
   Array.from({ length }, () => ALPHABET[crypto.randomInt(ALPHABET.length)]).join("");
 
-/**
- * Builds a code like FH-12-7Q4K: home initials, two digits, four characters.
- * A code that contains the resident's room number is rejected, so a code seen by
- * someone outside the family never gives away where a resident lives.
- */
+/** A code never contains the resident's room number, so it never gives away where they live. */
 const generateCode = ({ prefix, roomNumber }) => {
   const room = String(roomNumber || "").replace(/\s+/g, "").toUpperCase();
 
@@ -57,10 +52,6 @@ const shapeCode = (doc) =>
       }
     : null;
 
-/**
- * The resident's current code, or `code: null` when there is none or it has
- * expired, so the app shows Make A New Code.
- */
 const getCurrentCode = async ({ link }) => {
   const [doc] = await FamilyCode.aggregate([
     {
@@ -79,12 +70,8 @@ const getCurrentCode = async ({ link }) => {
     : { residentId: link.residentId, code: null, expiresAt: null, createdAt: null };
 };
 
-/**
- * Makes a new code and voids the old one in one transaction. A clash with an
- * existing code, or with a second request made at the same moment, is retried.
- */
+/** Voids the old code and creates the new one in one transaction; a clash is retried. */
 const createCode = async ({ link, userId }) => {
-  // The room number (kept out of the code) and the home's name, in one read.
   const [info] = await Resident.aggregate([
     { $match: { _id: toObjectId(link.residentId) } },
     {
@@ -136,7 +123,7 @@ const createCode = async ({ link, userId }) => {
 
       return shapeCode(created);
     } catch (error) {
-      // 11000: the code already exists, or another request just made one.
+      // 11000: the code already exists, or another request just made one
       if (error.code !== 11000) throw error;
     } finally {
       await session.endSession();

@@ -19,7 +19,6 @@ const {
   isStaffAccount,
 } = require("./familyAccessService");
 
-/** Wrong or expired codes allowed inside the lock window before entry is locked. */
 const MAX_FAILED_TRIES = 5;
 const LOCK_MS = FAMILY_CODE_LOCK_MINUTES * 60 * 1000;
 
@@ -27,11 +26,7 @@ const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
 const normaliseCode = (code) => String(code || "").trim().toUpperCase();
 
-/**
- * Five failures inside the window lock code entry until the fifth failure is a
- * full window old. Entry attempts made while locked are not recorded, so a
- * locked member cannot extend their own lock.
- */
+/** Five failures inside the window lock entry. Tries made while locked are not recorded, so the lock can't be extended. */
 const assertNotLocked = async (userId) => {
   const now = Date.now();
   const failures = await FamilyCodeFailure.aggregate([
@@ -53,17 +48,12 @@ const assertNotLocked = async (userId) => {
   }
 };
 
-/** Records the failed try, then throws the reason the member sees. */
 const failCode = async (userId, translationKey, statusCode) => {
   await FamilyCodeFailure.create({ userId });
   throw new AppError(translationKey, statusCode);
 };
 
-/**
- * Checks a code a member typed. Wrong, expired and replaced codes all count
- * towards the lock. The result names the home but never the resident: the member
- * only sees who the family is for once they are approved.
- */
+/** Wrong, expired and replaced codes all count towards the lock. Returns the home, never the resident: that is shown only after approval. */
 const checkCode = async ({ userId, code }) => {
   await assertNotLocked(userId);
 
@@ -105,12 +95,12 @@ const checkCode = async ({ userId, code }) => {
   ]);
   if (!doc) return failCode(userId, "family_code_not_found", 404);
 
-  // A replaced code and an expired one read the same: ask for a new one.
+  // a replaced code reads the same as an expired one
   if (doc.status !== FamilyCodeStatus.ACTIVE || new Date(doc.expiresAt) <= new Date()) {
     return failCode(userId, "family_code_expired", 410);
   }
 
-  // With Family Engagement off the code is as good as unknown.
+  // module off: the code is treated as unknown
   if (!doc.organization || !isFamilyModuleActive(doc.organization)) {
     return failCode(userId, "family_code_not_found", 404);
   }
@@ -121,7 +111,6 @@ const checkCode = async ({ userId, code }) => {
   };
 };
 
-/** Code Accepted card: what the app shows after the member types a valid code. */
 const previewCode = async ({ userId, code }) => {
   const { homeName } = await checkCode({ userId, code });
   return { valid: true, homeName };
@@ -135,19 +124,16 @@ const shapeRequest = (row, homeName) => ({
   requestedAt: row.requestedAt,
 });
 
-/** Join A Family: Send Join Request. Creates a pending request for approval. */
 const requestToJoin = async ({ user, code, relationship }) => {
   if (!Object.values(FamilyRelationship).includes(relationship)) {
     throw new AppError("invalid_relationship", 400);
   }
 
-  // One email, one role: a staff account cannot be a family member.
   if (await isStaffAccount(user)) throw new AppError("email_used_by_staff", 409);
 
   const { code: doc, homeName } = await checkCode({ userId: user._id, code });
 
-  // The member's own links, in one read: one request at a time (so the Waiting
-  // screen has a single request to show), and no second link to the same family.
+  // one pending request at a time, and no second link to the same family
   const mine = await FamilyMember.aggregate([
     { $match: { userId: toObjectId(user._id) } },
     { $project: { residentId: 1, status: 1 } },
@@ -178,7 +164,7 @@ const requestToJoin = async ({ user, code, relationship }) => {
   let row;
   try {
     if (existing) {
-      // A rejected, cancelled or removed member asking again reuses their row.
+      // asking again after a rejection, cancellation or removal reuses the row
       row = await FamilyMember.findOneAndUpdate(
         { _id: existing._id },
         { $set: fields },
@@ -197,13 +183,11 @@ const requestToJoin = async ({ user, code, relationship }) => {
     throw error;
   }
 
-  // A good code clears the failed tries.
   await FamilyCodeFailure.deleteMany({ userId: user._id });
 
   return shapeRequest(row, homeName);
 };
 
-/** Request Sent / Waiting: the member's pending request, or null. */
 const getCurrentRequest = async (userId) => {
   const [row] = await FamilyMember.aggregate([
     {
@@ -236,7 +220,6 @@ const getCurrentRequest = async (userId) => {
   return row ? shapeRequest(row, row.homeName || "") : null;
 };
 
-/** Cancel Request: only the member who asked, and only while it is pending. */
 const cancelRequest = async ({ userId, requestId }) => {
   if (!mongoose.Types.ObjectId.isValid(requestId)) {
     throw new AppError("join_request_not_found", 404);

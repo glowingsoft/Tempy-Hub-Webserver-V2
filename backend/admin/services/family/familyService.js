@@ -41,10 +41,7 @@ const stripHash = (invitation) => {
   return safe;
 };
 
-/**
- * Loads the resident and confirms the caller may manage family access for it:
- * owner/superAdmin anywhere in the org, site and line managers on their own site.
- */
+// owner/superAdmin anywhere in the org; site and line managers on their own site
 const requireManageableResident = async ({
   actor,
   organizationId,
@@ -210,7 +207,7 @@ const getInvitation = async ({ invitationId, organizationId }) => {
   return stripHash(invitation);
 };
 
-/** Issues a fresh token: the old one is unrecoverable, only its hash was kept. */
+// the old token is unrecoverable (only its hash was kept), so a resend issues a new one
 const resendInvitation = async ({ actor, invitationId, organizationId }) => {
   const invitation = await FamilyInvitation.findOne({
     _id: invitationId,
@@ -276,10 +273,7 @@ const revokeInvitation = async ({ actor, invitationId, organizationId }) => {
   return stripHash(invitation);
 };
 
-/**
- * Resolves a plaintext token to its pending invitation. Only the hash is
- * stored, so every pending row has to be compared (same trade-off as staff).
- */
+// Only the hash is stored, so every pending row has to be compared (same trade-off as staff).
 const findByToken = async (token) => {
   if (!token) throw new AppError("invitation_not_found", 404);
 
@@ -330,7 +324,6 @@ const previewInvitation = async (token) => {
   return shapeInvitationPreview(invitation);
 };
 
-/** Pending invitations for a logged-in user, matched by email. */
 const listMyInvitations = async ({ user, page, limit, skip }) => {
   const email = String(user.email || "").trim().toLowerCase();
   if (!email) throw new AppError("email_required", 400);
@@ -380,11 +373,7 @@ const getMyInvitation = async ({ user, invitationId }) => {
   return shapeInvitationPreview(invitation);
 };
 
-/**
- * Redeems an invitation. An existing account keeps its password and only gains
- * the link: one relative of two residents is one person with two links, and an
- * invitation must never be a way to reset someone else's credentials.
- */
+/** An existing account keeps its password and only gains the link. */
 const redeemInvitation = async ({
   invitation,
   existingUser = null,
@@ -514,7 +503,6 @@ const acceptInvitation = async ({ token, name, password, timezone }) => {
   return redeemInvitation({ invitation, name, password, timezone });
 };
 
-/** Logged-in user accepts one of their pending invitations; no password. */
 const acceptMyInvitation = async ({ user, invitationId }) => {
   const invitation = await requireMyPendingInvitation({ user, invitationId });
   return redeemInvitation({ invitation, existingUser: user });

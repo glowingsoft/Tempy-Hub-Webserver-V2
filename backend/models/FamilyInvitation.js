@@ -5,12 +5,7 @@ const {
   FamilyRelationship,
 } = require("./domainEnums");
 
-/**
- * An invitation for a relative to get a family-app login linked to one resident.
- *
- * Separate from `StaffInvitation` (roles, permissions, employment) and from the
- * visitor `Invitation` (arrival windows, badges): none of those fields apply.
- */
+/** An invitation for a relative to get a family-app login linked to one resident. */
 const familyInvitationSchema = new mongoose.Schema(
   {
     organizationId: {
@@ -49,7 +44,6 @@ const familyInvitationSchema = new mongoose.Schema(
       default: FamilyRelationship.OTHER,
     },
     isNextOfKin: { type: Boolean, default: false },
-    /** Only the hash is stored; the plaintext is mailed once at issue. */
     tokenHash: { type: String, required: true, select: false },
     status: {
       type: String,
@@ -81,7 +75,6 @@ const familyInvitationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/** At most one outstanding invitation per person per resident. */
 familyInvitationSchema.index(
   { residentId: 1, email: 1 },
   {

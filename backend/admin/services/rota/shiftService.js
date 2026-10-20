@@ -54,6 +54,36 @@ const parseShiftStatus = (status) => {
   return value;
 };
 
+const SHIFT_CLAIM_STATUSES = Object.values(ShiftClaimStatus);
+
+const emptyShiftClaimStatusCounts = () =>
+  Object.fromEntries(SHIFT_CLAIM_STATUSES.map((status) => [status, 0]));
+
+/** Tab counts ignore `status` so each claim-status total stays independent of the list filter. */
+const shiftClaimStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    SHIFT_CLAIM_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const shiftClaimStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    SHIFT_CLAIM_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const parseShiftClaimStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!SHIFT_CLAIM_STATUSES.includes(value)) {
+    throw new AppError("invalid_shift_claim_status", 400);
+  }
+  return value;
+};
+
 const branchTimezone = async (branchId) => {
   const branch = await Branch.findById(branchId).select("timezone").lean();
   return branch?.timezone || DEFAULT_TZ;
@@ -577,7 +607,6 @@ const listClaims = async ({
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
   };
 
-  if (status) match.status = status;
   if (shiftId) match.shiftId = new mongoose.Types.ObjectId(String(shiftId));
 
   if (actor) {
@@ -587,7 +616,11 @@ const listClaims = async ({
     }
   }
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  const claimStatus = parseShiftClaimStatus(status);
+  if (claimStatus) match.status = claimStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: ShiftClaim,
     match,
     page,
@@ -595,9 +628,13 @@ const listClaims = async ({
     skip,
     sort: { createdAt: -1 },
     extraDataStages: claimDetailStages,
+    extraFacets: shiftClaimStatusCountFacets(countMatch),
   });
 
-  return { data, meta };
+  return {
+    data,
+    meta: { ...meta, counts: shiftClaimStatusCountsFromFacet(result) },
+  };
 };
 
 const getClaim = async ({ actor, organizationId, claimId }) => {

@@ -16,7 +16,7 @@ const {
   enabledModuleSlugs,
 } = require("./permissionCatalogue");
 const { StaffProfile } = require("@models/StaffProfile");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { staffInvitationEmailTemplate } = require("@utils/emailTemplates");
@@ -33,6 +33,35 @@ const {
 } = require("@adminServices/staff/staffAccess");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
+
+const STAFF_INVITATION_STATUSES = Object.values(StaffInvitationStatus);
+
+const staffInvitationStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    STAFF_INVITATION_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const staffInvitationStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    STAFF_INVITATION_STATUSES.map((status) => [
+      status,
+      facetCount(result[`${status}Count`]),
+    ])
+  );
+
+const parseStaffInvitationStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!STAFF_INVITATION_STATUSES.includes(value)) {
+    throw new AppError("invalid_invitation_status", 400);
+  }
+  return value;
+};
 
 /**
  * Most to least privileged. Used to stop anyone granting a role above their own,
@@ -705,19 +734,28 @@ const listInvitations = async ({
   keyword,
 }) => {
   const match = { organizationId: toObjectId(organizationId) };
-  if (status) match.status = status;
 
   const or = keywordOr(keyword, ["email", "name"], { trim: true });
   if (or) match.$or = or;
 
-  return paginateWithFacet({
+  const countMatch = { ...match };
+  const invitationStatus = parseStaffInvitationStatus(status);
+  if (invitationStatus) match.status = invitationStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: StaffInvitation,
     match,
     page,
     limit,
     skip,
     extraDataStages: [{ $project: { tokenHash: 0 } }],
+    extraFacets: staffInvitationStatusCountFacets(countMatch),
   });
+
+  return {
+    data,
+    meta: { ...meta, counts: staffInvitationStatusCountsFromFacet(result) },
+  };
 };
 
 const getInvitation = async ({ invitationId, organizationId }) => {

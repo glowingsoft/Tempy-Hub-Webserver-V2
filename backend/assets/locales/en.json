@@ -208,6 +208,7 @@
   "outside_managed_branch": "You can only manage members of your own branch",
   "cannot_remove_last_owner": "An organization must keep at least one active owner",
   "invitation_not_found": "Invitation not found",
+  "invalid_invitation_status": "Invalid invitation status",
   "invitation_not_pending": "This invitation is no longer pending",
   "invitation_already_pending": "An invitation for this email is already pending",
   "invitation_expired": "This invitation has expired. Ask for a new one",
@@ -282,6 +283,7 @@
   "shift_starts_in_past": "Shift start time cannot be in the past for this site",
   "shift_not_found": "Shift not found",
   "invalid_shift_status": "Invalid shift status",
+  "invalid_shift_claim_status": "Invalid shift claim status",
   "shift_not_open": "This shift is not open for claims",
   "shift_not_visible": "You cannot view or claim this shift",
   "shift_claim_already_exists": "You already have a claim for this shift",
@@ -415,5 +417,12 @@
   "invalid_peep_level": "PEEP level must be low, medium, or high",
   "invalid_peep_consent_status": "Consent status is not valid",
   "peep_record_created_successfully": "PEEP record created successfully",
-  "peep_record_updated_successfully": "PEEP record updated successfully"
+  "peep_record_updated_successfully": "PEEP record updated successfully",
+  "invalid_kiosk_widget": "Each widget must be an object",
+  "invalid_kiosk_widget_type": "Widget type must be image, qr, text, or link",
+  "invalid_kiosk_widget_text_kind": "Text widgets must be quoteOfTheDay, greeting, or plain",
+  "invalid_kiosk_widget_url": "This widget needs a valid http or https URL",
+  "kiosk_widget_text_required": "A text widget needs body text",
+  "kiosk_home_widget_limit": "A kiosk home screen can have at most 8 widgets",
+  "kiosk_widgets_saved": "Kiosk widgets saved"
 }

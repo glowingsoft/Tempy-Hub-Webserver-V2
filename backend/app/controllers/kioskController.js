@@ -1,6 +1,7 @@
 const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 
 const kioskService = require("@adminServices/kiosk/kioskService");
+const kioskWidgetService = require("@adminServices/kiosk/kioskWidgetService");
 
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
@@ -499,6 +500,24 @@ const getMe = async (req, res) => {
 
 };
 
+const listWidgets = async (req, res) => {
+  try {
+    const data = await kioskWidgetService.listKioskWidgetsForDevice({
+      kiosk: req.kiosk,
+      organizationId: req.orgId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
+
 const updateMe = async (req, res) => {
   try {
     const data = await kioskService.updateKioskSettings({
@@ -706,6 +725,8 @@ module.exports = {
   verifyAdminPin,
 
   getMe,
+
+  listWidgets,
 
   updateMe,
 

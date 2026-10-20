@@ -236,6 +236,25 @@ const KioskPairingStatus = {
   CANCELLED: "cancelled",
 };
 
+const KioskWidgetType = {
+  IMAGE: "image",
+  QR: "qr",
+  TEXT: "text",
+  LINK: "link",
+};
+
+const KioskWidgetPlacement = {
+  HOME: "home",
+  CHECKOUT: "checkout",
+};
+
+/** Only used when type is text. */
+const KioskTextKind = {
+  QUOTE_OF_THE_DAY: "quoteOfTheDay",
+  GREETING: "greeting",
+  PLAIN: "plain",
+};
+
 const EvacuationType = {
   REAL: "real",
   MOCK: "mock",
@@ -379,6 +398,9 @@ module.exports = {
   KioskMode,
   KioskDeviceType,
   KioskPairingStatus,
+  KioskWidgetType,
+  KioskWidgetPlacement,
+  KioskTextKind,
   EvacuationType,
   EvacuationStatus,
   EvacPersonKind,

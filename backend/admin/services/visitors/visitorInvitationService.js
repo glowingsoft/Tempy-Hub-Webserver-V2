@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { Invitation } = require("@models/Invitation");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { visitorInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
@@ -20,6 +20,38 @@ const OPEN_INVITE_STATUSES = [
   InvitationStatus.AWAITING_GUEST,
   InvitationStatus.ACCEPTED,
 ];
+
+const VISITOR_INVITATION_STATUSES = Object.values(InvitationStatus);
+
+const emptyVisitorInvitationStatusCounts = () =>
+  Object.fromEntries(VISITOR_INVITATION_STATUSES.map((status) => [status, 0]));
+
+const visitorInvitationStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    VISITOR_INVITATION_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const visitorInvitationStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    VISITOR_INVITATION_STATUSES.map((status) => [
+      status,
+      facetCount(result[`${status}Count`]),
+    ])
+  );
+
+const parseVisitorInvitationStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!VISITOR_INVITATION_STATUSES.includes(value)) {
+    throw new AppError("invalid_invitation_status", 400);
+  }
+  return value;
+};
 
 const randomInviteCode = () => {
   const max = 10 ** INVITE_CODE_LENGTH;
@@ -151,16 +183,30 @@ const listVisitorInvitations = async ({
 
   const match = { organizationId };
   if (scopedBranchId) match.branchId = scopedBranchId;
-  if (status) match.status = status;
 
-  return paginateWithFacet({
+  const countMatch = { ...match };
+  const invitationStatus = parseVisitorInvitationStatus(status);
+  if (invitationStatus) match.status = invitationStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: Invitation,
     match,
     page,
     limit,
     skip,
     sort: { createdAt: -1 },
+    extraFacets: visitorInvitationStatusCountFacets(countMatch),
   });
+
+  return {
+    data,
+    meta: {
+      ...meta,
+      counts: result
+        ? visitorInvitationStatusCountsFromFacet(result)
+        : emptyVisitorInvitationStatusCounts(),
+    },
+  };
 };
 
 const resendVisitorInvitation = async ({

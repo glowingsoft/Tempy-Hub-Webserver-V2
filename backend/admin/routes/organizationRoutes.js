@@ -34,6 +34,7 @@ const visitorInvitationController = require("../controllers/visitorInvitationCon
 const residentMediaController = require("../controllers/residentMediaController");
 const floorPlanController = require("../controllers/floorPlanController");
 const peepRecordController = require("../controllers/peepRecordController");
+const kioskWidgetController = require("../controllers/kioskWidgetController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
@@ -448,6 +449,19 @@ scoped.get(
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),
   visitSessionController.listVisitSessions
+);
+
+scoped.get(
+  "/kiosk-widgets",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  kioskWidgetController.listKioskWidgets
+);
+scoped.put(
+  "/kiosk-widgets",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  kioskWidgetController.saveKioskWidgets
 );
 
 scoped.get(

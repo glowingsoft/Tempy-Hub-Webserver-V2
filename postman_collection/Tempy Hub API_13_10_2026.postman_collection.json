@@ -6864,6 +6864,46 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "Widgets",
+              "item": [
+                {
+                  "name": "kiosk home widgets",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-kiosk-token",
+                        "value": "{{kioskToken}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}app/kiosk/widgets",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "kiosk",
+                        "widgets"
+                      ]
+                    }
+                  },
+                  "response": []
+                }
+              ]
             }
           ]
         },
@@ -19036,6 +19076,189 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Kiosk Widgets",
+          "item": [
+            {
+              "name": "1 list kiosk widgets",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/kiosk-widgets?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "kiosk-widgets"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "2 save kiosk widgets (site default)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"kioskId\": null,\n  \"homeWidgets\": [\n    {\n      \"type\": \"image\",\n      \"title\": \"Welcome\",\n      \"sortOrder\": 1,\n      \"config\": {\n        \"imageUrl\": \"https://example.com/welcome.png\",\n        \"caption\": \"Welcome\"\n      }\n    },\n    {\n      \"type\": \"text\",\n      \"title\": \"Quote Of The Day\",\n      \"sortOrder\": 2,\n      \"config\": {\n        \"textKind\": \"quoteOfTheDay\",\n        \"body\": \"Care is a team sport.\"\n      }\n    },\n    {\n      \"type\": \"text\",\n      \"title\": \"Greetings\",\n      \"sortOrder\": 3,\n      \"config\": {\n        \"textKind\": \"greeting\",\n        \"body\": \"Good morning from reception.\"\n      }\n    }\n  ],\n  \"checkoutWidget\": {\n    \"type\": \"qr\",\n    \"title\": \"Checkout survey\",\n    \"config\": {\n      \"url\": \"https://forms.google.com/checkout-survey\",\n      \"caption\": \"Scan to tell us about your visit\"\n    },\n    \"showToVisitors\": true,\n    \"showToEmployees\": false\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/kiosk-widgets",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "kiosk-widgets"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "3 list kiosk widgets (one kiosk)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/kiosk-widgets?branchId={{branchId}}&kioskId={{kioskId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "kiosk-widgets"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "kioskId",
+                      "value": "{{kioskId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "4 save kiosk widgets (one kiosk override)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"kioskId\": \"{{kioskId}}\",\n  \"homeWidgets\": [\n    {\n      \"type\": \"image\",\n      \"title\": \"Welcome\",\n      \"sortOrder\": 1,\n      \"config\": {\n        \"imageUrl\": \"https://example.com/welcome.png\",\n        \"caption\": \"Welcome\"\n      }\n    },\n    {\n      \"type\": \"text\",\n      \"title\": \"Quote Of The Day\",\n      \"sortOrder\": 2,\n      \"config\": {\n        \"textKind\": \"quoteOfTheDay\",\n        \"body\": \"Care is a team sport.\"\n      }\n    },\n    {\n      \"type\": \"text\",\n      \"title\": \"Greetings\",\n      \"sortOrder\": 3,\n      \"config\": {\n        \"textKind\": \"greeting\",\n        \"body\": \"Good morning from reception.\"\n      }\n    }\n  ],\n  \"checkoutWidget\": {\n    \"type\": \"qr\",\n    \"title\": \"Checkout survey\",\n    \"config\": {\n      \"url\": \"https://forms.google.com/checkout-survey\",\n      \"caption\": \"Scan to tell us about your visit\"\n    },\n    \"showToVisitors\": true,\n    \"showToEmployees\": false\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/kiosk-widgets",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "kiosk-widgets"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
@@ -19243,6 +19466,11 @@
     },
     {
       "key": "supervisorStaffId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "kioskId",
       "value": "",
       "type": "string"
     }

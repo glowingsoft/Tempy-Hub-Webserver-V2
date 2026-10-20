@@ -69,6 +69,7 @@ router.post(
 router.use(requireKioskSession, requireKioskModule(ModuleSlug.SIGN_IN_ATTENDANCE));
 
 router.get("/me", kioskController.getMe);
+router.get("/widgets", kioskController.listWidgets);
 router.patch("/me", kioskController.updateMe);
 router.get("/qr", kioskController.getQr);
 router.get("/pairing/pending", kioskController.getPendingPairing);

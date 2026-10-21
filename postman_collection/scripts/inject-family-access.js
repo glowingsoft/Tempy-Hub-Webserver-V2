@@ -233,6 +233,112 @@ requests.push(
   })
 );
 
+// ---------------------------------------------------------------- Next of kin handover and leaving
+requests.push(
+  req("handover candidates", "GET", ["app", "family", "handover", "candidates"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Handover candidates fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data.members).to.be.an("array");',
+      "    pm.expect(data.canLetHomeChoose).to.eql(true);",
+      "    const pick = data.members.find((m) => m.canSelect);",
+      '    if (pick) pm.collectionVariables.set("memberId", pick.memberId);',
+      "});",
+    ],
+    description:
+      "Who the next of kin can hand over to: active members (canSelect true) and people still waiting for approval (shown, canSelect false), plus the option to let the home choose. Next of kin only. Figma screen: Leave Margaret's Family (Handover To).",
+  }),
+  withBody(
+    req("ask to take over", "POST", ["app", "family", "handover"], {
+      tests: [
+        'pm.test("Handover requested", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("pending");',
+        '    pm.collectionVariables.set("handoverId", data.handoverId);',
+        "});",
+      ],
+      description:
+        "Asks one member to take over as next of kin. Body: residentId and toMemberId (a memberId from handover candidates). The next of kin keeps the role until the person accepts. Errors: 400 handover_target_required / handover_to_self, 404 family_member_not_found, 409 handover_member_not_approved or handover_pending (one open handover per resident). Figma screen: Leave Margaret's Family (Ask James To Take Over).",
+    }),
+    { residentId: "{{residentId}}", toMemberId: "{{memberId}}" }
+  ),
+  withBody(
+    req("ask the home to choose", "POST", ["app", "family", "handover"], {
+      tests: [
+        'pm.test("Handover requested", function () {',
+        "    pm.response.to.have.status(201);",
+        '    pm.expect(pm.response.json().data.homeChooses).to.eql(true);',
+        '    pm.collectionVariables.set("handoverId", pm.response.json().data.handoverId);',
+        "});",
+      ],
+      description:
+        "Lets the home choose the new next of kin. Body: residentId and homeChooses true. The next of kin keeps the role until the home assigns someone. Figma screen: Leave Margaret's Family (Let Florence House Choose).",
+    }),
+    { residentId: "{{residentId}}", homeChooses: true }
+  ),
+  req("current handover", "GET", ["app", "family", "handover", "current"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Current handover fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      "    if (data) {",
+      '        pm.expect(["outgoing", "incoming"]).to.include(data.direction);',
+      '        pm.collectionVariables.set("handoverId", data.handoverId);',
+      "    }",
+      "});",
+    ],
+    description:
+      "The open handover the caller is part of, or null. direction is outgoing for the next of kin who asked and incoming for the person asked; to is null when the home chooses. residentId is optional. Figma screen: Leave Margaret's Family (James Must Accept).",
+  }),
+  req("accept handover", "POST", ["app", "family", "handover", "{{handoverId}}", "accept"], {
+    tests: [
+      'pm.test("Handover accepted", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("accepted");',
+      "});",
+    ],
+    description:
+      "The person asked accepts and becomes next of kin; the previous next of kin stays a regular member. Done together or not at all. 404 for anyone but the person asked, 409 if no longer open or no longer valid (the next of kin changed or someone left).",
+  }),
+  req("decline handover", "POST", ["app", "family", "handover", "{{handoverId}}", "decline"], {
+    tests: [
+      'pm.test("Handover declined", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("declined");',
+      "});",
+    ],
+    description:
+      "The person asked declines; the next of kin keeps the role. 404 for anyone but the person asked, 409 if no longer open.",
+  }),
+  req("cancel handover", "POST", ["app", "family", "handover", "{{handoverId}}", "cancel"], {
+    tests: [
+      'pm.test("Handover cancelled", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("cancelled");',
+      "});",
+    ],
+    description:
+      "Keep My Role: the next of kin withdraws the request. 404 for anyone but the next of kin who asked, 409 if no longer open. Figma screen: Leave Margaret's Family (Keep My Role).",
+  }),
+  withBody(
+    req("leave family", "POST", ["app", "family", "leave"], {
+      tests: [
+        'pm.test("Left the family", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("removed");',
+        "});",
+      ],
+      description:
+        "Leave this family. Body: residentId. The next of kin gets 409 next_of_kin_must_hand_over until someone has taken over. Leaving also withdraws any handover that was asked of this member. Figma screen: Profile & Settings (Leave This Family).",
+    }),
+    { residentId: "{{residentId}}" }
+  )
+);
+
 let folder = appFolder.item.find((i) => i.name === "Family");
 if (!folder) {
   folder = { name: "Family", item: [] };
@@ -261,7 +367,7 @@ if (invite && invite.request.body) {
 }
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

@@ -1,4 +1,3 @@
-const mongoose = require("mongoose");
 const { User } = require("@models/UserModel");
 const { Organization } = require("@models/Organization");
 const { FamilyMember } = require("@models/FamilyMember");
@@ -6,26 +5,37 @@ const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 const { isFamilyModuleActive } = require("./familyAccessService");
+const { toObjectId, isValidObjectId, joinOne, personFields } = require("./familyPipeline");
 
-const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
+const joinUser = joinOne({ from: User, localField: "userId", as: "user" });
 
-const userStages = [
-  {
-    $lookup: {
-      from: User.collection.name,
-      localField: "userId",
-      foreignField: "_id",
-      as: "user",
+// ---------------------------------------------------------------- who may act
+
+const callerIsNextOfKin = (callerId) => ({
+  $gt: [
+    {
+      $size: {
+        $filter: {
+          input: "$family",
+          as: "member",
+          cond: {
+            $and: [
+              { $eq: ["$$member.userId", callerId] },
+              { $eq: ["$$member.status", FamilyMemberStatus.ACTIVE] },
+              { $eq: ["$$member.isNextOfKin", true] },
+            ],
+          },
+        },
+      },
     },
-  },
-  { $unwind: "$user" },
-];
+    0,
+  ],
+});
 
 /** Anything the caller may not act on is a 404, so other families' members and requests stay hidden. */
 const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
-  if (!mongoose.Types.ObjectId.isValid(linkId)) throw new AppError(notFoundKey, 404);
+  if (!isValidObjectId(linkId)) throw new AppError(notFoundKey, 404);
 
-  const callerId = toObjectId(userId);
   const [row] = await FamilyMember.aggregate([
     { $match: { _id: toObjectId(linkId) } },
     {
@@ -36,15 +46,7 @@ const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
         as: "family",
       },
     },
-    {
-      $lookup: {
-        from: Organization.collection.name,
-        localField: "organizationId",
-        foreignField: "_id",
-        as: "organization",
-      },
-    },
-    { $unwind: "$organization" },
+    ...joinOne({ from: Organization, localField: "organizationId", as: "organization" }),
     {
       $project: {
         residentId: 1,
@@ -52,72 +54,64 @@ const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
         status: 1,
         isNextOfKin: 1,
         "organization.moduleAccess": 1,
-        callerIsNextOfKin: {
-          $gt: [
-            {
-              $size: {
-                $filter: {
-                  input: "$family",
-                  as: "member",
-                  cond: {
-                    $and: [
-                      { $eq: ["$$member.userId", callerId] },
-                      { $eq: ["$$member.status", FamilyMemberStatus.ACTIVE] },
-                      { $eq: ["$$member.isNextOfKin", true] },
-                    ],
-                  },
-                },
-              },
-            },
-            0,
-          ],
-        },
+        callerIsNextOfKin: callerIsNextOfKin(toObjectId(userId)),
       },
     },
   ]);
 
-  if (!row || !row.callerIsNextOfKin || !isFamilyModuleActive(row.organization)) {
-    throw new AppError(notFoundKey, 404);
-  }
+  const allowed = row && row.callerIsNextOfKin && isFamilyModuleActive(row.organization);
+  if (!allowed) throw new AppError(notFoundKey, 404);
   return row;
 };
+
+// ---------------------------------------------------------------- listing
+
+// next of kin first, then active members in the order they joined, then requests
+const memberOrderStages = [
+  {
+    $addFields: {
+      rank: {
+        $switch: {
+          branches: [
+            { case: { $eq: ["$isNextOfKin", true] }, then: 0 },
+            { case: { $eq: ["$status", FamilyMemberStatus.ACTIVE] }, then: 1 },
+          ],
+          default: 2,
+        },
+      },
+    },
+  },
+  { $sort: { rank: 1, createdAt: 1 } },
+];
+
+const withActions = (member, canManage) => ({
+  ...member,
+  canRemove:
+    canManage && member.status === FamilyMemberStatus.ACTIVE && !member.isNextOfKin,
+  canReview: canManage && member.status === FamilyMemberStatus.PENDING,
+});
 
 /** The next of kin also sees (and can act on) people who asked to join; everyone else sees active members only. */
 const listMembers = async ({ userId, link }) => {
   const canManage = Boolean(link.isNextOfKin);
+  const visibleStatuses = canManage
+    ? [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING]
+    : [FamilyMemberStatus.ACTIVE];
 
-  const rows = await FamilyMember.aggregate([
+  const members = await FamilyMember.aggregate([
     {
       $match: {
         residentId: toObjectId(link.residentId),
-        status: {
-          $in: canManage
-            ? [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING]
-            : [FamilyMemberStatus.ACTIVE],
-        },
+        status: { $in: visibleStatuses },
       },
     },
-    ...userStages,
-    {
-      $addFields: {
-        rank: {
-          $switch: {
-            branches: [
-              { case: { $eq: ["$isNextOfKin", true] }, then: 0 },
-              { case: { $eq: ["$status", FamilyMemberStatus.ACTIVE] }, then: 1 },
-            ],
-            default: 2,
-          },
-        },
-      },
-    },
-    { $sort: { rank: 1, createdAt: 1 } },
+    ...joinUser,
+    ...memberOrderStages,
     {
       $project: {
         _id: 0,
         memberId: "$_id",
-        name: { $ifNull: ["$user.name", ""] },
-        photoUrl: { $ifNull: ["$user.profileIcon", ""] },
+        ...personFields(),
         relationship: 1,
         isNextOfKin: 1,
         status: 1,
@@ -130,12 +124,7 @@ const listMembers = async ({ userId, link }) => {
   return {
     residentId: link.residentId,
     canManage,
-    members: rows.map((row) => ({
-      ...row,
-      canRemove:
-        canManage && row.status === FamilyMemberStatus.ACTIVE && !row.isNextOfKin,
-      canReview: canManage && row.status === FamilyMemberStatus.PENDING,
-    })),
+    members: members.map((member) => withActions(member, canManage)),
   };
 };
 
@@ -151,13 +140,12 @@ const listJoinRequests = ({ link, page, limit, skip }) =>
     skip,
     sort: { requestedAt: 1 },
     extraDataStages: [
-      ...userStages,
+      ...joinUser,
       {
         $project: {
           _id: 0,
           requestId: "$_id",
-          name: { $ifNull: ["$user.name", ""] },
-          photoUrl: { $ifNull: ["$user.profileIcon", ""] },
+          ...personFields(),
           relationship: 1,
           requestedAt: 1,
         },
@@ -165,13 +153,14 @@ const listJoinRequests = ({ link, page, limit, skip }) =>
     ],
   });
 
+// ---------------------------------------------------------------- deciding and removing
+
 const decideJoinRequest = async ({ userId, requestId, decision }) => {
   const row = await loadForNextOfKin({
     userId,
     linkId: requestId,
     notFoundKey: "join_request_not_found",
   });
-
   if (row.status !== FamilyMemberStatus.PENDING) {
     throw new AppError("join_request_not_pending", 409);
   }
@@ -179,13 +168,7 @@ const decideJoinRequest = async ({ userId, requestId, decision }) => {
   // The status is part of the filter, so two people deciding at once cannot both win.
   const result = await FamilyMember.updateOne(
     { _id: row._id, status: FamilyMemberStatus.PENDING },
-    {
-      $set: {
-        status: decision,
-        decidedBy: userId,
-        decidedAt: new Date(),
-      },
-    }
+    { $set: { status: decision, decidedBy: userId, decidedAt: new Date() } }
   );
   if (!result.modifiedCount) throw new AppError("join_request_not_pending", 409);
 

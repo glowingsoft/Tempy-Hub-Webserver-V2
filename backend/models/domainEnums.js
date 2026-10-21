@@ -86,6 +86,13 @@ const FamilyCodeStatus = {
   VOIDED: "voided",
 };
 
+const FamilyHandoverStatus = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  DECLINED: "declined",
+  CANCELLED: "cancelled",
+};
+
 const FamilyJoinSource = {
   INVITATION: "invitation",
   CODE: "code",
@@ -385,6 +392,7 @@ module.exports = {
   FamilyRelationship,
   FamilyMemberStatus,
   FamilyJoinSource,
+  FamilyHandoverStatus,
   FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,

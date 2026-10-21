@@ -1,4 +1,3 @@
-const mongoose = require("mongoose");
 const { Organization } = require("@models/Organization");
 const { Branch } = require("@models/Branch");
 const { Resident } = require("@models/Resident");
@@ -9,8 +8,7 @@ const {
   FamilyRelationship,
   ModuleSlug,
 } = require("@models/domainEnums");
-
-const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
+const { toObjectId, joinOne } = require("./familyPipeline");
 
 const RELATIONSHIP_LABELS = {
   [FamilyRelationship.SPOUSE]: "Spouse",
@@ -58,15 +56,7 @@ const moduleActiveStage = (now) => ({
 
 const activeLinkStages = (userId, now = new Date()) => [
   { $match: { userId: toObjectId(userId), status: FamilyMemberStatus.ACTIVE } },
-  {
-    $lookup: {
-      from: Organization.collection.name,
-      localField: "organizationId",
-      foreignField: "_id",
-      as: "organization",
-    },
-  },
-  { $unwind: "$organization" },
+  ...joinOne({ from: Organization, localField: "organizationId", as: "organization" }),
   moduleActiveStage(now),
   { $sort: { createdAt: 1 } },
 ];
@@ -88,28 +78,17 @@ const listActiveLinks = (userId) =>
     },
   ]);
 
+const pickActiveResidentId = (rows, requestedId) =>
+  rows.some((row) => String(row.residentId) === String(requestedId))
+    ? String(requestedId)
+    : String(rows[0].residentId);
+
 /** activeResidentId is the resident the app is showing; if missing or not linked, the first is flagged. */
 const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   const rows = await FamilyMember.aggregate([
     ...activeLinkStages(userId),
-    {
-      $lookup: {
-        from: Resident.collection.name,
-        localField: "residentId",
-        foreignField: "_id",
-        as: "resident",
-      },
-    },
-    { $unwind: "$resident" },
-    {
-      $lookup: {
-        from: Branch.collection.name,
-        localField: "branchId",
-        foreignField: "_id",
-        as: "branch",
-      },
-    },
-    { $unwind: { path: "$branch", preserveNullAndEmptyArrays: true } },
+    ...joinOne({ from: Resident, localField: "residentId", as: "resident" }),
+    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
     {
       $project: {
         _id: 0,
@@ -125,17 +104,10 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
       },
     },
   ]);
-
   if (!rows.length) return [];
 
-  const activeId = rows.some((r) => String(r.residentId) === String(activeResidentId))
-    ? String(activeResidentId)
-    : String(rows[0].residentId);
-
-  return rows.map((row) => ({
-    ...row,
-    isActive: String(row.residentId) === activeId,
-  }));
+  const activeId = pickActiveResidentId(rows, activeResidentId);
+  return rows.map((row) => ({ ...row, isActive: String(row.residentId) === activeId }));
 };
 
 /** One email holds one role: any staff membership, or a platform admin, makes it a staff account. */
@@ -151,9 +123,9 @@ const isStaffAccount = async (user) => {
 };
 
 module.exports = {
-  isStaffAccount,
   listRelationships,
   isFamilyModuleActive,
   listActiveLinks,
   resolveFamilyResidents,
+  isStaffAccount,
 };

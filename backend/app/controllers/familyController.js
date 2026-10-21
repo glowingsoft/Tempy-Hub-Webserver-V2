@@ -3,229 +3,155 @@ const familyAccessService = require("@appServices/family/familyAccessService");
 const familyCodeService = require("@appServices/family/familyCodeService");
 const familyJoinService = require("@appServices/family/familyJoinService");
 const familyMemberService = require("@appServices/family/familyMemberService");
+const familyHandoverService = require("@appServices/family/familyHandoverService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
-const listMyResidents = async (req, res) => {
-  try {
-    const data = await familyAccessService.resolveFamilyResidents(req.user._id, {
-      activeResidentId: req.query.residentId,
-    });
+/**
+ * Wraps a handler so each one only says what to call and how to answer.
+ * `paged` handlers return { data, meta } instead of plain data.
+ */
+const respond =
+  (action, { statusCode = 200, translationKey = "data_fetched_successfully", paged = false } = {}) =>
+  async (req, res) => {
+    try {
+      const result = await action(req);
+      const body = paged ? { data: result.data, meta: result.meta } : { data: result };
+      return sendResponse({ res, statusCode, translationKey, ...body });
+    } catch (error) {
+      return handleServiceError(res, error, "some_thing_went_wrong");
+    }
+  };
 
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const listRelationships = respond(() => familyAccessService.listRelationships());
 
-const listRelationships = async (req, res) => {
-  try {
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data: familyAccessService.listRelationships(),
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const listMyResidents = respond((req) =>
+  familyAccessService.resolveFamilyResidents(req.user._id, {
+    activeResidentId: req.query.residentId,
+  })
+);
 
-const getCurrentFamilyCode = async (req, res) => {
-  try {
-    const data = await familyCodeService.getCurrentCode({ link: req.familyLink });
+const getCurrentFamilyCode = respond((req) =>
+  familyCodeService.getCurrentCode({ link: req.familyLink })
+);
 
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const createFamilyCode = respond(
+  (req) => familyCodeService.createCode({ link: req.familyLink, userId: req.user._id }),
+  { statusCode: 201, translationKey: "family_code_created" }
+);
 
-const createFamilyCode = async (req, res) => {
-  try {
-    const data = await familyCodeService.createCode({
-      link: req.familyLink,
-      userId: req.user._id,
-    });
+const previewJoinCode = respond((req) =>
+  familyJoinService.previewCode({ userId: req.user._id, code: req.query.code })
+);
 
-    return sendResponse({
-      res,
-      statusCode: 201,
-      translationKey: "family_code_created",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const previewJoinCode = async (req, res) => {
-  try {
-    const data = await familyJoinService.previewCode({
-      userId: req.user._id,
-      code: req.query.code,
-    });
-
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const requestToJoin = async (req, res) => {
-  try {
-    const data = await familyJoinService.requestToJoin({
+const requestToJoin = respond(
+  (req) =>
+    familyJoinService.requestToJoin({
       user: req.user,
       code: req.body.code,
       relationship: req.body.relationship,
-    });
+    }),
+  { statusCode: 201, translationKey: "join_request_created" }
+);
 
-    return sendResponse({
-      res,
-      statusCode: 201,
-      translationKey: "join_request_created",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const getCurrentJoinRequest = respond((req) =>
+  familyJoinService.getCurrentRequest(req.user._id)
+);
 
-const getCurrentJoinRequest = async (req, res) => {
-  try {
-    const data = await familyJoinService.getCurrentRequest(req.user._id);
+const cancelJoinRequest = respond(
+  (req) =>
+    familyJoinService.cancelRequest({ userId: req.user._id, requestId: req.params.id }),
+  { translationKey: "join_request_cancelled" }
+);
 
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const cancelJoinRequest = async (req, res) => {
-  try {
-    const data = await familyJoinService.cancelRequest({
-      userId: req.user._id,
-      requestId: req.params.id,
-    });
-
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "join_request_cancelled",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const listMembers = async (req, res) => {
-  try {
-    const data = await familyMemberService.listMembers({
-      userId: req.user._id,
-      link: req.familyLink,
-    });
-
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const removeMember = async (req, res) => {
-  try {
-    const data = await familyMemberService.removeMember({
-      userId: req.user._id,
-      memberId: req.params.memberId,
-    });
-
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "family_member_removed",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const listJoinRequests = async (req, res) => {
-  try {
+const listJoinRequests = respond(
+  (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
-    const { data, meta } = await familyMemberService.listJoinRequests({
-      link: req.familyLink,
-      page,
-      limit,
-      skip,
-    });
+    return familyMemberService.listJoinRequests({ link: req.familyLink, page, limit, skip });
+  },
+  { paged: true }
+);
 
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "data_fetched_successfully",
-      data,
-      meta,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const decideJoinRequest = (decision, translationKey) =>
+  respond(
+    (req) =>
+      familyMemberService.decideJoinRequest({
+        userId: req.user._id,
+        requestId: req.params.id,
+        decision,
+      }),
+    { translationKey }
+  );
 
-const decide = (decision, translationKey) => async (req, res) => {
-  try {
-    const data = await familyMemberService.decideJoinRequest({
+const approveJoinRequest = decideJoinRequest(FamilyMemberStatus.ACTIVE, "join_request_approved");
+const rejectJoinRequest = decideJoinRequest(FamilyMemberStatus.REJECTED, "join_request_rejected");
+
+const listMembers = respond((req) =>
+  familyMemberService.listMembers({ userId: req.user._id, link: req.familyLink })
+);
+
+const removeMember = respond(
+  (req) =>
+    familyMemberService.removeMember({ userId: req.user._id, memberId: req.params.memberId }),
+  { translationKey: "family_member_removed" }
+);
+
+const listHandoverCandidates = respond((req) =>
+  familyHandoverService.listCandidates({ userId: req.user._id, link: req.familyLink })
+);
+
+const requestHandover = respond(
+  (req) =>
+    familyHandoverService.requestHandover({
       userId: req.user._id,
-      requestId: req.params.id,
-      decision,
-    });
+      link: req.familyLink,
+      toMemberId: req.body.toMemberId,
+      homeChooses: req.body.homeChooses,
+    }),
+  { statusCode: 201, translationKey: "handover_requested" }
+);
 
-    return sendResponse({ res, statusCode: 200, translationKey, data });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const getCurrentHandover = respond((req) =>
+  familyHandoverService.getCurrentHandover({
+    userId: req.user._id,
+    residentId: req.query.residentId,
+  })
+);
 
-const approveJoinRequest = decide(FamilyMemberStatus.ACTIVE, "join_request_approved");
-const rejectJoinRequest = decide(FamilyMemberStatus.REJECTED, "join_request_rejected");
+const answerHandover = (action, translationKey) =>
+  respond(
+    (req) => action({ userId: req.user._id, handoverId: req.params.id }),
+    { translationKey }
+  );
+
+const acceptHandover = answerHandover(familyHandoverService.acceptHandover, "handover_accepted");
+const declineHandover = answerHandover(familyHandoverService.declineHandover, "handover_declined");
+const cancelHandover = answerHandover(familyHandoverService.cancelHandover, "handover_cancelled");
+
+const leaveFamily = respond(
+  (req) => familyHandoverService.leaveFamily({ userId: req.user._id, link: req.familyLink }),
+  { translationKey: "family_left" }
+);
 
 module.exports = {
-  listMembers,
-  removeMember,
-  listJoinRequests,
-  approveJoinRequest,
-  rejectJoinRequest,
+  listRelationships,
+  listMyResidents,
+  getCurrentFamilyCode,
+  createFamilyCode,
   previewJoinCode,
   requestToJoin,
   getCurrentJoinRequest,
   cancelJoinRequest,
-  listMyResidents,
-  listRelationships,
-  getCurrentFamilyCode,
-  createFamilyCode,
+  listJoinRequests,
+  approveJoinRequest,
+  rejectJoinRequest,
+  listMembers,
+  removeMember,
+  listHandoverCandidates,
+  requestHandover,
+  getCurrentHandover,
+  acceptHandover,
+  declineHandover,
+  cancelHandover,
+  leaveFamily,
 };

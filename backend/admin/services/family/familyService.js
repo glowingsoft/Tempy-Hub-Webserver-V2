@@ -21,7 +21,10 @@ const {
   actorStanding,
   assertMayAccessResidents,
 } = require("@adminServices/residents/residentAccess");
-const { isStaffAccount } = require("@appServices/family/familyAccessService");
+const {
+  isStaffAccount,
+  familyModuleOrganizationIds,
+} = require("@appServices/family/familyAccessService");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
@@ -279,6 +282,12 @@ const revokeInvitation = async ({ actor, invitationId, organizationId }) => {
 };
 
 // Only the hash is stored, so every pending row has to be compared (same trade-off as staff).
+/** With Family Engagement off an invitation cannot be seen or used: it reads as not found. */
+const assertFamilyModuleOn = async (organizationId) => {
+  const active = await familyModuleOrganizationIds([organizationId]);
+  if (!active.length) throw new AppError("invitation_not_found", 404);
+};
+
 const findByToken = async (token) => {
   if (!token) throw new AppError("invitation_not_found", 404);
 
@@ -293,6 +302,7 @@ const findByToken = async (token) => {
         await invitation.save();
         throw new AppError("invitation_expired", 400);
       }
+      await assertFamilyModuleOn(invitation.organizationId);
       return invitation;
     }
   }
@@ -333,13 +343,20 @@ const listMyInvitations = async ({ user, page, limit, skip }) => {
   const email = String(user.email || "").trim().toLowerCase();
   if (!email) throw new AppError("email_required", 400);
 
+  const pending = {
+    email,
+    status: FamilyInvitationStatus.PENDING,
+    expiresAt: { $gt: new Date() },
+  };
+  const homes = await FamilyInvitation.aggregate([
+    { $match: pending },
+    { $group: { _id: "$organizationId" } },
+  ]);
+  const activeHomes = await familyModuleOrganizationIds(homes.map((home) => home._id));
+
   const { data, meta } = await paginateWithFacet({
     model: FamilyInvitation,
-    match: {
-      email,
-      status: FamilyInvitationStatus.PENDING,
-      expiresAt: { $gt: new Date() },
-    },
+    match: { ...pending, organizationId: { $in: activeHomes } },
     page,
     limit,
     skip,
@@ -369,6 +386,7 @@ const requireMyPendingInvitation = async ({ user, invitationId }) => {
     await invitation.save({ validateModifiedOnly: true });
     throw new AppError("invitation_expired", 400);
   }
+  await assertFamilyModuleOn(invitation.organizationId);
 
   return invitation;
 };

@@ -1,5 +1,5 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
-const { respond } = require("@utils/controllerResponse");
+const { respond, respondByAction } = require("@utils/controllerResponse");
 const familyAccessService = require("@appServices/family/familyAccessService");
 const familyCodeService = require("@appServices/family/familyCodeService");
 const familyJoinService = require("@appServices/family/familyJoinService");
@@ -43,12 +43,6 @@ const getCurrentJoinRequest = respond((req) =>
   familyJoinService.getCurrentRequest(req.user._id)
 );
 
-const cancelJoinRequest = respond(
-  (req) =>
-    familyJoinService.cancelRequest({ userId: req.user._id, requestId: req.params.id }),
-  { translationKey: "join_request_cancelled" }
-);
-
 const listJoinRequests = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
@@ -57,19 +51,26 @@ const listJoinRequests = respond(
   { paged: true }
 );
 
-const decideJoinRequest = (decision, translationKey) =>
-  respond(
-    (req) =>
-      familyMemberService.decideJoinRequest({
-        userId: req.user._id,
-        requestId: req.params.id,
-        decision,
-      }),
-    { translationKey }
-  );
+const decide = (decision, translationKey) => ({
+  run: (req) =>
+    familyMemberService.decideJoinRequest({
+      userId: req.user._id,
+      requestId: req.params.id,
+      decision,
+    }),
+  translationKey,
+});
 
-const approveJoinRequest = decideJoinRequest(FamilyMemberStatus.ACTIVE, "join_request_approved");
-const rejectJoinRequest = decideJoinRequest(FamilyMemberStatus.REJECTED, "join_request_rejected");
+// The requester cancels their own request; the next of kin approves or rejects it.
+const updateJoinRequest = respondByAction({
+  approve: decide(FamilyMemberStatus.ACTIVE, "join_request_approved"),
+  reject: decide(FamilyMemberStatus.REJECTED, "join_request_rejected"),
+  cancel: {
+    run: (req) =>
+      familyJoinService.cancelRequest({ userId: req.user._id, requestId: req.params.id }),
+    translationKey: "join_request_cancelled",
+  },
+});
 
 const listMembers = respond((req) =>
   familyMemberService.listMembers({ userId: req.user._id, link: req.familyLink })
@@ -103,15 +104,16 @@ const getCurrentHandover = respond((req) =>
   })
 );
 
-const answerHandover = (action, translationKey) =>
-  respond(
-    (req) => action({ userId: req.user._id, handoverId: req.params.id }),
-    { translationKey }
-  );
+const answerHandover = (answer, translationKey) => ({
+  run: (req) => answer({ userId: req.user._id, handoverId: req.params.id }),
+  translationKey,
+});
 
-const acceptHandover = answerHandover(familyHandoverService.acceptHandover, "handover_accepted");
-const declineHandover = answerHandover(familyHandoverService.declineHandover, "handover_declined");
-const cancelHandover = answerHandover(familyHandoverService.cancelHandover, "handover_cancelled");
+const updateHandover = respondByAction({
+  accept: answerHandover(familyHandoverService.acceptHandover, "handover_accepted"),
+  decline: answerHandover(familyHandoverService.declineHandover, "handover_declined"),
+  cancel: answerHandover(familyHandoverService.cancelHandover, "handover_cancelled"),
+});
 
 const leaveFamily = respond(
   (req) => familyHandoverService.leaveFamily({ userId: req.user._id, link: req.familyLink }),
@@ -138,18 +140,14 @@ module.exports = {
   previewJoinCode,
   requestToJoin,
   getCurrentJoinRequest,
-  cancelJoinRequest,
   listJoinRequests,
-  approveJoinRequest,
-  rejectJoinRequest,
+  updateJoinRequest,
   listMembers,
   removeMember,
   listHandoverCandidates,
   requestHandover,
   getCurrentHandover,
-  acceptHandover,
-  declineHandover,
-  cancelHandover,
+  updateHandover,
   leaveFamily,
   inviteRelative,
 };

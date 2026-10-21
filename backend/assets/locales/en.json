@@ -439,6 +439,7 @@
   "floor_plan_pin_deleted_successfully": "Floor plan pin deleted",
   "peep_record_not_found": "PEEP record not found",
   "peep_record_already_exists": "This resident already has a PEEP record",
+  "invalid_action": "Action must be one of: {actions}",
   "invalid_peep_level": "PEEP level must be low, medium, or high",
   "invalid_peep_consent_status": "Consent status is not valid",
   "peep_record_created_successfully": "PEEP record created successfully",

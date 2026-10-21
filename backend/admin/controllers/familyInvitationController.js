@@ -3,6 +3,7 @@ const {
   validateParams,
   parsePaginationParams,
 } = require("@utils/responseUtil");
+const { respondByAction } = require("@utils/controllerResponse");
 const familyService = require("@adminServices/family/familyService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { FamilyRelationship } = require("@models/domainEnums");
@@ -86,48 +87,24 @@ const getInvitation = async (req, res) => {
   }
 };
 
-const resendInvitation = async (req, res) => {
-  try {
-    const data = await familyService.resendInvitation({
+const invitationAction = (run, translationKey) => ({
+  run: (req) =>
+    run({
       actor: req.user,
       invitationId: req.params.invitationId,
       organizationId: req.orgId,
-    });
+    }),
+  translationKey,
+});
 
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "invitation_sent_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
-const revokeInvitation = async (req, res) => {
-  try {
-    const data = await familyService.revokeInvitation({
-      actor: req.user,
-      invitationId: req.params.invitationId,
-      organizationId: req.orgId,
-    });
-
-    return sendResponse({
-      res,
-      statusCode: 200,
-      translationKey: "invitation_revoked_successfully",
-      data,
-    });
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
+const updateInvitation = respondByAction({
+  resend: invitationAction(familyService.resendInvitation, "invitation_sent_successfully"),
+  revoke: invitationAction(familyService.revokeInvitation, "invitation_revoked_successfully"),
+});
 
 module.exports = {
   inviteFamilyMember,
   listInvitations,
   getInvitation,
-  resendInvitation,
-  revokeInvitation,
+  updateInvitation,
 };

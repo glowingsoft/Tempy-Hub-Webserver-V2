@@ -8830,10 +8830,10 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}/cancel",
+                  "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -8841,11 +8841,19 @@
                     "app",
                     "family",
                     "join-requests",
-                    "{{joinRequestId}}",
-                    "cancel"
+                    "{{joinRequestId}}"
                   ]
                 },
-                "description": "Cancel Request, after the confirmation dialog. Only the member who asked, and only while it is pending (409 otherwise, 404 for anyone else's request). Figma screen: Join A Family (Cancel Request)."
+                "description": "PATCH with body {\"action\":\"cancel\"}. Cancel Request, after the confirmation dialog. Only the member who asked, and only while it is pending (409 otherwise, 404 for anyone else's request). Figma screen: Join A Family (Cancel Request).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"cancel\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -8961,10 +8969,10 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}/approve",
+                  "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -8972,11 +8980,19 @@
                     "app",
                     "family",
                     "join-requests",
-                    "{{joinRequestId}}",
-                    "approve"
+                    "{{joinRequestId}}"
                   ]
                 },
-                "description": "Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review)."
+                "description": "PATCH with body {\"action\":\"approve\"}. Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"approve\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -8997,10 +9013,10 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}/reject",
+                  "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -9008,11 +9024,19 @@
                     "app",
                     "family",
                     "join-requests",
-                    "{{joinRequestId}}",
-                    "reject"
+                    "{{joinRequestId}}"
                   ]
                 },
-                "description": "Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review)."
+                "description": "PATCH with body {\"action\":\"reject\"}. Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -9247,10 +9271,10 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/app/family/handover/{{handoverId}}/accept",
+                  "raw": "{{url}}/app/family/handover/{{handoverId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -9258,11 +9282,19 @@
                     "app",
                     "family",
                     "handover",
-                    "{{handoverId}}",
-                    "accept"
+                    "{{handoverId}}"
                   ]
                 },
-                "description": "The person asked accepts and becomes next of kin; the previous next of kin stays a regular member. Done together or not at all. 404 for anyone but the person asked, 409 if no longer open or no longer valid (the next of kin changed or someone left)."
+                "description": "PATCH with body {\"action\":\"accept\"}. The person asked accepts and becomes next of kin; the previous next of kin stays a regular member. Done together or not at all. 404 for anyone but the person asked, 409 if no longer open or no longer valid (the next of kin changed or someone left).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"accept\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -9283,10 +9315,10 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/app/family/handover/{{handoverId}}/decline",
+                  "raw": "{{url}}/app/family/handover/{{handoverId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -9294,11 +9326,19 @@
                     "app",
                     "family",
                     "handover",
-                    "{{handoverId}}",
-                    "decline"
+                    "{{handoverId}}"
                   ]
                 },
-                "description": "The person asked declines; the next of kin keeps the role. 404 for anyone but the person asked, 409 if no longer open."
+                "description": "PATCH with body {\"action\":\"decline\"}. The person asked declines; the next of kin keeps the role. 404 for anyone but the person asked, 409 if no longer open.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"decline\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -9319,10 +9359,10 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [],
                 "url": {
-                  "raw": "{{url}}/app/family/handover/{{handoverId}}/cancel",
+                  "raw": "{{url}}/app/family/handover/{{handoverId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -9330,11 +9370,19 @@
                     "app",
                     "family",
                     "handover",
-                    "{{handoverId}}",
-                    "cancel"
+                    "{{handoverId}}"
                   ]
                 },
-                "description": "Keep My Role: the next of kin withdraws the request. 404 for anyone but the next of kin who asked, 409 if no longer open. Figma screen: Leave Margaret's Family (Keep My Role)."
+                "description": "PATCH with body {\"action\":\"cancel\"}. Keep My Role: the next of kin withdraws the request. 404 for anyone but the next of kin who asked, 409 if no longer open. Figma screen: Leave Margaret's Family (Keep My Role).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"cancel\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -19953,7 +20001,7 @@
                     "family-invitations"
                   ]
                 },
-                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
               },
               "response": []
             },
@@ -20055,7 +20103,7 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20065,17 +20113,26 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}/resend",
+                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "admin",
                     "family-invitations",
-                    "{{familyInvitationId}}",
-                    "resend"
+                    "{{familyInvitationId}}"
                   ]
-                }
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"resend\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "PATCH with body {\"action\":\"resend\"}. "
               },
               "response": []
             },
@@ -20095,7 +20152,7 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20105,17 +20162,26 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}/revoke",
+                  "raw": "{{url}}/admin/family-invitations/{{familyInvitationId}}",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "admin",
                     "family-invitations",
-                    "{{familyInvitationId}}",
-                    "revoke"
+                    "{{familyInvitationId}}"
                   ]
-                }
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"revoke\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "PATCH with body {\"action\":\"revoke\"}. "
               },
               "response": []
             }
@@ -20166,7 +20232,7 @@
                     "members"
                   ]
                 },
-                "description": "Everyone linked to the resident: next of kin first, then active members, then people waiting for approval. Includes email. Owner, super admin, site manager and line manager (a site or line manager only for their own site). Feeds: My Family."
+                "description": "Everyone linked to the resident: next of kin first, then active members, then people waiting for approval. Includes email. Owner, super admin, site manager and line manager (a site or line manager only for their own site). Feeds: My Family. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             },
@@ -20209,7 +20275,7 @@
                     "next-of-kin"
                   ]
                 },
-                "description": "Makes an active member the next of kin; the old next of kin steps down and stays a member. Also how the home finishes a \"let the home choose\" handover. Body: memberId. 409 if already next of kin or not approved yet, 404 for someone not linked to this resident. Figma screen: Leave Margaret's Family (Let Florence House Choose).",
+                "description": "Makes an active member the next of kin; the old next of kin steps down and stays a member. Also how the home finishes a \"let the home choose\" handover. Body: memberId. 409 if already next of kin or not approved yet, 404 for someone not linked to this resident. Figma screen: Leave Margaret's Family (Let Florence House Choose). Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
@@ -20262,7 +20328,7 @@
                     "{{memberId}}"
                   ]
                 },
-                "description": "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family."
+                "description": "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             },
@@ -20305,7 +20371,7 @@
                     "code"
                   ]
                 },
-                "description": "The resident's current family code and expiry, or code: null. Feeds: Invite Family (family code card)."
+                "description": "The resident's current family code and expiry, or code: null. Feeds: Invite Family (family code card). Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             },
@@ -20348,7 +20414,7 @@
                     "code"
                   ]
                 },
-                "description": "The home makes a new family code (14 days); the old one stops working. Same rules as the next of kin making one."
+                "description": "The home makes a new family code (14 days); the old one stops working. Same rules as the next of kin making one. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             },
@@ -20405,7 +20471,7 @@
                     }
                   ]
                 },
-                "description": "People waiting for approval, oldest first, paginated. Filter with residentId or branchId; without a filter an owner or super admin sees the whole organization and a site or line manager sees their own site."
+                "description": "People waiting for approval, oldest first, paginated. Filter with residentId or branchId; without a filter an owner or super admin sees the whole organization and a site or line manager sees their own site. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             },
@@ -20426,7 +20492,7 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20436,7 +20502,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/family/join-requests/{{joinRequestId}}/approve",
+                  "raw": "{{url}}/admin/family/join-requests/{{joinRequestId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -20444,11 +20510,19 @@
                     "admin",
                     "family",
                     "join-requests",
-                    "{{joinRequestId}}",
-                    "approve"
+                    "{{joinRequestId}}"
                   ]
                 },
-                "description": "The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request."
+                "description": "PATCH with body {\"action\":\"approve\"}. The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"approve\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -20469,7 +20543,7 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PATCH",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20479,7 +20553,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/family/join-requests/{{joinRequestId}}/reject",
+                  "raw": "{{url}}/admin/family/join-requests/{{joinRequestId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -20487,11 +20561,19 @@
                     "admin",
                     "family",
                     "join-requests",
-                    "{{joinRequestId}}",
-                    "reject"
+                    "{{joinRequestId}}"
                   ]
                 },
-                "description": "The home declines a request. The person can ask again later."
+                "description": "PATCH with body {\"action\":\"reject\"}. The home declines a request. The person can ask again later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             },
@@ -20546,7 +20628,7 @@
                     }
                   ]
                 },
-                "description": "Open handover requests, oldest first, paginated: who asked, who they asked (to is null when the home chooses), and the resident. homeChooses=true shows only the families waiting for the home. Finish one with staff set next of kin. Feeds: Leave Margaret's Family (Let Florence House Choose)."
+                "description": "Open handover requests, oldest first, paginated: who asked, who they asked (to is null when the home chooses), and the resident. homeChooses=true shows only the families waiting for the home. Finish one with staff set next of kin. Feeds: Leave Margaret's Family (Let Florence House Choose). Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             }

@@ -1,5 +1,8 @@
 const { sendResponse } = require("@utils/responseUtil");
-const { listActiveLinks } = require("@appServices/family/familyAccessService");
+const {
+  isFamilyModuleActive,
+  listActiveLinks,
+} = require("@appServices/family/familyAccessService");
 const { isValidObjectId } = require("@appServices/family/familyPipeline");
 
 // 404 rather than 403, so a resident's existence is not revealed.
@@ -45,6 +48,19 @@ const requireFamilyAccess =
     }
   };
 
+/**
+ * Staff routes: with Family Engagement off the customer sees nothing, so the answer
+ * is 404 (not the 403 of requireModule). A platform admin passes, as with every module.
+ * Run it after requireMembership.
+ */
+const requireFamilyModule = (req, res, next) => {
+  if (!req.organization) {
+    return sendResponse({ res, statusCode: 403, translationKey: "no_membership_for_scope" });
+  }
+  if (req.isPlatformAdmin || isFamilyModuleActive(req.organization)) return next();
+  return notFound(res);
+};
+
 const requireNextOfKin = (req, res, next) => {
   if (!req.familyLink?.isNextOfKin) {
     return sendResponse({ res, statusCode: 403, translationKey: "next_of_kin_only" });
@@ -52,4 +68,4 @@ const requireNextOfKin = (req, res, next) => {
   return next();
 };
 
-module.exports = { requireFamilyAccess, requireNextOfKin };
+module.exports = { requireFamilyAccess, requireNextOfKin, requireFamilyModule };

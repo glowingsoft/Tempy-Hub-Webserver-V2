@@ -41,10 +41,11 @@ const isFamilyModuleActive = (organization, now = new Date()) => {
   );
 };
 
-// Runs on the joined organization, so links in a home with the module off are dropped in the database.
-const moduleActiveStage = (now) => ({
+// `path` is where the module list sits: on a joined organization, so links in a home
+// with the module off are dropped in the database, or on the organization itself.
+const moduleActiveStage = (now, path = "organization.moduleAccess") => ({
   $match: {
-    "organization.moduleAccess": {
+    [path]: {
       $elemMatch: {
         moduleSlug: ModuleSlug.FAMILY_ENGAGEMENT,
         enabled: true,
@@ -53,6 +54,18 @@ const moduleActiveStage = (now) => ({
     },
   },
 });
+
+/** Which of these organizations currently have Family Engagement on. */
+const familyModuleOrganizationIds = async (organizationIds) => {
+  if (!organizationIds.length) return [];
+
+  const rows = await Organization.aggregate([
+    { $match: { _id: { $in: organizationIds.map(toObjectId) } } },
+    moduleActiveStage(new Date(), "moduleAccess"),
+    { $project: { _id: 1 } },
+  ]);
+  return rows.map((row) => row._id);
+};
 
 const activeLinkStages = (userId, now = new Date()) => [
   { $match: { userId: toObjectId(userId), status: FamilyMemberStatus.ACTIVE } },
@@ -110,6 +123,23 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   return rows.map((row) => ({ ...row, isActive: String(row.residentId) === activeId }));
 };
 
+/**
+ * Why a member sees no residents: "active" (has links), "pending" (waiting for approval),
+ * "removed" (every link ended by removal, so the app shows You no longer have access) or "none".
+ */
+const resolveAccessState = async (userId, residentCount) => {
+  if (residentCount > 0) return "active";
+
+  const rows = await FamilyMember.aggregate([
+    { $match: { userId: toObjectId(userId) } },
+    { $group: { _id: "$status" } },
+  ]);
+  const statuses = rows.map((row) => row._id);
+  if (statuses.includes(FamilyMemberStatus.PENDING)) return "pending";
+  if (statuses.includes(FamilyMemberStatus.REMOVED)) return "removed";
+  return "none";
+};
+
 /** One email holds one role: any staff membership, or a platform admin, makes it a staff account. */
 const isStaffAccount = async (user) => {
   if (user?.accountState?.userType === "admin") return true;
@@ -125,7 +155,9 @@ const isStaffAccount = async (user) => {
 module.exports = {
   listRelationships,
   isFamilyModuleActive,
+  familyModuleOrganizationIds,
   listActiveLinks,
   resolveFamilyResidents,
+  resolveAccessState,
   isStaffAccount,
 };

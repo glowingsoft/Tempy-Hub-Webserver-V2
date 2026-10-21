@@ -367,8 +367,14 @@ const orgHeader = [
     type: "text",
   },
 ];
+const STAFF_ACCESS =
+  " Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.";
 const staff = (name, method, pathParts, options = {}) =>
-  req(name, method, pathParts, { ...options, header: orgHeader });
+  req(name, method, pathParts, {
+    ...options,
+    header: orgHeader,
+    description: (options.description || "") + STAFF_ACCESS,
+  });
 
 const staffRequests = [
   staff("staff family members", "GET", ["admin", "family", "residents", "{{residentId}}", "members"], {
@@ -509,6 +515,54 @@ if (invite && invite.request.body) {
     /relationship is one of [^.]*\./,
     "relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down."
   );
+}
+
+// One PATCH per record: the body's action picks approve / reject / cancel and so on.
+// Postman keeps a request per action so each can be sent on its own.
+const toAction = (request, action) => {
+  const parts = request.request.url.path;
+  parts.pop();
+  request.request.method = "PATCH";
+  request.request.url.raw = `{{url}}/${parts.join("/")}`;
+  request.request.body = jsonBody({ action });
+  request.request.description =
+    `PATCH with body {"action":"${action}"}. ` + (request.request.description || "");
+};
+const byName = (list, name) => {
+  const found = list.find((r) => r.name === name);
+  if (!found) throw new Error(`request not found: ${name}`);
+  return found;
+};
+for (const [name, action] of [
+  ["cancel join request", "cancel"],
+  ["approve join request", "approve"],
+  ["reject join request", "reject"],
+  ["accept handover", "accept"],
+  ["decline handover", "decline"],
+  ["cancel handover", "cancel"],
+]) {
+  toAction(byName(requests, name), action);
+}
+for (const [name, action] of [
+  ["staff approve join request", "approve"],
+  ["staff reject join request", "reject"],
+]) {
+  toAction(byName(staffRequests, name), action);
+}
+const familyInvitationsFolder = adminFolder.item.find((i) => i.name === "Family Invitations");
+for (const [name, action] of [
+  ["resend family invitation", "resend"],
+  ["revoke family invitation", "revoke"],
+]) {
+  const found = familyInvitationsFolder && familyInvitationsFolder.item.find((r) => r.name === name);
+  if (found) {
+    const parts = found.request.url.path;
+    if (parts[parts.length - 1] === action) {
+      toAction(found, action);
+    } else {
+      found.request.body = jsonBody({ action });
+    }
+  }
 }
 
 const vars = collection.variable || [];

@@ -18,6 +18,7 @@ const { StaffProfile } = require("@models/StaffProfile");
 const {
   isStaffAccount,
   resolveFamilyResidents,
+  resolveAccessState,
 } = require("@appServices/family/familyAccessService");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const {
@@ -247,14 +248,18 @@ const resolveStaffAccess = async (user) => {
   };
 };
 
-const resolveFamilyAccess = async (user) => ({
-  isPlatformAdmin: false,
-  memberships: [],
-  highestRole: null,
-  defaultSurface: "familyApp",
-  ...emptyStaffAccessFields(),
-  residents: await resolveFamilyResidents(user._id),
-});
+const resolveFamilyAccess = async (user) => {
+  const residents = await resolveFamilyResidents(user._id);
+  return {
+    isPlatformAdmin: false,
+    memberships: [],
+    highestRole: null,
+    defaultSurface: "familyApp",
+    ...emptyStaffAccessFields(),
+    residents,
+    accessState: await resolveAccessState(user._id, residents.length),
+  };
+};
 
 const emptyStaffAccessFields = () => ({
   moduleMenu: {},

@@ -1,5 +1,5 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
-const { respond } = require("@utils/controllerResponse");
+const { respond, respondByAction } = require("@utils/controllerResponse");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
@@ -44,19 +44,20 @@ const listJoinRequests = respond(
   { paged: true }
 );
 
-const decideJoinRequest = (decision, translationKey) =>
-  respond(
-    (req) =>
-      familyStaffService.decideJoinRequest({
-        ...withScope(req),
-        requestId: req.params.id,
-        decision,
-      }),
-    { translationKey }
-  );
+const decide = (decision, translationKey) => ({
+  run: (req) =>
+    familyStaffService.decideJoinRequest({
+      ...withScope(req),
+      requestId: req.params.id,
+      decision,
+    }),
+  translationKey,
+});
 
-const approveJoinRequest = decideJoinRequest(FamilyMemberStatus.ACTIVE, "join_request_approved");
-const rejectJoinRequest = decideJoinRequest(FamilyMemberStatus.REJECTED, "join_request_rejected");
+const updateJoinRequest = respondByAction({
+  approve: decide(FamilyMemberStatus.ACTIVE, "join_request_approved"),
+  reject: decide(FamilyMemberStatus.REJECTED, "join_request_rejected"),
+});
 
 const listHandovers = respond(
   (req) => {
@@ -88,8 +89,7 @@ module.exports = {
   setNextOfKin,
   removeMember,
   listJoinRequests,
-  approveJoinRequest,
-  rejectJoinRequest,
+  updateJoinRequest,
   listHandovers,
   getCode,
   createCode,

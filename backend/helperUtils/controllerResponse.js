@@ -1,4 +1,5 @@
 const { sendResponse } = require("@utils/responseUtil");
+const { AppError } = require("@services/_errors/AppError");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 /**
@@ -17,4 +18,18 @@ const respond =
     }
   };
 
-module.exports = { respond };
+/**
+ * One route for the actions on a record: the body's `action` picks the handler, so
+ * approve / reject / cancel share one PATCH. Unknown actions are a 400.
+ * `actions` maps a name to { run(req), translationKey?, statusCode? }.
+ */
+const respondByAction = (actions) => async (req, res) => {
+  const action = String(req.body?.action || "");
+  const handler = Object.prototype.hasOwnProperty.call(actions, action) ? actions[action] : null;
+  if (!handler) {
+    return handleServiceError(res, new AppError("invalid_action", 400, { actions: Object.keys(actions).join(", ") }), "some_thing_went_wrong");
+  }
+  return respond(handler.run, handler)(req, res);
+};
+
+module.exports = { respond, respondByAction };

@@ -3,12 +3,14 @@ const auth = require("@middlewares/authMiddleware");
 const {
   requireMembership,
   requireRoles,
-  requireModule,
+  requirePermission,
 } = require("@middlewares/membershipMiddleware");
-const { ModuleSlug } = require("@models/domainEnums");
+const { requireFamilyModule } = require("@middlewares/familyMiddleware");
 const {
-  RESIDENT_HANDLER_ROLES,
-} = require("@adminServices/residents/residentAccess");
+  FAMILY_VIEW,
+  FAMILY_MANAGE,
+  FAMILY_STAFF_ROLES,
+} = require("@adminServices/family/familyAccess");
 const familyInvitationController = require("../controllers/familyInvitationController");
 
 const router = express.Router();
@@ -16,20 +18,13 @@ const router = express.Router();
 router.use(
   auth,
   requireMembership(),
-  requireModule(ModuleSlug.RESIDENTS),
-  requireRoles(RESIDENT_HANDLER_ROLES)
+  requireFamilyModule,
+  requireRoles(FAMILY_STAFF_ROLES)
 );
 
-router.post("/", familyInvitationController.inviteFamilyMember);
-router.get("/", familyInvitationController.listInvitations);
-router.get("/:invitationId", familyInvitationController.getInvitation);
-router.post(
-  "/:invitationId/resend",
-  familyInvitationController.resendInvitation
-);
-router.post(
-  "/:invitationId/revoke",
-  familyInvitationController.revokeInvitation
-);
+router.post("/", requirePermission(FAMILY_MANAGE), familyInvitationController.inviteFamilyMember);
+router.get("/", requirePermission(FAMILY_VIEW), familyInvitationController.listInvitations);
+router.get("/:invitationId", requirePermission(FAMILY_VIEW), familyInvitationController.getInvitation);
+router.patch("/:invitationId", requirePermission(FAMILY_MANAGE), familyInvitationController.updateInvitation);
 
 module.exports = router;

@@ -13,25 +13,18 @@ const {
 } = require("@models/domainEnums");
 const {
   actorStanding,
-  assertMayManageStaff,
   assertMayApproveForStaff,
   resolveScopedStaffIds,
 } = require("../staff/staffAccess");
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("./supervisionSchedule");
+const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
+const { actorConductor, conductedByStages } = require("../staff/meetingConductor");
 
 const toObjectId = (value, key) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
     throw new AppError(key, 400);
   }
   return new mongoose.Types.ObjectId(String(value));
-};
-
-const intervalMonths = (value) => {
-  const months = Number(value);
-  if (!Number.isInteger(months) || months < 1 || months > 12) {
-    throw new AppError("invalid_supervision_interval", 400);
-  }
-  return months;
 };
 
 const timezoneFor = async (branchId) => {
@@ -78,55 +71,7 @@ const assertCanAccessStaff = async ({ actor, organizationId, staff }) => {
   return standing;
 };
 
-const updateSupervisionSettings = async ({
-  actor,
-  organizationId,
-  staffProfileId,
-  supervisorStaffId,
-  supervisionIntervalMonths,
-}) => {
-  if (supervisorStaffId === undefined && supervisionIntervalMonths === undefined) {
-    throw new AppError("nothing_to_update", 400);
-  }
-
-  const staff = await loadStaff(staffProfileId, organizationId);
-  const standing = await actorStanding(actor, organizationId);
-  assertMayManageStaff(standing, staff.branchId);
-
-  if (supervisorStaffId !== undefined) {
-    if (!supervisorStaffId) {
-      staff.supervisorStaffId = null;
-    } else {
-      const supervisor = await loadStaff(supervisorStaffId, organizationId);
-      if (String(supervisor.branchId) !== String(staff.branchId)) {
-        throw new AppError("outside_managed_branch", 400);
-      }
-      staff.supervisorStaffId = supervisor._id;
-    }
-  }
-
-  if (supervisionIntervalMonths !== undefined) {
-    staff.supervisionIntervalMonths = supervisionIntervalMonths
-      ? intervalMonths(supervisionIntervalMonths)
-      : null;
-  }
-
-  await StaffProfile.updateOne(
-    { _id: staff._id },
-    {
-      $set: {
-        supervisorStaffId: staff.supervisorStaffId,
-        supervisionIntervalMonths: staff.supervisionIntervalMonths,
-      },
-    }
-  );
-
-  return {
-    _id: staff._id,
-    supervisorStaffId: staff.supervisorStaffId,
-    supervisionIntervalMonths: staff.supervisionIntervalMonths,
-  };
-};
+const updateSupervisionSettings = (payload) => updateStaffComplianceSettings(payload);
 
 const listTeamSupervision = async ({
   actor,
@@ -260,16 +205,6 @@ const fileFrom = (file) =>
     ? { name: file.name || "", fileType: file.fileType || "", url: file.url }
     : null;
 
-const actorStaffId = async ({ actor, organizationId }) => {
-  const actorProfile = await StaffProfile.findOne({
-    userId: actor._id,
-    organizationId,
-  })
-    .select("_id")
-    .lean();
-  return actorProfile?._id || null;
-};
-
 const createSupervision = async ({
   actor,
   organizationId,
@@ -302,9 +237,9 @@ const createSupervision = async ({
     throw new AppError("supervision_schedule_required", 400);
   }
 
-  const [timezone, conductedByStaffId] = await Promise.all([
+  const [timezone, conductor] = await Promise.all([
     timezoneFor(staff.branchId),
-    actorStaffId({ actor, organizationId }),
+    actorConductor({ actor, organizationId }),
   ]);
 
   const record = await SupervisionRecord.create({
@@ -319,7 +254,8 @@ const createSupervision = async ({
           ? atZone(completedAt, timezone)
           : moment.tz(timezone).toDate()
         : null,
-    conductedByStaffId: conductedByStaffId || staff.supervisorStaffId || null,
+    conductedByStaffId: conductor.conductedByStaffId,
+    conductedByUserId: conductor.conductedByUserId,
     topics: textList(topics),
     notes: notes || "",
     actionPoints: actionPointsFrom(actionPoints),
@@ -374,9 +310,9 @@ const updateSupervision = async ({
     throw new AppError("invalid_supervision_status", 400);
   }
 
-  const [timezone, conductedByStaffId] = await Promise.all([
+  const [timezone, conductor] = await Promise.all([
     timezoneFor(staff.branchId),
-    actorStaffId({ actor, organizationId }),
+    actorConductor({ actor, organizationId }),
   ]);
 
   if (scheduledAt !== undefined) {
@@ -392,7 +328,8 @@ const updateSupervision = async ({
     record.completedAt = completedAt
       ? atZone(completedAt, timezone)
       : moment.tz(timezone).toDate();
-    record.conductedByStaffId = conductedByStaffId || record.conductedByStaffId;
+    record.conductedByStaffId = conductor.conductedByStaffId;
+    record.conductedByUserId = conductor.conductedByUserId;
     if (topics !== undefined) record.topics = textList(topics);
     if (notes !== undefined) record.notes = notes || "";
     if (actionPoints !== undefined) record.actionPoints = actionPointsFrom(actionPoints);
@@ -454,36 +391,7 @@ const mySupervision = async ({ actor, organizationId }) => {
         },
       },
       { $sort: { completedAt: -1, scheduledAt: -1 } },
-      {
-        $lookup: {
-          from: StaffProfile.collection.name,
-          localField: "conductedByStaffId",
-          foreignField: "_id",
-          pipeline: [
-            {
-              $lookup: {
-                from: User.collection.name,
-                localField: "userId",
-                foreignField: "_id",
-                pipeline: [{ $project: { name: 1 } }],
-                as: "user",
-              },
-            },
-            {
-              $project: {
-                name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
-              },
-            },
-          ],
-          as: "conductor",
-        },
-      },
-      {
-        $addFields: {
-          conductedBy: { $ifNull: [{ $arrayElemAt: ["$conductor.name", 0] }, ""] },
-        },
-      },
-      { $project: { conductor: 0 } },
+      ...conductedByStages,
     ]),
     timezoneFor(staff.branchId),
   ]);

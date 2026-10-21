@@ -17,14 +17,35 @@ const testOk = {
   },
 };
 
+const saveKioskId = {
+  listen: "test",
+  script: {
+    type: "text/javascript",
+    exec: [
+      'pm.test("OK", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));',
+      "const json = pm.response.json();",
+      'if (json.data && json.data._id) pm.collectionVariables.set("kioskId", json.data._id);',
+    ],
+  },
+};
+
 const orgHeader = [{ key: "x-org-id", value: "{{organizationId}}" }];
 
-const req = (name, method, pathParts, { query } = {}) => ({
+const req = (name, method, pathParts, { query, body, test } = {}) => ({
   name,
-  event: [testOk],
+  event: [test || testOk],
   request: {
     method,
     header: orgHeader,
+    ...(body
+      ? {
+          body: {
+            mode: "raw",
+            raw: JSON.stringify(body, null, 2),
+            options: { raw: { language: "json" } },
+          },
+        }
+      : {}),
     url: {
       raw: `{{url}}/${pathParts.join("/")}${query ? `?${query}` : ""}`,
       host: ["{{url}}"],
@@ -42,25 +63,42 @@ const req = (name, method, pathParts, { query } = {}) => ({
   response: [],
 });
 
-const upsertFolder = (parent, folderName, requests) => {
+const addMissing = (parent, folderName, requests) => {
   let folder = parent.item.find((i) => i.name === folderName);
   if (!folder) {
     folder = { name: folderName, item: [] };
     parent.item.push(folder);
   }
   for (const request of requests) {
-    const idx = folder.item.findIndex((r) => r.name === request.name);
-    if (idx >= 0) folder.item[idx] = request;
-    else folder.item.push(request);
+    if (folder.item.some((r) => r.name === request.name)) continue;
+    folder.item.push(request);
   }
 };
 
-upsertFolder(adminPanel, "Kiosks", [
+addMissing(adminPanel, "Kiosks", [
   req("list kiosks", "GET", ["admin", "kiosks"], {
     query:
       "page=1&limit=10&branchId={{branchId}}&keyword=&setupStatus=&kioskMode=&presence=",
   }),
+  req("create kiosk", "POST", ["admin", "kiosks"], {
+    test: saveKioskId,
+    body: {
+      branchId: "{{branchId}}",
+      receptionIdentifier: "Main Entrance",
+      locationLabel: "Reception",
+      deviceType: "ipad",
+    },
+  }),
   req("get kiosk", "GET", ["admin", "kiosks", "{{kioskId}}"]),
+  req("update kiosk", "PATCH", ["admin", "kiosks", "{{kioskId}}"], {
+    body: {
+      receptionIdentifier: "Main Entrance",
+      locationLabel: "Reception",
+      deviceType: "ipad",
+      fireEvacuation: true,
+    },
+  }),
+  req("toggle kiosk lock", "POST", ["admin", "kiosks", "{{kioskId}}", "toggle-lock"]),
 ]);
 
 const vars = collection.variable || [];
@@ -70,4 +108,4 @@ if (!vars.find((v) => v.key === "kioskId")) {
 collection.variable = vars;
 
 fs.writeFileSync(FILE, JSON.stringify(collection, null, 2));
-console.log("Zawar postman: Kiosks folder injected under Admin Panel");
+console.log("Postman: Admin Panel / Kiosks requests upserted");

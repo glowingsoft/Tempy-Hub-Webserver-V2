@@ -8357,6 +8357,81 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Appraisal",
+          "item": [
+            {
+              "name": "my appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}app/appraisal",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "appraisal"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "acknowledge appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}app/appraisal/{{appraisalId}}/acknowledge",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "appraisal",
+                    "{{appraisalId}}",
+                    "acknowledge"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -17412,6 +17487,51 @@
               ]
             },
             {
+              "name": "create kiosk",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"kioskId\", json.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"receptionIdentifier\": \"Main Entrance\",\n  \"locationLabel\": \"Reception\",\n  \"deviceType\": \"ipad\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/kiosks",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "kiosks"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "get kiosk",
               "event": [
                 {
@@ -17572,6 +17692,86 @@
                   "body": "{\n    \"message\": \"Data fetched successfully\",\n    \"data\": {\n        \"_id\": \"6abf4a116d75cd00893813da\",\n        \"branchId\": \"6abd00a222b729d2d1d40771\",\n        \"deviceId\": \"postman-kiosk-2\",\n        \"receptionIdentifier\": \"\",\n        \"locationLabel\": \"Reception\",\n        \"nfcTagId\": null,\n        \"setupStatus\": \"registered\",\n        \"kioskMode\": \"locked\",\n        \"lastHeartbeatAt\": null,\n        \"lastCheckInAt\": null,\n        \"createdAt\": \"2026-10-02T06:07:13.740Z\",\n        \"updatedAt\": \"2026-10-02T06:07:13.740Z\",\n        \"presence\": \"offline\",\n        \"branch\": {\n            \"_id\": \"6abd00a222b729d2d1d40771\",\n            \"name\": \"Beacon House\",\n            \"code\": \"BE-1234\",\n            \"timezone\": \"Europe/London\",\n            \"settings\": {\n                \"enableBreaks\": true,\n                \"paidBreaks\": false,\n                \"allowPhoneCheckIn\": true,\n                \"lateGraceMinutes\": 10,\n                \"enableLeaveRequests\": true\n            }\n        },\n        \"visitorsOnSite\": 0,\n        \"visitorCheckIns\": 0,\n        \"visitorCheckOuts\": 0,\n        \"recentVisits\": []\n    }\n}"
                 }
               ]
+            },
+            {
+              "name": "update kiosk",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"receptionIdentifier\": \"Main Entrance\",\n  \"locationLabel\": \"Reception\",\n  \"deviceType\": \"ipad\",\n  \"fireEvacuation\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/kiosks/{{kioskId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "kiosks",
+                    "{{kioskId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "toggle kiosk lock",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/kiosks/{{kioskId}}/toggle-lock",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "kiosks",
+                    "{{kioskId}}",
+                    "toggle-lock"
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -19259,6 +19459,286 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Appraisal",
+          "item": [
+            {
+              "name": "update org appraisal interval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"settings\": {\n    \"defaultAppraisalIntervalMonths\": 12\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update staff appraisal settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"appraisalIntervalMonths\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/staff-profiles/{{staffProfileId}}/appraisal-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-profiles",
+                    "{{staffProfileId}}",
+                    "appraisal-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "list team appraisals",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/appraisals?branchId={{branchId}}&staffId={{staffProfileId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "{{staffProfileId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "book appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Created\", () => pm.response.to.have.status(201));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"appraisalId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"appraisalActionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"kind\": \"annual\",\n  \"status\": \"scheduled\",\n  \"scheduledAt\": \"2026-11-16T09:00:00\",\n  \"periodLabel\": \"Annual Review 2026\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/appraisals",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "save completed appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"completed\",\n  \"managerComments\": \"Meeting held\",\n  \"goals\": \"Complete NVQ\",\n  \"trainingNeeds\": \"Medication refresher\",\n  \"actionPoints\": [\n    \"Book the next review\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "sign off appraisal action point",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}/action-points/{{appraisalActionPointId}}/sign-off",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}",
+                    "action-points",
+                    "{{appraisalActionPointId}}",
+                    "sign-off"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "manager sign appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}/manager-sign",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}",
+                    "manager-sign"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     }
@@ -19352,7 +19832,7 @@
     },
     {
       "key": "branchId",
-      "value": ""
+      "value": "6ac76533e20e26c247a733f5"
     },
     {
       "key": "activationCodeId",
@@ -19471,6 +19951,16 @@
     },
     {
       "key": "kioskId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appraisalId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appraisalActionPointId",
       "value": "",
       "type": "string"
     }

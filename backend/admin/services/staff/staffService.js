@@ -27,6 +27,10 @@ const {
   resolveSubordinateStaffIds,
   assertRoleMayHaveStaffProfile,
 } = require("./staffAccess");
+const {
+  hasComplianceFields,
+  applyComplianceFields,
+} = require("./complianceSettings");
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -711,6 +715,48 @@ const joinOne = (from, localField, as, project) => {
   ];
 };
 
+/** Linked StaffProfile + user name. Original id field is kept. */
+const joinLinkedStaff = (localField, as) => [
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      localField,
+      foreignField: "_id",
+      pipeline: [
+        {
+          $lookup: {
+            from: User.collection.name,
+            localField: "userId",
+            foreignField: "_id",
+            pipeline: [
+              {
+                $project: {
+                  name: 1,
+                  email: 1,
+                  image: { $ifNull: ["$profileIcon", ""] },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "user",
+          },
+        },
+        {
+          $project: {
+            employeeCode: 1,
+            name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+            email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+            image: { $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""] },
+          },
+        },
+        { $limit: 1 },
+      ],
+      as,
+    },
+  },
+  { $addFields: { [as]: { $arrayElemAt: [`$${as}`, 0] } } },
+];
+
 /**
  * Active staff / lineManager / siteManager membership for this organisation.
  * Profiles with no matching membership are dropped by the following $unwind.
@@ -734,9 +780,20 @@ const joinStaffMembership = (organizationId) => ({
   },
 });
 
-const staffPageStages = [
-  ...joinOne(User.collection.name, "userId", "user"),
-  ...joinOne(JobTitle.collection.name, "jobTitleId", "jobTitle"),
+/**
+ * All related collections for a staff row. Used after skip/limit on list
+ * and as the body of get-by-id — one pipeline, no extra finds.
+ */
+const staffLookups = [
+  ...joinOne(User.collection.name, "userId", "user", {
+    name: 1,
+    email: 1,
+    image: { $ifNull: ["$profileIcon", ""] },
+  }),
+  ...joinOne(JobTitle.collection.name, "jobTitleId", "jobTitle", {
+    name: 1,
+    level: 1,
+  }),
   ...joinOne(Branch.collection.name, "branchId", "branch", {
     name: 1,
     code: 1,
@@ -746,10 +803,29 @@ const staffPageStages = [
     assemblyPoint: 1,
   }),
   {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, branchId: 1 } }],
+      as: "departments",
+    },
+  },
+  ...joinLinkedStaff("supervisorStaffId", "supervisor"),
+  ...joinLinkedStaff("reportsToStaffId", "reportsTo"),
+  {
+    $addFields: {
+      role: { $ifNull: ["$membership.role", null] },
+      supervisorStaffId: { $ifNull: ["$supervisorStaffId", null] },
+      reportsToStaffId: { $ifNull: ["$reportsToStaffId", null] },
+      supervisionIntervalMonths: { $ifNull: ["$supervisionIntervalMonths", null] },
+      appraisalIntervalMonths: { $ifNull: ["$appraisalIntervalMonths", null] },
+    },
+  },
+  {
     $project: {
       pinHash: 0,
-      "user.password": 0,
-      "user.resetToken": 0,
+      membership: 0,
     },
   },
 ];
@@ -860,14 +936,10 @@ const createStaffProfile = async ({
       await profile.save();
     }
 
-    const populated = await StaffProfile.findById(profile._id)
-      .select("-pinHash")
-      .populate("userId", "name email")
-      .populate("jobTitleId", "name level")
-      .populate("departmentIds", "name")
-      .lean();
-
-    return populated;
+    return getStaffProfile({
+      staffProfileId: profile._id,
+      organizationId,
+    });
   } catch (error) {
     if (duplicateKey(error)) {
       if (error.keyPattern?.employeeCode) {
@@ -980,7 +1052,7 @@ const listStaffProfiles = async ({
           { $sort: { createdAt: -1 } },
           { $skip: skip },
           { $limit: limit },
-          ...staffPageStages,
+          ...staffLookups,
         ],
       },
     },
@@ -1004,41 +1076,30 @@ const listDirectReports = async ({ actor, organizationId }) => {
 
   if (!ids.length) return [];
 
-  return StaffProfile.find({
-    _id: { $in: ids },
-    organizationId,
-  })
-    .select("-pinHash")
-    .populate("userId", "name email")
-    .populate("jobTitleId", "name level")
-    .populate("departmentIds", "name")
-    .lean();
+  return StaffProfile.aggregate([
+    { $match: { _id: { $in: ids }, organizationId: objectId(organizationId) } },
+    joinStaffMembership(objectId(organizationId)),
+    { $unwind: { path: "$membership", preserveNullAndEmptyArrays: true } },
+    ...staffLookups,
+  ]);
 };
 
 const getStaffProfile = async ({ staffProfileId, organizationId }) => {
-  const profile = await StaffProfile.findOne({
-    _id: staffProfileId,
-    organizationId,
-  })
-    .select("-pinHash")
-    .populate("userId", "name email")
-    .populate("jobTitleId", "name level")
-    .populate("departmentIds", "name")
-    .populate("reportsToStaffId", "employeeCode userId")
-    .lean();
+  const orgOid = objectId(organizationId);
+  const [profile] = await StaffProfile.aggregate([
+    {
+      $match: {
+        _id: objectId(staffProfileId),
+        organizationId: orgOid,
+      },
+    },
+    joinStaffMembership(orgOid),
+    { $unwind: { path: "$membership", preserveNullAndEmptyArrays: true } },
+    ...staffLookups,
+  ]);
 
   if (!profile) throw new AppError("staff_profile_not_found", 404);
-
-  const userId = profile.userId?._id || profile.userId;
-  const membership = await Membership.findOne({
-    userId,
-    organizationId,
-    status: ActiveInactiveStatus.ACTIVE,
-  })
-    .select("role")
-    .lean();
-
-  return { ...profile, role: membership?.role || null };
+  return profile;
 };
 
 const updateStaffProfile = async ({
@@ -1060,6 +1121,9 @@ const updateStaffProfile = async ({
   pin,
   nfcTagId,
   status,
+  supervisorStaffId,
+  supervisionIntervalMonths,
+  appraisalIntervalMonths,
 }) => {
   const profile = await StaffProfile.findOne({
     _id: staffProfileId,
@@ -1156,6 +1220,21 @@ const updateStaffProfile = async ({
       throw new AppError("invalid_staff_profile_status", 400);
     }
     profile.status = status;
+  }
+
+  if (
+    hasComplianceFields({
+      supervisorStaffId,
+      supervisionIntervalMonths,
+      appraisalIntervalMonths,
+    })
+  ) {
+    await applyComplianceFields(profile, {
+      organizationId,
+      supervisorStaffId,
+      supervisionIntervalMonths,
+      appraisalIntervalMonths,
+    });
   }
 
   if (!profile.isModified()) throw new AppError("nothing_to_update", 400);

@@ -349,6 +349,9 @@ const updateStaffProfile = async (req, res) => {
       pin: req.body.pin,
       nfcTagId: req.body.nfcTagId,
       status: req.body.status,
+      supervisorStaffId: req.body.supervisorStaffId,
+      supervisionIntervalMonths: req.body.supervisionIntervalMonths,
+      appraisalIntervalMonths: req.body.appraisalIntervalMonths,
     });
 
     return sendResponse({

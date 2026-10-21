@@ -56,6 +56,12 @@ const appraisalRecordSchema = new mongoose.Schema(
       ref: "StaffProfile",
       default: null,
     },
+    /** Logged-in user who booked or completed this meeting (LM, SM, or Owner). */
+    conductedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     managerComments: { type: String, default: "" },
     goals: { type: String, default: "" },
     trainingNeeds: { type: String, default: "" },

@@ -48,6 +48,8 @@ const staffProfileSchema = new mongoose.Schema(
     },
     /** Null uses the organisation default interval. */
     supervisionIntervalMonths: { type: Number, default: null, min: 1 },
+    /** Null uses the organisation default appraisal interval. */
+    appraisalIntervalMonths: { type: Number, default: null, min: 1 },
     startDate: { type: Date, required: true },
     /** Weekly contracted hours; used for holiday pro-rata (full-time default 37.5). */
     contractedWeeklyHours: { type: Number, default: 37.5, min: 0 },

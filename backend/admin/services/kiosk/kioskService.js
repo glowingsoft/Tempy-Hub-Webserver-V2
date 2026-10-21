@@ -1096,11 +1096,12 @@ const getTodayAtKiosk = async ({
 const HEARTBEAT_ONLINE_MS = 2 * 60 * 1000;
 
 const parseSetupStatus = (value) => {
-  if (value == null || value === "") return undefined;
-  if (!Object.values(KioskSetupStatus).includes(value)) {
+  if (value == null || String(value).trim() === "") return undefined;
+  const status = String(value).trim().toLowerCase();
+  if (!Object.values(KioskSetupStatus).includes(status)) {
     throw new AppError("invalid_kiosk_setup_status", 400);
   }
-  return value;
+  return status;
 };
 
 const parseDeviceType = (value) => {
@@ -1256,6 +1257,7 @@ const emptyKioskList = (page, limit) => ({
     offline: 0,
     locked: 0,
     pending: 0,
+    registered: 0,
   },
 });
 
@@ -1320,6 +1322,12 @@ const listKiosksForAdmin = async ({
         },
         { $count: "count" },
       ],
+      registeredCount: [
+        {
+          $match: { ...countMatch, setupStatus: KioskSetupStatus.REGISTERED },
+        },
+        { $count: "count" },
+      ],
     },
   });
 
@@ -1334,6 +1342,7 @@ const listKiosksForAdmin = async ({
       offline: Math.max(0, total - online),
       locked: facetCount(result.lockedCount),
       pending: facetCount(result.pendingCount),
+      registered: facetCount(result.registeredCount),
     },
   };
 };

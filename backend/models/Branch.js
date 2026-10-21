@@ -13,8 +13,8 @@ const branchSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     /** Case- and spacing-insensitive form of `name`; see the unique index below. */
     nameKey: { type: String, default: undefined },
-    /** Site code (Owner-entered, e.g. FH) or generated `BR-xxxxxx` if omitted. */
-    code: { type: String, required: true, trim: true },
+    /** Owner-entered site code: exactly 6 letters and numbers, unique. */
+    code: { type: String, required: true, trim: true, unique: true, uppercase: true },
     address: { type: mongoose.Schema.Types.Mixed, default: null },
     timezone: { type: String, default: "Europe/London" },
     status: {

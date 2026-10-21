@@ -10,6 +10,7 @@ const updateSupervisionSettings = async (req, res) => {
       staffProfileId: req.params.staffProfileId,
       supervisorStaffId: req.body.supervisorStaffId,
       supervisionIntervalMonths: req.body.supervisionIntervalMonths,
+      appraisalIntervalMonths: req.body.appraisalIntervalMonths,
     });
 
     return sendResponse({

@@ -51,6 +51,12 @@ const supervisionRecordSchema = new mongoose.Schema(
       ref: "StaffProfile",
       default: null,
     },
+    /** Logged-in user who booked or completed this meeting (LM, SM, or Owner). */
+    conductedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     topics: { type: [String], default: [] },
     notes: { type: String, default: "" },
     actionPoints: { type: [actionPointSchema], default: [] },

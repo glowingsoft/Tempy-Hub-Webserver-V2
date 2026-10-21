@@ -22,6 +22,7 @@ const membershipController = require("../controllers/membershipController");
 
 const staffController = require("../controllers/staffController");
 const supervisionController = require("../controllers/supervisionController");
+const appraisalController = require("../controllers/appraisalController");
 const shiftController = require("../controllers/shiftController");
 const attendanceController = require("../controllers/attendanceController");
 const leaveController = require("../controllers/leaveController");
@@ -259,6 +260,12 @@ scoped.get(
 scoped.get("/staff-profiles", staffController.listStaffProfiles);
 
 scoped.patch(
+  "/staff-profiles/:staffProfileId/compliance-settings",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.updateStaffComplianceSettings
+);
+scoped.patch(
   "/staff-profiles/:staffProfileId/supervision-settings",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
@@ -287,6 +294,48 @@ scoped.post(
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   supervisionController.signOffActionPoint
+);
+scoped.patch(
+  "/staff-profiles/:staffProfileId/appraisal-settings",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.updateAppraisalSettings
+);
+scoped.get(
+  "/compliance-history",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.listComplianceHistory
+);
+scoped.get(
+  "/appraisals",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.listTeamAppraisals
+);
+scoped.post(
+  "/appraisals",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.createAppraisal
+);
+scoped.put(
+  "/appraisals/:appraisalId",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.updateAppraisal
+);
+scoped.post(
+  "/appraisals/:appraisalId/action-points/:actionPointId/sign-off",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.signOffActionPoint
+);
+scoped.post(
+  "/appraisals/:appraisalId/manager-sign",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.managerSignAppraisal
 );
 
 scoped.post(

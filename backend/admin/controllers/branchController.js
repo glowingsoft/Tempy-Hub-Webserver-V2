@@ -7,7 +7,7 @@ const branchService = require("@adminServices/organizations/branchService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const createBranch = async (req, res) => {
-  if (!validateParams(req, res, { formFields: ["name"] })) return;
+  if (!validateParams(req, res, { formFields: ["name", "code"] })) return;
 
   try {
     const data = await branchService.createBranch({

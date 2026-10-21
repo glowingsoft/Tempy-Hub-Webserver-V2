@@ -240,6 +240,8 @@
   "handover_declined": "Handover declined",
   "handover_cancelled": "Handover cancelled. You stay next of kin",
   "family_left": "You have left this family",
+  "next_of_kin_already": "This person is already the next of kin",
+  "next_of_kin_set": "Next of kin updated",
   "next_of_kin_only": "Only the next of kin can do this",
   "family_member_already_exists": "This person already has family access to this resident",
   "password_required": "Password is required to set up your account",

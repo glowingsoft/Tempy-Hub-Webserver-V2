@@ -13,12 +13,12 @@ const test = (lines) => ({
   script: { type: "text/javascript", exec: lines },
 });
 
-const req = (name, method, pathParts, { query, tests, description } = {}) => ({
+const req = (name, method, pathParts, { query, tests, description, header } = {}) => ({
   name,
   event: tests ? [test(tests)] : [],
   request: {
     method,
-    header: [],
+    header: header || [],
     url: {
       raw: `{{url}}/${pathParts.join("/")}${query ? `?${query}` : ""}`,
       host: ["{{url}}"],
@@ -339,6 +339,151 @@ requests.push(
   )
 );
 
+// ---------------------------------------------------------------- Invite Family (by email)
+requests.push(
+  withBody(
+    req("invite a relative", "POST", ["app", "family", "member-invitations"], {
+      tests: [
+        'pm.test("Invitation sent", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("pending");',
+        '    pm.expect(data).to.not.have.any.keys("token", "acceptUrl", "tokenHash");',
+        "});",
+      ],
+      description:
+        "Invite Family: the next of kin invites a relative. Body: residentId, name, email, relationship (a value from relationship options). The invitee gets an email with a one-time link valid for 7 days. The sender never receives the link: with EMAIL_ENABLED off the server prints it in its console, so copy the token from there into familyInviteToken to test accept family invitation. Next of kin only (403 otherwise); 400 for a missing name or bad relationship or email; 409 if the email belongs to a staff member, is already a member, or already has a pending invitation. Figma screen: Invite Family (Send Invite).",
+    }),
+    { residentId: "{{residentId}}", name: "Jane Doe", email: "{{relativeEmail}}", relationship: "granddaughter" }
+  )
+);
+
+// ---------------------------------------------------------------- Staff side (Admin Panel > Family Management)
+const orgHeader = [
+  {
+    key: "x-org-id",
+    value: "{{organizationId}}",
+    description: "Organization scope for admin routes.",
+    type: "text",
+  },
+];
+const staff = (name, method, pathParts, options = {}) =>
+  req(name, method, pathParts, { ...options, header: orgHeader });
+
+const staffRequests = [
+  staff("staff family members", "GET", ["admin", "family", "residents", "{{residentId}}", "members"], {
+    tests: [
+      'pm.test("Family members fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data.members).to.be.an("array");',
+      "    const removable = data.members.find((m) => m.status === \"active\" && !m.isNextOfKin);",
+      '    if (removable) pm.collectionVariables.set("memberId", removable.memberId);',
+      "});",
+    ],
+    description:
+      "Everyone linked to the resident: next of kin first, then active members, then people waiting for approval. Includes email. Owner, super admin, site manager and line manager (a site or line manager only for their own site). Feeds: My Family.",
+  }),
+  {
+    ...staff("staff set next of kin", "PUT", ["admin", "family", "residents", "{{residentId}}", "next-of-kin"], {
+      tests: [
+        'pm.test("Next of kin updated", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.isNextOfKin).to.eql(true);',
+        "});",
+      ],
+      description:
+        "Makes an active member the next of kin; the old next of kin steps down and stays a member. Also how the home finishes a \"let the home choose\" handover. Body: memberId. 409 if already next of kin or not approved yet, 404 for someone not linked to this resident. Figma screen: Leave Margaret's Family (Let Florence House Choose).",
+    }),
+  },
+  staff("staff remove family member", "DELETE", ["admin", "family", "residents", "{{residentId}}", "members", "{{memberId}}"], {
+    tests: [
+      'pm.test("Family member removed", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("removed");',
+      "});",
+    ],
+    description:
+      "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family.",
+  }),
+  staff("staff current family code", "GET", ["admin", "family", "residents", "{{residentId}}", "code"], {
+    tests: [
+      'pm.test("Family code fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.have.property("code");',
+      "});",
+    ],
+    description:
+      "The resident's current family code and expiry, or code: null. Feeds: Invite Family (family code card).",
+  }),
+  staff("staff make family code", "POST", ["admin", "family", "residents", "{{residentId}}", "code"], {
+    tests: [
+      'pm.test("Family code created", function () {',
+      "    pm.response.to.have.status(201);",
+      '    pm.collectionVariables.set("familyCode", pm.response.json().data.code);',
+      "});",
+    ],
+    description:
+      "The home makes a new family code (14 days); the old one stops working. Same rules as the next of kin making one.",
+  }),
+  staff("staff join requests", "GET", ["admin", "family", "join-requests"], {
+    query: "residentId={{residentId}}&page=1&limit=10",
+    tests: [
+      'pm.test("Join requests fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.be.an("array");',
+      '    if (data[0]) pm.collectionVariables.set("joinRequestId", data[0].requestId);',
+      "});",
+    ],
+    description:
+      "People waiting for approval, oldest first, paginated. Filter with residentId or branchId; without a filter an owner or super admin sees the whole organization and a site or line manager sees their own site.",
+  }),
+  staff("staff approve join request", "POST", ["admin", "family", "join-requests", "{{joinRequestId}}", "approve"], {
+    tests: [
+      'pm.test("Join request approved", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("active");',
+      "});",
+    ],
+    description:
+      "The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request.",
+  }),
+  staff("staff reject join request", "POST", ["admin", "family", "join-requests", "{{joinRequestId}}", "reject"], {
+    tests: [
+      'pm.test("Join request rejected", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("rejected");',
+      "});",
+    ],
+    description: "The home declines a request. The person can ask again later.",
+  }),
+  staff("staff open handovers", "GET", ["admin", "family", "handovers"], {
+    query: "homeChooses=true&page=1&limit=10",
+    tests: [
+      'pm.test("Handovers fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.be.an("array");',
+      "});",
+    ],
+    description:
+      "Open handover requests, oldest first, paginated: who asked, who they asked (to is null when the home chooses), and the resident. homeChooses=true shows only the families waiting for the home. Finish one with staff set next of kin. Feeds: Leave Margaret's Family (Let Florence House Choose).",
+  }),
+];
+// PUT and DELETE keep their bodies/headers; the set-next-of-kin body is added below
+staffRequests[1].request.body = jsonBody({ memberId: "{{memberId}}" });
+
+let staffFolder = adminFolder.item.find((i) => i.name === "Family Management");
+if (!staffFolder) {
+  staffFolder = { name: "Family Management", item: [] };
+  adminFolder.item.push(staffFolder);
+}
+for (const request of staffRequests) {
+  const idx = staffFolder.item.findIndex((r) => r.name === request.name);
+  if (idx >= 0) staffFolder.item[idx] = request;
+  else staffFolder.item.push(request);
+}
+
 let folder = appFolder.item.find((i) => i.name === "Family");
 if (!folder) {
   folder = { name: "Family", item: [] };
@@ -371,6 +516,9 @@ for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }
+}
+if (!vars.find((v) => v.key === "relativeEmail")) {
+  vars.push({ key: "relativeEmail", value: "relative@example.com", type: "string" });
 }
 collection.variable = vars;
 

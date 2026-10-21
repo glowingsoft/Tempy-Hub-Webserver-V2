@@ -1,27 +1,12 @@
-const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
+const { parsePaginationParams } = require("@utils/responseUtil");
+const { respond } = require("@utils/controllerResponse");
 const familyAccessService = require("@appServices/family/familyAccessService");
 const familyCodeService = require("@appServices/family/familyCodeService");
 const familyJoinService = require("@appServices/family/familyJoinService");
 const familyMemberService = require("@appServices/family/familyMemberService");
 const familyHandoverService = require("@appServices/family/familyHandoverService");
+const familyInviteService = require("@appServices/family/familyInviteService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
-const { handleServiceError } = require("@services/_errors/handleServiceError");
-
-/**
- * Wraps a handler so each one only says what to call and how to answer.
- * `paged` handlers return { data, meta } instead of plain data.
- */
-const respond =
-  (action, { statusCode = 200, translationKey = "data_fetched_successfully", paged = false } = {}) =>
-  async (req, res) => {
-    try {
-      const result = await action(req);
-      const body = paged ? { data: result.data, meta: result.meta } : { data: result };
-      return sendResponse({ res, statusCode, translationKey, ...body });
-    } catch (error) {
-      return handleServiceError(res, error, "some_thing_went_wrong");
-    }
-  };
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
 
@@ -133,6 +118,18 @@ const leaveFamily = respond(
   { translationKey: "family_left" }
 );
 
+const inviteRelative = respond(
+  (req) =>
+    familyInviteService.inviteRelative({
+      userId: req.user._id,
+      link: req.familyLink,
+      name: req.body.name,
+      email: req.body.email,
+      relationship: req.body.relationship,
+    }),
+  { statusCode: 201, translationKey: "invitation_sent_successfully" }
+);
+
 module.exports = {
   listRelationships,
   listMyResidents,
@@ -154,4 +151,5 @@ module.exports = {
   declineHandover,
   cancelHandover,
   leaveFamily,
+  inviteRelative,
 };

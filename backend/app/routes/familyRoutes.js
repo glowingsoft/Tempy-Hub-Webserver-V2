@@ -21,6 +21,8 @@ router.get("/residents", familyController.listMyResidents);
 router.get("/codes/current", residentInQuery, requireNextOfKin, familyController.getCurrentFamilyCode);
 router.post("/codes", residentInBody, requireNextOfKin, familyController.createFamilyCode);
 
+router.post("/member-invitations", residentInBody, requireNextOfKin, familyController.inviteRelative);
+
 router.get("/join/preview", familyController.previewJoinCode);
 router.post("/join", familyController.requestToJoin);
 router.get("/join-requests/current", familyController.getCurrentJoinRequest);

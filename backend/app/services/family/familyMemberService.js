@@ -5,6 +5,7 @@ const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 const { isFamilyModuleActive } = require("./familyAccessService");
+const { decidePendingRequest, removeActiveLink } = require("./familyLinkActions");
 const { toObjectId, isValidObjectId, joinOne, personFields } = require("./familyPipeline");
 
 const joinUser = joinOne({ from: User, localField: "userId", as: "user" });
@@ -165,13 +166,7 @@ const decideJoinRequest = async ({ userId, requestId, decision }) => {
     throw new AppError("join_request_not_pending", 409);
   }
 
-  // The status is part of the filter, so two people deciding at once cannot both win.
-  const result = await FamilyMember.updateOne(
-    { _id: row._id, status: FamilyMemberStatus.PENDING },
-    { $set: { status: decision, decidedBy: userId, decidedAt: new Date() } }
-  );
-  if (!result.modifiedCount) throw new AppError("join_request_not_pending", 409);
-
+  await decidePendingRequest({ linkId: row._id, decision, actorId: userId });
   return { requestId: row._id, status: decision };
 };
 
@@ -191,17 +186,7 @@ const removeMember = async ({ userId, memberId }) => {
     throw new AppError("family_member_not_found", 404);
   }
 
-  const result = await FamilyMember.updateOne(
-    { _id: row._id, status: FamilyMemberStatus.ACTIVE },
-    {
-      $set: {
-        status: FamilyMemberStatus.REMOVED,
-        removedBy: userId,
-        removedAt: new Date(),
-      },
-    }
-  );
-  if (!result.modifiedCount) throw new AppError("family_member_not_found", 404);
+  await removeActiveLink({ link: row, actorId: userId });
 
   return { memberId: row._id, status: FamilyMemberStatus.REMOVED };
 };

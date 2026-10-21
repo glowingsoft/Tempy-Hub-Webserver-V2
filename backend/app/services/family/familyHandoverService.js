@@ -6,7 +6,13 @@ const { FamilyHandover } = require("@models/FamilyHandover");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyHandoverStatus, FamilyMemberStatus } = require("@models/domainEnums");
 const { listActiveLinks } = require("./familyAccessService");
-const { toObjectId, isValidObjectId, joinOne, personFields } = require("./familyPipeline");
+const {
+  toObjectId,
+  isValidObjectId,
+  joinOne,
+  personFields,
+  pickPerson,
+} = require("./familyPipeline");
 
 const shapeHandover = (handover) => ({
   handoverId: handover._id,
@@ -137,8 +143,8 @@ const getCurrentHandover = async ({ userId, residentId }) => {
         requestedAt: 1,
         fromUserId: 1,
         residentName: { $ifNull: ["$resident.name", ""] },
-        from: personFields("from"),
-        to: personFields("to"),
+        ...personFields("from", "from"),
+        ...personFields("to", "to"),
       },
     },
   ]);
@@ -148,8 +154,8 @@ const getCurrentHandover = async ({ userId, residentId }) => {
     ...shapeHandover(row),
     residentName: row.residentName,
     direction: String(row.fromUserId) === String(userId) ? "outgoing" : "incoming",
-    from: row.from,
-    to: row.homeChooses ? null : row.to,
+    from: pickPerson(row, "from"),
+    to: row.homeChooses ? null : pickPerson(row, "to"),
   };
 };
 

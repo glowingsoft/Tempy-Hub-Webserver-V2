@@ -21,6 +21,7 @@ const {
   actorStanding,
   assertMayAccessResidents,
 } = require("@adminServices/residents/residentAccess");
+const { isStaffAccount } = require("@appServices/family/familyAccessService");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
@@ -87,10 +88,11 @@ const dispatchInvitation = async ({
   return acceptUrl;
 };
 
-const inviteFamilyMember = async ({
-  actor,
+/** Everything that makes an invitation, once the caller is known to be allowed to send it. */
+const createInvitation = async ({
+  inviterId,
   organizationId,
-  residentId,
+  resident,
   email,
   name,
   phone,
@@ -102,24 +104,22 @@ const inviteFamilyMember = async ({
     .lean();
   if (!organization) throw new AppError("organization_not_found", 404);
 
-  const resident = await requireManageableResident({
-    actor,
-    organizationId,
-    residentId,
-  });
-
   const normalisedEmail = String(email).trim().toLowerCase();
   if (!validator.isEmail(normalisedEmail)) {
     throw new AppError("email_invalid", 400);
   }
 
   const existingUser = await User.findOne({ email: normalisedEmail })
-    .select("_id")
+    .select("_id accountState.userType")
     .lean();
   if (existingUser) {
+    if (await isStaffAccount(existingUser)) {
+      throw new AppError("email_used_by_staff", 409);
+    }
+
     const alreadyLinked = await FamilyMember.exists({
       userId: existingUser._id,
-      residentId,
+      residentId: resident._id,
       status: FamilyMemberStatus.ACTIVE,
     });
     if (alreadyLinked) throw new AppError("family_member_already_exists", 409);
@@ -127,7 +127,7 @@ const inviteFamilyMember = async ({
 
   if (
     await FamilyInvitation.exists({
-      residentId,
+      residentId: resident._id,
       email: normalisedEmail,
       status: FamilyInvitationStatus.PENDING,
     })
@@ -142,7 +142,7 @@ const inviteFamilyMember = async ({
     invitation = await FamilyInvitation.create({
       organizationId,
       branchId: resident.branchId,
-      residentId,
+      residentId: resident._id,
       email: normalisedEmail,
       name: name || "",
       phone: phone || "",
@@ -150,7 +150,7 @@ const inviteFamilyMember = async ({
       isNextOfKin: Boolean(isNextOfKin),
       tokenHash: await bcrypt.hash(token, 10),
       expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000),
-      invitedByUserId: actor._id,
+      invitedByUserId: inviterId,
       lastSentAt: new Date(),
     });
   } catch (error) {
@@ -169,6 +169,11 @@ const inviteFamilyMember = async ({
   });
 
   return { ...stripHash(invitation), acceptUrl };
+};
+
+const inviteFamilyMember = async ({ actor, organizationId, residentId, ...fields }) => {
+  const resident = await requireManageableResident({ actor, organizationId, residentId });
+  return createInvitation({ inviterId: actor._id, organizationId, resident, ...fields });
 };
 
 const listInvitations = async ({
@@ -509,6 +514,8 @@ const acceptMyInvitation = async ({ user, invitationId }) => {
 };
 
 module.exports = {
+  requireManageableResident,
+  createInvitation,
   inviteFamilyMember,
   listInvitations,
   getInvitation,

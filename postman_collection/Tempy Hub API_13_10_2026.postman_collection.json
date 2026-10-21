@@ -9380,6 +9380,51 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "invite a relative",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Invitation sent\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data.status).to.eql(\"pending\");",
+                      "    pm.expect(data).to.not.have.any.keys(\"token\", \"acceptUrl\", \"tokenHash\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/member-invitations",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "member-invitations"
+                  ]
+                },
+                "description": "Invite Family: the next of kin invites a relative. Body: residentId, name, email, relationship (a value from relationship options). The invitee gets an email with a one-time link valid for 7 days. The sender never receives the link: with EMAIL_ENABLED off the server prints it in its console, so copy the token from there into familyInviteToken to test accept family invitation. Next of kin only (403 otherwise); 400 for a missing name or bad relationship or email; 409 if the email belongs to a staff member, is already a member, or already has a pending invitation. Figma screen: Invite Family (Send Invite).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"name\": \"Jane Doe\",\n  \"email\": \"{{relativeEmail}}\",\n  \"relationship\": \"granddaughter\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
             }
           ]
         }
@@ -19908,7 +19953,7 @@
                     "family-invitations"
                   ]
                 },
-                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
               },
               "response": []
             },
@@ -20071,6 +20116,437 @@
                     "revoke"
                   ]
                 }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Family Management",
+          "item": [
+            {
+              "name": "staff family members",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family members fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data.members).to.be.an(\"array\");",
+                      "    const removable = data.members.find((m) => m.status === \"active\" && !m.isNextOfKin);",
+                      "    if (removable) pm.collectionVariables.set(\"memberId\", removable.memberId);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/residents/{{residentId}}/members",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "residents",
+                    "{{residentId}}",
+                    "members"
+                  ]
+                },
+                "description": "Everyone linked to the resident: next of kin first, then active members, then people waiting for approval. Includes email. Owner, super admin, site manager and line manager (a site or line manager only for their own site). Feeds: My Family."
+              },
+              "response": []
+            },
+            {
+              "name": "staff set next of kin",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Next of kin updated\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.isNextOfKin).to.eql(true);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/residents/{{residentId}}/next-of-kin",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "residents",
+                    "{{residentId}}",
+                    "next-of-kin"
+                  ]
+                },
+                "description": "Makes an active member the next of kin; the old next of kin steps down and stays a member. Also how the home finishes a \"let the home choose\" handover. Body: memberId. 409 if already next of kin or not approved yet, 404 for someone not linked to this resident. Figma screen: Leave Margaret's Family (Let Florence House Choose).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "staff remove family member",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family member removed\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"removed\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/residents/{{residentId}}/members/{{memberId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "residents",
+                    "{{residentId}}",
+                    "members",
+                    "{{memberId}}"
+                  ]
+                },
+                "description": "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family."
+              },
+              "response": []
+            },
+            {
+              "name": "staff current family code",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family code fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data).to.have.property(\"code\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/residents/{{residentId}}/code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "residents",
+                    "{{residentId}}",
+                    "code"
+                  ]
+                },
+                "description": "The resident's current family code and expiry, or code: null. Feeds: Invite Family (family code card)."
+              },
+              "response": []
+            },
+            {
+              "name": "staff make family code",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family code created\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "    pm.collectionVariables.set(\"familyCode\", pm.response.json().data.code);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/residents/{{residentId}}/code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "residents",
+                    "{{residentId}}",
+                    "code"
+                  ]
+                },
+                "description": "The home makes a new family code (14 days); the old one stops working. Same rules as the next of kin making one."
+              },
+              "response": []
+            },
+            {
+              "name": "staff join requests",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Join requests fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.be.an(\"array\");",
+                      "    if (data[0]) pm.collectionVariables.set(\"joinRequestId\", data[0].requestId);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/join-requests?residentId={{residentId}}&page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "join-requests"
+                  ],
+                  "query": [
+                    {
+                      "key": "residentId",
+                      "value": "{{residentId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "People waiting for approval, oldest first, paginated. Filter with residentId or branchId; without a filter an owner or super admin sees the whole organization and a site or line manager sees their own site."
+              },
+              "response": []
+            },
+            {
+              "name": "staff approve join request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Join request approved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"active\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/join-requests/{{joinRequestId}}/approve",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "join-requests",
+                    "{{joinRequestId}}",
+                    "approve"
+                  ]
+                },
+                "description": "The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request."
+              },
+              "response": []
+            },
+            {
+              "name": "staff reject join request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Join request rejected\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"rejected\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/join-requests/{{joinRequestId}}/reject",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "join-requests",
+                    "{{joinRequestId}}",
+                    "reject"
+                  ]
+                },
+                "description": "The home declines a request. The person can ask again later."
+              },
+              "response": []
+            },
+            {
+              "name": "staff open handovers",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Handovers fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/handovers?homeChooses=true&page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "handovers"
+                  ],
+                  "query": [
+                    {
+                      "key": "homeChooses",
+                      "value": "true"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Open handover requests, oldest first, paginated: who asked, who they asked (to is null when the home chooses), and the resident. homeChooses=true shows only the families waiting for the home. Finish one with staff set next of kin. Feeds: Leave Margaret's Family (Let Florence House Choose)."
               },
               "response": []
             }
@@ -20303,6 +20779,11 @@
     {
       "key": "handoverId",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "relativeEmail",
+      "value": "relative@example.com",
       "type": "string"
     }
   ]

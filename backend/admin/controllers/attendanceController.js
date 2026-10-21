@@ -21,6 +21,7 @@ const listAttendanceDays = async (req, res) => {
       presenceStatus: req.query.presenceStatus,
       leaveType: req.query.leaveType,
       punctualityStatus: req.query.punctualityStatus,
+      keyword: req.query.keyword,
       actor: req.user,
     });
 
@@ -45,6 +46,7 @@ const listAttendanceRota = async (req, res) => {
       from: req.query.from,
       to: req.query.to,
       timezone: req.query.timezone,
+      keyword: req.query.keyword,
       actor: req.user,
     });
 

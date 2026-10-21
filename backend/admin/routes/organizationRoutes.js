@@ -191,6 +191,11 @@ scoped.get(
   requireRoles(MANAGERS),
   membershipController.getInvitation
 );
+scoped.patch(
+  "/invitations/:invitationId",
+  requireRoles(INVITERS),
+  membershipController.updateInvitation
+);
 
 
 
@@ -270,6 +275,12 @@ scoped.post(
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   supervisionController.createSupervision
+);
+scoped.put(
+  "/supervision/:supervisionId",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.updateSupervision
 );
 scoped.post(
   "/supervision/:supervisionId/action-points/:actionPointId/sign-off",

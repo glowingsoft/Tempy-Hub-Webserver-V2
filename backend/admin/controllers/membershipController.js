@@ -187,6 +187,35 @@ const getInvitation = async (req, res) => {
   }
 };
 
+const updateInvitation = async (req, res) => {
+  try {
+    const data = await membershipService.updateInvitation({
+      actor: req.user,
+      invitationId: req.params.invitationId,
+      organizationId: req.orgId,
+      name: req.body.name,
+      role: req.body.role,
+      branchId: req.body.branchId,
+      permissions: req.body.permissions,
+      jobTitleId: req.body.jobTitleId,
+      departmentIds: req.body.departmentIds,
+      reportsToStaffId: req.body.reportsToStaffId,
+      startDate: req.body.startDate,
+      employeeCode: req.body.employeeCode,
+      isBranchManager: req.body.isBranchManager,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "invitation_updated_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const resendInvitation = async (req, res) => {
   try {
     const data = await membershipService.resendInvitation({
@@ -234,6 +263,7 @@ module.exports = {
   inviteMember,
   listInvitations,
   getInvitation,
+  updateInvitation,
   resendInvitation,
   revokeInvitation,
 };

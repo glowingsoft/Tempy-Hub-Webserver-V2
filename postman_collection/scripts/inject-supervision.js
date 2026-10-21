@@ -105,15 +105,13 @@ adminPanel.item.push({
       },
       test: saveCreated,
     }),
-    req("save completed supervision", "POST", [...orgPath, "supervision"], {
+    req("save completed supervision", "PUT", [...orgPath, "supervision", "{{supervisionId}}"], {
       body: {
-        staffId: "{{staffProfileId}}",
         status: "completed",
         topics: ["Wellbeing", "Training"],
         notes: "Meeting held",
         actionPoints: ["Book the next review"],
       },
-      test: saveCreated,
     }),
     req(
       "sign off action point",

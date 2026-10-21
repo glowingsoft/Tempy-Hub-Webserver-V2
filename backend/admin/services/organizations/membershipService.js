@@ -352,6 +352,38 @@ const membershipDetailStages = [
   },
 ];
 
+const MEMBERSHIP_STATUSES = Object.values(ActiveInactiveStatus);
+
+const emptyMembershipStatusCounts = () =>
+  Object.fromEntries(MEMBERSHIP_STATUSES.map((status) => [status, 0]));
+
+const membershipStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    MEMBERSHIP_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const membershipStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    MEMBERSHIP_STATUSES.map((status) => [
+      status,
+      facetCount(result[`${status}Count`]),
+    ])
+  );
+
+const parseMembershipStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!MEMBERSHIP_STATUSES.includes(value)) {
+    throw new AppError("invalid_membership_status", 400);
+  }
+  return value;
+};
+
 const parseOptionalBool = (value) => {
   if (value === undefined || value === null || value === "") return null;
   if (value === true || value === "true" || value === "1") return true;
@@ -361,7 +393,10 @@ const parseOptionalBool = (value) => {
 
 const emptyMemberPage = (page, limit) => ({
   data: [],
-  meta: generateMeta(page, limit, 0),
+  meta: {
+    ...generateMeta(page, limit, 0),
+    counts: emptyMembershipStatusCounts(),
+  },
 });
 
 const listMembers = async ({
@@ -378,7 +413,6 @@ const listMembers = async ({
   const match = { organizationId: toObjectId(organizationId) };
   if (role) match.role = role;
   if (branchId) match.branchId = toObjectId(branchId);
-  if (status) match.status = status;
 
   const term = keyword != null ? String(keyword).trim() : "";
   if (term) {
@@ -420,14 +454,24 @@ const listMembers = async ({
     }
   }
 
-  return paginateWithFacet({
+  const countMatch = { ...match };
+  const membershipStatus = parseMembershipStatus(status);
+  if (membershipStatus) match.status = membershipStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: Membership,
     match,
     page,
     limit,
     skip,
     extraDataStages: membershipDetailStages,
+    extraFacets: membershipStatusCountFacets(countMatch),
   });
+
+  return {
+    data,
+    meta: { ...meta, counts: membershipStatusCountsFromFacet(result) },
+  };
 };
 
 /**
@@ -725,6 +769,53 @@ const inviteMember = async ({
   return { ...safe, acceptUrl };
 };
 
+const invitationDetailStages = [
+  { $project: { tokenHash: 0 } },
+  {
+    $lookup: {
+      from: Organization.collection.name,
+      localField: "organizationId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, status: 1 } }],
+      as: "organization",
+    },
+  },
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, code: 1, status: 1 } }],
+      as: "branch",
+    },
+  },
+  {
+    $lookup: {
+      from: JobTitle.collection.name,
+      localField: "jobTitleId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, level: 1, active: 1 } }],
+      as: "jobTitle",
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, active: 1, sortOrder: 1 } }],
+      as: "departments",
+    },
+  },
+  {
+    $addFields: {
+      organization: { $ifNull: [{ $arrayElemAt: ["$organization", 0] }, null] },
+      branch: { $ifNull: [{ $arrayElemAt: ["$branch", 0] }, null] },
+      jobTitle: { $ifNull: [{ $arrayElemAt: ["$jobTitle", 0] }, null] },
+    },
+  },
+];
+
 const listInvitations = async ({
   organizationId,
   page,
@@ -748,7 +839,7 @@ const listInvitations = async ({
     page,
     limit,
     skip,
-    extraDataStages: [{ $project: { tokenHash: 0 } }],
+    extraDataStages: invitationDetailStages,
     extraFacets: staffInvitationStatusCountFacets(countMatch),
   });
 
@@ -759,15 +850,151 @@ const listInvitations = async ({
 };
 
 const getInvitation = async ({ invitationId, organizationId }) => {
+  if (!mongoose.Types.ObjectId.isValid(String(invitationId))) {
+    throw new AppError("invalid_id", 400);
+  }
+
+  const [invitation] = await StaffInvitation.aggregate([
+    {
+      $match: {
+        _id: toObjectId(invitationId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
+    ...invitationDetailStages,
+  ]);
+
+  if (!invitation) throw new AppError("invitation_not_found", 404);
+  return invitation;
+};
+
+const updateInvitation = async ({
+  actor,
+  invitationId,
+  organizationId,
+  name,
+  role,
+  branchId,
+  permissions,
+  jobTitleId,
+  departmentIds,
+  reportsToStaffId,
+  startDate,
+  employeeCode,
+  isBranchManager,
+}) => {
   const invitation = await StaffInvitation.findOne({
     _id: invitationId,
     organizationId,
-  }).lean();
-
+  });
   if (!invitation) throw new AppError("invitation_not_found", 404);
+  if (invitation.status !== StaffInvitationStatus.PENDING) {
+    throw new AppError("invitation_not_pending", 400);
+  }
 
-  const { tokenHash, ...safe } = invitation;
-  return safe;
+  const hasName = name !== undefined;
+  const hasRole = role !== undefined;
+  const hasBranch = branchId !== undefined;
+  const hasPermissions = permissions !== undefined;
+  const hasJobTitle = jobTitleId !== undefined;
+  const hasDepartments = departmentIds !== undefined;
+  const hasReportsTo = reportsToStaffId !== undefined;
+  const hasStartDate = startDate !== undefined;
+  const hasEmployeeCode = employeeCode !== undefined;
+  const hasBranchManager = isBranchManager !== undefined;
+
+  if (
+    !hasName &&
+    !hasRole &&
+    !hasBranch &&
+    !hasPermissions &&
+    !hasJobTitle &&
+    !hasDepartments &&
+    !hasReportsTo &&
+    !hasStartDate &&
+    !hasEmployeeCode &&
+    !hasBranchManager
+  ) {
+    throw new AppError("nothing_to_update", 400);
+  }
+
+  const nextRole = hasRole ? role : invitation.role;
+  const nextBranchId = hasBranch ? branchId || null : invitation.branchId;
+
+  const standing = await actorStanding(actor, organizationId);
+  assertMayGrant(standing, { role: nextRole, branchId: nextBranchId });
+  if (hasBranch) await assertBranchInOrganization(nextBranchId, organizationId);
+
+  if (hasPermissions) {
+    const organization = await Organization.findById(organizationId)
+      .select("moduleAccess")
+      .lean();
+    if (!organization) throw new AppError("organization_not_found", 404);
+    assertPermissionsGrantable(standing, permissions, organization);
+  }
+
+  const nextJobTitleId = hasJobTitle ? jobTitleId || null : invitation.jobTitleId;
+  const nextDepartmentIds = hasDepartments
+    ? departmentIds || []
+    : invitation.departmentIds;
+  const nextReportsTo = hasReportsTo
+    ? reportsToStaffId || null
+    : invitation.reportsToStaffId;
+  const nextStartDate = hasStartDate ? startDate || null : invitation.startDate;
+  const nextEmployeeCode = hasEmployeeCode
+    ? employeeCode || null
+    : invitation.employeeCode;
+
+  const employmentTouched =
+    hasJobTitle ||
+    hasDepartments ||
+    hasReportsTo ||
+    hasStartDate ||
+    hasEmployeeCode ||
+    hasRole ||
+    hasBranch;
+  const mayHaveStaffProfile = STAFF_PROFILE_ROLES.includes(nextRole);
+  const hasEmployment =
+    nextJobTitleId ||
+    (nextDepartmentIds && nextDepartmentIds.length) ||
+    nextReportsTo ||
+    nextStartDate ||
+    nextEmployeeCode;
+
+  if (employmentTouched && mayHaveStaffProfile) {
+    if (hasEmployment) {
+      const staffService = require("@adminServices/staff/staffService");
+      const employment = await staffService.validateEmploymentAssignment({
+        organizationId,
+        branchId: nextBranchId,
+        jobTitleId: nextJobTitleId,
+        departmentIds: nextDepartmentIds,
+        reportsToStaffId: nextReportsTo,
+        startDate: nextStartDate,
+        employeeCode: nextEmployeeCode,
+      });
+      invitation.jobTitleId = employment.jobTitleId;
+      invitation.departmentIds = employment.departmentIds;
+      invitation.reportsToStaffId = employment.reportsToStaffId;
+      invitation.startDate = employment.startDate;
+      invitation.employeeCode = employment.employeeCode;
+    } else {
+      invitation.jobTitleId = null;
+      invitation.departmentIds = [];
+      invitation.reportsToStaffId = null;
+      invitation.startDate = null;
+      invitation.employeeCode = null;
+    }
+  }
+
+  if (hasName) invitation.name = String(name || "").trim();
+  if (hasRole) invitation.role = nextRole;
+  if (hasBranch) invitation.branchId = nextBranchId;
+  if (hasPermissions) invitation.permissions = permissions || [];
+  if (hasBranchManager) invitation.isBranchManager = Boolean(isBranchManager);
+
+  await invitation.save();
+  return getInvitation({ invitationId, organizationId });
 };
 
 /** Issues a fresh token: the old one is unrecoverable, only its hash was kept. */
@@ -1160,6 +1387,7 @@ module.exports = {
   inviteMember,
   listInvitations,
   getInvitation,
+  updateInvitation,
   resendInvitation,
   revokeInvitation,
   previewInvitation,

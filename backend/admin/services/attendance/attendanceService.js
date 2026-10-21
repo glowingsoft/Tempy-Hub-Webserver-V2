@@ -264,6 +264,7 @@ const ATTENDANCE_LIST_LOOKUPS = [
             name: "$_branch.name",
             code: "$_branch.code",
             status: "$_branch.status",
+            timezone: "$_branch.timezone",
             settings: "$_branch.settings",
           },
           null,
@@ -276,6 +277,18 @@ const ATTENDANCE_LIST_LOOKUPS = [
 
 const utcDateKey = (value) => moment.utc(value).format("YYYY-MM-DD");
 
+const formatClockedHours = (clockInAt, clockOutAt, timezone) => {
+  if (!clockInAt || !clockOutAt) return null;
+  const tz = timezone || DEFAULT_TZ;
+  const start = moment.tz(clockInAt, tz);
+  const end = moment.tz(clockOutAt, tz);
+  if (!start.isValid() || !end.isValid() || end.isBefore(start)) return null;
+  const totalMinutes = end.diff(start, "minutes");
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}hrs ${minutes} m`;
+};
+
 const withComputedWorkedMinutes = (days) =>
   days.map((day) => ({
     ...day,
@@ -283,6 +296,11 @@ const withComputedWorkedMinutes = (days) =>
     workedMinutes:
       day.workedMinutes ??
       computeWorkedMinutes(day, day.branch?.settings || {}),
+    totalHours: formatClockedHours(
+      day.clockInAt,
+      day.clockOutAt,
+      day.branch?.timezone || DEFAULT_TZ
+    ),
   }));
 
 const fetchAttendanceDays = async ({ match, sort }) => {
@@ -327,6 +345,39 @@ const paginateRows = (rows, page, limit, skip) => ({
   meta: generateMeta(page, limit, rows.length),
 });
 
+const PUNCTUALITY_STATUSES = Object.values(PunctualityStatus);
+
+const emptyPunctualityStatusCounts = () =>
+  Object.fromEntries(PUNCTUALITY_STATUSES.map((status) => [status, 0]));
+
+/** Tab counts ignore `punctualityStatus` so each total stays independent of the list filter. */
+const punctualityStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    PUNCTUALITY_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, punctualityStatus: status } }, { $count: "count" }],
+    ])
+  );
+
+const punctualityStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    PUNCTUALITY_STATUSES.map((status) => [
+      status,
+      facetCount(result[`${status}Count`]),
+    ])
+  );
+
+const parsePunctualityStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!PUNCTUALITY_STATUSES.includes(value)) {
+    throw new AppError("invalid_punctuality_status", 400);
+  }
+  return value;
+};
+
 const emptySummary = {
   onTimeCount: 0,
   lateCount: 0,
@@ -359,9 +410,54 @@ const registerSummary = (rows) => {
 
 const emptyRegisterPage = (page, limit) => ({
   data: [],
-  meta: generateMeta(page, limit, 0),
+  meta: {
+    ...generateMeta(page, limit, 0),
+    counts: emptyPunctualityStatusCounts(),
+  },
   summary: { ...emptySummary },
 });
+
+const summaryFromCounts = (counts, leaveDays = []) => {
+  const summary = registerSummary(leaveDays);
+  summary.onTimeCount = counts.onTime;
+  summary.lateCount = counts.late;
+  const denom =
+    summary.onTimeCount +
+    summary.lateCount +
+    summary.sickDays +
+    summary.absenceDays;
+  summary.attendanceRate = denom
+    ? Math.round((100 * (summary.onTimeCount + summary.lateCount)) / denom)
+    : 0;
+  return summary;
+};
+
+/** Staff in scope whose user name or email matches `keyword`. */
+const staffIdsMatchingKeyword = async (staffIds, keyword) => {
+  const term = String(keyword || "").trim();
+  if (!term || !staffIds?.length) return staffIds || [];
+
+  const regex = { $regex: escapeRegex(term), $options: "i" };
+  const rows = await StaffProfile.aggregate([
+    { $match: { _id: { $in: staffIds } } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "userId",
+        foreignField: "_id",
+        pipeline: [
+          { $match: { $or: [{ name: regex }, { email: regex }] } },
+          { $project: { _id: 1 } },
+        ],
+        as: "user",
+      },
+    },
+    { $match: { user: { $ne: [] } } },
+    { $project: { _id: 1 } },
+  ]);
+
+  return rows.map((row) => row._id);
+};
 
 const listStaffSummaries = async (staffIds) => {
   if (!staffIds?.length) return [];
@@ -852,6 +948,7 @@ const listAttendanceDays = async ({
   presenceStatus,
   leaveType,
   punctualityStatus,
+  keyword,
   actor,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -879,29 +976,57 @@ const listAttendanceDays = async ({
     if (to) match.workDate.$lte = startOfUtcDay(to);
   }
 
-  const staffIds = await resolveScopedStaffIds({
+  if (presenceStatus) match.presenceStatus = presenceStatus;
+
+  const scopedStaffIds = await resolveScopedStaffIds({
     standing,
     actor,
     organizationId,
     staffId,
     branchId,
   });
+  const staffIds = await staffIdsMatchingKeyword(scopedStaffIds, keyword);
+  if (!staffIds.length) return emptyRegisterPage(page, limit);
+  if (String(keyword || "").trim()) match.staffId = { $in: staffIds };
 
-  const [attendanceDays, leaveDays] = await Promise.all([
-    fetchAttendanceDays({
+  const punctuality = parsePunctualityStatus(punctualityStatus);
+
+  if (leaveType && !punctuality) {
+    const leaveDays = await listLeaveRegisterDays({ staffIds, from, to });
+    const rows = filterRegisterRows(leaveDays, { leaveType });
+    return {
+      ...paginateRows(rows, page, limit, skip),
+      meta: {
+        ...generateMeta(page, limit, rows.length),
+        counts: emptyPunctualityStatusCounts(),
+      },
+      summary: registerSummary(leaveDays),
+    };
+  }
+
+  const countMatch = { ...match };
+  if (punctuality) match.punctualityStatus = punctuality;
+
+  const [{ data, meta, result }, leaveDays] = await Promise.all([
+    paginateWithFacet({
+      model: AttendanceDay,
       match,
+      page,
+      limit,
+      skip,
       sort: { workDate: -1, clockInAt: -1 },
+      extraDataStages: ATTENDANCE_LIST_LOOKUPS,
+      extraFacets: punctualityStatusCountFacets(countMatch),
     }),
-    listLeaveRegisterDays({ staffIds, from, to }),
+    punctuality ? Promise.resolve([]) : listLeaveRegisterDays({ staffIds, from, to }),
   ]);
 
-  const merged = mergeAttendanceAndLeave(attendanceDays, leaveDays);
-  const rows = filterRegisterRows(merged, {
-    presenceStatus,
-    leaveType,
-    punctualityStatus,
-  });
-  return { ...paginateRows(rows, page, limit, skip), summary: registerSummary(merged) };
+  const counts = punctualityStatusCountsFromFacet(result);
+  return {
+    data: withComputedWorkedMinutes(data),
+    meta: { ...meta, counts },
+    summary: summaryFromCounts(counts, leaveDays),
+  };
 };
 
 const resolveRotaRange = (from, to, timezone) => {
@@ -995,6 +1120,7 @@ const listAttendanceRota = async ({
   from,
   to,
   timezone,
+  keyword,
   actor,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -1024,13 +1150,14 @@ const listAttendanceRota = async ({
     DEFAULT_TZ;
   const { fromDay, toDay } = resolveRotaRange(from, to, tz);
 
-  const staffIds = await resolveScopedStaffIds({
+  const scopedStaffIds = await resolveScopedStaffIds({
     standing,
     actor,
     organizationId,
     staffId,
     branchId,
   });
+  const staffIds = await staffIdsMatchingKeyword(scopedStaffIds, keyword);
   if (!staffIds.length) {
     return {
       timezone: tz,

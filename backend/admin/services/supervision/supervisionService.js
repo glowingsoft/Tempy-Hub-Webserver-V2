@@ -255,6 +255,21 @@ const actionPointsFrom = (value) => {
   return points;
 };
 
+const fileFrom = (file) =>
+  file?.url
+    ? { name: file.name || "", fileType: file.fileType || "", url: file.url }
+    : null;
+
+const actorStaffId = async ({ actor, organizationId }) => {
+  const actorProfile = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId,
+  })
+    .select("_id")
+    .lean();
+  return actorProfile?._id || null;
+};
+
 const createSupervision = async ({
   actor,
   organizationId,
@@ -287,14 +302,10 @@ const createSupervision = async ({
     throw new AppError("supervision_schedule_required", 400);
   }
 
-  const actorProfile = await StaffProfile.findOne({
-    userId: actor._id,
-    organizationId,
-  })
-    .select("_id")
-    .lean();
-
-  const timezone = await timezoneFor(staff.branchId);
+  const [timezone, conductedByStaffId] = await Promise.all([
+    timezoneFor(staff.branchId),
+    actorStaffId({ actor, organizationId }),
+  ]);
 
   const record = await SupervisionRecord.create({
     organizationId,
@@ -308,14 +319,87 @@ const createSupervision = async ({
           ? atZone(completedAt, timezone)
           : moment.tz(timezone).toDate()
         : null,
-    conductedByStaffId: actorProfile?._id || staff.supervisorStaffId || null,
+    conductedByStaffId: conductedByStaffId || staff.supervisorStaffId || null,
     topics: textList(topics),
     notes: notes || "",
     actionPoints: actionPointsFrom(actionPoints),
-    file: file?.url ? { name: file.name || "", fileType: file.fileType || "", url: file.url } : null,
+    file: fileFrom(file),
     status: meetingStatus,
   });
 
+  return record.toObject();
+};
+
+const updateSupervision = async ({
+  actor,
+  organizationId,
+  supervisionId,
+  status,
+  scheduledAt,
+  locationLabel,
+  completedAt,
+  topics,
+  notes,
+  actionPoints,
+  file,
+}) => {
+  const record = await SupervisionRecord.findOne({
+    _id: toObjectId(supervisionId, "invalid_supervision_id"),
+    organizationId: toObjectId(organizationId, "invalid_organization_id"),
+  });
+  if (!record) throw new AppError("supervision_not_found", 404);
+  if (record.status !== ComplianceMeetingStatus.SCHEDULED) {
+    throw new AppError("supervision_not_editable", 400);
+  }
+
+  const staff = await loadStaff(record.staffId, organizationId);
+  await assertCanAccessStaff({ actor, organizationId, staff });
+
+  const hasUpdate =
+    status !== undefined ||
+    scheduledAt !== undefined ||
+    locationLabel !== undefined ||
+    completedAt !== undefined ||
+    topics !== undefined ||
+    notes !== undefined ||
+    actionPoints !== undefined ||
+    file !== undefined;
+  if (!hasUpdate) throw new AppError("nothing_to_update", 400);
+
+  const meetingStatus = status || record.status;
+  if (!Object.values(ComplianceMeetingStatus).includes(meetingStatus)) {
+    throw new AppError("invalid_supervision_status", 400);
+  }
+  if (meetingStatus === ComplianceMeetingStatus.CANCELLED) {
+    throw new AppError("invalid_supervision_status", 400);
+  }
+
+  const [timezone, conductedByStaffId] = await Promise.all([
+    timezoneFor(staff.branchId),
+    actorStaffId({ actor, organizationId }),
+  ]);
+
+  if (scheduledAt !== undefined) {
+    if (!scheduledAt && meetingStatus === ComplianceMeetingStatus.SCHEDULED) {
+      throw new AppError("supervision_schedule_required", 400);
+    }
+    record.scheduledAt = scheduledAt ? atZone(scheduledAt, timezone) : record.scheduledAt;
+  }
+  if (locationLabel !== undefined) record.locationLabel = locationLabel || "";
+
+  if (meetingStatus === ComplianceMeetingStatus.COMPLETED) {
+    record.status = ComplianceMeetingStatus.COMPLETED;
+    record.completedAt = completedAt
+      ? atZone(completedAt, timezone)
+      : moment.tz(timezone).toDate();
+    record.conductedByStaffId = conductedByStaffId || record.conductedByStaffId;
+    if (topics !== undefined) record.topics = textList(topics);
+    if (notes !== undefined) record.notes = notes || "";
+    if (actionPoints !== undefined) record.actionPoints = actionPointsFrom(actionPoints);
+    if (file !== undefined) record.file = fileFrom(file);
+  }
+
+  await record.save();
   return record.toObject();
 };
 
@@ -428,6 +512,7 @@ module.exports = {
   updateSupervisionSettings,
   listTeamSupervision,
   createSupervision,
+  updateSupervision,
   signOffActionPoint,
   mySupervision,
 };

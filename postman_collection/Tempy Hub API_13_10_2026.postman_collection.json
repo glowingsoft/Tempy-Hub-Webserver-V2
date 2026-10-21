@@ -19004,9 +19004,8 @@
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"Created\", () => pm.response.to.have.status(201));",
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
                       "const json = pm.response.json();",
-                      "if (json.data && json.data._id) pm.collectionVariables.set(\"supervisionId\", json.data._id);",
                       "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
                       "if (point && point._id) pm.collectionVariables.set(\"actionPointId\", point._id);"
                     ]
@@ -19014,11 +19013,11 @@
                 }
               ],
               "request": {
-                "method": "POST",
+                "method": "PUT",
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"status\": \"completed\",\n  \"topics\": [\n    \"Wellbeing\",\n    \"Training\"\n  ],\n  \"notes\": \"Meeting held\",\n  \"actionPoints\": [\n    \"Book the next review\"\n  ]\n}",
+                  "raw": "{\n  \"status\": \"completed\",\n  \"topics\": [\n    \"Wellbeing\",\n    \"Training\"\n  ],\n  \"notes\": \"Meeting held\",\n  \"actionPoints\": [\n    \"Book the next review\"\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -19026,7 +19025,7 @@
                   }
                 },
                 "url": {
-                  "raw": "{{url}}admin/organizations/{{organizationId}}/supervision",
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/supervision/{{supervisionId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -19034,7 +19033,8 @@
                     "admin",
                     "organizations",
                     "{{organizationId}}",
-                    "supervision"
+                    "supervision",
+                    "{{supervisionId}}"
                   ]
                 }
               },

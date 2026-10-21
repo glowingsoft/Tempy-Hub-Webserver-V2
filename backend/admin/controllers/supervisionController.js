@@ -70,6 +70,33 @@ const createSupervision = async (req, res) => {
   }
 };
 
+const updateSupervision = async (req, res) => {
+  try {
+    const data = await supervisionService.updateSupervision({
+      actor: req.user,
+      organizationId: req.orgId,
+      supervisionId: req.params.supervisionId,
+      status: req.body.status,
+      scheduledAt: req.body.scheduledAt,
+      locationLabel: req.body.locationLabel,
+      completedAt: req.body.completedAt,
+      topics: req.body.topics,
+      notes: req.body.notes,
+      actionPoints: req.body.actionPoints,
+      file: req.body.file,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "supervision_saved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const signOffActionPoint = async (req, res) => {
   try {
     const data = await supervisionService.signOffActionPoint({
@@ -94,5 +121,6 @@ module.exports = {
   updateSupervisionSettings,
   listTeamSupervision,
   createSupervision,
+  updateSupervision,
   signOffActionPoint,
 };

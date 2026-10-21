@@ -443,12 +443,6 @@ const emptySummary = () => ({
   sites: [],
 });
 
-const emptyDetail = () => ({
-  site: null,
-  levels: { ...emptyLevels(), total: 0 },
-  floorPlans: [],
-});
-
 const getPeepFloorSummary = async ({ actor, organizationId, branchId, keyword }) => {
   const standing = await actorStanding(actor, organizationId);
   const scoped = scopeBranchFilter(standing, branchId);
@@ -467,7 +461,7 @@ const getPeepFloorSummary = async ({ actor, organizationId, branchId, keyword })
     { $project: { name: 1, code: 1 } },
     { $sort: { name: 1 } },
   ]);
-  if (!orgBranches.length) return siteId ? emptyDetail() : emptySummary();
+  if (!orgBranches.length) return emptySummary();
 
   const recordMatch = {
     organizationId: orgId,
@@ -559,15 +553,6 @@ const getPeepFloorSummary = async ({ actor, organizationId, branchId, keyword })
       floorsSummary: floorsByBranch.get(id) || { total: 0, uploaded: 0, floors: [] },
     };
   });
-
-  if (siteId) {
-    const detail = sites[0];
-    return {
-      site: detail.branch,
-      levels: detail.levels,
-      floorPlans: detail.floorsSummary.floors,
-    };
-  }
 
   return {
     totals: { ...totals, records },

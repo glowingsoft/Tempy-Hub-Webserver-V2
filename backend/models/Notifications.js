@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 // Define the NotificationTypes enum
 const NotificationTypes = {
   NEW_MESSAGE: "newMessage",
+  FAMILY_UPLOAD_APPROVED: "familyUploadApproved",
+  FAMILY_UPLOAD_REJECTED: "familyUploadRejected",
   SYSTEM: "system",
   REMINDER: "reminder",
   DOCUMENTS_UPDATE: "documentsUpdate",

@@ -11,6 +11,7 @@ const router = express.Router({ mergeParams: true });
 const canViewFamily = [requireFamilyModule, requireRoles(FAMILY_STAFF_ROLES), requirePermission(FAMILY_VIEW)];
 
 router.get("/family-invitations", canViewFamily, familyInvitationController.listInvitations);
+router.get("/family-uploads", canViewFamily, familyStaffController.listUploads);
 router.get("/family-groups", canViewFamily, familyStaffController.listFamilyGroups);
 router.get("/family-members", canViewFamily, familyStaffController.listAllMembers);
 

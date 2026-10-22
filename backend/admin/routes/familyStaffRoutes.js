@@ -31,7 +31,9 @@ router.get("/residents/:residentId/code", requirePermission(FAMILY_VIEW), family
 router.post("/residents/:residentId/code", requirePermission(FAMILY_MANAGE), familyStaffController.createCode);
 
 router.get("/join-requests", requirePermission(FAMILY_VIEW), familyStaffController.listJoinRequests);
-router.patch("/join-requests/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateJoinRequest);
+router.put("/join-requests/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateJoinRequest);
+
+router.put("/uploads/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateUpload);
 
 router.get("/handovers", requirePermission(FAMILY_VIEW), familyStaffController.listHandovers);
 

@@ -24,6 +24,6 @@ router.use(
 
 router.post("/", requirePermission(FAMILY_MANAGE), familyInvitationController.inviteFamilyMember);
 router.get("/:invitationId", requirePermission(FAMILY_VIEW), familyInvitationController.getInvitation);
-router.patch("/:invitationId", requirePermission(FAMILY_MANAGE), familyInvitationController.updateInvitation);
+router.put("/:invitationId", requirePermission(FAMILY_MANAGE), familyInvitationController.updateInvitation);
 
 module.exports = router;

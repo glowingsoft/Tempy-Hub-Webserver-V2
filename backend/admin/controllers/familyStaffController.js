@@ -2,6 +2,7 @@ const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyGroupService = require("@adminServices/family/familyGroupService");
+const familyModerationService = require("@adminServices/family/familyModerationService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const withScope = (req) => ({ actor: req.user, organizationId: req.orgId });
@@ -42,6 +43,35 @@ const listFamilyGroups = respond(
   },
   { paged: true }
 );
+
+const listUploads = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyModerationService.listUploads({
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      residentId: req.query.residentId,
+      status: req.query.status,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const uploadScope = (req) => ({ actor: req.user, organizationId: req.orgId, uploadId: req.params.id });
+
+const updateUpload = respondByAction({
+  approve: {
+    run: (req) => familyModerationService.approveUpload({ ...uploadScope(req), blur: req.body.blur }),
+    translationKey: "upload_approved",
+  },
+  reject: {
+    run: (req) => familyModerationService.rejectUpload({ ...uploadScope(req), reason: req.body.reason }),
+    translationKey: "upload_rejected",
+  },
+});
 
 const setNextOfKin = respond(
   (req) =>
@@ -122,6 +152,8 @@ module.exports = {
   listMembers,
   listAllMembers,
   listFamilyGroups,
+  listUploads,
+  updateUpload,
   setNextOfKin,
   removeMember,
   listJoinRequests,

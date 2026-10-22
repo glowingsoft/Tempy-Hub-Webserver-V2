@@ -6,6 +6,7 @@ const familyJoinService = require("@appServices/family/familyJoinService");
 const familyMemberService = require("@appServices/family/familyMemberService");
 const familyHandoverService = require("@appServices/family/familyHandoverService");
 const familyInviteService = require("@appServices/family/familyInviteService");
+const familyUploadService = require("@appServices/family/familyUploadService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
@@ -135,6 +136,52 @@ const listSentInvitations = respond(
   { paged: true }
 );
 
+const uploadPhoto = respond(
+  (req) => familyUploadService.uploadPhoto({ userId: req.user._id, file: req.file }),
+  { statusCode: 201, translationKey: "photo_uploaded" }
+);
+
+const createUpload = respond(
+  (req) =>
+    familyUploadService.createUpload({
+      userId: req.user._id,
+      link: req.familyLink,
+      message: req.body.message,
+      mediaIds: req.body.mediaIds,
+      includeInGazette: req.body.includeInGazette,
+      clientId: req.body.clientId,
+    }),
+  { statusCode: 201, translationKey: "upload_sent_for_approval" }
+);
+
+const listMyUploads = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyUploadService.listMyUploads({
+      userId: req.user._id,
+      residentId: req.query.residentId,
+      status: req.query.status,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const updateUpload = respond(
+  (req) =>
+    familyUploadService.updateUpload({
+      userId: req.user._id,
+      links: req.familyLinks,
+      uploadId: req.params.id,
+      message: req.body.message,
+      mediaIds: req.body.mediaIds,
+      includeInGazette: req.body.includeInGazette,
+    }),
+  { translationKey: "upload_updated" }
+);
+
 const inviteRelative = respond(
   (req) =>
     familyInviteService.inviteRelative({
@@ -166,4 +213,8 @@ module.exports = {
   leaveFamily,
   inviteRelative,
   listSentInvitations,
+  uploadPhoto,
+  createUpload,
+  listMyUploads,
+  updateUpload,
 };

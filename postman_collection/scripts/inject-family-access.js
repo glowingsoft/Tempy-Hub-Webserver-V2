@@ -339,6 +339,79 @@ requests.push(
   )
 );
 
+// ---------------------------------------------------------------- Uploads (family app)
+requests.push(
+  {
+    name: "upload photo",
+    event: [
+      test([
+        'pm.test("Photo uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data).to.have.keys(["mediaId", "url", "width", "height"]);',
+        '    pm.collectionVariables.set("mediaId", data.mediaId);',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: [],
+      body: { mode: "formdata", formdata: [{ key: "file", type: "file", src: [] }] },
+      url: { raw: "{{url}}/app/family/media", host: ["{{url}}"], path: ["app", "family", "media"] },
+      description:
+        "New Upload: Upload Photos. Body is form-data with one image in the field file (choose a file in Postman). Images only, up to 10 MB; the server checks it is a real image, resizes it to 2048px and stores it. Sets mediaId for send upload for approval. One photo per call.",
+    },
+    response: [],
+  },
+  withBody(
+    req("send upload for approval", "POST", ["app", "family", "uploads"], {
+      tests: [
+        'pm.test("Upload sent for approval", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("waiting");',
+        '    pm.collectionVariables.set("uploadId", data.uploadId);',
+        "});",
+      ],
+      description:
+        "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as waiting; nobody but you sees it until a manager approves.",
+    }),
+    {
+      residentId: "{{residentId}}",
+      message: "Lily scored twice at her first football match!",
+      mediaIds: ["{{mediaId}}"],
+      includeInGazette: true,
+      clientId: "postman-upload-1",
+    }
+  ),
+  req("my uploads", "GET", ["app", "family", "uploads"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("My uploads fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("waiting", "approved", "rejected");',
+      "});",
+    ],
+    description:
+      "My Uploads: Approved, Waiting For Approval and Not Approved (with rejectionReason). Optional query: status (waiting, approved, rejected), residentId, page, limit. meta.counts has the three totals and ignores the status filter. Photos show the blurred copy once one exists. Rejected uploads disappear 30 days after rejection.",
+  }),
+  withBody(
+    req("edit and resend upload", "PUT", ["app", "family", "uploads", "{{uploadId}}"], {
+      tests: [
+        'pm.test("Upload resent", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("waiting");',
+        "});",
+      ],
+      description:
+        "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
+    }),
+    { message: "Lily scored twice at her first football match, Gran!", includeInGazette: true }
+  )
+);
+
 // ---------------------------------------------------------------- Invite Family (by email)
 requests.push(
   req("invitations I sent", "GET", ["app", "family", "member-invitations"], {
@@ -388,7 +461,20 @@ const staff = (name, method, pathParts, options = {}) =>
   });
 
 const staffRequests = [
-  req("staff family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
+  req("upload queue", "GET", ["admin", "organizations", "{{organizationId}}", "family-uploads"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("Upload queue fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("waiting", "approved", "rejected");',
+      "});",
+    ],
+    description:
+      "Moderation queue: uploads waiting for approval, oldest first, with author, resident, room and the original photos. Optional query: status (default waiting), branchId, residentId, page, limit. meta.counts has waiting, approved and rejected for the tabs and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
+  }),
+  req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
     tests: [
       'pm.test("Family groups fetched", function () {',
@@ -399,9 +485,9 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Family Groups page: one row per admitted resident with nextOfKinName, nextOfKinRelationship, membersCount and status. Status is active (someone is linked), invitePending (only invitations out) or noFamily. Buttons: active shows Manage (GET residents/:residentId/members) and Invite (POST /admin/family-invitations); invitePending shows Manage and Resend (PATCH /admin/family-invitations/:pendingInvitationId with action resend); noFamily shows Add next of kin (POST /admin/family-invitations with isNextOfKin true). meta.counts gives total, active, invitePending and noFamily for the cards and tabs; the counts ignore the status filter and follow branchId and keyword. Optional query: status, keyword (resident, room or next of kin), branchId, page, limit. Owners, super admins and managers with familyEngagement.view; 404 when the module is off.",
+      "Family Groups page: one row per admitted resident with nextOfKinName, nextOfKinRelationship, membersCount and status. Status is active (someone is linked), invitePending (only invitations out) or noFamily. Buttons: active shows Manage (GET residents/:residentId/members) and Invite (POST /admin/family-invitations); invitePending shows Manage and Resend (PUT /admin/family-invitations/:pendingInvitationId with action resend); noFamily shows Add next of kin (POST /admin/family-invitations with isNextOfKin true). meta.counts gives total, active, invitePending and noFamily for the cards and tabs; the counts ignore the status filter and follow branchId and keyword. Optional query: status, keyword (resident, room or next of kin), branchId, page, limit. Owners, super admins and managers with familyEngagement.view; 404 when the module is off.",
   }),
-  req("staff all family members", "GET", ["admin", "organizations", "{{organizationId}}", "family-members"], {
+  req("all family members", "GET", ["admin", "organizations", "{{organizationId}}", "family-members"], {
     query: "page=1&limit=10",
     tests: [
       'pm.test("All family members fetched", function () {',
@@ -412,7 +498,7 @@ const staffRequests = [
     description:
       "Every active and pending family member of the organization in the path, across residents, whoever invited them. Same shape as the organization members list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Without a status it lists active and pending. meta.counts gives the number of active, pending, rejected, cancelled and removed members; the counts ignore the status filter. Optional query: branchId, residentId, status, isNextOfKin, page, limit.",
   }),
-  staff("staff family members", "GET", ["admin", "family", "residents", "{{residentId}}", "members"], {
+  staff("family members", "GET", ["admin", "family", "residents", "{{residentId}}", "members"], {
     tests: [
       'pm.test("Family members fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -426,7 +512,7 @@ const staffRequests = [
       "Everyone linked to the resident: next of kin first, then active members, then people waiting for approval. Includes email. Owner, super admin, site manager and line manager (a site or line manager only for their own site). Feeds: My Family.",
   }),
   {
-    ...staff("staff set next of kin", "PUT", ["admin", "family", "residents", "{{residentId}}", "next-of-kin"], {
+    ...staff("set next of kin", "PUT", ["admin", "family", "residents", "{{residentId}}", "next-of-kin"], {
       tests: [
         'pm.test("Next of kin updated", function () {',
         "    pm.response.to.have.status(200);",
@@ -437,7 +523,7 @@ const staffRequests = [
         "Makes an active member the next of kin; the old next of kin steps down and stays a member. Also how the home finishes a \"let the home choose\" handover. Body: memberId. 409 if already next of kin or not approved yet, 404 for someone not linked to this resident. Figma screen: Leave Margaret's Family (Let Florence House Choose).",
     }),
   },
-  staff("staff remove family member", "DELETE", ["admin", "family", "residents", "{{residentId}}", "members", "{{memberId}}"], {
+  staff("remove family member", "DELETE", ["admin", "family", "residents", "{{residentId}}", "members", "{{memberId}}"], {
     tests: [
       'pm.test("Family member removed", function () {',
       "    pm.response.to.have.status(200);",
@@ -447,7 +533,7 @@ const staffRequests = [
     description:
       "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family.",
   }),
-  staff("staff current family code", "GET", ["admin", "family", "residents", "{{residentId}}", "code"], {
+  staff("current family code", "GET", ["admin", "family", "residents", "{{residentId}}", "code"], {
     tests: [
       'pm.test("Family code fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -457,7 +543,7 @@ const staffRequests = [
     description:
       "The resident's current family code and expiry, or code: null. Feeds: Invite Family (family code card).",
   }),
-  staff("staff make family code", "POST", ["admin", "family", "residents", "{{residentId}}", "code"], {
+  staff("make family code", "POST", ["admin", "family", "residents", "{{residentId}}", "code"], {
     tests: [
       'pm.test("Family code created", function () {',
       "    pm.response.to.have.status(201);",
@@ -467,7 +553,7 @@ const staffRequests = [
     description:
       "The home makes a new family code (14 days); the old one stops working. Same rules as the next of kin making one.",
   }),
-  staff("staff join requests", "GET", ["admin", "family", "join-requests"], {
+  staff("join requests", "GET", ["admin", "family", "join-requests"], {
     query: "residentId={{residentId}}&page=1&limit=10",
     tests: [
       'pm.test("Join requests fetched", function () {',
@@ -480,7 +566,7 @@ const staffRequests = [
     description:
       "People waiting for approval, oldest first, paginated. Filter with residentId or branchId; without a filter an owner or super admin sees the whole organization and a site or line manager sees their own site.",
   }),
-  staff("staff approve join request", "POST", ["admin", "family", "join-requests", "{{joinRequestId}}", "approve"], {
+  staff("approve join request", "POST", ["admin", "family", "join-requests", "{{joinRequestId}}", "approve"], {
     tests: [
       'pm.test("Join request approved", function () {',
       "    pm.response.to.have.status(200);",
@@ -490,7 +576,7 @@ const staffRequests = [
     description:
       "The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request.",
   }),
-  staff("staff reject join request", "POST", ["admin", "family", "join-requests", "{{joinRequestId}}", "reject"], {
+  staff("reject join request", "POST", ["admin", "family", "join-requests", "{{joinRequestId}}", "reject"], {
     tests: [
       'pm.test("Join request rejected", function () {',
       "    pm.response.to.have.status(200);",
@@ -499,7 +585,7 @@ const staffRequests = [
     ],
     description: "The home declines a request. The person can ask again later.",
   }),
-  staff("staff open handovers", "GET", ["admin", "family", "handovers"], {
+  staff("open handovers", "GET", ["admin", "family", "handovers"], {
     query: "homeChooses=true&page=1&limit=10",
     tests: [
       'pm.test("Handovers fetched", function () {',
@@ -514,11 +600,51 @@ const staffRequests = [
 // PUT and DELETE keep their bodies/headers; the set-next-of-kin body is added below
 staffRequests[1].request.body = jsonBody({ memberId: "{{memberId}}" });
 
+// The decision requests share one PUT; the body's action picks approve or reject.
+const uploadDecisions = [
+  {
+    name: "approve upload",
+    body: { action: "approve" },
+    status: "approved",
+    description:
+      "Approves a waiting upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first.",
+  },
+  {
+    name: "approve upload with blur",
+    body: { action: "approve", blur: { "{{mediaId}}": [{ x: 0.1, y: 0.2, width: 0.3, height: 0.25 }] } },
+    status: "approved",
+    description:
+      "Approve after blurring. blur maps a photo id of the upload to rectangles {x, y, width, height}, each a fraction of the photo (0 to 1) so the app does not need the stored size. The server saves a blurred copy, which is the only one ever shown to families, and keeps the original for audit. 400 invalid_blur_areas for a photo of another upload or rectangles outside the photo.",
+  },
+  {
+    name: "reject upload",
+    body: { action: "reject", reason: "Another resident is in the photo. Please crop and send again." },
+    status: "rejected",
+    description:
+      "Rejects a waiting upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later.",
+  },
+];
+uploadDecisions.forEach(({ name, body, status, description }) => {
+  const request = staff(name, "PUT", ["admin", "family", "uploads", "{{uploadId}}"], {
+    tests: [
+      `pm.test("Upload ${status}", function () {`,
+      "    pm.response.to.have.status(200);",
+      `    pm.expect(pm.response.json().data.status).to.eql("${status}");`,
+      "});",
+    ],
+    description,
+  });
+  request.request.body = jsonBody(body);
+  staffRequests.push(request);
+});
+
 let staffFolder = adminFolder.item.find((i) => i.name === "Family Management");
 if (!staffFolder) {
   staffFolder = { name: "Family Management", item: [] };
   adminFolder.item.push(staffFolder);
 }
+// requests were once named "staff ..."; drop those so the renamed ones do not duplicate them
+staffFolder.item = staffFolder.item.filter((r) => !/^staff /.test(r.name));
 for (const request of staffRequests) {
   const idx = staffFolder.item.findIndex((r) => r.name === request.name);
   if (idx >= 0) staffFolder.item[idx] = request;
@@ -552,16 +678,16 @@ if (invite && invite.request.body) {
   );
 }
 
-// One PATCH per record: the body's action picks approve / reject / cancel and so on.
+// One PUT per record: the body's action picks approve / reject / cancel and so on.
 // Postman keeps a request per action so each can be sent on its own.
 const toAction = (request, action) => {
   const parts = request.request.url.path;
   parts.pop();
-  request.request.method = "PATCH";
+  request.request.method = "PUT";
   request.request.url.raw = `{{url}}/${parts.join("/")}`;
   request.request.body = jsonBody({ action });
   request.request.description =
-    `PATCH with body {"action":"${action}"}. ` + (request.request.description || "");
+    `PUT with body {"action":"${action}"}. ` + (request.request.description || "");
 };
 const byName = (list, name) => {
   const found = list.find((r) => r.name === name);
@@ -579,8 +705,8 @@ for (const [name, action] of [
   toAction(byName(requests, name), action);
 }
 for (const [name, action] of [
-  ["staff approve join request", "approve"],
-  ["staff reject join request", "reject"],
+  ["approve join request", "approve"],
+  ["reject join request", "reject"],
 ]) {
   toAction(byName(staffRequests, name), action);
 }
@@ -620,8 +746,18 @@ if (allInvitations) {
     "Every family invitation of the organization in the path, whoever sent it, newest first. Same shape as the organization invitations list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Optional query: branchId, status, residentId, keyword, page, limit. Rows carry residentName and invitedByName. meta.counts gives the number of pending, accepted, revoked and expired invitations (a pending one past its expiry counts as expired); the counts ignore the status filter.";
 }
 
+// Requests saved by an earlier run may still say PATCH.
+const retire = (item) => {
+  if (item.item) return item.item.forEach(retire);
+  if (item.request && item.request.method === "PATCH" && /family|invitation/i.test(item.request.url.raw || "")) {
+    item.request.method = "PUT";
+    item.request.description = (item.request.description || "").replace("PATCH with body", "PUT with body");
+  }
+};
+retire(collection);
+
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "uploadId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

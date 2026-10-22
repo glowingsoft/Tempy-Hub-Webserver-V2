@@ -8830,7 +8830,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [],
                 "url": {
                   "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}",
@@ -8844,7 +8844,7 @@
                     "{{joinRequestId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"cancel\"}. Cancel Request, after the confirmation dialog. Only the member who asked, and only while it is pending (409 otherwise, 404 for anyone else's request). Figma screen: Join A Family (Cancel Request).",
+                "description": "PUT with body {\"action\":\"cancel\"}. Cancel Request, after the confirmation dialog. Only the member who asked, and only while it is pending (409 otherwise, 404 for anyone else's request). Figma screen: Join A Family (Cancel Request).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"cancel\"\n}",
@@ -8969,7 +8969,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [],
                 "url": {
                   "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}",
@@ -8983,7 +8983,7 @@
                     "{{joinRequestId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"approve\"}. Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review).",
+                "description": "PUT with body {\"action\":\"approve\"}. Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"approve\"\n}",
@@ -9013,7 +9013,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [],
                 "url": {
                   "raw": "{{url}}/app/family/join-requests/{{joinRequestId}}",
@@ -9027,7 +9027,7 @@
                     "{{joinRequestId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"reject\"}. Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review).",
+                "description": "PUT with body {\"action\":\"reject\"}. Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"reject\"\n}",
@@ -9271,7 +9271,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [],
                 "url": {
                   "raw": "{{url}}/app/family/handover/{{handoverId}}",
@@ -9285,7 +9285,7 @@
                     "{{handoverId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"accept\"}. The person asked accepts and becomes next of kin; the previous next of kin stays a regular member. Done together or not at all. 404 for anyone but the person asked, 409 if no longer open or no longer valid (the next of kin changed or someone left).",
+                "description": "PUT with body {\"action\":\"accept\"}. The person asked accepts and becomes next of kin; the previous next of kin stays a regular member. Done together or not at all. 404 for anyone but the person asked, 409 if no longer open or no longer valid (the next of kin changed or someone left).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"accept\"\n}",
@@ -9315,7 +9315,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [],
                 "url": {
                   "raw": "{{url}}/app/family/handover/{{handoverId}}",
@@ -9329,7 +9329,7 @@
                     "{{handoverId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"decline\"}. The person asked declines; the next of kin keeps the role. 404 for anyone but the person asked, 409 if no longer open.",
+                "description": "PUT with body {\"action\":\"decline\"}. The person asked declines; the next of kin keeps the role. 404 for anyone but the person asked, 409 if no longer open.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"decline\"\n}",
@@ -9359,7 +9359,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [],
                 "url": {
                   "raw": "{{url}}/app/family/handover/{{handoverId}}",
@@ -9373,7 +9373,7 @@
                     "{{handoverId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"cancel\"}. Keep My Role: the next of kin withdraws the request. 404 for anyone but the next of kin who asked, 409 if no longer open. Figma screen: Leave Margaret's Family (Keep My Role).",
+                "description": "PUT with body {\"action\":\"cancel\"}. Keep My Role: the next of kin withdraws the request. 404 for anyone but the next of kin who asked, 409 if no longer open. Figma screen: Leave Margaret's Family (Keep My Role).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"cancel\"\n}",
@@ -9511,6 +9511,187 @@
                   ]
                 },
                 "description": "Invitations this next of kin sent for the resident, newest first, with status (pending, accepted, revoked, expired). Optional query: status, page, limit. Next of kin only."
+              },
+              "response": []
+            },
+            {
+              "name": "upload photo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Photo uploaded\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.have.keys([\"mediaId\", \"url\", \"width\", \"height\"]);",
+                      "    pm.collectionVariables.set(\"mediaId\", data.mediaId);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{url}}/app/family/media",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "media"
+                  ]
+                },
+                "description": "New Upload: Upload Photos. Body is form-data with one image in the field file (choose a file in Postman). Images only, up to 10 MB; the server checks it is a real image, resizes it to 2048px and stores it. Sets mediaId for send upload for approval. One photo per call."
+              },
+              "response": []
+            },
+            {
+              "name": "send upload for approval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Upload sent for approval\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data.status).to.eql(\"waiting\");",
+                      "    pm.collectionVariables.set(\"uploadId\", data.uploadId);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/uploads",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "uploads"
+                  ]
+                },
+                "description": "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as waiting; nobody but you sees it until a manager approves.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"message\": \"Lily scored twice at her first football match!\",\n  \"mediaIds\": [\n    \"{{mediaId}}\"\n  ],\n  \"includeInGazette\": true,\n  \"clientId\": \"postman-upload-1\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "my uploads",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"My uploads fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an(\"array\");",
+                      "    pm.expect(json.meta.counts).to.have.all.keys(\"waiting\", \"approved\", \"rejected\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/uploads?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "uploads"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "My Uploads: Approved, Waiting For Approval and Not Approved (with rejectionReason). Optional query: status (waiting, approved, rejected), residentId, page, limit. meta.counts has the three totals and ignores the status filter. Photos show the blurred copy once one exists. Rejected uploads disappear 30 days after rejection."
+              },
+              "response": []
+            },
+            {
+              "name": "edit and resend upload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Upload resent\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"waiting\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/uploads/{{uploadId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "uploads",
+                    "{{uploadId}}"
+                  ]
+                },
+                "description": "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"Lily scored twice at her first football match, Gran!\",\n  \"includeInGazette\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             }
@@ -20041,7 +20222,7 @@
                     "family-invitations"
                   ]
                 },
-                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
               },
               "response": []
             },
@@ -20153,7 +20334,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20182,7 +20363,7 @@
                     }
                   }
                 },
-                "description": "PATCH with body {\"action\":\"resend\"}. "
+                "description": "PUT with body {\"action\":\"resend\"}. "
               },
               "response": []
             },
@@ -20202,7 +20383,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20231,7 +20412,7 @@
                     }
                   }
                 },
-                "description": "PATCH with body {\"action\":\"revoke\"}. "
+                "description": "PUT with body {\"action\":\"revoke\"}. "
               },
               "response": []
             }
@@ -20241,7 +20422,155 @@
           "name": "Family Management",
           "item": [
             {
-              "name": "staff family members",
+              "name": "upload queue",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Upload queue fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an(\"array\");",
+                      "    pm.expect(json.meta.counts).to.have.all.keys(\"waiting\", \"approved\", \"rejected\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/family-uploads?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "family-uploads"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Moderation queue: uploads waiting for approval, oldest first, with author, resident, room and the original photos. Optional query: status (default waiting), branchId, residentId, page, limit. meta.counts has waiting, approved and rejected for the tabs and ignores the status filter. Needs familyEngagement.view; 404 when the module is off."
+              },
+              "response": []
+            },
+            {
+              "name": "family groups",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family groups fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an(\"array\");",
+                      "    pm.expect(json.meta.counts).to.have.all.keys(\"total\", \"active\", \"invitePending\", \"noFamily\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/family-groups?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "family-groups"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Family Groups page: one row per admitted resident with nextOfKinName, nextOfKinRelationship, membersCount and status. Status is active (someone is linked), invitePending (only invitations out) or noFamily. Buttons: active shows Manage (GET residents/:residentId/members) and Invite (POST /admin/family-invitations); invitePending shows Manage and Resend (PUT /admin/family-invitations/:pendingInvitationId with action resend); noFamily shows Add next of kin (POST /admin/family-invitations with isNextOfKin true). meta.counts gives total, active, invitePending and noFamily for the cards and tabs; the counts ignore the status filter and follow branchId and keyword. Optional query: status, keyword (resident, room or next of kin), branchId, page, limit. Owners, super admins and managers with familyEngagement.view; 404 when the module is off.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "all family members",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"All family members fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/family-members?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "family-members"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Every active and pending family member of the organization in the path, across residents, whoever invited them. Same shape as the organization members list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Without a status it lists active and pending. meta.counts gives the number of active, pending, rejected, cancelled and removed members; the counts ignore the status filter. Optional query: branchId, residentId, status, isNextOfKin, page, limit."
+              },
+              "response": []
+            },
+            {
+              "name": "family members",
               "event": [
                 {
                   "listen": "test",
@@ -20287,7 +20616,7 @@
               "response": []
             },
             {
-              "name": "staff set next of kin",
+              "name": "set next of kin",
               "event": [
                 {
                   "listen": "test",
@@ -20330,7 +20659,7 @@
               "response": []
             },
             {
-              "name": "staff remove family member",
+              "name": "remove family member",
               "event": [
                 {
                   "listen": "test",
@@ -20374,7 +20703,7 @@
               "response": []
             },
             {
-              "name": "staff current family code",
+              "name": "current family code",
               "event": [
                 {
                   "listen": "test",
@@ -20417,7 +20746,7 @@
               "response": []
             },
             {
-              "name": "staff make family code",
+              "name": "make family code",
               "event": [
                 {
                   "listen": "test",
@@ -20460,7 +20789,7 @@
               "response": []
             },
             {
-              "name": "staff join requests",
+              "name": "join requests",
               "event": [
                 {
                   "listen": "test",
@@ -20517,7 +20846,7 @@
               "response": []
             },
             {
-              "name": "staff approve join request",
+              "name": "approve join request",
               "event": [
                 {
                   "listen": "test",
@@ -20533,7 +20862,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20554,7 +20883,7 @@
                     "{{joinRequestId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"approve\"}. The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "description": "PUT with body {\"action\":\"approve\"}. The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"approve\"\n}",
@@ -20568,7 +20897,7 @@
               "response": []
             },
             {
-              "name": "staff reject join request",
+              "name": "reject join request",
               "event": [
                 {
                   "listen": "test",
@@ -20584,7 +20913,7 @@
                 }
               ],
               "request": {
-                "method": "PATCH",
+                "method": "PUT",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -20605,7 +20934,7 @@
                     "{{joinRequestId}}"
                   ]
                 },
-                "description": "PATCH with body {\"action\":\"reject\"}. The home declines a request. The person can ask again later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "description": "PUT with body {\"action\":\"reject\"}. The home declines a request. The person can ask again later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"reject\"\n}",
@@ -20619,7 +20948,7 @@
               "response": []
             },
             {
-              "name": "staff open handovers",
+              "name": "open handovers",
               "event": [
                 {
                   "listen": "test",
@@ -20674,50 +21003,47 @@
               "response": []
             },
             {
-              "name": "staff all family members",
+              "name": "approve upload",
               "event": [
                 {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"All family members fetched\", function () {",
+                      "pm.test(\"Upload approved\", function () {",
                       "    pm.response.to.have.status(200);",
-                      "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"approved\");",
                       "});"
                     ]
                   }
                 }
               ],
               "request": {
-                "method": "GET",
-                "header": [],
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
                 "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/family-members?page=1&limit=10",
+                  "raw": "{{url}}/admin/family/uploads/{{uploadId}}",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "admin",
-                    "organizations",
-                    "{{organizationId}}",
-                    "family-members"
-                  ],
-                  "query": [
-                    {
-                      "key": "page",
-                      "value": "1"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "10"
-                    }
+                    "family",
+                    "uploads",
+                    "{{uploadId}}"
                   ]
                 },
-                "description": "Every active and pending family member of the organization in the path, across residents, whoever invited them. Same shape as the organization members list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Without a status it lists active and pending. meta.counts gives the number of active, pending, rejected, cancelled and removed members; the counts ignore the status filter. Optional query: branchId, residentId, status, isNextOfKin, page, limit.",
+                "description": "Approves a waiting upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
+                  "raw": "{\n  \"action\": \"approve\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -20728,49 +21054,104 @@
               "response": []
             },
             {
-              "name": "staff family groups",
+              "name": "approve upload with blur",
               "event": [
                 {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"Family groups fetched\", function () {",
+                      "pm.test(\"Upload approved\", function () {",
                       "    pm.response.to.have.status(200);",
-                      "    const json = pm.response.json();",
-                      "    pm.expect(json.data).to.be.an(\"array\");",
-                      "    pm.expect(json.meta.counts).to.have.all.keys(\"total\", \"active\", \"invitePending\", \"noFamily\");",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"approved\");",
                       "});"
                     ]
                   }
                 }
               ],
               "request": {
-                "method": "GET",
-                "header": [],
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
                 "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/family-groups?page=1&limit=10",
+                  "raw": "{{url}}/admin/family/uploads/{{uploadId}}",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "admin",
-                    "organizations",
-                    "{{organizationId}}",
-                    "family-groups"
-                  ],
-                  "query": [
-                    {
-                      "key": "page",
-                      "value": "1"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "10"
-                    }
+                    "family",
+                    "uploads",
+                    "{{uploadId}}"
                   ]
                 },
-                "description": "Family Groups page: one row per admitted resident with nextOfKinName, nextOfKinRelationship, membersCount and status. Status is active (someone is linked), invitePending (only invitations out) or noFamily. Buttons: active shows Manage (GET residents/:residentId/members) and Invite (POST /admin/family-invitations); invitePending shows Manage and Resend (PATCH /admin/family-invitations/:pendingInvitationId with action resend); noFamily shows Add next of kin (POST /admin/family-invitations with isNextOfKin true). meta.counts gives total, active, invitePending and noFamily for the cards and tabs; the counts ignore the status filter and follow branchId and keyword. Optional query: status, keyword (resident, room or next of kin), branchId, page, limit. Owners, super admins and managers with familyEngagement.view; 404 when the module is off."
+                "description": "Approve after blurring. blur maps a photo id of the upload to rectangles {x, y, width, height}, each a fraction of the photo (0 to 1) so the app does not need the stored size. The server saves a blurred copy, which is the only one ever shown to families, and keeps the original for audit. 400 invalid_blur_areas for a photo of another upload or rectangles outside the photo. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"approve\",\n  \"blur\": {\n    \"{{mediaId}}\": [\n      {\n        \"x\": 0.1,\n        \"y\": 0.2,\n        \"width\": 0.3,\n        \"height\": 0.25\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "reject upload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Upload rejected\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"rejected\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/uploads/{{uploadId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "uploads",
+                    "{{uploadId}}"
+                  ]
+                },
+                "description": "Rejects a waiting upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\",\n  \"reason\": \"Another resident is in the photo. Please crop and send again.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "response": []
             }
@@ -21008,6 +21389,16 @@
     {
       "key": "relativeEmail",
       "value": "relative@example.com",
+      "type": "string"
+    },
+    {
+      "key": "mediaId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "uploadId",
+      "value": "",
       "type": "string"
     }
   ]

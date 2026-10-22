@@ -6,6 +6,7 @@ const {
   requireFamilyAccess,
   requireNextOfKin,
 } = require("@middlewares/familyMiddleware");
+const { receivePhoto } = require("@middlewares/familyPhotoMiddleware");
 const familyController = require("../controllers/familyController");
 
 const router = express.Router();
@@ -29,7 +30,7 @@ router.post("/join", familyController.requestToJoin);
 router.get("/join-requests/current", familyController.getCurrentJoinRequest);
 
 router.get("/join-requests", residentInQuery, requireNextOfKin, familyController.listJoinRequests);
-router.patch("/join-requests/:id", familyController.updateJoinRequest);
+router.put("/join-requests/:id", familyController.updateJoinRequest);
 
 router.get("/members", residentInQuery, familyController.listMembers);
 router.delete("/members/:memberId", familyController.removeMember);
@@ -37,7 +38,12 @@ router.delete("/members/:memberId", familyController.removeMember);
 router.get("/handover/candidates", residentInQuery, requireNextOfKin, familyController.listHandoverCandidates);
 router.post("/handover", residentInBody, requireNextOfKin, familyController.requestHandover);
 router.get("/handover/current", familyController.getCurrentHandover);
-router.patch("/handover/:id", familyController.updateHandover);
+router.put("/handover/:id", familyController.updateHandover);
+
+router.post("/media", requireFamilyAccess(), receivePhoto, familyController.uploadPhoto);
+router.post("/uploads", residentInBody, familyController.createUpload);
+router.get("/uploads", requireFamilyAccess(), familyController.listMyUploads);
+router.put("/uploads/:id", requireFamilyAccess(), familyController.updateUpload);
 
 router.post("/leave", residentInBody, familyController.leaveFamily);
 

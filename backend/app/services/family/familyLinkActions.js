@@ -94,4 +94,4 @@ const assignNextOfKin = async ({ target }) => {
   });
 };
 
-module.exports = { decidePendingRequest, removeActiveLink, assignNextOfKin };
+module.exports = { decidePendingRequest, removeActiveLink, assignNextOfKin, inTransaction };

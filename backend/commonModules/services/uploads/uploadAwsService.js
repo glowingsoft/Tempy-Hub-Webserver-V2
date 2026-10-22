@@ -2,6 +2,7 @@ const path = require("path");
 const { randomUUID } = require("crypto");
 const {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
@@ -50,6 +51,23 @@ const uploadFiles = async (files) => {
   }));
 };
 
+const publicUrl = (key) =>
+  `https://${getBucket()}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(key)}`;
+
+const putObject = async ({ key, body, contentType }) => {
+  await getClient().send(
+    new PutObjectCommand({ Bucket: requireBucket(), Key: key, Body: body, ContentType: contentType })
+  );
+  return { key, url: publicUrl(key) };
+};
+
+const getObject = async (key) => {
+  const { Body } = await getClient().send(
+    new GetObjectCommand({ Bucket: requireBucket(), Key: key })
+  );
+  return Buffer.from(await Body.transformToByteArray());
+};
+
 const deleteFiles = async (fileKey) => {
   await getClient().send(new DeleteObjectCommand({
     Bucket: requireBucket(),
@@ -65,4 +83,6 @@ const deleteFiles = async (fileKey) => {
 module.exports = {
   uploadFiles,
   deleteFiles,
+  putObject,
+  getObject,
 };

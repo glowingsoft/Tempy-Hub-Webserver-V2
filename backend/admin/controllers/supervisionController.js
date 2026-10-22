@@ -1,4 +1,4 @@
-const { sendResponse } = require("@utils/responseUtil");
+const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const supervisionService = require("@adminServices/supervision/supervisionService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
@@ -26,11 +26,39 @@ const updateSupervisionSettings = async (req, res) => {
 
 const listTeamSupervision = async (req, res) => {
   try {
-    const data = await supervisionService.listTeamSupervision({
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await supervisionService.listTeamSupervision({
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.query.branchId,
       staffId: req.query.staffId,
+      status: req.query.status,
+      keyword: req.query.keyword || req.query.search,
+      timezone: req.query.timezone || req.user.timezone,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getSupervision = async (req, res) => {
+  try {
+    const data = await supervisionService.getSupervision({
+      actor: req.user,
+      organizationId: req.orgId,
+      supervisionId: req.params.supervisionId,
+      timezone: req.query.timezone || req.user.timezone,
     });
 
     return sendResponse({
@@ -121,6 +149,7 @@ const signOffActionPoint = async (req, res) => {
 module.exports = {
   updateSupervisionSettings,
   listTeamSupervision,
+  getSupervision,
   createSupervision,
   updateSupervision,
   signOffActionPoint,

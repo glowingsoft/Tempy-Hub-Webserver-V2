@@ -19,6 +19,8 @@ const {
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("./supervisionSchedule");
 const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
 const { actorConductor, conductedByStages } = require("../staff/meetingConductor");
+const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 
 const toObjectId = (value, key) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
@@ -37,6 +39,30 @@ const atZone = (value, timezone) => {
   if (!parsed.isValid()) throw new AppError("invalid_supervision_date", 400);
   return parsed.toDate();
 };
+
+const viewerTimezone = (timezone) => {
+  const value = String(timezone || "").trim();
+  if (value && moment.tz.zone(value)) return value;
+  return DEFAULT_TZ;
+};
+
+const formatAt = (value, timezone) => {
+  if (value == null || value === "") return null;
+  const parsed = inZone(value, timezone);
+  return parsed.isValid() ? parsed.format() : null;
+};
+
+const datesForViewer = (row, timezone) => ({
+  ...row,
+  scheduledAt: formatAt(row.scheduledAt, timezone),
+  completedAt: formatAt(row.completedAt, timezone),
+  createdAt: formatAt(row.createdAt, timezone),
+  updatedAt: formatAt(row.updatedAt, timezone),
+  actionPoints: (row.actionPoints || []).map((point) => ({
+    ...point,
+    signedOffAt: formatAt(point.signedOffAt, timezone),
+  })),
+});
 
 const orgInterval = async (organizationId) => {
   const organization = await Organization.findById(organizationId)
@@ -73,110 +99,274 @@ const assertCanAccessStaff = async ({ actor, organizationId, staff }) => {
 
 const updateSupervisionSettings = (payload) => updateStaffComplianceSettings(payload);
 
-const listTeamSupervision = async ({
-  actor,
-  organizationId,
-  branchId,
-  staffId,
-}) => {
-  const standing = await actorStanding(actor, organizationId);
-  const ids = await resolveScopedSuperviseeIds({
-    standing,
-    actor,
-    organizationId,
-    staffId,
-    branchId,
-  });
-  if (!ids.length) return [];
+const MEETING_STATUSES = Object.values(ComplianceMeetingStatus);
 
-  const defaultInterval = await orgInterval(organizationId);
-  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+const emptyStatusCounts = () =>
+  Object.fromEntries(MEETING_STATUSES.map((status) => [status, 0]));
+
+const statusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    MEETING_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const statusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    MEETING_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const parseMeetingStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!MEETING_STATUSES.includes(value)) {
+    throw new AppError("invalid_supervision_status", 400);
+  }
+  return value;
+};
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const staffIdsMatchingKeyword = async (staffIds, keyword) => {
+  const term = String(keyword || "").trim();
+  if (!term || !staffIds.length) return [];
+
+  const regex = { $regex: escapeRegex(term), $options: "i" };
   const rows = await StaffProfile.aggregate([
-    { $match: { _id: { $in: ids }, organizationId: orgOid } },
+    { $match: { _id: { $in: staffIds } } },
     {
       $lookup: {
         from: User.collection.name,
         localField: "userId",
         foreignField: "_id",
         pipeline: [
-          {
-            $project: {
-              name: 1,
-              email: 1,
-              image: { $ifNull: ["$profileIcon", ""] },
-            },
-          },
+          { $match: { $or: [{ name: regex }, { email: regex }] } },
+          { $project: { _id: 1 } },
         ],
         as: "user",
       },
     },
-    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
     {
-      $lookup: {
-        from: Branch.collection.name,
-        localField: "branchId",
-        foreignField: "_id",
-        pipeline: [{ $project: { timezone: 1 } }],
-        as: "branch",
+      $match: {
+        $or: [{ user: { $ne: [] } }, { employeeCode: regex }],
       },
     },
-    { $unwind: { path: "$branch", preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: SupervisionRecord.collection.name,
-        localField: "_id",
-        foreignField: "staffId",
-        pipeline: [
-          {
-            $match: {
-              organizationId: orgOid,
-              status: { $ne: ComplianceMeetingStatus.CANCELLED },
-            },
-          },
-          {
-            $project: {
-              status: 1,
-              completedAt: 1,
-              scheduledAt: 1,
-              locationLabel: 1,
-            },
-          },
-        ],
-        as: "meetings",
-      },
-    },
-    {
-      $project: {
-        employeeCode: 1,
-        startDate: 1,
-        supervisionIntervalMonths: 1,
-        timezone: "$branch.timezone",
-        user: 1,
-        meetings: 1,
-      },
-    },
+    { $project: { _id: 1 } },
   ]);
 
-  return rows.map((row) => {
-    const standingRow = supervisionStanding({
-      startDate: row.startDate,
-      intervalMonths: row.supervisionIntervalMonths || defaultInterval,
-      meetings: row.meetings,
-      timezone: row.timezone || DEFAULT_TZ,
-    });
-    return {
-      staffId: row._id,
-      employeeCode: row.employeeCode,
-      name: row.user?.name || "",
-      email: row.user?.email || "",
-      image: row.user?.image || "",
-      lastCompletedAt: standingRow.lastCompletedAt,
-      nextDueAt: standingRow.nextDueAt,
-      score: standingRow.score,
-      badge: standingRow.badge,
-      upcoming: standingRow.upcoming,
-    };
+  return rows.map((row) => row._id);
+};
+
+const emptyPage = (page, limit) => ({
+  data: [],
+  meta: { ...generateMeta(page, limit, 0), counts: emptyStatusCounts() },
+});
+
+const staffLookup = {
+  $lookup: {
+    from: StaffProfile.collection.name,
+    localField: "staffId",
+    foreignField: "_id",
+    pipeline: [
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: "userId",
+          foreignField: "_id",
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+                image: { $ifNull: ["$profileIcon", ""] },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "user",
+        },
+      },
+      {
+        $project: {
+          employeeCode: 1,
+          branchId: 1,
+          startDate: 1,
+          name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+          email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+          image: { $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""] },
+        },
+      },
+      { $limit: 1 },
+    ],
+    as: "staff",
+  },
+};
+
+const branchLookup = {
+  $lookup: {
+    from: Branch.collection.name,
+    localField: "branchId",
+    foreignField: "_id",
+    pipeline: [{ $project: { name: 1, code: 1, timezone: 1 } }, { $limit: 1 }],
+    as: "branch",
+  },
+};
+
+const signedOffLookup = {
+  $lookup: {
+    from: StaffProfile.collection.name,
+    localField: "actionPoints.signedOffByStaffId",
+    foreignField: "_id",
+    pipeline: [
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: "userId",
+          foreignField: "_id",
+          pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+          as: "user",
+        },
+      },
+      {
+        $project: {
+          name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+        },
+      },
+    ],
+    as: "signedOffStaff",
+  },
+};
+
+const attachSignedOffNames = {
+  $addFields: {
+    staff: { $arrayElemAt: ["$staff", 0] },
+    branch: { $arrayElemAt: ["$branch", 0] },
+    actionPoints: {
+      $map: {
+        input: { $ifNull: ["$actionPoints", []] },
+        as: "point",
+        in: {
+          $mergeObjects: [
+            "$$point",
+            {
+              signedOffBy: {
+                $let: {
+                  vars: {
+                    signer: {
+                      $first: {
+                        $filter: {
+                          input: "$signedOffStaff",
+                          as: "row",
+                          cond: { $eq: ["$$row._id", "$$point.signedOffByStaffId"] },
+                        },
+                      },
+                    },
+                  },
+                  in: { $ifNull: ["$$signer.name", ""] },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+};
+
+const recordShapeStages = [
+  ...conductedByStages,
+  staffLookup,
+  branchLookup,
+  signedOffLookup,
+  attachSignedOffNames,
+  { $project: { signedOffStaff: 0 } },
+];
+
+const listTeamSupervision = async ({
+  actor,
+  organizationId,
+  branchId,
+  staffId,
+  status,
+  keyword,
+  timezone,
+  page,
+  limit,
+  skip,
+}) => {
+  const tz = viewerTimezone(timezone || actor?.timezone);
+  const standing = await actorStanding(actor, organizationId);
+  const ids = await resolveScopedSuperviseeIds({
+    standing,
+    actor,
+    organizationId,
+    staffId: staffId ? toObjectId(staffId, "invalid_staff_profile_id") : null,
+    branchId,
   });
+  if (!ids.length) {
+    const empty = emptyPage(page, limit);
+    return { ...empty, meta: { ...empty.meta, timezone: tz } };
+  }
+
+  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+  const match = {
+    organizationId: orgOid,
+    staffId: { $in: ids },
+  };
+  if (branchId) match.branchId = toObjectId(branchId, "invalid_branch_id");
+
+  const term = String(keyword || "").trim();
+  if (term) {
+    const regex = { $regex: escapeRegex(term), $options: "i" };
+    const namedStaffIds = await staffIdsMatchingKeyword(ids, term);
+    match.$or = [
+      ...(namedStaffIds.length ? [{ staffId: { $in: namedStaffIds } }] : []),
+      { locationLabel: regex },
+      { notes: regex },
+      { topics: regex },
+    ];
+  }
+
+  const meetingStatus = parseMeetingStatus(status);
+  const countMatch = { ...match };
+  if (meetingStatus) match.status = meetingStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
+    model: SupervisionRecord,
+    match,
+    page,
+    limit,
+    skip,
+    sort: { scheduledAt: -1, createdAt: -1 },
+    extraDataStages: recordShapeStages,
+    extraFacets: statusCountFacets(countMatch),
+  });
+
+  return {
+    data: data.map((row) => datesForViewer(row, tz)),
+    meta: { ...meta, counts: statusCountsFromFacet(result), timezone: tz },
+  };
+};
+
+const getSupervision = async ({ actor, organizationId, supervisionId, timezone }) => {
+  const tz = viewerTimezone(timezone || actor?.timezone);
+  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+  const recordId = toObjectId(supervisionId, "invalid_supervision_id");
+  const [row] = await SupervisionRecord.aggregate([
+    { $match: { _id: recordId, organizationId: orgOid } },
+    ...recordShapeStages,
+  ]);
+  if (!row) throw new AppError("supervision_not_found", 404);
+
+  await assertCanAccessStaff({
+    actor,
+    organizationId,
+    staff: { _id: row.staffId, branchId: row.branchId },
+  });
+  return datesForViewer(row, tz);
 };
 
 const textList = (value) => {
@@ -419,6 +609,7 @@ const mySupervision = async ({ actor, organizationId }) => {
 module.exports = {
   updateSupervisionSettings,
   listTeamSupervision,
+  getSupervision,
   createSupervision,
   updateSupervision,
   signOffActionPoint,

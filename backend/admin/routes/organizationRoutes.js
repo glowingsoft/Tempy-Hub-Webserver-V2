@@ -283,6 +283,12 @@ scoped.post(
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   supervisionController.createSupervision
 );
+scoped.get(
+  "/supervision/:supervisionId",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.getSupervision
+);
 scoped.put(
   "/supervision/:supervisionId",
   requireRoles(TEAM_APPROVER_ROLES),

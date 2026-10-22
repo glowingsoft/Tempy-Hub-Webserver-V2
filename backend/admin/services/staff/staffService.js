@@ -959,6 +959,39 @@ const createStaffProfile = async ({
   }
 };
 
+const lineManagerDirectoryMatch = async ({ actor, organizationId, match }) => {
+  const manager = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId,
+  })
+    .select("_id branchId")
+    .lean();
+  if (!manager) return false;
+
+  const reports = await StaffProfile.find({
+    organizationId,
+    $or: [
+      { reportsToStaffId: manager._id },
+      { supervisorStaffId: manager._id },
+    ],
+  })
+    .select("_id")
+    .lean();
+
+  if (reports.length) {
+    match._id = { $in: [manager._id, ...reports.map((row) => row._id)] };
+    return true;
+  }
+
+  if (manager.branchId) {
+    match.branchId = manager.branchId;
+    return true;
+  }
+
+  match._id = manager._id;
+  return true;
+};
+
 const buildStaffListMatch = async ({
   organizationId,
   actor,
@@ -972,18 +1005,27 @@ const buildStaffListMatch = async ({
 
   if (actor) {
     const standing = await actorStanding(actor, organizationId);
-    const scopedBranchId = scopeBranchFilter(standing, branchId);
-    if (scopedBranchId) match.branchId = objectId(scopedBranchId);
-    else if (branchId) match.branchId = objectId(branchId);
+    if (standing.role === MembershipRole.LINE_MANAGER) {
+      const inDirectory = await lineManagerDirectoryMatch({
+        actor,
+        organizationId,
+        match,
+      });
+      if (!inDirectory) return null;
+    } else {
+      const scopedBranchId = scopeBranchFilter(standing, branchId);
+      if (scopedBranchId) match.branchId = objectId(scopedBranchId);
+      else if (branchId) match.branchId = objectId(branchId);
 
-    const inScope = await applyLineManagerStaffScope({
-      match,
-      standing,
-      actor,
-      organizationId,
-      staffIdField: "_id",
-    });
-    if (!inScope) return null;
+      const inScope = await applyLineManagerStaffScope({
+        match,
+        standing,
+        actor,
+        organizationId,
+        staffIdField: "_id",
+      });
+      if (!inScope) return null;
+    }
   } else if (branchId) {
     match.branchId = objectId(branchId);
   }

@@ -13,8 +13,8 @@ const {
 } = require("@models/domainEnums");
 const {
   actorStanding,
-  assertMayApproveForStaff,
-  resolveScopedStaffIds,
+  assertMaySuperviseStaff,
+  resolveScopedSuperviseeIds,
 } = require("../staff/staffAccess");
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("./supervisionSchedule");
 const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
@@ -61,7 +61,7 @@ const assertCanAccessStaff = async ({ actor, organizationId, staff }) => {
   if (standing.role === MembershipRole.STAFF) {
     throw new AppError("insufficient_role", 403);
   }
-  await assertMayApproveForStaff({
+  await assertMaySuperviseStaff({
     standing,
     actor,
     organizationId,
@@ -80,7 +80,7 @@ const listTeamSupervision = async ({
   staffId,
 }) => {
   const standing = await actorStanding(actor, organizationId);
-  const ids = await resolveScopedStaffIds({
+  const ids = await resolveScopedSuperviseeIds({
     standing,
     actor,
     organizationId,

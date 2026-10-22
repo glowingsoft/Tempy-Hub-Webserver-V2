@@ -116,13 +116,65 @@ const assertMayApproveForStaff = async ({
     _id: targetStaffId,
     organizationId,
   })
-    .select("reportsToStaffId branchId")
+    .select("reportsToStaffId supervisorStaffId branchId")
     .lean();
 
   if (!target) throw new AppError("staff_profile_not_found", 404);
 
   if (String(target.reportsToStaffId) !== String(managerId)) {
     throw new AppError("not_direct_report", 403);
+  }
+};
+
+/** Supervision is conducted by supervisorStaffId, not the org-chart line manager. */
+const assertMaySuperviseStaff = async ({
+  standing,
+  actor,
+  organizationId,
+  branchId,
+  targetStaffId,
+  managerStaffId = null,
+}) => {
+  if (MANAGER_ROLES.includes(standing.role)) {
+    assertMayManageStaff(standing, branchId);
+    return;
+  }
+
+  if (standing.role !== MembershipRole.LINE_MANAGER) {
+    throw new AppError("insufficient_role", 403);
+  }
+
+  if (
+    standing.branchId &&
+    branchId &&
+    String(standing.branchId) !== String(branchId)
+  ) {
+    throw new AppError("outside_managed_branch", 403);
+  }
+
+  let managerId = managerStaffId;
+  if (!managerId) {
+    const manager = await StaffProfile.findOne({
+      userId: actor._id,
+      organizationId,
+    })
+      .select("_id")
+      .lean();
+    if (!manager) throw new AppError("staff_profile_not_found", 403);
+    managerId = manager._id;
+  }
+
+  const target = await StaffProfile.findOne({
+    _id: targetStaffId,
+    organizationId,
+  })
+    .select("supervisorStaffId branchId")
+    .lean();
+
+  if (!target) throw new AppError("staff_profile_not_found", 404);
+
+  if (String(target.supervisorStaffId) !== String(managerId)) {
+    throw new AppError("not_assigned_supervisor", 403);
   }
 };
 
@@ -175,6 +227,18 @@ const resolveSubordinates = async ({
     .lean();
 };
 
+const resolveSuperviseeStaffIds = async ({ userId, organizationId }) => {
+  if (!userId || !organizationId) return [];
+  const manager = await StaffProfile.findOne({ userId, organizationId })
+    .select("_id")
+    .lean();
+  if (!manager) return [];
+  return StaffProfile.find({
+    organizationId,
+    supervisorStaffId: manager._id,
+  }).distinct("_id");
+};
+
 /** Same as resolveSubordinates, but only StaffProfile ids (for query filters). */
 const resolveSubordinateStaffIds = async (args) => {
   const rows = await resolveSubordinates(args);
@@ -200,6 +264,34 @@ const resolveScopedStaffIds = async ({
 
   if (standing.role === MembershipRole.LINE_MANAGER) {
     const teamIds = await resolveSubordinateStaffIds({
+      userId: actor._id,
+      organizationId,
+    });
+    if (!teamIds.length) return [];
+    if (staffId && !teamIds.some((id) => String(id) === String(staffId))) {
+      return [];
+    }
+    staffMatch._id = staffId || { $in: teamIds };
+  } else if (staffId) {
+    staffMatch._id = staffId;
+  }
+
+  return StaffProfile.find(staffMatch).distinct("_id");
+};
+
+const resolveScopedSuperviseeIds = async ({
+  standing,
+  actor,
+  organizationId,
+  staffId = null,
+  branchId = null,
+}) => {
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const staffMatch = { organizationId };
+  if (scopedBranchId) staffMatch.branchId = scopedBranchId;
+
+  if (standing.role === MembershipRole.LINE_MANAGER) {
+    const teamIds = await resolveSuperviseeStaffIds({
       userId: actor._id,
       organizationId,
     });
@@ -273,11 +365,14 @@ module.exports = {
   assertOneActiveMembershipPerOrg,
   assertRoleMayHaveStaffProfile,
   assertMayApproveForStaff,
+  assertMaySuperviseStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
   resolveSubordinates,
   resolveSubordinateStaffIds,
   applyLineManagerStaffScope,
   resolveScopedStaffIds,
+  resolveSuperviseeStaffIds,
+  resolveScopedSuperviseeIds,
   duplicateKey,
 };

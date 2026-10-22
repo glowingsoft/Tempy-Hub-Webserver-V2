@@ -145,6 +145,7 @@
   "visitor_profile_not_found": "No visitor profile found for this account",
   "no_direct_reports": "You have no direct reports",
   "not_direct_report": "You can only act on your direct reports",
+  "not_assigned_supervisor": "You can only book supervision for staff assigned to you as supervisor",
   "kiosk_token_missing": "Kiosk token missing",
   "kiosk_not_found": "Kiosk not found",
   "kiosk_not_registered": "This kiosk has not completed setup",

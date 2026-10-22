@@ -26,7 +26,7 @@ const {
   ActiveInactiveStatus,
   MembershipRole,
 } = require("@models/domainEnums");
-const { assertSurfaceAccess } = require("./surfaceAccess");
+const { assertSurfaceAccess, normalizeSurface } = require("./surfaceAccess");
 
 const register = async ({
   email,
@@ -348,15 +348,16 @@ const login = async ({
   }
 
   const access = await assertAudienceAccess(user, audience);
-  assertSurfaceAccess({ surface, audience, access });
+  const resolvedSurface = normalizeSurface(surface);
+  assertSurfaceAccess({ surface: resolvedSurface, audience, access });
 
   user.timezone = timezone;
 
-  const token = user.generateAuthToken(audience, surface);
+  const token = user.generateAuthToken(audience, resolvedSurface);
 
   const response = formatUserResponse(user, token, [], ["resetToken"]);
   response.audience = audience;
-  response.surface = surface || null;
+  response.surface = resolvedSurface || null;
   // Without this the client cannot tell an owner from a staff member, since the
   // rest of the payload is identical for every account.
   response.access = access;

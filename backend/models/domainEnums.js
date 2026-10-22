@@ -22,8 +22,8 @@ const MembershipRoleRank = {
 
 /**
  * Which product the client is (not the same as Membership.role).
- * Login may send this so a line manager cannot enter the owner/platform portal.
- * Higher membership rank may open a lower-ranked portal.
+ * Login may send this so a line manager cannot enter the owner/platform portal
+ * and an owner cannot enter managerApp.
  */
 const AppSurface = {
   STAFF_APP: "staffApp",

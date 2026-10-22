@@ -1,7 +1,8 @@
 const { sendResponse, validateParams } = require("@utils/responseUtil");
 const authService = require("@commonServices/auth/authService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
-const { AuthAudience, AppSurface } = require("@models/domainEnums");
+const { AuthAudience } = require("@models/domainEnums");
+const { ALL_SURFACES, normalizeSurface } = require("@commonServices/auth/surfaceAccess");
 
 const membershipService = require("@adminServices/organizations/membershipService");
 
@@ -103,8 +104,14 @@ const register = async (req, res) => {
 };
 
 const login = async (req, res) => {
-  const { email, password, deviceId, deviceType, timezone, surface } = req.body;
+  const { email, password, deviceId, deviceType, timezone } = req.body;
   const audience = req.body.audience || AuthAudience.STAFF;
+  let surface;
+  try {
+    surface = normalizeSurface(req.body.surface);
+  } catch (error) {
+    return handleServiceError(res, error);
+  }
 
   const validationOptions = {
     rawData: ["email", "password", "deviceId", "deviceType", "timezone"],
@@ -114,9 +121,10 @@ const login = async (req, res) => {
         AuthAudience.VISITOR,
         AuthAudience.RESIDENT,
       ],
-      surface: Object.values(AppSurface),
+      ...(surface ? { surface: ALL_SURFACES } : {}),
     },
   };
+  if (surface) req.body.surface = surface;
   if (!validateParams(req, res, validationOptions)) {
     return;
   }

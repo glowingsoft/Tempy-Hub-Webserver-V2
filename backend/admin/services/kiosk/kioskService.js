@@ -25,6 +25,7 @@ const { AppError } = require("@services/_errors/AppError");
 const { signKioskToken } = require("@middlewares/kioskMiddleware");
 const { verifyActivationCode, issueActivationCode } = require("@adminServices/organizations/branchService");
 const attendanceService = require("@adminServices/attendance/attendanceService");
+const { getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
 const communicationService = require("@commonServices/communication/communicationService");
 const { emitKioskPairingReady } = require("@config/sockets/kiosk/kioskSocketEmitter");
 const {
@@ -241,13 +242,27 @@ const searchBranchesForKiosk = async ({
 };
 
 const shapeStaffPreview = async (profile) => {
-  const [user, jobTitle, departments] = await Promise.all([
+  const [user, jobTitle, departments, active] = await Promise.all([
     User.findById(profile.userId).select("name email phoneNumber").lean(),
     JobTitle.findById(profile.jobTitleId).select("name level").lean(),
     Department.find({ _id: { $in: profile.departmentIds || [] } })
       .select("name")
       .lean(),
+    getActiveShiftForStaff({
+      staffProfile: profile,
+      organizationId: profile.organizationId,
+    }),
   ]);
+
+  const shift = active.shift
+    ? {
+        _id: active.shift._id,
+        startsAt: active.shift.startsAt,
+        endsAt: active.shift.endsAt,
+        status: active.shift.status,
+        branchId: active.shift.branchId,
+      }
+    : null;
 
   return {
     staffId: profile._id,
@@ -260,6 +275,9 @@ const shapeStaffPreview = async (profile) => {
     branchId: profile.branchId,
     hasPin: Boolean(profile.pinHash),
     hasNfc: Boolean(profile.nfcTagId),
+    shift,
+    clockInEligible: Boolean(active.clockInEligible),
+    graceMinutes: active.graceMinutes ?? null,
   };
 };
 

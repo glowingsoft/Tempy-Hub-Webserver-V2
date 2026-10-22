@@ -2269,6 +2269,42 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "roster request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}app/attendance/{{attendanceDayId}}/roster-request",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "attendance",
+                    "{{attendanceDayId}}",
+                    "roster-request"
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -11352,6 +11388,121 @@
                     "organizations",
                     "{{organizationId}}",
                     "attendance-change-requests"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "list unscheduled attendance",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/attendance?page=1&limit=10&punctualityStatus=unscheduled",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "attendance"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "approve roster",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/attendance/{{attendanceDayId}}/approve-roster",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "attendance",
+                    "{{attendanceDayId}}",
+                    "approve-roster"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "reject roster",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}admin/organizations/{{organizationId}}/attendance/{{attendanceDayId}}/reject-roster",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "attendance",
+                    "{{attendanceDayId}}",
+                    "reject-roster"
                   ]
                 }
               },

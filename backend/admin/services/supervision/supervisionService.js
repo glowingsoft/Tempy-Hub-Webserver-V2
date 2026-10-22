@@ -340,7 +340,7 @@ const listTeamSupervision = async ({
     page,
     limit,
     skip,
-    sort: { scheduledAt: -1, createdAt: -1 },
+    sort: { createdAt: -1 },
     extraDataStages: recordShapeStages,
     extraFacets: statusCountFacets(countMatch),
   });

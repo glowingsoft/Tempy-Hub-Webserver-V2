@@ -3,6 +3,7 @@ const {
   CheckInMethod,
   PunctualityStatus,
   PresenceStatus,
+  RosterRequestStatus,
 } = require("./domainEnums");
 
 const breakSegmentSchema = new mongoose.Schema(
@@ -28,6 +29,13 @@ const attendanceDaySchema = new mongoose.Schema(
       index: true,
     },
     workDate: { type: Date, required: true },
+    /** Set when clock-in matched a rostered shift, or after roster approve. */
+    shiftId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shift",
+      default: null,
+      index: true,
+    },
     clockInAt: { type: Date, required: true },
     clockOutAt: { type: Date, default: null },
     breaks: { type: [breakSegmentSchema], default: [] },
@@ -47,6 +55,18 @@ const attendanceDaySchema = new mongoose.Schema(
       default: PresenceStatus.ON_SITE,
     },
     workedMinutes: { type: Number, default: null },
+    rosterRequestStatus: {
+      type: String,
+      enum: Object.values(RosterRequestStatus),
+      default: RosterRequestStatus.NONE,
+    },
+    rosterRequestedAt: { type: Date, default: null },
+    rosterReviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    rosterReviewedAt: { type: Date, default: null },
     /** Idempotency key supplied by offline clients so replayed events are dropped. */
     clientEventId: { type: String, default: null },
     /** When the event happened on the device, which can predate the server write. */
@@ -62,6 +82,10 @@ const attendanceDaySchema = new mongoose.Schema(
 
 attendanceDaySchema.index({ staffId: 1, workDate: 1 }, { unique: true });
 attendanceDaySchema.index({ clientEventId: 1 }, { unique: true, sparse: true });
+attendanceDaySchema.index(
+  { shiftId: 1 },
+  { sparse: true, partialFilterExpression: { shiftId: { $type: "objectId" } } }
+);
 
 const AttendanceDay =
   mongoose.models.AttendanceDay ||

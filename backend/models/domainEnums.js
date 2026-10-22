@@ -146,6 +146,15 @@ const CheckInMethod = {
 const PunctualityStatus = {
   ON_TIME: "onTime",
   LATE: "late",
+  UNSCHEDULED: "unscheduled",
+};
+
+/** Extra hours worked with no rota row until a manager approves. */
+const RosterRequestStatus = {
+  NONE: "none",
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
 };
 
 const PresenceStatus = {
@@ -384,6 +393,7 @@ module.exports = {
   ShiftClaimStatus,
   CheckInMethod,
   PunctualityStatus,
+  RosterRequestStatus,
   PresenceStatus,
   ChangeRequestStatus,
   AdmissionStatus,

@@ -325,6 +325,12 @@ scoped.post(
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   appraisalController.createAppraisal
 );
+scoped.get(
+  "/appraisals/:appraisalId",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.getAppraisal
+);
 scoped.put(
   "/appraisals/:appraisalId",
   requireRoles(TEAM_APPROVER_ROLES),
@@ -382,6 +388,20 @@ scoped.get(
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_VIEW),
   attendanceController.listAttendanceDays
+);
+scoped.post(
+  "/attendance/:attendanceDayId/approve-roster",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  requirePermission(ATTENDANCE_APPROVE),
+  attendanceController.approveRoster
+);
+scoped.post(
+  "/attendance/:attendanceDayId/reject-roster",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  requirePermission(ATTENDANCE_APPROVE),
+  attendanceController.rejectRoster
 );
 scoped.get(
   "/attendance-change-requests",

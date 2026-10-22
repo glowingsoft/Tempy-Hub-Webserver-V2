@@ -17,8 +17,14 @@ const {
   StaffProfileStatus,
   LeaveType,
   LeaveRequestStatus,
+  RosterRequestStatus,
 } = require("@models/domainEnums");
-const { getActiveShift, getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
+const {
+  getActiveShift,
+  getActiveShiftForStaff,
+  getShift,
+  createScheduledShiftFromAttendance,
+} = require("@adminServices/rota/shiftService");
 const { getFullImageUrl } = require("@utils/imageHelper");
 const {
   actorStanding,
@@ -453,6 +459,7 @@ const parsePunctualityStatus = (status) => {
 const emptySummary = {
   onTimeCount: 0,
   lateCount: 0,
+  unscheduledCount: 0,
   sickDays: 0,
   absenceDays: 0,
   attendanceRate: 0,
@@ -468,6 +475,9 @@ const registerSummary = (rows) => {
     }
     if (row.punctualityStatus === PunctualityStatus.ON_TIME) summary.onTimeCount += 1;
     if (row.punctualityStatus === PunctualityStatus.LATE) summary.lateCount += 1;
+    if (row.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
+      summary.unscheduledCount += 1;
+    }
   }
   const denom =
     summary.onTimeCount +
@@ -493,6 +503,7 @@ const summaryFromCounts = (counts, leaveDays = []) => {
   const summary = registerSummary(leaveDays);
   summary.onTimeCount = counts.onTime;
   summary.lateCount = counts.late;
+  summary.unscheduledCount = counts.unscheduled || 0;
   const denom =
     summary.onTimeCount +
     summary.lateCount +
@@ -616,6 +627,30 @@ const resolvePunctuality = (clockInAt, shiftStartsAt, graceMinutes) => {
     : PunctualityStatus.ON_TIME;
 };
 
+const clockInFromActiveShift = (active, clockInAt) => {
+  const hasRosteredShift = Boolean(active.clockInEligible && active.shift);
+  return {
+    hasRosteredShift,
+    punctualityStatus: hasRosteredShift
+      ? resolvePunctuality(
+          clockInAt,
+          active.shift.startsAt,
+          active.graceMinutes
+        )
+      : PunctualityStatus.UNSCHEDULED,
+    shiftId: hasRosteredShift ? active.shift._id : null,
+  };
+};
+
+const staffCannotClockIn = async (staffId) => {
+  const workDate = startOfUtcDay(new Date());
+  const blocked = await AttendanceDay.exists({
+    staffId,
+    $or: [{ workDate }, { clockOutAt: null }],
+  });
+  return Boolean(blocked);
+};
+
 const getTodayAttendance = async ({ userId, organizationId }) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const workDate = startOfUtcDay(new Date());
@@ -665,9 +700,10 @@ const clockIn = async ({
   }
 
   const active = await getActiveShift({ userId, organizationId });
-  if (!active.clockInEligible || !active.shift) {
-    throw new AppError("no_active_shift_for_clock_in", 403);
-  }
+  // Previously required an assigned shift in the clock-in window.
+  // if (!active.clockInEligible || !active.shift) {
+  //   throw new AppError("no_active_shift_for_clock_in", 403);
+  // }
 
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
   const workDate = startOfUtcDay(clockInAt);
@@ -682,19 +718,16 @@ const clockIn = async ({
   const openDay = await getOpenAttendanceDay(profile._id);
   if (openDay) throw new AppError("attendance_open_session_exists", 409);
 
-  const punctualityStatus = resolvePunctuality(
-    clockInAt,
-    active.shift.startsAt,
-    active.graceMinutes
-  );
+  const rostered = clockInFromActiveShift(active, clockInAt);
 
   const day = await AttendanceDay.create({
     staffId: profile._id,
     branchId: profile.branchId,
     workDate,
+    shiftId: rostered.shiftId,
     clockInAt,
     checkInMethod,
-    punctualityStatus,
+    punctualityStatus: rostered.punctualityStatus,
     presenceStatus: PresenceStatus.ON_SITE,
     clientEventId: clientEventId || null,
     occurredAt: occurredAt ? new Date(occurredAt) : null,
@@ -705,7 +738,7 @@ const clockIn = async ({
     staffId: profile._id,
     image,
     day: day.toObject(),
-    shift: active.shift,
+    shift: rostered.hasRosteredShift ? active.shift : null,
   });
 };
 
@@ -775,9 +808,10 @@ const clockInForStaff = async ({
     staffProfile,
     organizationId,
   });
-  if (!active.clockInEligible || !active.shift) {
-    throw new AppError("no_active_shift_for_clock_in", 403);
-  }
+  // Previously required an assigned shift in the clock-in window.
+  // if (!active.clockInEligible || !active.shift) {
+  //   throw new AppError("no_active_shift_for_clock_in", 403);
+  // }
 
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
   const workDate = startOfUtcDay(clockInAt);
@@ -792,19 +826,16 @@ const clockInForStaff = async ({
   const openDay = await getOpenAttendanceDay(staffProfile._id);
   if (openDay) throw new AppError("attendance_open_session_exists", 409);
 
-  const punctualityStatus = resolvePunctuality(
-    clockInAt,
-    active.shift.startsAt,
-    active.graceMinutes
-  );
+  const rostered = clockInFromActiveShift(active, clockInAt);
 
   const day = await AttendanceDay.create({
     staffId: staffProfile._id,
     branchId: staffProfile.branchId,
     workDate,
+    shiftId: rostered.shiftId,
     clockInAt,
     checkInMethod,
-    punctualityStatus,
+    punctualityStatus: rostered.punctualityStatus,
     presenceStatus: PresenceStatus.ON_SITE,
     clientEventId: clientEventId || null,
     occurredAt: occurredAt ? new Date(occurredAt) : null,
@@ -814,7 +845,7 @@ const clockInForStaff = async ({
     staffId: staffProfile._id,
     image,
     day: day.toObject(),
-    shift: active.shift,
+    shift: rostered.hasRosteredShift ? active.shift : null,
   });
 };
 
@@ -1206,6 +1237,7 @@ const staffRotaTotals = (byDate) => {
     workedMinutes: 0,
     onTimeCount: 0,
     lateCount: 0,
+    unscheduledCount: 0,
     sickDays: 0,
     absenceDays: 0,
   };
@@ -1218,6 +1250,9 @@ const staffRotaTotals = (byDate) => {
     totals.workedMinutes += row.workedMinutes || 0;
     if (row.punctualityStatus === PunctualityStatus.ON_TIME) totals.onTimeCount += 1;
     if (row.punctualityStatus === PunctualityStatus.LATE) totals.lateCount += 1;
+    if (row.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
+      totals.unscheduledCount += 1;
+    }
   }
   return totals;
 };
@@ -1245,7 +1280,7 @@ const listAttendanceRota = async ({
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
       weeks: [],
-      summary: { onTimeCount: 0, lateCount: 0, sickDays: 0, absenceDays: 0, attendanceRate: 0 },
+      summary: { ...emptySummary },
     };
   }
 
@@ -1273,7 +1308,7 @@ const listAttendanceRota = async ({
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
       weeks: buildRotaWeeks(fromDay, toDay),
-      summary: { onTimeCount: 0, lateCount: 0, sickDays: 0, absenceDays: 0, attendanceRate: 0 },
+      summary: { ...emptySummary },
     };
   }
 
@@ -1302,18 +1337,13 @@ const listAttendanceRota = async ({
     byStaffDate.get(sid).set(utcDateKey(row.workDate), row);
   }
 
-  const summary = {
-    onTimeCount: 0,
-    lateCount: 0,
-    sickDays: 0,
-    absenceDays: 0,
-    attendanceRate: 0,
-  };
+  const summary = { ...emptySummary };
   const staffRows = staffList.map((staff) => {
     const byDate = byStaffDate.get(String(staff._id)) || new Map();
     const totals = staffRotaTotals(byDate);
     summary.onTimeCount += totals.onTimeCount;
     summary.lateCount += totals.lateCount;
+    summary.unscheduledCount += totals.unscheduledCount;
     summary.sickDays += totals.sickDays;
     summary.absenceDays += totals.absenceDays;
     return { staff, totals, byDate };
@@ -1534,6 +1564,115 @@ const rejectChangeRequest = async ({
   return request.toObject();
 };
 
+const loadAttendanceDayInOrg = async (attendanceDayId, organizationId) => {
+  const day = await AttendanceDay.findById(attendanceDayId);
+  if (!day) throw new AppError("attendance_day_not_found", 404);
+
+  const branch = await Branch.findById(day.branchId)
+    .select("organizationId")
+    .lean();
+  if (!branch || String(branch.organizationId) !== String(organizationId)) {
+    throw new AppError("attendance_day_not_found", 404);
+  }
+  return day;
+};
+
+const requestRosterForDay = async ({
+  userId,
+  organizationId,
+  attendanceDayId,
+}) => {
+  const profile = await requireStaffProfile(userId, organizationId);
+  const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
+
+  if (String(day.staffId) !== String(profile._id)) {
+    throw new AppError("attendance_day_not_found", 404);
+  }
+  if (day.punctualityStatus !== PunctualityStatus.UNSCHEDULED) {
+    throw new AppError("attendance_not_unscheduled", 400);
+  }
+  if (!day.clockOutAt) throw new AppError("attendance_not_clocked_out", 400);
+  if (day.shiftId) throw new AppError("attendance_already_rostered", 409);
+  if (day.rosterRequestStatus === RosterRequestStatus.PENDING) {
+    throw new AppError("attendance_roster_request_pending", 409);
+  }
+  if (day.rosterRequestStatus === RosterRequestStatus.APPROVED) {
+    throw new AppError("attendance_already_rostered", 409);
+  }
+
+  day.rosterRequestStatus = RosterRequestStatus.PENDING;
+  day.rosterRequestedAt = new Date();
+  await day.save();
+  return day.toObject();
+};
+
+const approveRosterForDay = async ({
+  actor,
+  organizationId,
+  attendanceDayId,
+  startsAt,
+  endsAt,
+}) => {
+  const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
+  const standing = await actorStanding(actor, organizationId);
+  assertMayManageStaff(standing, day.branchId);
+
+  if (day.rosterRequestStatus === RosterRequestStatus.APPROVED && day.shiftId) {
+    const shift = await getShift({
+      shiftId: day.shiftId,
+      organizationId,
+    });
+    return { day: day.toObject(), shift };
+  }
+
+  if (day.punctualityStatus !== PunctualityStatus.UNSCHEDULED) {
+    throw new AppError("attendance_not_unscheduled", 400);
+  }
+  if (day.shiftId) throw new AppError("attendance_already_rostered", 409);
+  if (!day.clockOutAt && !endsAt) {
+    throw new AppError("attendance_not_clocked_out", 400);
+  }
+
+  const shift = await createScheduledShiftFromAttendance({
+    organizationId,
+    branchId: day.branchId,
+    staffId: day.staffId,
+    startsAt: startsAt || day.clockInAt,
+    endsAt: endsAt || day.clockOutAt,
+  });
+
+  day.shiftId = shift._id;
+  day.rosterRequestStatus = RosterRequestStatus.APPROVED;
+  day.rosterReviewedBy = actor._id;
+  day.rosterReviewedAt = new Date();
+  await day.save();
+
+  return { day: day.toObject(), shift };
+};
+
+const rejectRosterForDay = async ({
+  actor,
+  organizationId,
+  attendanceDayId,
+}) => {
+  const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
+  const standing = await actorStanding(actor, organizationId);
+  assertMayManageStaff(standing, day.branchId);
+
+  if (day.rosterRequestStatus === RosterRequestStatus.APPROVED || day.shiftId) {
+    throw new AppError("attendance_already_rostered", 409);
+  }
+  if (day.punctualityStatus !== PunctualityStatus.UNSCHEDULED) {
+    throw new AppError("attendance_not_unscheduled", 400);
+  }
+
+  day.rosterRequestStatus = RosterRequestStatus.REJECTED;
+  day.rosterReviewedBy = actor._id;
+  day.rosterReviewedAt = new Date();
+  await day.save();
+  return day.toObject();
+};
+
 module.exports = {
   getTodayAttendance,
   getTodayAttendanceForStaff,
@@ -1553,4 +1692,8 @@ module.exports = {
   listChangeRequests,
   approveChangeRequest,
   rejectChangeRequest,
+  staffCannotClockIn,
+  requestRosterForDay,
+  approveRosterForDay,
+  rejectRosterForDay,
 };

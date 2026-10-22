@@ -166,6 +166,46 @@ const rejectChangeRequest = async (req, res) => {
   }
 };
 
+const approveRoster = async (req, res) => {
+  try {
+    const data = await attendanceService.approveRosterForDay({
+      actor: req.user,
+      organizationId: req.orgId,
+      attendanceDayId: req.params.attendanceDayId,
+      startsAt: req.body.startsAt,
+      endsAt: req.body.endsAt,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_roster_approved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const rejectRoster = async (req, res) => {
+  try {
+    const data = await attendanceService.rejectRosterForDay({
+      actor: req.user,
+      organizationId: req.orgId,
+      attendanceDayId: req.params.attendanceDayId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_roster_rejected",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   listAttendanceDays,
   listAttendanceRota,
@@ -174,4 +214,6 @@ module.exports = {
   listChangeRequests,
   approveChangeRequest,
   rejectChangeRequest,
+  approveRoster,
+  rejectRoster,
 };

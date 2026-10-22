@@ -72,11 +72,37 @@ const listComplianceHistory = async (req, res) => {
 
 const listTeamAppraisals = async (req, res) => {
   try {
-    const data = await appraisalService.listTeamAppraisals({
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await appraisalService.listTeamAppraisals({
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.query.branchId,
       staffId: req.query.staffId,
+      status: req.query.status,
+      keyword: req.query.keyword || req.query.search,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getAppraisal = async (req, res) => {
+  try {
+    const data = await appraisalService.getAppraisal({
+      actor: req.user,
+      organizationId: req.orgId,
+      appraisalId: req.params.appraisalId,
     });
 
     return sendResponse({
@@ -183,6 +209,7 @@ module.exports = {
   updateStaffComplianceSettings,
   listComplianceHistory,
   listTeamAppraisals,
+  getAppraisal,
   createAppraisal,
   updateAppraisal,
   signOffActionPoint,

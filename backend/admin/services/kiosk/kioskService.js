@@ -242,7 +242,7 @@ const searchBranchesForKiosk = async ({
 };
 
 const shapeStaffPreview = async (profile) => {
-  const [user, jobTitle, departments, active] = await Promise.all([
+  const [user, jobTitle, departments, active, cannotClockIn] = await Promise.all([
     User.findById(profile.userId).select("name email phoneNumber").lean(),
     JobTitle.findById(profile.jobTitleId).select("name level").lean(),
     Department.find({ _id: { $in: profile.departmentIds || [] } })
@@ -252,6 +252,7 @@ const shapeStaffPreview = async (profile) => {
       staffProfile: profile,
       organizationId: profile.organizationId,
     }),
+    attendanceService.staffCannotClockIn(profile._id),
   ]);
 
   const shift = active.shift
@@ -276,7 +277,7 @@ const shapeStaffPreview = async (profile) => {
     hasPin: Boolean(profile.pinHash),
     hasNfc: Boolean(profile.nfcTagId),
     shift,
-    clockInEligible: Boolean(active.clockInEligible),
+    clockInEligible: !cannotClockIn,
     graceMinutes: active.graceMinutes ?? null,
   };
 };

@@ -744,6 +744,33 @@ const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => 
   return claim.toObject();
 };
 
+const createScheduledShiftFromAttendance = async ({
+  organizationId,
+  branchId,
+  staffId,
+  startsAt,
+  endsAt,
+}) => {
+  await assertBranchInOrganization(branchId, organizationId);
+  const timezone = await branchTimezone(branchId);
+  const times = parseShiftTimes(startsAt, endsAt, timezone, {
+    requireFutureStart: false,
+  });
+
+  const shift = await Shift.create({
+    organizationId,
+    branchId,
+    staffId,
+    startsAt: times.startsAt,
+    endsAt: times.endsAt,
+    status: ShiftStatus.SCHEDULED,
+    filledAt: new Date(),
+  });
+
+  const [withDetails] = await attachShiftDetails([shift.toObject()]);
+  return withDetails;
+};
+
 module.exports = {
   createShift,
   listShifts,
@@ -759,5 +786,6 @@ module.exports = {
   getClaim,
   approveClaim,
   rejectClaim,
+  createScheduledShiftFromAttendance,
   ModuleSlug,
 };

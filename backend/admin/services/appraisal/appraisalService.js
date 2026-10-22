@@ -15,17 +15,26 @@ const {
 const {
   actorStanding,
   assertMayApproveForStaff,
+  assertMaySuperviseStaff,
   resolveScopedStaffIds,
+  resolveScopedSuperviseeIds,
   MANAGER_ROLES,
 } = require("../staff/staffAccess");
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("../supervision/supervisionSchedule");
 const {
   loadOrgCycleSettings,
-  orgCycleDefaults,
   effectiveIntervals,
 } = require("./cycle");
 const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
 const { actorConductor, conductedByStages } = require("../staff/meetingConductor");
+const { paginateWithFacet } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
+const {
+  MEETING_STATUSES,
+  emptyStatusCounts,
+  countAppraisalStatuses,
+  appraisalRecordStages,
+} = require("./appraisalRecordPipeline");
 
 const toObjectId = (value, key) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
@@ -55,18 +64,77 @@ const loadStaff = async (staffId, organizationId) => {
   return staff;
 };
 
+const uniqueIds = (ids) => {
+  const seen = new Set();
+  const out = [];
+  for (const id of ids) {
+    const key = String(id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+};
+
+const scopedAppraisalStaffIds = async ({
+  standing,
+  actor,
+  organizationId,
+  staffId,
+  branchId,
+}) => {
+  const [reports, supervisees] = await Promise.all([
+    resolveScopedStaffIds({
+      standing,
+      actor,
+      organizationId,
+      staffId,
+      branchId,
+    }),
+    resolveScopedSuperviseeIds({
+      standing,
+      actor,
+      organizationId,
+      staffId,
+      branchId,
+    }),
+  ]);
+  return uniqueIds([...reports, ...supervisees]);
+};
+
 const assertCanAccessStaff = async ({ actor, organizationId, staff }) => {
   const standing = await actorStanding(actor, organizationId);
   if (standing.role === MembershipRole.STAFF) {
     throw new AppError("insufficient_role", 403);
   }
-  await assertMayApproveForStaff({
-    standing,
-    actor,
-    organizationId,
-    branchId: staff.branchId,
-    targetStaffId: staff._id,
-  });
+  if (MANAGER_ROLES.includes(standing.role)) {
+    await assertMayApproveForStaff({
+      standing,
+      actor,
+      organizationId,
+      branchId: staff.branchId,
+      targetStaffId: staff._id,
+    });
+    return standing;
+  }
+  try {
+    await assertMayApproveForStaff({
+      standing,
+      actor,
+      organizationId,
+      branchId: staff.branchId,
+      targetStaffId: staff._id,
+    });
+  } catch (error) {
+    if (error?.statusCode !== 403) throw error;
+    await assertMaySuperviseStaff({
+      standing,
+      actor,
+      organizationId,
+      branchId: staff.branchId,
+      targetStaffId: staff._id,
+    });
+  }
   return standing;
 };
 
@@ -106,115 +174,130 @@ const standingMeetings = (meetings) =>
         meeting.kind !== AppraisalKind.OTHER)
   );
 
-const listTeamAppraisals = async ({
-  actor,
-  organizationId,
-  branchId,
-  staffId,
-}) => {
-  const standing = await actorStanding(actor, organizationId);
-  await assertCanWriteAppraisal({ actor, organizationId, standing });
-  const ids = await resolveScopedStaffIds({
-    standing,
-    actor,
-    organizationId,
-    staffId,
-    branchId,
-  });
-  if (!ids.length) return [];
+const parseMeetingStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!MEETING_STATUSES.includes(value)) {
+    throw new AppError("invalid_appraisal_status", 400);
+  }
+  return value;
+};
 
-  const settings = await loadOrgCycleSettings(organizationId);
-  const defaults = orgCycleDefaults(settings);
-  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const staffIdsMatchingKeyword = async (staffIds, keyword) => {
+  const term = String(keyword || "").trim();
+  if (!term || !staffIds.length) return [];
+
+  const regex = { $regex: escapeRegex(term), $options: "i" };
   const rows = await StaffProfile.aggregate([
-    { $match: { _id: { $in: ids }, organizationId: orgOid } },
+    { $match: { _id: { $in: staffIds } } },
     {
       $lookup: {
         from: User.collection.name,
         localField: "userId",
         foreignField: "_id",
         pipeline: [
-          {
-            $project: {
-              name: 1,
-              email: 1,
-              image: { $ifNull: ["$profileIcon", ""] },
-            },
-          },
+          { $match: { $or: [{ name: regex }, { email: regex }] } },
+          { $project: { _id: 1 } },
         ],
         as: "user",
       },
     },
-    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
     {
-      $lookup: {
-        from: Branch.collection.name,
-        localField: "branchId",
-        foreignField: "_id",
-        pipeline: [{ $project: { timezone: 1 } }],
-        as: "branch",
+      $match: {
+        $or: [{ user: { $ne: [] } }, { employeeCode: regex }],
       },
     },
-    { $unwind: { path: "$branch", preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: AppraisalRecord.collection.name,
-        localField: "_id",
-        foreignField: "staffId",
-        pipeline: [
-          {
-            $match: {
-              organizationId: orgOid,
-              status: { $ne: ComplianceMeetingStatus.CANCELLED },
-            },
-          },
-          {
-            $project: {
-              status: 1,
-              kind: 1,
-              completedAt: 1,
-              scheduledAt: 1,
-              periodLabel: 1,
-            },
-          },
-        ],
-        as: "meetings",
-      },
-    },
-    {
-      $project: {
-        employeeCode: 1,
-        startDate: 1,
-        appraisalIntervalMonths: 1,
-        timezone: "$branch.timezone",
-        user: 1,
-        meetings: 1,
-      },
-    },
+    { $project: { _id: 1 } },
   ]);
 
-  return rows.map((row) => {
-    const intervalMonths = row.appraisalIntervalMonths || defaults.appraisalMonths;
-    const standingRow = supervisionStanding({
-      startDate: row.startDate,
-      intervalMonths,
-      meetings: standingMeetings(row.meetings),
-      timezone: row.timezone || DEFAULT_TZ,
-    });
-    return {
-      staffId: row._id,
-      employeeCode: row.employeeCode,
-      name: row.user?.name || "",
-      email: row.user?.email || "",
-      image: row.user?.image || "",
-      intervalMonths,
-      lastCompletedAt: standingRow.lastCompletedAt,
-      nextDueAt: standingRow.nextDueAt,
-      score: standingRow.score,
-      badge: standingRow.badge,
-      upcoming: standingRow.upcoming,
-    };
+  return rows.map((row) => row._id);
+};
+
+const emptyPage = (page, limit) => ({
+  data: [],
+  meta: { ...generateMeta(page, limit, 0), counts: emptyStatusCounts() },
+});
+
+const listTeamAppraisals = async ({
+  actor,
+  organizationId,
+  branchId,
+  staffId,
+  status,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
+  const standing = await actorStanding(actor, organizationId);
+  const ids = await scopedAppraisalStaffIds({
+    standing,
+    actor,
+    organizationId,
+    staffId: staffId ? toObjectId(staffId, "invalid_staff_profile_id") : null,
+    branchId,
   });
+  if (!ids.length) return emptyPage(page, limit);
+
+  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+  const match = {
+    organizationId: orgOid,
+    staffId: { $in: ids },
+  };
+  if (branchId) match.branchId = toObjectId(branchId, "invalid_branch_id");
+
+  const term = String(keyword || "").trim();
+  if (term) {
+    const regex = { $regex: escapeRegex(term), $options: "i" };
+    const namedStaffIds = await staffIdsMatchingKeyword(ids, term);
+    match.$or = [
+      ...(namedStaffIds.length ? [{ staffId: { $in: namedStaffIds } }] : []),
+      { periodLabel: regex },
+      { managerComments: regex },
+      { goals: regex },
+      { trainingNeeds: regex },
+    ];
+  }
+
+  const meetingStatus = parseMeetingStatus(status);
+  const countMatch = { ...match };
+  if (meetingStatus) match.status = meetingStatus;
+
+  const [{ data, meta }, counts] = await Promise.all([
+    paginateWithFacet({
+      model: AppraisalRecord,
+      match,
+      page,
+      limit,
+      skip,
+      sort: { createdAt: -1 },
+      extraDataStages: appraisalRecordStages,
+    }),
+    countAppraisalStatuses(countMatch),
+  ]);
+
+  return { data, meta: { ...meta, counts } };
+};
+
+const getAppraisal = async ({ actor, organizationId, appraisalId }) => {
+  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+  const recordId = toObjectId(appraisalId, "invalid_appraisal_id");
+  const [row] = await AppraisalRecord.aggregate([
+    { $match: { _id: recordId, organizationId: orgOid } },
+    ...appraisalRecordStages,
+  ]);
+  if (!row) throw new AppError("appraisal_not_found", 404);
+
+  await assertCanAccessStaff({
+    actor,
+    organizationId,
+    staff: { _id: row.staffId, branchId: row.branchId },
+  });
+  return row;
 };
 
 const textFrom = (value) => (value == null ? "" : String(value));
@@ -243,17 +326,17 @@ const parseKind = (value) => {
   return value;
 };
 
-const parseMeetingStatus = (status, completedAt) => {
-  const meetingStatus =
+const parseAppraisalStatus = (status, completedAt) => {
+  const appraisalStatus =
     status ||
     (completedAt ? ComplianceMeetingStatus.COMPLETED : ComplianceMeetingStatus.SCHEDULED);
   if (
-    !Object.values(ComplianceMeetingStatus).includes(meetingStatus) ||
-    meetingStatus === ComplianceMeetingStatus.CANCELLED
+    !Object.values(ComplianceMeetingStatus).includes(appraisalStatus) ||
+    appraisalStatus === ComplianceMeetingStatus.CANCELLED
   ) {
     throw new AppError("invalid_appraisal_status", 400);
   }
-  return meetingStatus;
+  return appraisalStatus;
 };
 
 const createAppraisal = async ({
@@ -275,9 +358,11 @@ const createAppraisal = async ({
     toObjectId(staffId, "invalid_staff_profile_id"),
     organizationId
   );
-  await assertWriterForStaff({ actor, organizationId, staff });
-
-  const meetingStatus = parseMeetingStatus(status, completedAt);
+  const standing = await assertCanAccessStaff({ actor, organizationId, staff });
+  const meetingStatus = parseAppraisalStatus(status, completedAt);
+  if (meetingStatus === ComplianceMeetingStatus.COMPLETED) {
+    await assertCanWriteAppraisal({ actor, organizationId, standing });
+  }
   if (meetingStatus === ComplianceMeetingStatus.SCHEDULED && !scheduledAt) {
     throw new AppError("appraisal_schedule_required", 400);
   }
@@ -344,7 +429,7 @@ const updateAppraisal = async ({
   }
 
   const staff = await loadStaff(record.staffId, organizationId);
-  await assertWriterForStaff({ actor, organizationId, staff });
+  const standing = await assertCanAccessStaff({ actor, organizationId, staff });
 
   const hasUpdate =
     kind !== undefined ||
@@ -359,7 +444,10 @@ const updateAppraisal = async ({
     file !== undefined;
   if (!hasUpdate) throw new AppError("nothing_to_update", 400);
 
-  const meetingStatus = status ? parseMeetingStatus(status) : record.status;
+  const meetingStatus = status ? parseAppraisalStatus(status) : record.status;
+  if (meetingStatus === ComplianceMeetingStatus.COMPLETED) {
+    await assertCanWriteAppraisal({ actor, organizationId, standing });
+  }
   const [timezone, conductor] = await Promise.all([
     timezoneFor(staff.branchId),
     actorConductor({ actor, organizationId }),
@@ -518,6 +606,7 @@ module.exports = {
   updateAppraisalSettings,
   updateStaffComplianceSettings,
   listTeamAppraisals,
+  getAppraisal,
   createAppraisal,
   updateAppraisal,
   signOffActionPoint,

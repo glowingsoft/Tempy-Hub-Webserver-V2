@@ -1,12 +1,46 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const familyStaffService = require("@adminServices/family/familyStaffService");
+const familyGroupService = require("@adminServices/family/familyGroupService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const withScope = (req) => ({ actor: req.user, organizationId: req.orgId });
 
 const listMembers = respond((req) =>
   familyStaffService.listMembers({ ...withScope(req), residentId: req.params.residentId })
+);
+
+const listAllMembers = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyStaffService.listAllMembers({
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      residentId: req.query.residentId,
+      status: req.query.status,
+      isNextOfKin: req.query.isNextOfKin,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const listFamilyGroups = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyGroupService.listFamilyGroups({
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      status: req.query.status,
+      keyword: req.query.keyword,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
 );
 
 const setNextOfKin = respond(
@@ -86,6 +120,8 @@ const createCode = respond(
 
 module.exports = {
   listMembers,
+  listAllMembers,
+  listFamilyGroups,
   setNextOfKin,
   removeMember,
   listJoinRequests,

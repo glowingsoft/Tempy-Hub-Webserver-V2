@@ -67,8 +67,72 @@ const loadLink = async ({ organizationId, linkId, residentId, notFoundKey }) => 
 
 // ---------------------------------------------------------------- members and next of kin
 
-const listMembers = async ({ actor, organizationId, residentId }) => {
-  const resident = await requireManageableResident({ actor, organizationId, residentId });
+// reading is open across the organization; changing stays within the caller's site
+const requireReadableResident = async ({ organizationId, residentId }) => {
+  if (!isValidObjectId(residentId)) throw new AppError("resident_not_found", 404);
+  const [resident] = await Resident.aggregate([
+    { $match: { _id: toObjectId(residentId), organizationId: toObjectId(organizationId) } },
+    { $project: { name: 1, branchId: 1 } },
+  ]);
+  if (!resident) throw new AppError("resident_not_found", 404);
+  return resident;
+};
+
+const memberRow = {
+  _id: 0,
+  memberId: "$_id",
+  residentId: 1,
+  ...personFields(),
+  email: { $ifNull: ["$user.email", ""] },
+  relationship: 1,
+  isNextOfKin: 1,
+  status: 1,
+  joinedVia: 1,
+  requestedAt: 1,
+};
+
+const statusCountsOf = (rows = []) => {
+  const counts = Object.fromEntries(Object.values(FamilyMemberStatus).map((status) => [status, 0]));
+  rows.forEach((row) => {
+    counts[row._id] = row.count;
+  });
+  return counts;
+};
+
+/** Without a status it lists active and pending; meta.counts covers every status and ignores the status filter. */
+const listAllMembers = async ({ organizationId, branchId, residentId, status, isNextOfKin, page, limit, skip }) => {
+  const base = { organizationId: toObjectId(organizationId) };
+  if (branchId) base.branchId = toObjectId(branchId);
+  if (residentId) base.residentId = toObjectId(residentId);
+  if (isNextOfKin === "true" || isNextOfKin === "false") base.isNextOfKin = isNextOfKin === "true";
+
+  const match = {
+    ...base,
+    status: status || { $in: [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING] },
+  };
+
+  const { result, data, meta } = await paginateWithFacet({
+    model: FamilyMember,
+    match,
+    page,
+    limit,
+    skip,
+    sort: { createdAt: 1 },
+    extraFacets: {
+      statusCounts: [{ $match: base }, { $group: { _id: "$status", count: { $sum: 1 } } }],
+    },
+    extraDataStages: [
+      ...joinUser,
+      ...joinResident,
+      { $project: { ...memberRow, residentName: { $ifNull: ["$resident.name", ""] }, branchId: 1 } },
+    ],
+  });
+
+  return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
+};
+
+const listMembers = async ({ organizationId, residentId }) => {
+  const resident = await requireReadableResident({ organizationId, residentId });
 
   const members = await FamilyMember.aggregate([
     {
@@ -255,6 +319,7 @@ const createCode = async ({ actor, organizationId, residentId }) => {
 
 module.exports = {
   listMembers,
+  listAllMembers,
   setNextOfKin,
   removeMember,
   listJoinRequests,

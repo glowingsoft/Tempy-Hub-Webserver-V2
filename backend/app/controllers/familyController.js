@@ -120,6 +120,21 @@ const leaveFamily = respond(
   { translationKey: "family_left" }
 );
 
+const listSentInvitations = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyInviteService.listSentInvitations({
+      userId: req.user._id,
+      link: req.familyLink,
+      status: req.query.status,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
 const inviteRelative = respond(
   (req) =>
     familyInviteService.inviteRelative({
@@ -150,4 +165,5 @@ module.exports = {
   updateHandover,
   leaveFamily,
   inviteRelative,
+  listSentInvitations,
 };

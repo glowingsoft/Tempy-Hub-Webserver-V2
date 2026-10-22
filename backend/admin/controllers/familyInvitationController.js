@@ -47,6 +47,7 @@ const listInvitations = async (req, res) => {
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await familyService.listInvitations({
       organizationId: req.orgId,
+      branchId: req.query.branchId,
       page,
       limit,
       skip,

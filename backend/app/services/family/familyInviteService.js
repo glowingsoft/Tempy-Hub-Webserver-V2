@@ -1,4 +1,6 @@
 const { Resident } = require("@models/Resident");
+const { FamilyInvitation } = require("@models/FamilyInvitation");
+const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyRelationship } = require("@models/domainEnums");
 const { createInvitation } = require("@adminServices/family/familyService");
@@ -46,4 +48,33 @@ const inviteRelative = async ({ userId, link, name, email, relationship }) => {
   };
 };
 
-module.exports = { inviteRelative };
+const listSentInvitations = ({ userId, link, status, page, limit, skip }) =>
+  paginateWithFacet({
+    model: FamilyInvitation,
+    match: {
+      residentId: toObjectId(link.residentId),
+      invitedByUserId: toObjectId(userId),
+      ...(status ? { status } : {}),
+    },
+    page,
+    limit,
+    skip,
+    sort: { createdAt: -1 },
+    extraDataStages: [
+      {
+        $project: {
+          _id: 0,
+          invitationId: "$_id",
+          name: 1,
+          email: 1,
+          relationship: 1,
+          status: 1,
+          expiresAt: 1,
+          lastSentAt: 1,
+          createdAt: 1,
+        },
+      },
+    ],
+  });
+
+module.exports = { inviteRelative, listSentInvitations };

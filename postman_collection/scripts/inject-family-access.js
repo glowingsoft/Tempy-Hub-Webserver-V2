@@ -341,6 +341,17 @@ requests.push(
 
 // ---------------------------------------------------------------- Invite Family (by email)
 requests.push(
+  req("invitations I sent", "GET", ["app", "family", "member-invitations"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Sent invitations fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+      "});",
+    ],
+    description:
+      "Invitations this next of kin sent for the resident, newest first, with status (pending, accepted, revoked, expired). Optional query: status, page, limit. Next of kin only.",
+  }),
   withBody(
     req("invite a relative", "POST", ["app", "family", "member-invitations"], {
       tests: [
@@ -377,6 +388,30 @@ const staff = (name, method, pathParts, options = {}) =>
   });
 
 const staffRequests = [
+  req("staff family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("Family groups fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("total", "active", "invitePending", "noFamily");',
+      "});",
+    ],
+    description:
+      "Family Groups page: one row per admitted resident with nextOfKinName, nextOfKinRelationship, membersCount and status. Status is active (someone is linked), invitePending (only invitations out) or noFamily. Buttons: active shows Manage (GET residents/:residentId/members) and Invite (POST /admin/family-invitations); invitePending shows Manage and Resend (PATCH /admin/family-invitations/:pendingInvitationId with action resend); noFamily shows Add next of kin (POST /admin/family-invitations with isNextOfKin true). meta.counts gives total, active, invitePending and noFamily for the cards and tabs; the counts ignore the status filter and follow branchId and keyword. Optional query: status, keyword (resident, room or next of kin), branchId, page, limit. Owners, super admins and managers with familyEngagement.view; 404 when the module is off.",
+  }),
+  req("staff all family members", "GET", ["admin", "organizations", "{{organizationId}}", "family-members"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("All family members fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+      "});",
+    ],
+    description:
+      "Every active and pending family member of the organization in the path, across residents, whoever invited them. Same shape as the organization members list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Without a status it lists active and pending. meta.counts gives the number of active, pending, rejected, cancelled and removed members; the counts ignore the status filter. Optional query: branchId, residentId, status, isNextOfKin, page, limit.",
+  }),
   staff("staff family members", "GET", ["admin", "family", "residents", "{{residentId}}", "members"], {
     tests: [
       'pm.test("Family members fetched", function () {',
@@ -563,6 +598,26 @@ for (const [name, action] of [
       found.request.body = jsonBody({ action });
     }
   }
+}
+
+// The invitations list lives under the organization, like the members and invitations lists of staff.
+const allInvitations = ((adminFolder.item.find((i) => i.name === "Family Invitations") || { item: [] }).item).find(
+  (r) => r.name === "list family invitations"
+);
+if (allInvitations) {
+  const path = ["admin", "organizations", "{{organizationId}}", "family-invitations"];
+  allInvitations.request.url.path = path;
+  allInvitations.request.url.raw = `{{url}}/${path.join("/")}?page=1&limit=10&status=pending`;
+  allInvitations.request.url.query = [
+    { key: "page", value: "1" },
+    { key: "limit", value: "10" },
+    { key: "status", value: "pending" },
+  ];
+  allInvitations.request.header = (allInvitations.request.header || []).filter(
+    (h) => String(h.key).toLowerCase() !== "x-org-id"
+  );
+  allInvitations.request.description =
+    "Every family invitation of the organization in the path, whoever sent it, newest first. Same shape as the organization invitations list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Optional query: branchId, status, residentId, keyword, page, limit. Rows carry residentName and invitedByName. meta.counts gives the number of pending, accepted, revoked and expired invitations (a pending one past its expiry counts as expired); the counts ignore the status filter.";
 }
 
 const vars = collection.variable || [];

@@ -155,6 +155,7 @@ const isStaffAccount = async (user) => {
 module.exports = {
   listRelationships,
   isFamilyModuleActive,
+  moduleActiveStage,
   familyModuleOrganizationIds,
   listActiveLinks,
   resolveFamilyResidents,

@@ -25,6 +25,7 @@ const {
   isStaffAccount,
   familyModuleOrganizationIds,
 } = require("@appServices/family/familyAccessService");
+const { joinOne } = require("@appServices/family/familyPipeline");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
@@ -179,8 +180,31 @@ const inviteFamilyMember = async ({ actor, organizationId, residentId, ...fields
   return createInvitation({ inviterId: actor._id, organizationId, resident, ...fields });
 };
 
+// pending past its expiry reads as expired, since nothing flips the stored status yet
+const invitationStatusNow = (now) => ({
+  $cond: [
+    {
+      $and: [
+        { $eq: ["$status", FamilyInvitationStatus.PENDING] },
+        { $lte: ["$expiresAt", now] },
+      ],
+    },
+    FamilyInvitationStatus.EXPIRED,
+    "$status",
+  ],
+});
+
+const statusCountsOf = (rows = []) => {
+  const counts = Object.fromEntries(Object.values(FamilyInvitationStatus).map((status) => [status, 0]));
+  rows.forEach((row) => {
+    counts[row._id] = row.count;
+  });
+  return counts;
+};
+
 const listInvitations = async ({
   organizationId,
+  branchId,
   page,
   limit,
   skip,
@@ -188,31 +212,54 @@ const listInvitations = async ({
   residentId,
   keyword,
 }) => {
-  const match = { organizationId: toObjectId(organizationId) };
-  if (status) match.status = status;
-  if (residentId) match.residentId = toObjectId(residentId);
+  // counts ignore the status filter so every tab keeps its total
+  const base = { organizationId: toObjectId(organizationId) };
+  if (branchId) base.branchId = toObjectId(branchId);
+  if (residentId) base.residentId = toObjectId(residentId);
 
   const or = keywordOr(keyword, ["email", "name"], { trim: true });
-  if (or) match.$or = or;
+  if (or) base.$or = or;
 
-  return paginateWithFacet({
+  const now = new Date();
+  const match = status ? { ...base, $expr: { $eq: [invitationStatusNow(now), status] } } : base;
+
+  const { result, data, meta } = await paginateWithFacet({
     model: FamilyInvitation,
     match,
     page,
     limit,
     skip,
-    extraDataStages: [{ $project: { tokenHash: 0 } }],
+    extraFacets: {
+      statusCounts: [
+        { $match: base },
+        { $group: { _id: invitationStatusNow(now), count: { $sum: 1 } } },
+      ],
+    },
+    extraDataStages: [
+      ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
+      ...joinOne({ from: User, localField: "invitedByUserId", as: "invitedBy", optional: true }),
+      {
+        $addFields: {
+          residentName: { $ifNull: ["$resident.name", ""] },
+          invitedByName: { $ifNull: ["$invitedBy.name", ""] },
+        },
+      },
+      { $addFields: { status: invitationStatusNow(now) } },
+      { $project: { tokenHash: 0, resident: 0, invitedBy: 0 } },
+    ],
   });
+
+  return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
 };
 
 const getInvitation = async ({ invitationId, organizationId }) => {
-  const invitation = await FamilyInvitation.findOne({
-    _id: invitationId,
-    organizationId,
-  }).lean();
+  const [invitation] = await FamilyInvitation.aggregate([
+    { $match: { _id: toObjectId(invitationId), organizationId: toObjectId(organizationId) } },
+    { $project: { tokenHash: 0 } },
+  ]);
   if (!invitation) throw new AppError("invitation_not_found", 404);
 
-  return stripHash(invitation);
+  return invitation;
 };
 
 // the old token is unrecoverable (only its hash was kept), so a resend issues a new one
@@ -281,13 +328,13 @@ const revokeInvitation = async ({ actor, invitationId, organizationId }) => {
   return stripHash(invitation);
 };
 
-// Only the hash is stored, so every pending row has to be compared (same trade-off as staff).
 /** With Family Engagement off an invitation cannot be seen or used: it reads as not found. */
 const assertFamilyModuleOn = async (organizationId) => {
   const active = await familyModuleOrganizationIds([organizationId]);
   if (!active.length) throw new AppError("invitation_not_found", 404);
 };
 
+// Only the hash is stored, so every pending row has to be compared (same trade-off as staff).
 const findByToken = async (token) => {
   if (!token) throw new AppError("invitation_not_found", 404);
 
@@ -311,27 +358,32 @@ const findByToken = async (token) => {
 };
 
 const shapeInvitationPreview = async (invitation) => {
-  const [organization, branch, resident] = await Promise.all([
-    Organization.findById(invitation.organizationId).select("name").lean(),
-    Branch.findById(invitation.branchId).select("name").lean(),
-    Resident.findById(invitation.residentId).select("name photoUrl").lean(),
+  const [preview] = await FamilyInvitation.aggregate([
+    { $match: { _id: invitation._id } },
+    ...joinOne({ from: Organization, localField: "organizationId", as: "organization", optional: true }),
+    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
+    { $lookup: { from: User.collection.name, localField: "email", foreignField: "email", as: "accounts" } },
+    {
+      $project: {
+        _id: 0,
+        invitationId: "$_id",
+        email: 1,
+        name: 1,
+        relationship: 1,
+        organizationId: 1,
+        organizationName: { $ifNull: ["$organization.name", ""] },
+        branchId: 1,
+        branchName: { $ifNull: ["$branch.name", ""] },
+        residentId: 1,
+        residentName: { $ifNull: ["$resident.name", ""] },
+        residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
+        expiresAt: 1,
+        requiresPassword: { $eq: [{ $size: "$accounts" }, 0] },
+      },
+    },
   ]);
-
-  return {
-    invitationId: invitation._id,
-    email: invitation.email,
-    name: invitation.name,
-    relationship: invitation.relationship,
-    organizationId: invitation.organizationId,
-    organizationName: organization?.name || "",
-    branchId: invitation.branchId,
-    branchName: branch?.name || "",
-    residentId: invitation.residentId,
-    residentName: resident?.name || "",
-    residentPhotoUrl: resident?.photoUrl || "",
-    expiresAt: invitation.expiresAt,
-    requiresPassword: !(await User.exists({ email: invitation.email })),
-  };
+  return preview;
 };
 
 const previewInvitation = async (token) => {

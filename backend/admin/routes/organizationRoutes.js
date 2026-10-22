@@ -33,6 +33,7 @@ const visitorInvitationController = require("../controllers/visitorInvitationCon
 const residentMediaController = require("../controllers/residentMediaController");
 const floorPlanController = require("../controllers/floorPlanController");
 const peepRecordController = require("../controllers/peepRecordController");
+const familyOrganizationRoutes = require("./familyOrganizationRoutes");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
@@ -153,6 +154,8 @@ scoped.get("/branches", branchController.listBranches);
 
 
 scoped.get("/members", membershipController.listMembers);
+
+scoped.use(familyOrganizationRoutes);
 
 scoped.get(
 

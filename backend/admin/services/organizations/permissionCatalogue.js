@@ -68,10 +68,12 @@ const enabledModuleSlugs = (organization) =>
 /**
  * Roles that answer every permission check by virtue of the role itself, so
  * their stored `Membership.permissions` is always empty. See requirePermission.
+ * Site Manager runs one site; branch scope is enforced in services, not here.
  */
 const ROLES_WITH_ALL_PERMISSIONS = [
   MembershipRole.SUPER_ADMIN,
   MembershipRole.OWNER,
+  MembershipRole.SITE_MANAGER,
 ];
 
 /**

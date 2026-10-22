@@ -9,6 +9,9 @@ const {
   ActiveInactiveStatus,
   OrganizationStatus,
 } = require("@models/domainEnums");
+const {
+  ROLES_WITH_ALL_PERMISSIONS,
+} = require("@adminServices/organizations/permissionCatalogue");
 
 const toObjectId = (value) =>
   mongoose.Types.ObjectId.isValid(value)
@@ -201,7 +204,7 @@ const requireRoles = (allowedRoles = []) => (req, res, next) => {
   return next();
 };
 
-/** superAdmin and owner bypass granular permission checks. */
+/** Owner, platform admin, and site manager bypass granular permission checks. */
 const requirePermission = (permission) => (req, res, next) => {
   if (!req.membership) {
     return sendResponse({
@@ -214,8 +217,7 @@ const requirePermission = (permission) => (req, res, next) => {
   const { role, permissions = [] } = req.membership;
 
   if (
-    role === MembershipRole.SUPER_ADMIN ||
-    role === MembershipRole.OWNER ||
+    ROLES_WITH_ALL_PERMISSIONS.includes(role) ||
     permissions.includes(permission)
   ) {
     return next();

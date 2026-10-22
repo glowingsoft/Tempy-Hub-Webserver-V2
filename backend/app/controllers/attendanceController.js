@@ -29,6 +29,7 @@ const clockIn = async (req, res) => {
       clientEventId: req.body.clientEventId,
       geo: req.body.geo,
       occurredAt: req.body.occurredAt,
+      image: req.body.image,
     });
 
     return sendResponse({

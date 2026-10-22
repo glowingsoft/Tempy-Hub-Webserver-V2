@@ -443,6 +443,7 @@ const verifyKioskCheckInOtp = async ({
   otp,
   clientEventId,
   occurredAt,
+  image,
 }) => {
   const profile = await assertStaffAtKioskBranch({
     staffId,
@@ -477,6 +478,7 @@ const verifyKioskCheckInOtp = async ({
     checkInMethod: CheckInMethod.PHONE,
     clientEventId,
     occurredAt,
+    image,
   });
 
   touchLastCheckIn(kioskId);
@@ -629,6 +631,7 @@ const confirmPairingAndClockIn = async ({
   sessionId,
   clientEventId,
   occurredAt,
+  image,
 }) => {
   const session = await KioskPairingSession.findOne({
     _id: sessionId,
@@ -652,6 +655,7 @@ const confirmPairingAndClockIn = async ({
     checkInMethod: CheckInMethod.QR,
     clientEventId,
     occurredAt,
+    image,
   });
 
   await KioskPairingSession.updateOne(
@@ -1021,6 +1025,7 @@ const clockInAtKiosk = async ({
   pin,
   clientEventId,
   occurredAt,
+  image,
 }) => {
   await assertKioskUnlocked(kioskId);
   const { profile, checkInMethod } = await resolveStaffForKiosk({
@@ -1039,6 +1044,7 @@ const clockInAtKiosk = async ({
     checkInMethod,
     clientEventId,
     occurredAt,
+    image,
   });
 
   touchLastCheckIn(kioskId);

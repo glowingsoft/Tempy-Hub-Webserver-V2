@@ -197,6 +197,8 @@ const verifyCheckInOtp = async (req, res) => {
 
       occurredAt: req.body.occurredAt,
 
+      image: req.body.image,
+
     });
 
 
@@ -300,6 +302,8 @@ const confirmPairing = async (req, res) => {
       clientEventId: req.body.clientEventId,
 
       occurredAt: req.body.occurredAt,
+
+      image: req.body.image,
 
     });
 
@@ -552,6 +556,8 @@ const staffBody = (body) => ({
   clientEventId: body.clientEventId,
 
   occurredAt: body.occurredAt,
+
+  image: body.image,
 
 });
 

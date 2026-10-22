@@ -50,6 +50,10 @@ spec.components.schemas.KioskStaffIdentifyRequest = {
     staffId: { type: "string" },
     clientEventId: { type: "string" },
     occurredAt: { type: "string", format: "date-time" },
+    image: {
+      type: "string",
+      description: "S3 object key only. Server prefixes S3_BASE_URL and saves StaffProfile.photoUrl",
+    },
   },
 };
 
@@ -73,6 +77,10 @@ spec.components.schemas.KioskOtpVerifyRequest = {
     otp: { type: "string" },
     clientEventId: { type: "string" },
     occurredAt: { type: "string", format: "date-time" },
+    image: {
+      type: "string",
+      description: "S3 object key only. Server prefixes S3_BASE_URL and saves StaffProfile.photoUrl",
+    },
   },
 };
 

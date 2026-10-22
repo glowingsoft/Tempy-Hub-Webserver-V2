@@ -19,6 +19,7 @@ const {
   LeaveRequestStatus,
 } = require("@models/domainEnums");
 const { getActiveShift, getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
+const { getFullImageUrl } = require("@utils/imageHelper");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -196,6 +197,77 @@ const getBranchSettings = async (branchId) => {
 const findByClientEventId = async (clientEventId) => {
   if (!clientEventId) return null;
   return AttendanceDay.findOne({ clientEventId }).lean();
+};
+
+const toClockInPhotoUrl = (key) => {
+  const value = key == null ? "" : String(key).trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return getFullImageUrl(value);
+};
+
+const CLOCK_IN_TZ = "Europe/London";
+
+const greetingForHour = (hour) => {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const presentClockIn = async ({ staffId, image, day, shift }) => {
+  const photoUrl = toClockInPhotoUrl(image);
+  if (photoUrl) {
+    await StaffProfile.updateOne({ _id: staffId }, { $set: { photoUrl } });
+  }
+
+  const profile = await StaffProfile.findById(staffId)
+    .select("userId photoUrl ward locationLabel branchId")
+    .lean();
+
+  const [user, branch] = await Promise.all([
+    profile?.userId
+      ? User.findById(profile.userId).select("name").lean()
+      : null,
+    profile?.branchId
+      ? Branch.findById(profile.branchId).select("name timezone").lean()
+      : null,
+  ]);
+
+  const tz = branch?.timezone || CLOCK_IN_TZ;
+  const clockMoment = moment.tz(day.clockInAt, tz);
+  const url = photoUrl || toClockInPhotoUrl(profile?.photoUrl) || "";
+  const location =
+    profile?.ward || profile?.locationLabel || branch?.name || "";
+  const shiftLabel = shift
+    ? `${moment.tz(shift.startsAt, tz).format("HH:mm")} – ${moment
+        .tz(shift.endsAt, tz)
+        .format("HH:mm")}`
+    : null;
+
+  return {
+    ...day,
+    image: url,
+    photoUrl: url,
+    greeting: greetingForHour(clockMoment.hour()),
+    name: user?.name || "",
+    time: clockMoment.format("hh:mm a"),
+    location,
+    shift: shift
+      ? {
+          _id: shift._id,
+          startsAt: shift.startsAt,
+          endsAt: shift.endsAt,
+          status: shift.status,
+          branchId: shift.branchId,
+          label: shiftLabel,
+        }
+      : null,
+    summary: {
+      time: clockMoment.format("hh:mm a"),
+      shift: shiftLabel,
+      location,
+    },
+  };
 };
 
 const getOpenAttendanceDay = async (staffId) => {
@@ -567,9 +639,24 @@ const clockIn = async ({
   clientEventId,
   geo,
   occurredAt,
+  image,
 }) => {
   const existingByEvent = await findByClientEventId(clientEventId);
-  if (existingByEvent) return existingByEvent;
+  if (existingByEvent) {
+    const profile = await StaffProfile.findById(existingByEvent.staffId).lean();
+    const activeShift = profile
+      ? await getActiveShiftForStaff({
+          staffProfile: profile,
+          organizationId,
+        })
+      : { shift: null };
+    return presentClockIn({
+      staffId: existingByEvent.staffId,
+      image,
+      day: existingByEvent,
+      shift: activeShift.shift,
+    });
+  }
 
   const profile = await requireStaffProfile(userId, organizationId);
 
@@ -614,7 +701,12 @@ const clockIn = async ({
     geo: geo || undefined,
   });
 
-  return day.toObject();
+  return presentClockIn({
+    staffId: profile._id,
+    image,
+    day: day.toObject(),
+    shift: active.shift,
+  });
 };
 
 const clockOut = async ({
@@ -661,9 +753,21 @@ const clockInForStaff = async ({
   checkInMethod = CheckInMethod.KIOSK,
   clientEventId,
   occurredAt,
+  image,
 }) => {
   const existingByEvent = await findByClientEventId(clientEventId);
-  if (existingByEvent) return existingByEvent;
+  if (existingByEvent) {
+    const activeShift = await getActiveShiftForStaff({
+      staffProfile,
+      organizationId,
+    });
+    return presentClockIn({
+      staffId: staffProfile._id,
+      image,
+      day: existingByEvent,
+      shift: activeShift.shift,
+    });
+  }
 
   assertStaffAtBranch(staffProfile, branchId);
 
@@ -706,7 +810,12 @@ const clockInForStaff = async ({
     occurredAt: occurredAt ? new Date(occurredAt) : null,
   });
 
-  return day.toObject();
+  return presentClockIn({
+    staffId: staffProfile._id,
+    image,
+    day: day.toObject(),
+    shift: active.shift,
+  });
 };
 
 const clockOutForStaff = async ({

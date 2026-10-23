@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { Shift } = require("@models/Shift");
 const { ShiftClaim } = require("@models/ShiftClaim");
+const { AttendanceDay } = require("@models/AttendanceDay");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
@@ -118,6 +119,74 @@ const parseShiftTimes = (
   }
 
   return { startsAt: start.toDate(), endsAt: end.toDate() };
+};
+
+const sameInstant = (a, b) => new Date(a).getTime() === new Date(b).getTime();
+
+const findLinkedAttendance = (shiftId) =>
+  AttendanceDay.findOne({ shiftId }).sort({ clockInAt: -1 }).lean();
+
+const assertNoStaffOverlap = async (shift) => {
+  if (!shift.staffId) return;
+
+  const clash = await Shift.findOne({
+    _id: { $ne: shift._id },
+    organizationId: shift.organizationId,
+    staffId: shift.staffId,
+    status: ShiftStatus.SCHEDULED,
+    startsAt: { $lt: shift.endsAt },
+    endsAt: { $gt: shift.startsAt },
+  })
+    .select("_id")
+    .lean();
+
+  if (clash) throw new AppError("shift_overlaps_existing", 409);
+};
+
+const applyShiftTimes = async (shift, { startsAt, endsAt, attendance }) => {
+  const timezone = await branchTimezone(shift.branchId);
+  const startLocked = attendance && startsAt !== undefined && !sameInstant(startsAt, shift.startsAt);
+  const sessionOpen = attendance && !attendance.clockOutAt;
+  const sessionClosed = attendance && attendance.clockOutAt;
+
+  if (sessionClosed && (startsAt !== undefined || endsAt !== undefined)) {
+    throw new AppError("shift_times_locked_after_clock_out", 400);
+  }
+  if (startLocked) throw new AppError("shift_start_locked_after_clock_in", 400);
+
+  const times = parseShiftTimes(
+    startsAt ?? shift.startsAt,
+    endsAt ?? shift.endsAt,
+    timezone,
+    { requireFutureStart: !attendance && startsAt !== undefined }
+  );
+
+  if (sessionOpen && endsAt !== undefined) {
+    const now = moment.tz(timezone);
+    if (!moment(times.endsAt).isAfter(now)) {
+      throw new AppError("shift_end_must_be_in_future", 400);
+    }
+    if (!moment(times.endsAt).isAfter(attendance.clockInAt)) {
+      throw new AppError("shift_end_before_clock_in", 400);
+    }
+  }
+
+  shift.startsAt = times.startsAt;
+  shift.endsAt = times.endsAt;
+};
+
+const assertShiftNotLockedByAttendance = (
+  attendance,
+  { open, staffId, status, currentStaffId }
+) => {
+  if (!attendance) return;
+  const cancel = status === ShiftStatus.CANCELLED;
+  const unassign = open === true || (staffId !== undefined && !staffId);
+  const reassign =
+    staffId && String(staffId) !== String(currentStaffId || "");
+  if (unassign || cancel || reassign) {
+    throw new AppError("shift_locked_after_attendance", 400);
+  }
 };
 
 const requireStaffProfile = async (userId, organizationId) => {
@@ -343,16 +412,16 @@ const updateShift = async ({
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, shift.branchId);
 
+  const attendance = await findLinkedAttendance(shift._id);
+  assertShiftNotLockedByAttendance(attendance, {
+    open,
+    staffId,
+    status,
+    currentStaffId: shift.staffId,
+  });
+
   if (startsAt !== undefined || endsAt !== undefined) {
-    const timezone = await branchTimezone(shift.branchId);
-    const times = parseShiftTimes(
-      startsAt ?? shift.startsAt,
-      endsAt ?? shift.endsAt,
-      timezone,
-      { requireFutureStart: startsAt !== undefined }
-    );
-    shift.startsAt = times.startsAt;
-    shift.endsAt = times.endsAt;
+    await applyShiftTimes(shift, { startsAt, endsAt, attendance });
   }
 
   if (visibility !== undefined) shift.visibility = visibility;
@@ -396,6 +465,7 @@ const updateShift = async ({
 
   if (!shift.isModified()) throw new AppError("nothing_to_update", 400);
 
+  await assertNoStaffOverlap(shift);
   await shift.save();
   const [withDetails] = await attachShiftDetails([shift.toObject()]);
   return withDetails;

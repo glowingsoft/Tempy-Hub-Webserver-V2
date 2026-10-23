@@ -506,16 +506,19 @@ const getMe = async (req, res) => {
 
 const listWidgets = async (req, res) => {
   try {
-    const data = await kioskWidgetService.listKioskWidgetsForDevice({
-      kiosk: req.kiosk,
-      organizationId: req.orgId,
-    });
+    const [widgets, organization] = await Promise.all([
+      kioskWidgetService.listKioskWidgetsForDevice({
+        kiosk: req.kiosk,
+        organizationId: req.orgId,
+      }),
+      kioskService.publicOrganization(req.orgId),
+    ]);
 
     return sendResponse({
       res,
       statusCode: 200,
       translationKey: "data_fetched_successfully",
-      data,
+      data: { ...widgets, organization },
     });
   } catch (error) {
     return handleServiceError(res, error, "something_went_wrong");

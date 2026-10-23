@@ -234,7 +234,10 @@ spec.components.schemas.AttendanceClockInRequest = {
   type: "object",
   properties: {
     checkInMethod: { type: "string", enum: ["phone", "kiosk", "manual", "qr", "nfc"], default: "phone" },
-    clientEventId: { type: "string" },
+    clientEventId: {
+      type: "string",
+      description: "Optional. Client retry key. Omit when not used.",
+    },
     occurredAt: { type: "string", format: "date-time" },
     geo: {
       type: "object",
@@ -250,7 +253,10 @@ spec.components.schemas.AttendanceClockInRequest = {
 spec.components.schemas.AttendanceClockEventRequest = {
   type: "object",
   properties: {
-    clientEventId: { type: "string" },
+    clientEventId: {
+      type: "string",
+      description: "Optional. Client retry key. Omit when not used.",
+    },
     occurredAt: { type: "string", format: "date-time" },
   },
 };

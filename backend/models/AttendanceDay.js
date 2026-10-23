@@ -80,7 +80,11 @@ const attendanceDaySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-attendanceDaySchema.index({ staffId: 1, workDate: 1 }, { unique: true });
+attendanceDaySchema.index({ staffId: 1, workDate: 1 });
+attendanceDaySchema.index(
+  { staffId: 1 },
+  { unique: true, partialFilterExpression: { clockOutAt: null } }
+);
 attendanceDaySchema.index({ clientEventId: 1 }, { unique: true, sparse: true });
 attendanceDaySchema.index(
   { shiftId: 1 },

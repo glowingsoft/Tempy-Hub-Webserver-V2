@@ -726,6 +726,26 @@ const deviceKioskFlags = async (kiosk) => ({
   ),
 });
 
+const publicOrganization = async (organizationId) => {
+  if (!organizationId) return null;
+  const org = await Organization.findById(organizationId)
+    .select("name status")
+    .lean();
+  if (!org) return null;
+  return { _id: org._id, name: org.name || "", status: org.status };
+};
+
+const organizationForKiosk = async (kiosk, branch) => {
+  let organizationId = branch?.organizationId;
+  if (!organizationId && kiosk?.branchId) {
+    const row = await Branch.findById(kiosk.branchId)
+      .select("organizationId")
+      .lean();
+    organizationId = row?.organizationId;
+  }
+  return publicOrganization(organizationId);
+};
+
 const sanitizeKiosk = (kiosk) => ({
   _id: kiosk._id,
   branchId: kiosk.branchId,
@@ -746,10 +766,14 @@ const sanitizeKiosk = (kiosk) => ({
 const kioskAuthPayload = async (kiosk) => {
   const row = kiosk.toObject ? kiosk.toObject() : kiosk;
   const shaped = sanitizeKiosk(row);
-  const flags = await deviceKioskFlags(row);
+  const [flags, organization] = await Promise.all([
+    deviceKioskFlags(row),
+    organizationForKiosk(row),
+  ]);
   return {
     token: signKioskToken(row),
     kiosk: shaped,
+    organization,
     receptionIdentifier: shaped.receptionIdentifier || null,
     ...flags,
   };
@@ -957,9 +981,13 @@ const assertKioskUnlocked = async (kioskOrId) => {
 
 const getKioskSession = async ({ kiosk, branch }) => {
   const shaped = sanitizeKiosk(kiosk);
-  const flags = await deviceKioskFlags(kiosk);
+  const [flags, organization] = await Promise.all([
+    deviceKioskFlags(kiosk),
+    organizationForKiosk(kiosk, branch),
+  ]);
   return {
     kiosk: shaped,
+    organization,
     branch: {
       _id: branch._id,
       name: branch.name,
@@ -1572,6 +1600,7 @@ const toggleKioskLockForAdmin = async ({ actor, organizationId, kioskId }) => {
 };
 
 module.exports = {
+  publicOrganization,
   searchBranchesForKiosk,
   searchStaffForKiosk,
   getStaffPreviewForKiosk,

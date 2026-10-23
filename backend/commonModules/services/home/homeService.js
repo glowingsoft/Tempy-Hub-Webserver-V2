@@ -72,7 +72,10 @@ const getStaffHome = async ({ userId, organizationId, userName }) => {
   const nextAssignedShift =
     shifts.find((shift) => moment(shift.endsAt).tz(tz).isSameOrAfter(now)) || null;
 
-  const clockInEligible = !today?.attendance;
+  const presence = today?.attendance?.presenceStatus;
+  const clockInEligible =
+    presence !== PresenceStatus.ON_SITE &&
+    presence !== PresenceStatus.ON_BREAK;
 
   return {
     greeting: greetingForHour(now.hour()),

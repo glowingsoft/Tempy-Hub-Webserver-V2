@@ -48,7 +48,10 @@ spec.components.schemas.KioskStaffIdentifyRequest = {
     employeeCode: { type: "string" },
     pin: { type: "string" },
     staffId: { type: "string" },
-    clientEventId: { type: "string" },
+    clientEventId: {
+      type: "string",
+      description: "Optional. Offline/retry key. Omit on kiosk PIN clock-in/out.",
+    },
     occurredAt: { type: "string", format: "date-time" },
     image: {
       type: "string",
@@ -75,7 +78,10 @@ spec.components.schemas.KioskOtpVerifyRequest = {
   properties: {
     staffId: { type: "string" },
     otp: { type: "string" },
-    clientEventId: { type: "string" },
+    clientEventId: {
+      type: "string",
+      description: "Optional. Offline/retry key. Omit on kiosk PIN clock-in/out.",
+    },
     occurredAt: { type: "string", format: "date-time" },
     image: {
       type: "string",
@@ -205,7 +211,10 @@ spec.paths["/app/kiosk/pairing/{sessionId}/confirm"] = {
           schema: {
             type: "object",
             properties: {
-              clientEventId: { type: "string" },
+              clientEventId: {
+      type: "string",
+      description: "Optional. Offline/retry key. Omit on kiosk PIN clock-in/out.",
+    },
               occurredAt: { type: "string", format: "date-time" },
             },
           },

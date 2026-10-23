@@ -146,6 +146,26 @@ const signOffActionPoint = async (req, res) => {
   }
 };
 
+const signOffActionPoints = async (req, res) => {
+  try {
+    const data = await supervisionService.signOffActionPoints({
+      actor: req.user,
+      organizationId: req.orgId,
+      supervisionId: req.params.supervisionId,
+      actionPointIds: req.body.actionPointIds,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "action_point_signed_off",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   updateSupervisionSettings,
   listTeamSupervision,
@@ -153,4 +173,5 @@ module.exports = {
   createSupervision,
   updateSupervision,
   signOffActionPoint,
+  signOffActionPoints,
 };

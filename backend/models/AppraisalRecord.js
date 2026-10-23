@@ -5,9 +5,9 @@ const actionPointSchema = new mongoose.Schema(
   {
     text: { type: String, required: true, trim: true },
     signedOffAt: { type: Date, default: null },
-    signedOffByStaffId: {
+    signedOffByUserId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "StaffProfile",
+      ref: "User",
       default: null,
     },
   },

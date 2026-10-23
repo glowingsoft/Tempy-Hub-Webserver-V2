@@ -211,14 +211,14 @@ const hoursFromSettings = (value, fallback) => {
 };
 
 const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
-  if (!branchId && !staffId) return 0;
-
   const filter = { clockOutAt: null };
   if (staffId) filter.staffId = staffId;
   if (branchId) filter.branchId = branchId;
 
-  const days = await AttendanceDay.find(filter).limit(AUTO_CLOCK_OUT_BATCH);
-  if (!days.length) return 0;
+  const days = await AttendanceDay.find(filter)
+    .sort({ clockInAt: 1 })
+    .limit(AUTO_CLOCK_OUT_BATCH);
+  if (!days.length) return { scanned: 0, closed: 0 };
 
   const branchIds = [...new Set(days.map((day) => String(day.branchId)))];
   const [branches, shifts] = await Promise.all([
@@ -280,9 +280,9 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
     });
   }
 
-  if (!ops.length) return 0;
+  if (!ops.length) return { scanned: days.length, closed: 0 };
   const result = await AttendanceDay.bulkWrite(ops);
-  return result.modifiedCount || 0;
+  return { scanned: days.length, closed: result.modifiedCount || 0 };
 };
 
 const normalizeClientEventId = (value) => {
@@ -1049,6 +1049,34 @@ const listOnSiteForBranch = async ({ branchId, keyword, page, limit, skip }) => 
   };
 };
 
+const breakTakenMinutes = (day, now) => {
+  let ms = 0;
+  for (const segment of day.breaks || []) {
+    if (!segment.breakInAt) continue;
+    const end = segment.breakOutAt ? new Date(segment.breakOutAt) : now;
+    ms += end - new Date(segment.breakInAt);
+  }
+  return Math.max(0, Math.round(ms / 60000));
+};
+
+const getOpenClockInSessionForStaff = async ({ staffProfile }) => {
+  await closeExpiredOpenSessions({ staffId: staffProfile._id });
+  const day = await getOpenAttendanceDay(staffProfile._id);
+  if (!day) return null;
+
+  const now = new Date();
+  return {
+    attendanceId: day._id,
+    clockInAt: day.clockInAt,
+    presenceStatus: day.presenceStatus,
+    breakTakenMinutes: breakTakenMinutes(day, now),
+    totalOnSiteMinutes: Math.max(
+      0,
+      Math.round((now - new Date(day.clockInAt)) / 60000)
+    ),
+  };
+};
+
 const getTodayAttendanceForStaff = async ({
   staffProfile,
   organizationId,
@@ -1796,6 +1824,7 @@ const rejectRosterForDay = async ({
 module.exports = {
   getTodayAttendance,
   getTodayAttendanceForStaff,
+  getOpenClockInSessionForStaff,
   listOnSiteForBranch,
   clockIn,
   clockInForStaff,

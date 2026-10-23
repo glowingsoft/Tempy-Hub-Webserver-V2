@@ -566,6 +566,26 @@ const staffBody = (body) => ({
 
 
 
+const verifyStaffPin = async (req, res) => {
+  try {
+    const data = await kioskService.verifyStaffPinAtKiosk({
+      organizationId: req.orgId,
+      branchId: req.branchId,
+      kioskId: req.kiosk._id,
+      ...staffBody(req.body),
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "staff_pin_verified",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
+
 const clockIn = async (req, res) => {
 
   try {
@@ -739,6 +759,7 @@ module.exports = {
 
   updateMe,
 
+  verifyStaffPin,
   clockIn,
 
   clockOut,

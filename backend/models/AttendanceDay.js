@@ -20,7 +20,6 @@ const attendanceDaySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "StaffProfile",
       required: true,
-      index: true,
     },
     branchId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -34,7 +33,6 @@ const attendanceDaySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Shift",
       default: null,
-      index: true,
     },
     clockInAt: { type: Date, required: true },
     clockOutAt: { type: Date, default: null },
@@ -85,7 +83,11 @@ const attendanceDaySchema = new mongoose.Schema(
 attendanceDaySchema.index({ staffId: 1, workDate: 1 });
 attendanceDaySchema.index(
   { staffId: 1 },
-  { unique: true, partialFilterExpression: { clockOutAt: null } }
+  {
+    unique: true,
+    name: "staffId_1_openSession",
+    partialFilterExpression: { clockOutAt: null },
+  }
 );
 attendanceDaySchema.index({ clientEventId: 1 }, { unique: true, sparse: true });
 attendanceDaySchema.index(

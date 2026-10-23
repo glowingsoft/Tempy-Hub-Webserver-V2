@@ -158,6 +158,8 @@
   "fire_evacuation_disabled": "Fire evacuation is turned off for this kiosk",
   "staff_identification_required": "Identify staff with NFC, employee code and PIN, or staff ID (dev only)",
   "staff_identification_failed": "Staff could not be identified",
+  "staff_pin_incorrect": "The staff PIN is incorrect",
+  "staff_pin_verified": "Staff PIN verified",
   "staff_not_at_kiosk_branch": "This staff member is not assigned to this branch",
   "kiosk_branch_search_term_too_short": "Search keyword must be at least 2 characters",
   "kiosk_staff_search_term_too_short": "Staff search keyword must be at least 2 characters",

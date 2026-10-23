@@ -95,6 +95,12 @@ router.post(
 );
 router.post("/attendance/otp/verify", otpLimiter, kioskController.verifyCheckInOtp);
 
+router.post(
+  "/attendance/verify",
+  otpLimiter,
+  kioskController.verifyStaffPin
+);
+
 router.get("/attendance/today", kioskController.getToday);
 router.get(
   "/attendance/on-site",

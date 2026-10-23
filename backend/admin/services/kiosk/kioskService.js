@@ -807,12 +807,12 @@ const resolveStaffForKiosk = async ({
       employeeCode: String(employeeCode).trim(),
     }).lean();
 
+    if (!profile) throw new AppError("staff_identification_failed", 401);
     if (
-      !profile ||
       !profile.pinHash ||
       !(await bcrypt.compare(String(pin), profile.pinHash))
     ) {
-      throw new AppError("staff_identification_failed", 401);
+      throw new AppError("staff_pin_incorrect", 401);
     }
   } else if (
     staffId &&
@@ -825,12 +825,12 @@ const resolveStaffForKiosk = async ({
       _id: staffId,
     }).lean();
 
+    if (!profile) throw new AppError("staff_identification_failed", 401);
     if (
-      !profile ||
       !profile.pinHash ||
       !(await bcrypt.compare(String(pin), profile.pinHash))
     ) {
-      throw new AppError("staff_identification_failed", 401);
+      throw new AppError("staff_pin_incorrect", 401);
     }
     checkInMethod = CheckInMethod.KIOSK;
   } else if (staffId && process.env.NODE_ENV !== "prod") {
@@ -1043,6 +1043,54 @@ const touchLastCheckIn = (kioskId) =>
   Kiosk.updateOne({ _id: kioskId }, { $set: { lastCheckInAt: new Date() } }).catch(
     () => {}
   );
+
+const verifyStaffPinAtKiosk = async ({
+  organizationId,
+  branchId,
+  kioskId,
+  staffId,
+  nfcTagId,
+  employeeCode,
+  pin,
+}) => {
+  await assertKioskUnlocked(kioskId);
+  if (pin == null || String(pin) === "") {
+    throw new AppError("staff_identification_required", 400);
+  }
+
+  const { profile } = await resolveStaffForKiosk({
+    organizationId,
+    branchId,
+    staffId,
+    nfcTagId,
+    employeeCode,
+    pin,
+  });
+  if (
+    !profile.pinHash ||
+    !(await bcrypt.compare(String(pin), profile.pinHash))
+  ) {
+    throw new AppError("staff_pin_incorrect", 401);
+  }
+
+  const [session, user] = await Promise.all([
+    attendanceService.getOpenClockInSessionForStaff({
+      staffProfile: profile,
+    }),
+    User.findById(profile.userId).select("name").lean(),
+  ]);
+
+  return {
+    clockedIn: Boolean(session),
+    staff: {
+      staffId: profile._id,
+      employeeCode: profile.employeeCode,
+      name: user?.name || "",
+      photoUrl: profile.photoUrl || "",
+    },
+    session,
+  };
+};
 
 const clockInAtKiosk = async ({
   organizationId,
@@ -1617,6 +1665,7 @@ module.exports = {
   updateKioskSettings,
   assertKioskFireEvacuationEnabled,
   verifyKioskEmergencyPin,
+  verifyStaffPinAtKiosk,
   clockInAtKiosk,
   clockOutAtKiosk,
   getTodayAtKiosk,

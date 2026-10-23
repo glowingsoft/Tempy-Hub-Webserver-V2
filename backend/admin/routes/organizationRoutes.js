@@ -296,6 +296,12 @@ scoped.put(
   supervisionController.updateSupervision
 );
 scoped.post(
+  "/supervision/:supervisionId/action-points/sign-off",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  supervisionController.signOffActionPoints
+);
+scoped.post(
   "/supervision/:supervisionId/action-points/:actionPointId/sign-off",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
@@ -336,6 +342,12 @@ scoped.put(
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   appraisalController.updateAppraisal
+);
+scoped.post(
+  "/appraisals/:appraisalId/action-points/sign-off",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  appraisalController.signOffActionPoints
 );
 scoped.post(
   "/appraisals/:appraisalId/action-points/:actionPointId/sign-off",

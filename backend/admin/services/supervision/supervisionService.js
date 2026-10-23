@@ -217,26 +217,19 @@ const branchLookup = {
 
 const signedOffLookup = {
   $lookup: {
-    from: StaffProfile.collection.name,
-    localField: "actionPoints.signedOffByStaffId",
+    from: User.collection.name,
+    localField: "actionPoints.signedOffByUserId",
     foreignField: "_id",
     pipeline: [
       {
-        $lookup: {
-          from: User.collection.name,
-          localField: "userId",
-          foreignField: "_id",
-          pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
-          as: "user",
-        },
-      },
-      {
         $project: {
-          name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+          name: 1,
+          email: 1,
+          image: { $ifNull: ["$profileIcon", ""] },
         },
       },
     ],
-    as: "signedOffStaff",
+    as: "signedOffUsers",
   },
 };
 
@@ -252,20 +245,20 @@ const attachSignedOffNames = {
           $mergeObjects: [
             "$$point",
             {
-              signedOffBy: {
+              signedOffByUser: {
                 $let: {
                   vars: {
                     signer: {
                       $first: {
                         $filter: {
-                          input: "$signedOffStaff",
+                          input: "$signedOffUsers",
                           as: "row",
-                          cond: { $eq: ["$$row._id", "$$point.signedOffByStaffId"] },
+                          cond: { $eq: ["$$row._id", "$$point.signedOffByUserId"] },
                         },
                       },
                     },
                   },
-                  in: { $ifNull: ["$$signer.name", ""] },
+                  in: { $ifNull: ["$$signer", null] },
                 },
               },
             },
@@ -282,7 +275,25 @@ const recordShapeStages = [
   branchLookup,
   signedOffLookup,
   attachSignedOffNames,
-  { $project: { signedOffStaff: 0 } },
+  {
+    $addFields: {
+      actionPoints: {
+        $map: {
+          input: "$actionPoints",
+          as: "point",
+          in: {
+            $mergeObjects: [
+              "$$point",
+              {
+                signedOffBy: { $ifNull: ["$$point.signedOffByUser.name", ""] },
+              },
+            ],
+          },
+        },
+      },
+    },
+  },
+  { $project: { signedOffUsers: 0 } },
 ];
 
 const listTeamSupervision = async ({
@@ -530,35 +541,115 @@ const updateSupervision = async ({
   return record.toObject();
 };
 
+const loadSupervisionForAccess = async ({ actor, organizationId, supervisionId }) => {
+  const record = await SupervisionRecord.findOne({
+    _id: toObjectId(supervisionId, "invalid_supervision_id"),
+    organizationId: toObjectId(organizationId, "invalid_organization_id"),
+  });
+  if (!record) throw new AppError("supervision_not_found", 404);
+
+  const staff = await loadStaff(record.staffId, organizationId);
+  await assertCanAccessStaff({ actor, organizationId, staff });
+  return { record, staff };
+};
+
+const uniquePointIds = (value) => {
+  if (!Array.isArray(value)) throw new AppError("invalid_action_points", 400);
+  const seen = new Set();
+  const ids = [];
+  for (const item of value) {
+    const id = String(item || "").trim();
+    if (!id) continue;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError("action_point_not_found", 404);
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+};
+
+const applyActionPointSignOffs = async ({
+  record,
+  staff,
+  actor,
+  organizationId,
+  signedOffIds,
+  replaceSet,
+}) => {
+  const wanted = new Set(signedOffIds.map(String));
+  for (const id of wanted) {
+    if (!record.actionPoints.id(id)) throw new AppError("action_point_not_found", 404);
+  }
+
+  const now = moment.tz(await timezoneFor(staff.branchId)).toDate();
+  const signerId = actor._id;
+
+  for (const point of record.actionPoints) {
+    const selected = wanted.has(String(point._id));
+    if (selected) {
+      if (!point.signedOffAt) {
+        point.signedOffAt = now;
+        point.signedOffByUserId = signerId;
+      }
+      continue;
+    }
+    const ownSign =
+      replaceSet &&
+      point.signedOffByUserId &&
+      String(point.signedOffByUserId) === String(signerId);
+    if (ownSign) {
+      point.signedOffAt = null;
+      point.signedOffByUserId = null;
+    }
+  }
+
+  await record.save();
+  return record.toObject();
+};
+
 const signOffActionPoint = async ({
   actor,
   organizationId,
   supervisionId,
   actionPointId,
 }) => {
-  const record = await SupervisionRecord.findOne({
-    _id: supervisionId,
+  const { record, staff } = await loadSupervisionForAccess({
+    actor,
     organizationId,
+    supervisionId,
   });
-  if (!record) throw new AppError("supervision_not_found", 404);
-
-  const staff = await loadStaff(record.staffId, organizationId);
-  await assertCanAccessStaff({ actor, organizationId, staff });
-
-  const point = record.actionPoints.id(actionPointId);
-  if (!point) throw new AppError("action_point_not_found", 404);
-
-  const actorProfile = await StaffProfile.findOne({
-    userId: actor._id,
+  return applyActionPointSignOffs({
+    record,
+    staff,
+    actor,
     organizationId,
-  })
-    .select("_id")
-    .lean();
+    signedOffIds: uniquePointIds([actionPointId]),
+    replaceSet: false,
+  });
+};
 
-  point.signedOffAt = moment.tz(await timezoneFor(staff.branchId)).toDate();
-  point.signedOffByStaffId = actorProfile?._id || null;
-  await record.save();
-  return record.toObject();
+/** Body `actionPointIds` is the full checked set: sent = signed off, omitted = open. */
+const signOffActionPoints = async ({
+  actor,
+  organizationId,
+  supervisionId,
+  actionPointIds,
+}) => {
+  const { record, staff } = await loadSupervisionForAccess({
+    actor,
+    organizationId,
+    supervisionId,
+  });
+  return applyActionPointSignOffs({
+    record,
+    staff,
+    actor,
+    organizationId,
+    signedOffIds: uniquePointIds(actionPointIds),
+    replaceSet: true,
+  });
 };
 
 const mySupervision = async ({ actor, organizationId }) => {
@@ -613,5 +704,6 @@ module.exports = {
   createSupervision,
   updateSupervision,
   signOffActionPoint,
+  signOffActionPoints,
   mySupervision,
 };

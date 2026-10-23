@@ -75,26 +75,19 @@ const branchLookup = {
 
 const signedOffLookup = {
   $lookup: {
-    from: StaffProfile.collection.name,
-    localField: "actionPoints.signedOffByStaffId",
+    from: User.collection.name,
+    localField: "actionPoints.signedOffByUserId",
     foreignField: "_id",
     pipeline: [
       {
-        $lookup: {
-          from: User.collection.name,
-          localField: "userId",
-          foreignField: "_id",
-          pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
-          as: "user",
-        },
-      },
-      {
         $project: {
-          name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+          name: 1,
+          email: 1,
+          image: { $ifNull: ["$profileIcon", ""] },
         },
       },
     ],
-    as: "signedOffStaff",
+    as: "signedOffUsers",
   },
 };
 
@@ -134,15 +127,31 @@ const shapeFields = {
           $mergeObjects: [
             "$$point",
             {
+              signedOffByUser: {
+                $let: {
+                  vars: {
+                    signer: {
+                      $first: {
+                        $filter: {
+                          input: "$signedOffUsers",
+                          as: "row",
+                          cond: { $eq: ["$$row._id", "$$point.signedOffByUserId"] },
+                        },
+                      },
+                    },
+                  },
+                  in: { $ifNull: ["$$signer", null] },
+                },
+              },
               signedOffBy: {
                 $let: {
                   vars: {
                     signer: {
                       $first: {
                         $filter: {
-                          input: "$signedOffStaff",
+                          input: "$signedOffUsers",
                           as: "row",
-                          cond: { $eq: ["$$row._id", "$$point.signedOffByStaffId"] },
+                          cond: { $eq: ["$$row._id", "$$point.signedOffByUserId"] },
                         },
                       },
                     },
@@ -167,7 +176,7 @@ const appraisalRecordStages = [
   staffSignedLookup,
   managerSignedLookup,
   shapeFields,
-  { $project: { signedOffStaff: 0, staffSigner: 0, managerSigner: 0 } },
+  { $project: { signedOffUsers: 0, staffSigner: 0, managerSigner: 0 } },
 ];
 
 module.exports = {

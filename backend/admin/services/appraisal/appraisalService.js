@@ -407,6 +407,73 @@ const loadAppraisal = async (appraisalId, organizationId) => {
   return record;
 };
 
+const shapeAppraisal = async (appraisalId, organizationId) => {
+  const [row] = await AppraisalRecord.aggregate([
+    {
+      $match: {
+        _id: toObjectId(appraisalId, "invalid_appraisal_id"),
+        organizationId: toObjectId(organizationId, "invalid_organization_id"),
+      },
+    },
+    ...appraisalRecordStages,
+  ]);
+  return row;
+};
+
+const uniquePointIds = (value) => {
+  if (!Array.isArray(value)) throw new AppError("invalid_action_points", 400);
+  const seen = new Set();
+  const ids = [];
+  for (const item of value) {
+    const id = String(item || "").trim();
+    if (!id) continue;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError("action_point_not_found", 404);
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+};
+
+const applyAppraisalActionPointSignOffs = async ({
+  record,
+  staff,
+  actor,
+  signedOffIds,
+  replaceSet,
+}) => {
+  const wanted = new Set(signedOffIds.map(String));
+  for (const id of wanted) {
+    if (!record.actionPoints.id(id)) throw new AppError("action_point_not_found", 404);
+  }
+
+  const now = moment.tz(await timezoneFor(staff.branchId)).toDate();
+  const signerId = actor._id;
+
+  for (const point of record.actionPoints) {
+    const selected = wanted.has(String(point._id));
+    if (selected) {
+      if (!point.signedOffAt) {
+        point.signedOffAt = now;
+        point.signedOffByUserId = signerId;
+      }
+      continue;
+    }
+    const ownSign =
+      replaceSet &&
+      point.signedOffByUserId &&
+      String(point.signedOffByUserId) === String(signerId);
+    if (ownSign) {
+      point.signedOffAt = null;
+      point.signedOffByUserId = null;
+    }
+  }
+
+  await record.save();
+};
+
 const updateAppraisal = async ({
   actor,
   organizationId,
@@ -503,14 +570,36 @@ const signOffActionPoint = async ({
   const staff = await loadStaff(record.staffId, organizationId);
   await assertWriterForStaff({ actor, organizationId, staff });
 
-  const point = record.actionPoints.id(actionPointId);
-  if (!point) throw new AppError("action_point_not_found", 404);
+  await applyAppraisalActionPointSignOffs({
+    record,
+    staff,
+    actor,
+    signedOffIds: uniquePointIds([actionPointId]),
+    replaceSet: false,
+  });
+  return shapeAppraisal(appraisalId, organizationId);
+};
 
-  const conductor = await actorConductor({ actor, organizationId });
-  point.signedOffAt = moment.tz(await timezoneFor(staff.branchId)).toDate();
-  point.signedOffByStaffId = conductor.conductedByStaffId;
-  await record.save();
-  return record.toObject();
+const signOffActionPoints = async ({
+  actor,
+  organizationId,
+  appraisalId,
+  actionPointIds,
+}) => {
+  const record = await loadAppraisal(appraisalId, organizationId);
+  if (record.lockedAt) throw new AppError("appraisal_locked", 400);
+
+  const staff = await loadStaff(record.staffId, organizationId);
+  await assertWriterForStaff({ actor, organizationId, staff });
+
+  await applyAppraisalActionPointSignOffs({
+    record,
+    staff,
+    actor,
+    signedOffIds: uniquePointIds(actionPointIds),
+    replaceSet: true,
+  });
+  return shapeAppraisal(appraisalId, organizationId);
 };
 
 const managerSignAppraisal = async ({ actor, organizationId, appraisalId }) => {
@@ -610,6 +699,7 @@ module.exports = {
   createAppraisal,
   updateAppraisal,
   signOffActionPoint,
+  signOffActionPoints,
   managerSignAppraisal,
   myAppraisal,
   acknowledgeAppraisal,

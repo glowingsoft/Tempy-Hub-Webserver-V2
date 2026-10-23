@@ -185,6 +185,26 @@ const signOffActionPoint = async (req, res) => {
   }
 };
 
+const signOffActionPoints = async (req, res) => {
+  try {
+    const data = await appraisalService.signOffActionPoints({
+      actor: req.user,
+      organizationId: req.orgId,
+      appraisalId: req.params.appraisalId,
+      actionPointIds: req.body.actionPointIds,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "action_point_signed_off",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const managerSignAppraisal = async (req, res) => {
   try {
     const data = await appraisalService.managerSignAppraisal({
@@ -213,5 +233,6 @@ module.exports = {
   createAppraisal,
   updateAppraisal,
   signOffActionPoint,
+  signOffActionPoints,
   managerSignAppraisal,
 };

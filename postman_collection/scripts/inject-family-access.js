@@ -363,6 +363,29 @@ requests.push(
     },
     response: [],
   },
+  {
+    name: "upload photos",
+    event: [
+      test([
+        'pm.test("Photos uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const photos = pm.response.json().data.photos;",
+        '    pm.expect(photos).to.be.an("array").that.is.not.empty;',
+        '    pm.collectionVariables.set("mediaId", photos[0].mediaId);',
+        '    pm.collectionVariables.set("mediaIds", JSON.stringify(photos.map((p) => p.mediaId)));',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: [],
+      body: { mode: "formdata", formdata: [{ key: "files", type: "file", src: [] }] },
+      url: { raw: "{{url}}/app/family/media/batch", host: ["{{url}}"], path: ["app", "family", "media", "batch"] },
+      description:
+        "New Upload: Upload Photos, several at once. Form-data field files; select up to 10 images in that one row (10 MB each, 50 MB together). Every file is checked before any is stored, so one bad file stores nothing and the error names it. Returns photos, a list of mediaId in the order sent. Sets mediaId (the first) and mediaIds (all, as a JSON list): in send upload for approval replace [\"{{mediaId}}\"] with {{mediaIds}} to attach them all.",
+    },
+    response: [],
+  },
   withBody(
     req("send upload for approval", "POST", ["app", "family", "uploads"], {
       tests: [
@@ -429,6 +452,47 @@ requests.push(
   })
 );
 
+// ---------------------------------------------------------------- Community wall (family app)
+requests.push(
+  req("community wall", "GET", ["app", "family", "wall"], {
+    query: "residentId={{residentId}}&page=1&limit=10",
+    tests: [
+      'pm.test("Wall fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.be.an("array");',
+      "});",
+    ],
+    description:
+      "Home Family Tab, Community Wall: the home's published posts, pinned first then newest. Query: residentId (required, it picks the home), page, limit. Each post has homeName, authorName, message, photos, isPinned, reactionCount, reactedByMe and taggedResidents (only residents you are linked to). Sets postId from the first post for the reaction requests.",
+  }),
+  req("react to post", "PUT", ["app", "family", "wall", "{{postId}}", "reaction"], {
+    tests: [
+      'pm.test("Reaction saved", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.reactedByMe).to.eql(true);',
+      "});",
+    ],
+    description:
+      "One tap. One reaction per member per post, so sending it again changes nothing. Returns reactionCount and reactedByMe. 404 for a removed post or a post at a home you are not linked to.",
+  }),
+  req("remove reaction", "DELETE", ["app", "family", "wall", "{{postId}}", "reaction"], {
+    tests: [
+      'pm.test("Reaction removed", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.reactedByMe).to.eql(false);',
+      "});",
+    ],
+    description: "Removes your reaction; safe to send twice. Returns reactionCount and reactedByMe.",
+  })
+);
+// the wall request remembers a post for the reaction requests
+requests.find((r) => r.name === "community wall").event.push(
+  test([
+    "const posts = pm.response.json().data;",
+    'if (posts.length) { pm.collectionVariables.set("postId", posts[0].postId); }',
+  ])
+);
+
 // ---------------------------------------------------------------- Invite Family (by email)
 requests.push(
   req("invitations I sent", "GET", ["app", "family", "member-invitations"], {
@@ -478,6 +542,73 @@ const staff = (name, method, pathParts, options = {}) =>
   });
 
 const staffRequests = [
+  {
+    name: "upload post photos",
+    event: [
+      test([
+        'pm.test("Photos uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const photos = pm.response.json().data.photos;",
+        '    pm.expect(photos).to.be.an("array").that.is.not.empty;',
+        '    pm.collectionVariables.set("mediaId", photos[0].mediaId);',
+        '    pm.collectionVariables.set("mediaIds", JSON.stringify(photos.map((p) => p.mediaId)));',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: orgHeader,
+      body: { mode: "formdata", formdata: [{ key: "files", type: "file", src: [] }] },
+      url: { raw: "{{url}}/admin/family/posts/media/batch", host: ["{{url}}"], path: ["admin", "family", "posts", "media", "batch"] },
+      description:
+        "Several photos for a wall post. Form-data field files; select up to 10 images in that one row. Returns photos with their mediaIds. Sets mediaId (the first) and mediaIds (all, as a JSON list): in create post replace [\"{{mediaId}}\"] with {{mediaIds}}. Needs familyEngagement.manage.",
+    },
+    response: [],
+  },
+  req("wall posts", "GET", ["admin", "organizations", "{{organizationId}}", "family-posts"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("Wall posts fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("published", "removed");',
+      "});",
+    ],
+    description:
+      "Staff Community Wall: every post of the organization, pinned first then newest, with author, home, photos, all tagged residents and reactionCount. Optional query: status (published or removed), branchId, residentId (tagged), keyword, page, limit. meta.counts has published and removed and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
+  }),
+  staff("taggable residents", "GET", ["admin", "family", "posts", "taggable-residents"], {
+    query: "branchId={{branchId}}",
+    tests: [
+      'pm.test("Taggable residents fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.be.an("array");',
+      "});",
+    ],
+    description:
+      "The tag picker: residents of the site that photo sharing is on for. A site or line manager always gets their own site; an owner or super admin can pass branchId (or none for every site).",
+  }),
+  {
+    name: "upload post photo",
+    event: [
+      test([
+        'pm.test("Photo uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        '    pm.collectionVariables.set("mediaId", pm.response.json().data.mediaId);',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: orgHeader,
+      body: { mode: "formdata", formdata: [{ key: "file", type: "file", src: [] }] },
+      url: { raw: "{{url}}/admin/family/posts/media", host: ["{{url}}"], path: ["admin", "family", "posts", "media"] },
+      description:
+        "One photo for a wall post. Form-data field file (choose a file in Postman). Images only, up to 10 MB; resized and stored. Sets mediaId for create post. Needs familyEngagement.manage.",
+    },
+    response: [],
+  },
   req("upload queue", "GET", ["admin", "organizations", "{{organizationId}}", "family-uploads"], {
     query: "page=1&limit=10",
     tests: [
@@ -490,6 +621,17 @@ const staffRequests = [
     ],
     description:
       "Moderation queue: uploads waiting for approval, oldest first, with author, resident, room and the original photos. Optional query: status (default waiting), branchId, residentId, page, limit. meta.counts has waiting, approved and rejected for the tabs and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
+  }),
+  req("family member detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-members", "{{memberId}}"], {
+    tests: [
+      'pm.test("Family member fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("memberId", "name", "email", "status", "residentName", "uploads");',
+      "});",
+    ],
+    description:
+      "Family member detail: name, email, phone, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (waiting, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
@@ -655,6 +797,62 @@ uploadDecisions.forEach(({ name, body, status, description }) => {
   staffRequests.push(request);
 });
 
+// Wall posts: create, edit and remove.
+const wallPosts = [
+  {
+    name: "create post",
+    method: "POST",
+    path: ["admin", "family", "posts"],
+    body: {
+      branchId: "{{branchId}}",
+      message: "Garden afternoon: live music and scones on the lawn.",
+      mediaIds: ["{{mediaId}}"],
+      taggedResidentIds: ["{{residentId}}"],
+      isPinned: false,
+    },
+    tests: [
+      'pm.test("Post published", function () {',
+      "    pm.response.to.have.status(201);",
+      '    pm.expect(pm.response.json().data.status).to.eql("published");',
+      '    pm.collectionVariables.set("postId", pm.response.json().data.postId);',
+      "});",
+    ],
+    description:
+      "Staff Community Wall: new post. Body: branchId (an owner or super admin must pick the site; a site or line manager posts to their own), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. Goes live straight away with no approval and every active family member at the site gets a notification. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage.",
+  },
+  {
+    name: "update post",
+    method: "PUT",
+    path: ["admin", "family", "posts", "{{postId}}"],
+    body: { message: "Garden afternoon: live music, scones and a raffle.", isPinned: true },
+    tests: [
+      'pm.test("Post updated", function () {',
+      "    pm.response.to.have.status(200);",
+      "});",
+    ],
+    description:
+      "Edit the text, photos or tags, or pin and unpin. Anything not sent stays as it was. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again.",
+  },
+  {
+    name: "remove post",
+    method: "DELETE",
+    path: ["admin", "family", "posts", "{{postId}}"],
+    tests: [
+      'pm.test("Post removed", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("removed");',
+      "});",
+    ],
+    description:
+      "Removes the post from every feed and from future newsletters and gazettes. The row is kept. Sending it again returns 404.",
+  },
+];
+wallPosts.forEach(({ name, method, path, body, tests, description }) => {
+  const request = staff(name, method, path, { tests, description });
+  if (body) request.request.body = jsonBody(body);
+  staffRequests.push(request);
+});
+
 let staffFolder = adminFolder.item.find((i) => i.name === "Family Management");
 if (!staffFolder) {
   staffFolder = { name: "Family Management", item: [] };
@@ -744,9 +942,19 @@ for (const [name, action] of [
 }
 
 // The invitations list lives under the organization, like the members and invitations lists of staff.
-const allInvitations = ((adminFolder.item.find((i) => i.name === "Family Invitations") || { item: [] }).item).find(
-  (r) => r.name === "list family invitations"
-);
+const familyInvitationItems = (adminFolder.item.find((i) => i.name === "Family Invitations") || { item: [] }).item;
+const allInvitations = familyInvitationItems.find((r) => r.name === "list family invitations");
+const invitationDetail = familyInvitationItems.find((r) => r.name === "get family invitation");
+if (invitationDetail) {
+  const path = ["admin", "organizations", "{{organizationId}}", "family-invitations", "{{familyInvitationId}}"];
+  invitationDetail.request.url.path = path;
+  invitationDetail.request.url.raw = `{{url}}/${path.join("/")}`;
+  invitationDetail.request.header = (invitationDetail.request.header || []).filter(
+    (h) => String(h.key).toLowerCase() !== "x-org-id"
+  );
+  invitationDetail.request.description =
+    "Family invitation detail: name, email, phone, relationship, isNextOfKin, status (a pending one past its expiry reads as expired), the resident, room and home, who invited, createdAt, expiresAt, lastSentAt, sendCount, and who accepted or revoked it. The token hash is never returned. 404 for another organization's invitation. Needs familyEngagement.view; 404 when the module is off.";
+}
 if (allInvitations) {
   const path = ["admin", "organizations", "{{organizationId}}", "family-invitations"];
   allInvitations.request.url.path = path;
@@ -774,7 +982,7 @@ const retire = (item) => {
 retire(collection);
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "uploadId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

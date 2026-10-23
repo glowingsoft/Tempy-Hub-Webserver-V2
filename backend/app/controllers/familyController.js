@@ -1,5 +1,6 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
+const { queryText } = require("@utils/familyQuery");
 const familyAccessService = require("@appServices/family/familyAccessService");
 const familyCodeService = require("@appServices/family/familyCodeService");
 const familyJoinService = require("@appServices/family/familyJoinService");
@@ -8,13 +9,14 @@ const familyHandoverService = require("@appServices/family/familyHandoverService
 const familyInviteService = require("@appServices/family/familyInviteService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const familyTimelineService = require("@appServices/family/familyTimelineService");
+const familyWallService = require("@appServices/family/familyWallService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
 
 const listMyResidents = respond((req) =>
   familyAccessService.resolveFamilyResidents(req.user._id, {
-    activeResidentId: req.query.residentId,
+    activeResidentId: queryText(req.query.residentId),
   })
 );
 
@@ -28,7 +30,7 @@ const createFamilyCode = respond(
 );
 
 const previewJoinCode = respond((req) =>
-  familyJoinService.previewCode({ userId: req.user._id, code: req.query.code })
+  familyJoinService.previewCode({ userId: req.user._id, code: queryText(req.query.code) })
 );
 
 const requestToJoin = respond(
@@ -102,7 +104,7 @@ const requestHandover = respond(
 const getCurrentHandover = respond((req) =>
   familyHandoverService.getCurrentHandover({
     userId: req.user._id,
-    residentId: req.query.residentId,
+    residentId: queryText(req.query.residentId),
   })
 );
 
@@ -128,7 +130,7 @@ const listSentInvitations = respond(
     return familyInviteService.listSentInvitations({
       userId: req.user._id,
       link: req.familyLink,
-      status: req.query.status,
+      status: queryText(req.query.status),
       page,
       limit,
       skip,
@@ -140,6 +142,11 @@ const listSentInvitations = respond(
 const uploadPhoto = respond(
   (req) => familyUploadService.uploadPhoto({ userId: req.user._id, file: req.file }),
   { statusCode: 201, translationKey: "photo_uploaded" }
+);
+
+const uploadPhotos = respond(
+  (req) => familyUploadService.uploadPhotos({ userId: req.user._id, files: req.files }),
+  { statusCode: 201, translationKey: "photos_uploaded" }
 );
 
 const createUpload = respond(
@@ -160,8 +167,8 @@ const listMyUploads = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyUploadService.listMyUploads({
       userId: req.user._id,
-      residentId: req.query.residentId,
-      status: req.query.status,
+      residentId: queryText(req.query.residentId),
+      status: queryText(req.query.status),
       page,
       limit,
       skip,
@@ -193,12 +200,48 @@ const listTimeline = respond(
     const limit = requested >= 1 ? Math.min(requested, TIMELINE_MAX_PAGE_SIZE) : TIMELINE_PAGE_SIZE;
     return familyTimelineService.listTimeline({
       link: req.familyLink,
+      userId: req.user._id,
       page,
       limit,
       skip: (page - 1) * limit,
     });
   },
   { paged: true }
+);
+
+const listWall = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyWallService.listWall({
+      link: req.familyLink,
+      links: req.familyLinks,
+      userId: req.user._id,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const addReaction = respond(
+  (req) =>
+    familyWallService.addReaction({
+      userId: req.user._id,
+      links: req.familyLinks,
+      postId: req.params.postId,
+    }),
+  { translationKey: "reaction_saved" }
+);
+
+const removeReaction = respond(
+  (req) =>
+    familyWallService.removeReaction({
+      userId: req.user._id,
+      links: req.familyLinks,
+      postId: req.params.postId,
+    }),
+  { translationKey: "reaction_removed" }
 );
 
 const inviteRelative = respond(
@@ -233,8 +276,12 @@ module.exports = {
   inviteRelative,
   listSentInvitations,
   uploadPhoto,
+  uploadPhotos,
   createUpload,
   listMyUploads,
   updateUpload,
   listTimeline,
+  listWall,
+  addReaction,
+  removeReaction,
 };

@@ -25,7 +25,8 @@ const {
   isStaffAccount,
   familyModuleOrganizationIds,
 } = require("@appServices/family/familyAccessService");
-const { joinOne } = require("@appServices/family/familyPipeline");
+const { joinOne, isValidObjectId } = require("@appServices/family/familyPipeline");
+const { searchText } = require("@utils/familyQuery");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
@@ -212,12 +213,16 @@ const listInvitations = async ({
   residentId,
   keyword,
 }) => {
+  if (status && !Object.values(FamilyInvitationStatus).includes(status)) {
+    throw new AppError("invalid_status_filter", 400);
+  }
+
   // counts ignore the status filter so every tab keeps its total
   const base = { organizationId: toObjectId(organizationId) };
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.residentId = toObjectId(residentId);
 
-  const or = keywordOr(keyword, ["email", "name"], { trim: true });
+  const or = keywordOr(searchText(keyword), ["email", "name"], { trim: true });
   if (or) base.$or = or;
 
   const now = new Date();
@@ -253,9 +258,42 @@ const listInvitations = async ({
 };
 
 const getInvitation = async ({ invitationId, organizationId }) => {
+  if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
+
   const [invitation] = await FamilyInvitation.aggregate([
     { $match: { _id: toObjectId(invitationId), organizationId: toObjectId(organizationId) } },
-    { $project: { tokenHash: 0 } },
+    ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
+    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({ from: User, localField: "invitedByUserId", as: "invitedBy", optional: true }),
+    ...joinOne({ from: User, localField: "acceptedByUserId", as: "acceptedBy", optional: true }),
+    ...joinOne({ from: User, localField: "revokedByUserId", as: "revokedBy", optional: true }),
+    {
+      $project: {
+        _id: 0,
+        invitationId: "$_id",
+        name: 1,
+        email: 1,
+        phone: 1,
+        relationship: 1,
+        isNextOfKin: 1,
+        status: invitationStatusNow(new Date()),
+        residentId: 1,
+        residentName: { $ifNull: ["$resident.name", ""] },
+        roomNumber: { $ifNull: ["$resident.roomNumber", ""] },
+        branchId: 1,
+        homeName: { $ifNull: ["$branch.name", ""] },
+        invitedById: "$invitedByUserId",
+        invitedByName: { $ifNull: ["$invitedBy.name", ""] },
+        createdAt: 1,
+        expiresAt: 1,
+        lastSentAt: 1,
+        sendCount: 1,
+        acceptedAt: 1,
+        acceptedByName: { $ifNull: ["$acceptedBy.name", ""] },
+        revokedAt: 1,
+        revokedByName: { $ifNull: ["$revokedBy.name", ""] },
+      },
+    },
   ]);
   if (!invitation) throw new AppError("invitation_not_found", 404);
 

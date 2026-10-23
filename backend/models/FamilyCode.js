@@ -2,8 +2,9 @@ const mongoose = require("mongoose");
 const { FamilyCodeStatus } = require("./domainEnums");
 
 /**
- * Stored as typed, not hashed: it is shown to the next of kin, and anyone using it
- * still needs approval. A resident has one active code; a new one voids the old.
+ * The code is never stored as typed. `codeHash` (a keyed hash) is how a code typed by someone
+ * is found; `codeCipher` (encrypted) is how the next of kin sees it again. See familyCodeCrypto.
+ * A resident has one active code; a new one voids the old.
  */
 const familyCodeSchema = new mongoose.Schema(
   {
@@ -22,7 +23,8 @@ const familyCodeSchema = new mongoose.Schema(
       ref: "Resident",
       required: true,
     },
-    code: { type: String, required: true, trim: true, uppercase: true },
+    codeHash: { type: String, required: true },
+    codeCipher: { type: String, required: true },
     status: {
       type: String,
       enum: Object.values(FamilyCodeStatus),
@@ -44,7 +46,7 @@ const familyCodeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-familyCodeSchema.index({ code: 1 }, { unique: true });
+familyCodeSchema.index({ codeHash: 1 }, { unique: true });
 
 familyCodeSchema.index(
   { residentId: 1 },

@@ -10,8 +10,6 @@ const { toObjectId, isValidObjectId, joinOne, personFields } = require("./family
 
 const joinUser = joinOne({ from: User, localField: "userId", as: "user" });
 
-// ---------------------------------------------------------------- who may act
-
 const callerIsNextOfKin = (callerId) => ({
   $gt: [
     {
@@ -64,8 +62,6 @@ const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
   if (!allowed) throw new AppError(notFoundKey, 404);
   return row;
 };
-
-// ---------------------------------------------------------------- listing
 
 // next of kin first, then active members in the order they joined, then requests
 const memberOrderStages = [
@@ -155,8 +151,6 @@ const listJoinRequests = ({ link, page, limit, skip }) =>
       },
     ],
   });
-
-// ---------------------------------------------------------------- deciding and removing
 
 const decideJoinRequest = async ({ userId, requestId, decision }) => {
   const row = await loadForNextOfKin({

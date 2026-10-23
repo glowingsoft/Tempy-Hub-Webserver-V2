@@ -11,6 +11,7 @@ const {
   FamilyInvitationStatus,
 } = require("@models/domainEnums");
 const { toObjectId, joinOne } = require("@appServices/family/familyPipeline");
+const { searchText } = require("@utils/familyQuery");
 
 const FamilyGroupStatus = {
   ACTIVE: "active",
@@ -121,7 +122,7 @@ const listFamilyGroups = async ({ organizationId, branchId, status, keyword, pag
   if (branchId) resident.branchId = toObjectId(branchId);
 
   const search = [];
-  const or = keywordOr(keyword, ["name", "roomNumber", "nextOfKinName"], { trim: true });
+  const or = keywordOr(searchText(keyword), ["name", "roomNumber", "nextOfKinName"], { trim: true });
   if (or) search.push({ $match: { $or: or } });
 
   const wanted = status ? [{ $match: { status } }] : [];
@@ -166,4 +167,4 @@ const listFamilyGroups = async ({ organizationId, branchId, status, keyword, pag
   return { data: result.data, meta: { ...generateMeta(page, limit, totalRecords), counts } };
 };
 
-module.exports = { listFamilyGroups, FamilyGroupStatus };
+module.exports = { listFamilyGroups };

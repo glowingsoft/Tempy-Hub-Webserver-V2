@@ -15,13 +15,10 @@ const {
 } = require("@models/domainEnums");
 const { isFamilyModuleActive, isStaffAccount } = require("./familyAccessService");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
+const { hashCode, normaliseCode } = require("./familyCodeCrypto");
 
 const MAX_FAILED_TRIES = 5;
 const LOCK_MS = FAMILY_CODE_LOCK_MINUTES * 60 * 1000;
-
-// ---------------------------------------------------------------- checking a code
-
-const normaliseCode = (code) => String(code || "").trim().toUpperCase();
 
 /** Five failures inside the window lock entry. Tries made while locked are not recorded, so the lock can't be extended. */
 const assertNotLocked = async (userId) => {
@@ -51,7 +48,7 @@ const failCode = async (userId, translationKey, statusCode) => {
 
 const findCodeWithHome = async (value) => {
   const [doc] = await FamilyCode.aggregate([
-    { $match: { code: value } },
+    { $match: { codeHash: hashCode(value) } },
     ...joinOne({ from: Organization, localField: "organizationId", as: "organization", optional: true }),
     ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
     {
@@ -98,8 +95,6 @@ const previewCode = async ({ userId, code }) => {
   const { homeName } = await checkCode({ userId, code });
   return { valid: true, homeName };
 };
-
-// ---------------------------------------------------------------- asking to join
 
 const shapeRequest = (row, homeName) => ({
   requestId: row._id,
@@ -185,8 +180,6 @@ const requestToJoin = async ({ user, code: typedCode, relationship }) => {
   await FamilyCodeFailure.deleteMany({ userId: user._id });
   return shapeRequest(row, homeName);
 };
-
-// ---------------------------------------------------------------- waiting and cancelling
 
 const getCurrentRequest = async (userId) => {
   const [row] = await FamilyMember.aggregate([

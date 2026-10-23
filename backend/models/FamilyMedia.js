@@ -11,6 +11,11 @@ const familyMediaSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    postId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FamilyPost",
+      default: null,
+    },
     uploadId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "FamilyUpload",
@@ -30,6 +35,7 @@ const familyMediaSchema = new mongoose.Schema(
 
 familyMediaSchema.index({ uploadedBy: 1, uploadId: 1 });
 familyMediaSchema.index({ uploadId: 1 });
+familyMediaSchema.index({ postId: 1 });
 
 const FamilyMedia =
   mongoose.models.FamilyMedia || mongoose.model("FamilyMedia", familyMediaSchema);

@@ -1,21 +1,28 @@
 const { User } = require("@models/UserModel");
+const { Branch } = require("@models/Branch");
 const { FamilyUpload } = require("@models/FamilyUpload");
+const { FamilyPost } = require("@models/FamilyPost");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyMember } = require("@models/FamilyMember");
-const { FamilyUploadStatus } = require("@models/domainEnums");
-const { paginateWithFacet } = require("@utils/paginate");
+const { FamilyUploadStatus, FamilyPostStatus } = require("@models/domainEnums");
+const { facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { toObjectId, joinOne } = require("./familyPipeline");
+const { reactionStats } = require("./familyWallPipeline");
 
-const TimelineItemType = { UPLOAD: "upload" };
+const TimelineItemType = { UPLOAD: "upload", WALL_POST: "wallPost" };
 
-/** Only the blurred copy is shown once a manager made one. */
+/** Only the blurred copy is shown once a manager made one; wall photos never have one. */
 const photoUrl = {
   $cond: [{ $ne: ["$$media.blurredUrl", ""] }, "$$media.blurredUrl", "$$media.url"],
 };
 
-const itemStages = (residentId) => [
+const isUpload = { $eq: ["$kind", TimelineItemType.UPLOAD] };
+
+const itemStages = ({ residentId, userId }) => [
   { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },
   ...joinOne({ from: User, localField: "authorId", as: "author", optional: true }),
+  ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
   {
     $lookup: {
       from: FamilyMember.collection.name,
@@ -37,6 +44,7 @@ const itemStages = (residentId) => [
       as: "authorLink",
     },
   },
+  ...reactionStats(userId),
   {
     $addFields: {
       photos: {
@@ -48,33 +56,77 @@ const itemStages = (residentId) => [
   {
     $project: {
       _id: 0,
-      type: { $literal: TimelineItemType.UPLOAD },
-      uploadId: "$_id",
-      residentId: 1,
+      type: "$kind",
+      uploadId: { $cond: [isUpload, "$_id", null] },
+      postId: { $cond: [isUpload, null, "$_id"] },
+      residentId: { $literal: toObjectId(residentId) },
+      homeName: { $ifNull: ["$branch.name", ""] },
       authorName: { $ifNull: ["$author.name", ""] },
       authorPhotoUrl: { $ifNull: ["$author.profileIcon", ""] },
       authorRelationship: 1,
       message: 1,
       photos: 1,
-      publishedAt: "$decidedAt",
+      reactionCount: { $cond: [isUpload, 0, "$reactionCount"] },
+      reactedByMe: { $cond: [isUpload, false, "$reactedByMe"] },
+      publishedAt: "$sortAt",
     },
   },
 ];
 
-/**
- * The Family tab: what has been shared about the resident, newest first. Only approved uploads
- * appear, from any member of the family; waiting and rejected ones stay with their author.
- * `link` is the caller's active link to the resident, so a removed member sees nothing.
- */
-const listTimeline = ({ link, page, limit, skip }) =>
-  paginateWithFacet({
-    model: FamilyUpload,
-    match: { residentId: toObjectId(link.residentId), status: FamilyUploadStatus.APPROVED },
-    page,
-    limit,
-    skip,
-    sort: { decidedAt: -1, _id: -1 },
-    extraDataStages: itemStages(link.residentId),
-  });
+/** Approved uploads and tagged wall posts for the resident, newest first. `link` is the caller's active link, so a removed member sees nothing. */
+const listTimeline = async ({ link, userId, page, limit, skip }) => {
+  const residentId = toObjectId(link.residentId);
 
-module.exports = { listTimeline, TimelineItemType };
+  const [result] = await FamilyUpload.aggregate([
+    { $match: { residentId, status: FamilyUploadStatus.APPROVED } },
+    {
+      $project: {
+        kind: { $literal: TimelineItemType.UPLOAD },
+        sortAt: "$decidedAt",
+        authorId: 1,
+        branchId: 1,
+        message: 1,
+        mediaIds: 1,
+      },
+    },
+    {
+      $unionWith: {
+        coll: FamilyPost.collection.name,
+        pipeline: [
+          {
+            $match: {
+              organizationId: toObjectId(link.organizationId),
+              taggedResidentIds: residentId,
+              status: FamilyPostStatus.PUBLISHED,
+            },
+          },
+          {
+            $project: {
+              kind: { $literal: TimelineItemType.WALL_POST },
+              sortAt: "$createdAt",
+              authorId: 1,
+              branchId: 1,
+              message: 1,
+              mediaIds: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $facet: {
+        data: [
+          { $sort: { sortAt: -1, _id: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          ...itemStages({ residentId, userId }),
+        ],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ]);
+
+  return { data: result.data, meta: generateMeta(page, limit, facetCount(result.totalCount)) };
+};
+
+module.exports = { listTimeline };

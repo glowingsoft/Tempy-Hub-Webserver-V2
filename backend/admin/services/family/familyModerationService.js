@@ -93,9 +93,7 @@ const listUploads = async ({ organizationId, branchId, residentId, status, page,
   return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
 };
 
-// ---------------------------------------------------------------- deciding
-
-/** Another manager may have decided first; a site or line manager can only decide for their own site. */
+/** A site or line manager can only decide for their own site; 409 if another manager decided first. */
 const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
   if (!isValidObjectId(uploadId)) throw new AppError("upload_not_found", 404);
 

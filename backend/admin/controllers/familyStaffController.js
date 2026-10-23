@@ -1,8 +1,11 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
+const { queryText, queryId } = require("@utils/familyQuery");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyGroupService = require("@adminServices/family/familyGroupService");
 const familyModerationService = require("@adminServices/family/familyModerationService");
+const familyPostService = require("@adminServices/family/familyPostService");
+const familyUploadService = require("@appServices/family/familyUploadService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const withScope = (req) => ({ actor: req.user, organizationId: req.orgId });
@@ -16,10 +19,10 @@ const listAllMembers = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listAllMembers({
       organizationId: req.orgId,
-      branchId: req.query.branchId,
-      residentId: req.query.residentId,
-      status: req.query.status,
-      isNextOfKin: req.query.isNextOfKin,
+      branchId: queryId(req.query.branchId),
+      residentId: queryId(req.query.residentId),
+      status: queryText(req.query.status),
+      isNextOfKin: queryText(req.query.isNextOfKin),
       page,
       limit,
       skip,
@@ -33,9 +36,9 @@ const listFamilyGroups = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyGroupService.listFamilyGroups({
       organizationId: req.orgId,
-      branchId: req.query.branchId,
-      status: req.query.status,
-      keyword: req.query.keyword,
+      branchId: queryId(req.query.branchId),
+      status: queryText(req.query.status),
+      keyword: queryText(req.query.keyword),
       page,
       limit,
       skip,
@@ -49,9 +52,9 @@ const listUploads = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyModerationService.listUploads({
       organizationId: req.orgId,
-      branchId: req.query.branchId,
-      residentId: req.query.residentId,
-      status: req.query.status,
+      branchId: queryId(req.query.branchId),
+      residentId: queryId(req.query.residentId),
+      status: queryText(req.query.status),
       page,
       limit,
       skip,
@@ -72,6 +75,78 @@ const updateUpload = respondByAction({
     translationKey: "upload_rejected",
   },
 });
+
+const listPosts = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyPostService.listPosts({
+      organizationId: req.orgId,
+      branchId: queryId(req.query.branchId),
+      residentId: queryId(req.query.residentId),
+      status: queryText(req.query.status),
+      keyword: queryText(req.query.keyword),
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const getMember = respond((req) =>
+  familyStaffService.getMember({ organizationId: req.orgId, memberId: req.params.memberId })
+);
+
+const listTaggableResidents = respond((req) =>
+  familyPostService.listTaggableResidents({
+    actor: req.user,
+    organizationId: req.orgId,
+    branchId: queryId(req.query.branchId),
+  })
+);
+
+const uploadPostPhoto = respond(
+  (req) => familyUploadService.uploadPhoto({ userId: req.user._id, file: req.file }),
+  { statusCode: 201, translationKey: "photo_uploaded" }
+);
+
+const uploadPostPhotos = respond(
+  (req) => familyUploadService.uploadPhotos({ userId: req.user._id, files: req.files }),
+  { statusCode: 201, translationKey: "photos_uploaded" }
+);
+
+const createPost = respond(
+  (req) =>
+    familyPostService.createPost({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.body.branchId,
+      message: req.body.message,
+      mediaIds: req.body.mediaIds,
+      taggedResidentIds: req.body.taggedResidentIds,
+      isPinned: req.body.isPinned,
+    }),
+  { statusCode: 201, translationKey: "post_created" }
+);
+
+const updatePost = respond(
+  (req) =>
+    familyPostService.updatePost({
+      actor: req.user,
+      organizationId: req.orgId,
+      postId: req.params.id,
+      message: req.body.message,
+      mediaIds: req.body.mediaIds,
+      taggedResidentIds: req.body.taggedResidentIds,
+      isPinned: req.body.isPinned,
+    }),
+  { translationKey: "post_updated" }
+);
+
+const removePost = respond(
+  (req) => familyPostService.removePost({ actor: req.user, organizationId: req.orgId, postId: req.params.id }),
+  { translationKey: "post_removed" }
+);
 
 const setNextOfKin = respond(
   (req) =>
@@ -98,8 +173,8 @@ const listJoinRequests = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listJoinRequests({
       ...withScope(req),
-      branchId: req.query.branchId,
-      residentId: req.query.residentId,
+      branchId: queryId(req.query.branchId),
+      residentId: queryId(req.query.residentId),
       page,
       limit,
       skip,
@@ -128,9 +203,9 @@ const listHandovers = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listHandovers({
       ...withScope(req),
-      branchId: req.query.branchId,
-      residentId: req.query.residentId,
-      homeChooses: req.query.homeChooses,
+      branchId: queryId(req.query.branchId),
+      residentId: queryId(req.query.residentId),
+      homeChooses: queryText(req.query.homeChooses),
       page,
       limit,
       skip,
@@ -151,9 +226,17 @@ const createCode = respond(
 module.exports = {
   listMembers,
   listAllMembers,
+  getMember,
   listFamilyGroups,
   listUploads,
   updateUpload,
+  listPosts,
+  listTaggableResidents,
+  uploadPostPhoto,
+  uploadPostPhotos,
+  createPost,
+  updatePost,
+  removePost,
   setNextOfKin,
   removeMember,
   listJoinRequests,

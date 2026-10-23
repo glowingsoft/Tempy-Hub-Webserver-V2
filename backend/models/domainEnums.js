@@ -99,6 +99,11 @@ const FamilyUploadStatus = {
   REJECTED: "rejected",
 };
 
+const FamilyPostStatus = {
+  PUBLISHED: "published",
+  REMOVED: "removed",
+};
+
 const FamilyJoinSource = {
   INVITATION: "invitation",
   CODE: "code",
@@ -400,6 +405,7 @@ module.exports = {
   FamilyJoinSource,
   FamilyHandoverStatus,
   FamilyUploadStatus,
+  FamilyPostStatus,
   FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,

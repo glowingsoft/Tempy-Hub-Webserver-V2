@@ -14,16 +14,19 @@ const MAX_PHOTOS = 10;
 const MAX_MESSAGE_LENGTH = 500;
 const MAX_CLIENT_ID_LENGTH = 100;
 const REJECTED_KEEP_DAYS = 30;
+const MAX_UNATTACHED_PHOTOS = 50;
 
 const isDuplicateKey = (error) => error?.code === 11000;
 
-// ---------------------------------------------------------------- photos
+const assertRoomForPhotos = async ({ userId, count }) => {
+  const [waiting] = await FamilyMedia.aggregate([
+    { $match: { uploadedBy: toObjectId(userId), uploadId: null, postId: null } },
+    { $count: "count" },
+  ]);
+  if ((waiting?.count ?? 0) + count > MAX_UNATTACHED_PHOTOS) throw new AppError("too_many_unused_photos", 429);
+};
 
-/** Step before submitting: the photo is checked, resized and stored, and the app keeps the returned mediaId. */
-const uploadPhoto = async ({ userId, file }) => {
-  if (!file) throw new AppError("file_required", 400);
-
-  const image = await prepareUpload(file.buffer);
+const storePhoto = async ({ userId, image }) => {
   const { key, url } = await uploadAwsService.putObject({
     key: `family/${userId}/${randomUUID()}.jpg`,
     body: image.buffer,
@@ -43,7 +46,33 @@ const uploadPhoto = async ({ userId, file }) => {
   return { mediaId: media._id, url, width: image.width, height: image.height };
 };
 
-// ---------------------------------------------------------------- validation
+/** Up to 10 photos in one request. Every file is checked before any is stored, so one bad file stores nothing. */
+const uploadPhotos = async ({ userId, files }) => {
+  if (!Array.isArray(files) || !files.length) throw new AppError("file_required", 400);
+  if (files.length > MAX_PHOTOS) throw new AppError("too_many_photos", 400);
+
+  await assertRoomForPhotos({ userId, count: files.length });
+
+  const images = [];
+  for (const file of files) {
+    try {
+      images.push(await prepareUpload(file.buffer));
+    } catch (error) {
+      throw new AppError("invalid_image_file", 400, { file: file.originalname || "a file" });
+    }
+  }
+
+  const photos = [];
+  for (const image of images) photos.push(await storePhoto({ userId, image }));
+  return { photos };
+};
+
+const uploadPhoto = async ({ userId, file }) => {
+  if (!file) throw new AppError("file_required", 400);
+
+  await assertRoomForPhotos({ userId, count: 1 });
+  return storePhoto({ userId, image: await prepareUpload(file.buffer) });
+};
 
 const normaliseMessage = (message) => {
   const text = String(message ?? "").trim();
@@ -69,7 +98,6 @@ const assertPhotosAllowed = async ({ organizationId, residentId }) => {
   if (!resident.photographyConsent) throw new AppError("photos_cannot_be_shared", 400);
 };
 
-/** Photos must be the caller's own and not already used by another upload. */
 const assertMediaUsable = async ({ userId, mediaIds, uploadId = null }) => {
   if (!mediaIds.length) return;
 
@@ -85,8 +113,6 @@ const assertMediaUsable = async ({ userId, mediaIds, uploadId = null }) => {
   ]);
   if ((found?.count ?? 0) !== mediaIds.length) throw new AppError("media_not_found", 400);
 };
-
-// ---------------------------------------------------------------- reading
 
 const effectiveUrl = (field) => ({
   $cond: [{ $ne: [`$$media.blurredUrl`, ""] }, `$$media.blurredUrl`, `$$media.${field}`],
@@ -132,7 +158,6 @@ const stillVisible = (now) => ({
   $or: [{ deleteAfter: null }, { deleteAfter: { $gt: now } }],
 });
 
-/** My Uploads: Approved, Waiting For Approval and Not Approved, newest first. Rejected ones leave after 30 days. */
 const listMyUploads = async ({ userId, residentId, status, page, limit, skip }) => {
   if (status && !Object.values(FamilyUploadStatus).includes(status)) {
     throw new AppError("invalid_status_filter", 400);
@@ -167,8 +192,6 @@ const getMyUpload = async ({ userId, uploadId }) => {
   if (!upload) throw new AppError("upload_not_found", 404);
   return upload;
 };
-
-// ---------------------------------------------------------------- writing
 
 /** Send For Approval. The same clientId returns the upload already made instead of a second one. */
 const createUpload = async ({ userId, link, message, mediaIds = [], includeInGazette, clientId }) => {
@@ -302,11 +325,9 @@ const rejectedDeleteAfter = (from = new Date()) =>
 
 module.exports = {
   uploadPhoto,
+  uploadPhotos,
   listMyUploads,
-  getMyUpload,
   createUpload,
   updateUpload,
   rejectedDeleteAfter,
-  MAX_PHOTOS,
-  MAX_MESSAGE_LENGTH,
 };

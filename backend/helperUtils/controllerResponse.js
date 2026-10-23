@@ -20,7 +20,7 @@ const respond =
 
 /**
  * One route for the actions on a record: the body's `action` picks the handler, so
- * approve / reject / cancel share one PATCH. Unknown actions are a 400.
+ * approve / reject / cancel share one PUT. Unknown actions are a 400.
  * `actions` maps a name to { run(req), translationKey?, statusCode? }.
  */
 const respondByAction = (actions) => async (req, res) => {

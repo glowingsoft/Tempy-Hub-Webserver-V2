@@ -12,9 +12,15 @@ const {
   FAMILY_APPROVE,
   FAMILY_STAFF_ROLES,
 } = require("@adminServices/family/familyAccess");
+const { receivePhoto, receivePhotos } = require("@middlewares/familyPhotoMiddleware");
+const createRateLimiter = require("@utils/rateLimiter");
 const familyStaffController = require("../controllers/familyStaffController");
 
 const router = express.Router();
+
+const photoLimiter = createRateLimiter("family-post-photos", 15, 60);
+const photoBatchLimiter = createRateLimiter("family-post-photo-batches", 15, 12);
+const postLimiter = createRateLimiter("family-posts", 15, 60);
 
 router.use(
   auth,
@@ -34,6 +40,13 @@ router.get("/join-requests", requirePermission(FAMILY_VIEW), familyStaffControll
 router.put("/join-requests/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateJoinRequest);
 
 router.put("/uploads/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateUpload);
+
+router.get("/posts/taggable-residents", requirePermission(FAMILY_VIEW), familyStaffController.listTaggableResidents);
+router.post("/posts/media/batch", photoBatchLimiter, requirePermission(FAMILY_MANAGE), receivePhotos, familyStaffController.uploadPostPhotos);
+router.post("/posts/media", photoLimiter, requirePermission(FAMILY_MANAGE), receivePhoto, familyStaffController.uploadPostPhoto);
+router.post("/posts", postLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.createPost);
+router.put("/posts/:id", requirePermission(FAMILY_MANAGE), familyStaffController.updatePost);
+router.delete("/posts/:id", requirePermission(FAMILY_MANAGE), familyStaffController.removePost);
 
 router.get("/handovers", requirePermission(FAMILY_VIEW), familyStaffController.listHandovers);
 

@@ -3,11 +3,12 @@ const { AppError } = require("@services/_errors/AppError");
 
 const MAX_EDGE = 2048;
 const MAX_BLUR_AREAS = 20;
+const MAX_INPUT_PIXELS = 40_000_000;
 
 /** Re-encodes the upload, which also proves it is a real image, and keeps its longest edge within MAX_EDGE. */
 const prepareUpload = async (buffer) => {
   try {
-    const { data, info } = await sharp(buffer)
+    const { data, info } = await sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
       .rotate()
       .resize(MAX_EDGE, MAX_EDGE, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 82 })
@@ -41,7 +42,6 @@ const validateAreas = (areas) => {
   return areas;
 };
 
-/** Returns a copy of the image with each area blurred. */
 const blurAreas = async (buffer, areas) => {
   validateAreas(areas);
 
@@ -68,4 +68,4 @@ const blurAreas = async (buffer, areas) => {
   return { buffer: out, mimeType: "image/jpeg" };
 };
 
-module.exports = { prepareUpload, blurAreas, validateAreas, MAX_BLUR_AREAS };
+module.exports = { prepareUpload, blurAreas, validateAreas };

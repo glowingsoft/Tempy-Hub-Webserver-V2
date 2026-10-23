@@ -6,6 +6,7 @@ const { FamilyCode } = require("@models/FamilyCode");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyCodeStatus } = require("@models/domainEnums");
 const { toObjectId, joinOne } = require("./familyPipeline");
+const { hashCode, encryptCode, decryptCode } = require("./familyCodeCrypto");
 
 const CODE_TTL_MS = Number(process.env.FAMILY_CODE_TTL_DAYS || 14) * 24 * 60 * 60 * 1000;
 const MAX_CREATE_ATTEMPTS = 5;
@@ -40,9 +41,9 @@ const generateCode = ({ prefix, roomNumber }) => {
   throw new AppError("family_code_generation_failed", 500);
 };
 
-const shapeCode = (doc) => ({
+const shapeCode = (doc, code) => ({
   residentId: doc.residentId,
-  code: doc.code,
+  code,
   expiresAt: doc.expiresAt,
   createdAt: doc.createdAt,
 });
@@ -62,7 +63,15 @@ const getCurrentCode = async ({ link }) => {
     { $limit: 1 },
   ]);
 
-  return doc ? shapeCode(doc) : noCode(link.residentId);
+  if (!doc) return noCode(link.residentId);
+
+  try {
+    return shapeCode(doc, decryptCode(doc.codeCipher));
+  } catch (error) {
+    // made with another key (for example after the secret changed): Make A New Code replaces it
+    console.error("family code could not be read", error.message);
+    return noCode(link.residentId);
+  }
 };
 
 /** The home's initials and the resident's room number, which a code is built from. */
@@ -103,7 +112,8 @@ const replaceActiveCode = async ({ link, userId, code }) => {
             organizationId: link.organizationId,
             branchId: link.branchId,
             residentId: link.residentId,
-            code,
+            codeHash: hashCode(code),
+            codeCipher: encryptCode(code),
             expiresAt: new Date(Date.now() + CODE_TTL_MS),
             createdBy: userId,
           },
@@ -124,8 +134,9 @@ const createCode = async ({ link, userId }) => {
 
   for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt += 1) {
     try {
-      const created = await replaceActiveCode({ link, userId, code: generateCode(inputs) });
-      return shapeCode(created);
+      const code = generateCode(inputs);
+      const created = await replaceActiveCode({ link, userId, code });
+      return shapeCode(created, code);
     } catch (error) {
       // 11000: the code already exists, or another request just made one
       if (error.code !== 11000) throw error;

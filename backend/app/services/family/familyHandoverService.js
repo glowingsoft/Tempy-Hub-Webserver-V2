@@ -22,8 +22,6 @@ const shapeHandover = (handover) => ({
   requestedAt: handover.requestedAt,
 });
 
-// ---------------------------------------------------------------- choosing who takes over
-
 /** Active members can be chosen; people still waiting for approval are shown but not selectable. */
 const listCandidates = async ({ userId, link }) => {
   const members = await FamilyMember.aggregate([
@@ -110,8 +108,6 @@ const requestHandover = async ({ userId, link, toMemberId, homeChooses }) => {
   }
 };
 
-// ---------------------------------------------------------------- seeing the request
-
 /** The open handover the caller is part of, as the one asking or the one asked. */
 const getCurrentHandover = async ({ userId, residentId }) => {
   const links = await listActiveLinks(userId);
@@ -158,8 +154,6 @@ const getCurrentHandover = async ({ userId, residentId }) => {
     to: row.homeChooses ? null : pickPerson(row, "to"),
   };
 };
-
-// ---------------------------------------------------------------- answering it
 
 /** side: "toUserId" for the person asked, "fromUserId" for the next of kin who asked. */
 const loadOpenHandover = async ({ userId, handoverId, side }) => {
@@ -249,8 +243,6 @@ const acceptHandover = async ({ userId, handoverId }) => {
 
   return { handoverId: row._id, status: FamilyHandoverStatus.ACCEPTED, residentId: row.residentId };
 };
-
-// ---------------------------------------------------------------- leaving
 
 /** The next of kin can't leave until someone has taken over. Leaving also withdraws any handover asked of them. */
 const leaveFamily = async ({ userId, link }) => {

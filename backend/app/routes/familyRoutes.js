@@ -6,10 +6,16 @@ const {
   requireFamilyAccess,
   requireNextOfKin,
 } = require("@middlewares/familyMiddleware");
-const { receivePhoto } = require("@middlewares/familyPhotoMiddleware");
+const { receivePhoto, receivePhotos } = require("@middlewares/familyPhotoMiddleware");
+const createRateLimiter = require("@utils/rateLimiter");
 const familyController = require("../controllers/familyController");
 
 const router = express.Router();
+
+const photoLimiter = createRateLimiter("family-photos", 15, 60);
+const photoBatchLimiter = createRateLimiter("family-photo-batches", 15, 12);
+const writeLimiter = createRateLimiter("family-writes", 15, 60);
+const inviteLimiter = createRateLimiter("family-invites", 15, 20);
 
 const residentInQuery = requireFamilyAccess({ param: "residentId", from: "query" });
 const residentInBody = requireFamilyAccess({ param: "residentId", from: "body" });
@@ -23,7 +29,7 @@ router.get("/codes/current", residentInQuery, requireNextOfKin, familyController
 router.post("/codes", residentInBody, requireNextOfKin, familyController.createFamilyCode);
 
 router.get("/member-invitations", residentInQuery, requireNextOfKin, familyController.listSentInvitations);
-router.post("/member-invitations", residentInBody, requireNextOfKin, familyController.inviteRelative);
+router.post("/member-invitations", inviteLimiter, residentInBody, requireNextOfKin, familyController.inviteRelative);
 
 router.get("/join/preview", familyController.previewJoinCode);
 router.post("/join", familyController.requestToJoin);
@@ -42,8 +48,13 @@ router.put("/handover/:id", familyController.updateHandover);
 
 router.get("/timeline", residentInQuery, familyController.listTimeline);
 
-router.post("/media", requireFamilyAccess(), receivePhoto, familyController.uploadPhoto);
-router.post("/uploads", residentInBody, familyController.createUpload);
+router.get("/wall", residentInQuery, familyController.listWall);
+router.put("/wall/:postId/reaction", requireFamilyAccess(), familyController.addReaction);
+router.delete("/wall/:postId/reaction", requireFamilyAccess(), familyController.removeReaction);
+
+router.post("/media/batch", photoBatchLimiter, requireFamilyAccess(), receivePhotos, familyController.uploadPhotos);
+router.post("/media", photoLimiter, requireFamilyAccess(), receivePhoto, familyController.uploadPhoto);
+router.post("/uploads", writeLimiter, residentInBody, familyController.createUpload);
 router.get("/uploads", requireFamilyAccess(), familyController.listMyUploads);
 router.put("/uploads/:id", requireFamilyAccess(), familyController.updateUpload);
 

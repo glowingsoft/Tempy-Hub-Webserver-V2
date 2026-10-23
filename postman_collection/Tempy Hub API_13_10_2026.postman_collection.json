@@ -9853,7 +9853,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Willow House\",\n  \"timezone\": \"Europe/London\",\n  \"assemblyPoint\": \"Front car park\",\n  \"settings\": {\n    \"enableBreaks\": true,\n    \"lateGraceMinutes\": 5,\n    \"allowPhoneCheckIn\": false\n  },\n  \"manager\": {\n    \"email\": \"{{inviteEmail}}\",\n    \"name\": \"Site Manager Name\",\n    \"jobTitleId\": \"{{jobTitleId}}\",\n    \"startDate\": \"2026-02-01T00:00:00.000Z\"\n  }\n}\n",
+                  "raw": "{\n  \"name\": \"Willow House\",\n  \"timezone\": \"Europe/London\",\n  \"assemblyPoint\": \"Front car park\",\n  \"settings\": {\n    \"enableBreaks\": true,\n    \"lateGraceMinutes\": 5,\n    \"allowPhoneCheckIn\": false,\n    \"autoClockOutHoursAfterShiftEnd\": 3,\n    \"autoClockOutHoursAfterClockIn\": 10\n  },\n  \"manager\": {\n    \"email\": \"{{inviteEmail}}\",\n    \"name\": \"Site Manager Name\",\n    \"jobTitleId\": \"{{jobTitleId}}\",\n    \"startDate\": \"2026-02-01T00:00:00.000Z\"\n  }\n}\n",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9882,7 +9882,7 @@
                     "header": [],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"name\": \"Beacon House\",\n  \"code\":\"BE-1234\",\n  \"timezone\": \"Europe/London\",\n  \"assemblyPoint\": \"Front car park\",\n  \"settings\": {\n    \"enableBreaks\": true,\n    \"paidBreaks\": false,\n    \"breakBands\": [\n      { \"minShiftHours\": 12, \"unpaidBreakMinutes\": 60 },\n      { \"minShiftHours\": 6, \"unpaidBreakMinutes\": 30 }\n    ],\n    \"lateGraceMinutes\": 5,\n    \"allowPhoneCheckIn\": false,\n    \"enableLeaveRequests\": true\n  },\n  \"manager\": {\n    \"email\": \"{{inviteEmail}}\",\n    \"name\": \"Site Manager Name\",\n    \"jobTitleId\": \"{{jobTitleId}}\",\n    \"departmentIds\": [],\n    \"startDate\": \"2026-02-01T00:00:00.000Z\"\n  }\n}\n",
+                      "raw": "{\n  \"name\": \"Beacon House\",\n  \"code\":\"BE-1234\",\n  \"timezone\": \"Europe/London\",\n  \"assemblyPoint\": \"Front car park\",\n  \"settings\": {\n    \"enableBreaks\": true,\n    \"paidBreaks\": false,\n    \"breakBands\": [\n      { \"minShiftHours\": 12, \"unpaidBreakMinutes\": 60 },\n      { \"minShiftHours\": 6, \"unpaidBreakMinutes\": 30 }\n    ],\n    \"lateGraceMinutes\": 5,\n    \"allowPhoneCheckIn\": false,\n    \"enableLeaveRequests\": true,\n    \"autoClockOutHoursAfterShiftEnd\": 3,\n    \"autoClockOutHoursAfterClockIn\": 10\n  },\n  \"manager\": {\n    \"email\": \"{{inviteEmail}}\",\n    \"name\": \"Site Manager Name\",\n    \"jobTitleId\": \"{{jobTitleId}}\",\n    \"departmentIds\": [],\n    \"startDate\": \"2026-02-01T00:00:00.000Z\"\n  }\n}\n",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -10125,7 +10125,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"assemblyPoint\": \"Rear garden gate\",\n  \"emergencyPin\": \"123456\",\n  \"settings\": {\n    \"allowPhoneCheckIn\": true,\n    \"lateGraceMinutes\": 10\n  }\n}\n",
+                  "raw": "{\n  \"assemblyPoint\": \"Rear garden gate\",\n  \"emergencyPin\": \"123456\",\n  \"settings\": {\n    \"allowPhoneCheckIn\": true,\n    \"lateGraceMinutes\": 10,\n    \"autoClockOutHoursAfterShiftEnd\": 3,\n    \"autoClockOutHoursAfterClockIn\": 10\n  }\n}\n",
                   "options": {
                     "raw": {
                       "language": "json"

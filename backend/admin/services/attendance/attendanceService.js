@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { AttendanceDay } = require("@models/AttendanceDay");
+const { Shift } = require("@models/Shift");
 const { AttendanceChangeRequest } = require("@models/AttendanceChangeRequest");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -198,6 +199,90 @@ const getBranchSettings = async (branchId) => {
   const branch = await Branch.findById(branchId).select("settings").lean();
   if (!branch) throw new AppError("branch_not_found", 404);
   return branch.settings || {};
+};
+
+const AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS = 3;
+const AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS = 10;
+const AUTO_CLOCK_OUT_BATCH = 200;
+
+const hoursFromSettings = (value, fallback) => {
+  const hours = Number(value);
+  return Number.isFinite(hours) && hours >= 0 ? hours : fallback;
+};
+
+const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
+  if (!branchId && !staffId) return 0;
+
+  const filter = { clockOutAt: null };
+  if (staffId) filter.staffId = staffId;
+  if (branchId) filter.branchId = branchId;
+
+  const days = await AttendanceDay.find(filter).limit(AUTO_CLOCK_OUT_BATCH);
+  if (!days.length) return 0;
+
+  const branchIds = [...new Set(days.map((day) => String(day.branchId)))];
+  const [branches, shifts] = await Promise.all([
+    Branch.find({ _id: { $in: branchIds } }).select("settings").lean(),
+    Shift.find({
+      _id: { $in: days.map((day) => day.shiftId).filter(Boolean) },
+    })
+      .select("endsAt")
+      .lean(),
+  ]);
+  const settingsByBranch = new Map(
+    branches.map((branch) => [String(branch._id), branch.settings || {}])
+  );
+  const shiftById = new Map(shifts.map((shift) => [String(shift._id), shift]));
+
+  const now = Date.now();
+  const ops = [];
+  for (const day of days) {
+    const settings = settingsByBranch.get(String(day.branchId)) || {};
+    const afterShiftEnd = hoursFromSettings(
+      settings.autoClockOutHoursAfterShiftEnd,
+      AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS
+    );
+    const afterClockIn = hoursFromSettings(
+      settings.autoClockOutHoursAfterClockIn,
+      AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS
+    );
+
+    let dueAtMs = null;
+    if (day.shiftId) {
+      const shift = shiftById.get(String(day.shiftId));
+      if (!shift?.endsAt) continue;
+      dueAtMs = new Date(shift.endsAt).getTime() + afterShiftEnd * 3600000;
+    } else {
+      dueAtMs = new Date(day.clockInAt).getTime() + afterClockIn * 3600000;
+    }
+    if (now < dueAtMs) continue;
+
+    const clockOutAt = new Date(dueAtMs);
+    const breaks = (day.breaks || []).map((segment) => ({
+      breakInAt: segment.breakInAt,
+      breakOutAt: segment.breakOutAt || clockOutAt,
+    }));
+    const next = {
+      clockOutAt,
+      presenceStatus: PresenceStatus.CHECKED_OUT,
+      autoClosed: true,
+      breaks,
+    };
+    next.workedMinutes = computeWorkedMinutes(
+      { ...day.toObject(), ...next },
+      settings
+    );
+    ops.push({
+      updateOne: {
+        filter: { _id: day._id, clockOutAt: null },
+        update: { $set: next },
+      },
+    });
+  }
+
+  if (!ops.length) return 0;
+  const result = await AttendanceDay.bulkWrite(ops);
+  return result.modifiedCount || 0;
 };
 
 const normalizeClientEventId = (value) => {
@@ -684,8 +769,10 @@ const clockInFromActiveShift = (active, clockInAt) => {
   };
 };
 
-const staffCannotClockIn = async (staffId) =>
-  Boolean(await getOpenAttendanceDay(staffId));
+const staffCannotClockIn = async (staffId) => {
+  await closeExpiredOpenSessions({ staffId });
+  return Boolean(await getOpenAttendanceDay(staffId));
+};
 
 const getTodayAttendance = async ({ userId, organizationId }) => {
   const profile = await requireStaffProfile(userId, organizationId);
@@ -714,6 +801,10 @@ const clockIn = async ({
 }) => {
   const eventId = normalizeClientEventId(clientEventId);
   const profile = await requireStaffProfile(userId, organizationId);
+  await closeExpiredOpenSessions({
+    staffId: profile._id,
+    branchId: profile.branchId,
+  });
   const existingByEvent = await findByClientEventId(eventId);
   if (existingByEvent && !existingByEvent.clockOutAt) {
     if (String(existingByEvent.staffId) !== String(profile._id)) {
@@ -811,6 +902,10 @@ const clockInForStaff = async ({
   image,
 }) => {
   assertStaffAtBranch(staffProfile, branchId);
+  await closeExpiredOpenSessions({
+    staffId: staffProfile._id,
+    branchId,
+  });
 
   const eventId = normalizeClientEventId(clientEventId);
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
@@ -879,6 +974,7 @@ const clockOutForStaff = async ({
 };
 
 const listOnSiteForBranch = async ({ branchId, keyword, page, limit, skip }) => {
+  await closeExpiredOpenSessions({ branchId });
   const term = String(keyword ?? "").trim();
   const keywordMatch = term
     ? {
@@ -1717,6 +1813,7 @@ module.exports = {
   approveChangeRequest,
   rejectChangeRequest,
   staffCannotClockIn,
+  closeExpiredOpenSessions,
   requestRosterForDay,
   approveRosterForDay,
   rejectRosterForDay,

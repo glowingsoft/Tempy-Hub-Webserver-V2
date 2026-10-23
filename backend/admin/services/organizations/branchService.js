@@ -58,13 +58,30 @@ const resolveBranchCode = async (requested, excludeId) => {
   return code;
 };
 
+const NUMBER_SETTING_FIELDS = new Set([
+  "lateGraceMinutes",
+  "autoClockOutHoursAfterShiftEnd",
+  "autoClockOutHoursAfterClockIn",
+]);
+
 const SETTING_FIELDS = [
   "enableBreaks",
   "lateGraceMinutes",
   "allowPhoneCheckIn",
   "paidBreaks",
   "enableLeaveRequests",
+  "autoClockOutHoursAfterShiftEnd",
+  "autoClockOutHoursAfterClockIn",
 ];
+
+const normalizeHoursSetting = (value, fallback) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  const hours = Number(value);
+  if (!Number.isFinite(hours) || hours < 0) {
+    throw new AppError("invalid_auto_clock_out_hours", 400);
+  }
+  return hours;
+};
 
 const normalizeBreakBands = (bands) => {
   if (!Array.isArray(bands)) {
@@ -103,6 +120,14 @@ const buildSettings = (settings) => ({
     settings?.enableLeaveRequests === undefined
       ? true
       : Boolean(settings.enableLeaveRequests),
+  autoClockOutHoursAfterShiftEnd: normalizeHoursSetting(
+    settings?.autoClockOutHoursAfterShiftEnd,
+    3
+  ),
+  autoClockOutHoursAfterClockIn: normalizeHoursSetting(
+    settings?.autoClockOutHoursAfterClockIn,
+    10
+  ),
   ...(settings?.breakBands !== undefined
     ? { breakBands: normalizeBreakBands(settings.breakBands) }
     : {}),
@@ -449,10 +474,9 @@ const updateBranch = async ({
   if (settings) {
     for (const field of SETTING_FIELDS) {
       if (settings[field] === undefined) continue;
-      update[`settings.${field}`] =
-        field === "lateGraceMinutes"
-          ? Number(settings[field])
-          : Boolean(settings[field]);
+      update[`settings.${field}`] = NUMBER_SETTING_FIELDS.has(field)
+        ? normalizeHoursSetting(settings[field], 0)
+        : Boolean(settings[field]);
     }
 
     if (settings.breakBands !== undefined) {

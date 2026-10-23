@@ -33,6 +33,10 @@ const branchSchema = new mongoose.Schema(
       paidBreaks: { type: Boolean, default: false },
       /** When false, staff on this site cannot submit leave requests. */
       enableLeaveRequests: { type: Boolean, default: true },
+      /** Hours after rostered shift.endsAt before an open session is closed. */
+      autoClockOutHoursAfterShiftEnd: { type: Number, default: 3, min: 0 },
+      /** Hours after clockInAt before an unscheduled open session is closed. */
+      autoClockOutHoursAfterClockIn: { type: Number, default: 10, min: 0 },
       /**
        * Unpaid break bands, e.g. 6h shift → 0.5h, 12h → 1h.
        * Longest matching minShiftHours wins.

@@ -55,6 +55,8 @@ const attendanceDaySchema = new mongoose.Schema(
       default: PresenceStatus.ON_SITE,
     },
     workedMinutes: { type: Number, default: null },
+    /** True when the session was closed by auto-checkout, not a staff punch. */
+    autoClosed: { type: Boolean, default: false },
     rosterRequestStatus: {
       type: String,
       enum: Object.values(RosterRequestStatus),

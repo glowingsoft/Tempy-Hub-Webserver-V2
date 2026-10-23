@@ -171,6 +171,7 @@
   "organization_created_successfully": "Organization created successfully",
   "organization_updated_successfully": "Organization updated successfully",
   "invalid_organization_status": "Invalid organization status",
+  "invalid_photography_consent": "Photography consent must be true or false",
   "nothing_to_update": "No updatable fields were provided",
   "module_access_updated_successfully": "Module access updated successfully",
   "module_access_must_be_array": "moduleAccess must be an array",

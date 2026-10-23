@@ -17347,7 +17347,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"James Taylor\",\n  \"roomNumber\": \"106\",\n  \"branchId\": \"{{branchId}}\",\n  \"email\": \"james.taylor@example.com\",\n  \"phone\": \"+447700900001\",\n  \"careLevel\": \"low\",\n  \"admissionStatus\": \"admitted\",\n  \"visitorPasscode\": \"PASS-1098\"\n}",
+                  "raw": "{\n  \"name\": \"James Taylor\",\n  \"roomNumber\": \"106\",\n  \"branchId\": \"{{branchId}}\",\n  \"email\": \"james.taylor@example.com\",\n  \"phone\": \"+447700900001\",\n  \"careLevel\": \"low\",\n  \"admissionStatus\": \"admitted\",\n  \"photographyConsent\": true,\n  \"visitorPasscode\": \"PASS-1098\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -17363,7 +17363,8 @@
                     "admin",
                     "residents"
                   ]
-                }
+                },
+                "description": " photographyConsent (true or false) records whether photos of the resident may be shared with families; it is what allows photos in family uploads and wall-post tags. Leave it out and it is off."
               },
               "response": [
                 {
@@ -17704,7 +17705,8 @@
                     "residents",
                     "{{residentId}}"
                   ]
-                }
+                },
+                "description": "  photographyConsent (true or false) can be changed here later; turning it off stops new photos and tags for the resident."
               },
               "response": [
                 {
@@ -20450,7 +20452,7 @@
                     "family-invitations"
                   ]
                 },
-                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
               },
               "response": []
             },

@@ -7,6 +7,7 @@ const familyMemberService = require("@appServices/family/familyMemberService");
 const familyHandoverService = require("@appServices/family/familyHandoverService");
 const familyInviteService = require("@appServices/family/familyInviteService");
 const familyUploadService = require("@appServices/family/familyUploadService");
+const familyTimelineService = require("@appServices/family/familyTimelineService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
@@ -182,6 +183,24 @@ const updateUpload = respond(
   { translationKey: "upload_updated" }
 );
 
+const TIMELINE_PAGE_SIZE = 20;
+const TIMELINE_MAX_PAGE_SIZE = 50;
+
+const listTimeline = respond(
+  (req) => {
+    const { page } = parsePaginationParams(req);
+    const requested = parseInt(req.query.limit, 10);
+    const limit = requested >= 1 ? Math.min(requested, TIMELINE_MAX_PAGE_SIZE) : TIMELINE_PAGE_SIZE;
+    return familyTimelineService.listTimeline({
+      link: req.familyLink,
+      page,
+      limit,
+      skip: (page - 1) * limit,
+    });
+  },
+  { paged: true }
+);
+
 const inviteRelative = respond(
   (req) =>
     familyInviteService.inviteRelative({
@@ -217,4 +236,5 @@ module.exports = {
   createUpload,
   listMyUploads,
   updateUpload,
+  listTimeline,
 };

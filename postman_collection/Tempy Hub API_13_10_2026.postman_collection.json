@@ -9694,6 +9694,56 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "timeline",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Timeline fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an(\"array\");",
+                      "    pm.expect(json.meta).to.have.property(\"totalRecords\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/family/timeline?residentId={{residentId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family",
+                    "timeline"
+                  ],
+                  "query": [
+                    {
+                      "key": "residentId",
+                      "value": "{{residentId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Home Family Tab, Family: everything shared about the resident, newest first. Query: residentId (required), page, limit (default 20, max 50). Approved uploads from any family member only; waiting and rejected ones never appear. Each item has type, authorName, authorPhotoUrl, authorRelationship, message, photos (the blurred copy where one exists) and publishedAt (when it was approved). 404 if you are not linked to the resident or the module is off."
+              },
+              "response": []
             }
           ]
         }
@@ -20222,7 +20272,7 @@
                     "family-invitations"
                   ]
                 },
-                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
+                "description": "Managers, site managers, line managers and owners (resident handler roles) can invite a relative for a resident. relationship is one of spouse, partner, son, daughter, grandson, granddaughter, brother, sister, nephew, niece, friend, legalGuardian, other. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. isNextOfKin makes the person the resident's next of kin; the previous next of kin steps down. Requires the Residents module."
               },
               "response": []
             },

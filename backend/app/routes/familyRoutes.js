@@ -40,6 +40,8 @@ router.post("/handover", residentInBody, requireNextOfKin, familyController.requ
 router.get("/handover/current", familyController.getCurrentHandover);
 router.put("/handover/:id", familyController.updateHandover);
 
+router.get("/timeline", residentInQuery, familyController.listTimeline);
+
 router.post("/media", requireFamilyAccess(), receivePhoto, familyController.uploadPhoto);
 router.post("/uploads", residentInBody, familyController.createUpload);
 router.get("/uploads", requireFamilyAccess(), familyController.listMyUploads);

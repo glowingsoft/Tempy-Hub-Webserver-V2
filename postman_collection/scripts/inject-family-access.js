@@ -412,6 +412,23 @@ requests.push(
   )
 );
 
+// ---------------------------------------------------------------- Resident timeline
+requests.push(
+  req("timeline", "GET", ["app", "family", "timeline"], {
+    query: "residentId={{residentId}}&page=1&limit=20",
+    tests: [
+      'pm.test("Timeline fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta).to.have.property("totalRecords");',
+      "});",
+    ],
+    description:
+      "Home Family Tab, Family: everything shared about the resident, newest first. Query: residentId (required), page, limit (default 20, max 50). Approved uploads from any family member only; waiting and rejected ones never appear. Each item has type, authorName, authorPhotoUrl, authorRelationship, message, photos (the blurred copy where one exists) and publishedAt (when it was approved). 404 if you are not linked to the resident or the module is off.",
+  })
+);
+
 // ---------------------------------------------------------------- Invite Family (by email)
 requests.push(
   req("invitations I sent", "GET", ["app", "family", "member-invitations"], {

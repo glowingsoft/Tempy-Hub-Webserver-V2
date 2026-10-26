@@ -48,12 +48,12 @@ const listInvitations = async (req, res) => {
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await familyService.listInvitations({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId),
+      branchId: queryId(req.query.branchId, "branchId"),
       page,
       limit,
       skip,
       status: queryText(req.query.status),
-      residentId: queryId(req.query.residentId),
+      residentId: queryId(req.query.residentId, "residentId"),
       keyword: queryText(req.query.keyword),
     });
 

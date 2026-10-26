@@ -9,10 +9,10 @@ const MAX_SEARCH_LENGTH = 100;
  */
 const queryText = (value) => (typeof value === "string" ? value : undefined);
 
-/** A filter id: absent is fine, anything present must be a 24-character hex id. */
-const queryId = (value) => {
+/** A filter id: absent is fine, anything present must be a 24-character hex id. The error names the field. */
+const queryId = (value, field = "id") => {
   if (value === undefined || value === "") return undefined;
-  if (typeof value !== "string" || !OBJECT_ID.test(value)) throw new AppError("invalid_id", 400);
+  if (typeof value !== "string" || !OBJECT_ID.test(value)) throw new AppError("invalid_filter_id", 400, { field });
   return value;
 };
 

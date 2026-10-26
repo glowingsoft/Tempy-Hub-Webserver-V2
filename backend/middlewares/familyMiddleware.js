@@ -3,11 +3,17 @@ const {
   isFamilyModuleActive,
   listActiveLinks,
 } = require("@appServices/family/familyAccessService");
-const { isValidObjectId } = require("@appServices/family/familyPipeline");
+const { isValidObjectId, toObjectId } = require("@appServices/family/familyPipeline");
+const { Branch } = require("@models/Branch");
+const { Resident } = require("@models/Resident");
+const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { AppError } = require("@services/_errors/AppError");
+const { queryId } = require("../helperUtils/familyQuery");
 
-// 404 rather than 403, so a resident's existence is not revealed.
-const notFound = (res) =>
-  sendResponse({ res, statusCode: 404, translationKey: "route_not_found" });
+// 404 rather than 403, so a resident's existence is not revealed: a resident that does not exist
+// and one the caller is not linked to answer the same.
+const notFound = (res, translationKey = "resident_not_found") =>
+  sendResponse({ res, statusCode: 404, translationKey });
 
 const readResidentId = (req, { param, from = "params" }) => (req[from] || {})[param];
 
@@ -21,7 +27,7 @@ const requireFamilyAccess =
   async (req, res, next) => {
     try {
       const links = await listActiveLinks(req.user._id);
-      if (!links.length) return notFound(res);
+      if (!links.length) return notFound(res, "family_profile_not_found");
 
       let link = null;
       if (options.param) {
@@ -34,7 +40,9 @@ const requireFamilyAccess =
             translationKey: "resident_id_required",
           });
         }
-        if (!isValidObjectId(residentId)) return notFound(res);
+        if (!isValidObjectId(residentId)) {
+          return sendResponse({ res, statusCode: 400, translationKey: "invalid_resident_id" });
+        }
 
         link = links.find((l) => String(l.residentId) === String(residentId));
         if (!link) return notFound(res);
@@ -58,7 +66,7 @@ const requireFamilyModule = (req, res, next) => {
     return sendResponse({ res, statusCode: 403, translationKey: "no_membership_for_scope" });
   }
   if (req.isPlatformAdmin || isFamilyModuleActive(req.organization)) return next();
-  return notFound(res);
+  return notFound(res, "family_module_not_enabled");
 };
 
 const requireNextOfKin = (req, res, next) => {
@@ -68,4 +76,28 @@ const requireNextOfKin = (req, res, next) => {
   return next();
 };
 
-module.exports = { requireFamilyAccess, requireNextOfKin, requireFamilyModule };
+/**
+ * Org-path lists take optional branchId and residentId filters. A malformed id is a 400 that names
+ * the field, and an id outside this organization is a 404 that names what is missing, rather than
+ * a list that is silently empty. Run it after requireMembership.
+ */
+const checkFamilyFilters = async (req, res, next) => {
+  try {
+    const branchId = queryId(req.query.branchId, "branchId");
+    const residentId = queryId(req.query.residentId, "residentId");
+    if (!branchId && !residentId) return next();
+    const organizationId = toObjectId(req.orgId);
+
+    const [branch, resident] = await Promise.all([
+      branchId ? Branch.exists({ _id: toObjectId(branchId), organizationId }) : true,
+      residentId ? Resident.exists({ _id: toObjectId(residentId), organizationId }) : true,
+    ]);
+    if (!branch) throw new AppError("branch_not_found", 404);
+    if (!resident) throw new AppError("resident_not_found", 404);
+    return next();
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+module.exports = { requireFamilyAccess, requireNextOfKin, requireFamilyModule, checkFamilyFilters };

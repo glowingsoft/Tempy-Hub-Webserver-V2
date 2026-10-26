@@ -20,8 +20,8 @@ const listAllMembers = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listAllMembers({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId),
-      residentId: queryId(req.query.residentId),
+      branchId: queryId(req.query.branchId, "branchId"),
+      residentId: queryId(req.query.residentId, "residentId"),
       status: queryText(req.query.status),
       isNextOfKin: queryText(req.query.isNextOfKin),
       keyword: queryText(req.query.keyword),
@@ -39,7 +39,7 @@ const listFamilyGroups = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyGroupService.listFamilyGroups({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId),
+      branchId: queryId(req.query.branchId, "branchId"),
       status: queryText(req.query.status),
       keyword: queryText(req.query.keyword),
       page,
@@ -55,8 +55,8 @@ const listUploads = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyModerationService.listUploads({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId),
-      residentId: queryId(req.query.residentId),
+      branchId: queryId(req.query.branchId, "branchId"),
+      residentId: queryId(req.query.residentId, "residentId"),
       status: queryText(req.query.status),
       keyword: queryText(req.query.keyword),
       page,
@@ -85,9 +85,9 @@ const listPosts = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyPostService.listPosts({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId),
-      residentId: queryId(req.query.residentId),
-      authorId: queryId(req.query.authorId),
+      branchId: queryId(req.query.branchId, "branchId"),
+      residentId: queryId(req.query.residentId, "residentId"),
+      authorId: queryId(req.query.authorId, "authorId"),
       status: queryText(req.query.status),
       pinned: queryText(req.query.pinned),
       hasPhotos: queryText(req.query.hasPhotos),
@@ -145,7 +145,7 @@ const listTaggableResidents = respond((req) =>
   familyPostService.listTaggableResidents({
     actor: req.user,
     organizationId: req.orgId,
-    branchId: queryId(req.query.branchId),
+    branchId: queryId(req.query.branchId, "branchId"),
   })
 );
 
@@ -223,8 +223,8 @@ const listJoinRequests = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listJoinRequests({
       ...withScope(req),
-      branchId: queryId(req.query.branchId),
-      residentId: queryId(req.query.residentId),
+      branchId: queryId(req.query.branchId, "branchId"),
+      residentId: queryId(req.query.residentId, "residentId"),
       page,
       limit,
       skip,
@@ -253,8 +253,8 @@ const listHandovers = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listHandovers({
       ...withScope(req),
-      branchId: queryId(req.query.branchId),
-      residentId: queryId(req.query.residentId),
+      branchId: queryId(req.query.branchId, "branchId"),
+      residentId: queryId(req.query.residentId, "residentId"),
       homeChooses: queryText(req.query.homeChooses),
       page,
       limit,

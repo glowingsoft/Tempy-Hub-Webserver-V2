@@ -20,6 +20,7 @@ const { inTransaction } = require("@appServices/family/familyLinkActions");
 const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
 const { reactionStats, postPhotos } = require("@appServices/family/familyWallPipeline");
 const { searchClause } = require("./familySearch");
+const { resolveSite } = require("./familySite");
 const { authorRoleStages } = require("./familyAuthor");
 const { decoratePosts, actionReports, getAttention, getStaffActivity } = require("./familyWallActivityService");
 
@@ -104,16 +105,7 @@ const assertMediaUsable = async ({ userId, mediaIds, postId = null }) => {
   if ((found?.count ?? 0) !== mediaIds.length) throw new AppError("media_not_found", 400);
 };
 
-/** The site a post belongs to: the one asked for, or the caller's own. A site or line manager cannot reach another site. */
-const resolveBranch = async ({ actor, organizationId, branchId }) => {
-  const standing = await actorStanding(actor, organizationId);
-  const target = branchId || standing.branchId;
-  if (!target) throw new AppError("branch_required", 400);
-
-  assertMayAccessResidents(standing, target);
-  await assertBranchInOrganization(target, organizationId);
-  return target;
-};
+const resolveBranch = async (args) => (await resolveSite(args)).branchId;
 
 const postRowStages = (userId = null) => [
   { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },

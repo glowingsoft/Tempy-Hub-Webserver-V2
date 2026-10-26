@@ -36,7 +36,6 @@ const familyMemberSchema = new mongoose.Schema(
       default: FamilyRelationship.OTHER,
     },
     isNextOfKin: { type: Boolean, default: false },
-    phone: { type: String, default: "" },
     status: {
       type: String,
       enum: Object.values(FamilyMemberStatus),

@@ -454,6 +454,39 @@ requests.push(
 
 // ---------------------------------------------------------------- Community wall (family app)
 requests.push(
+  req("newsletters of my home", "GET", ["app", "family", "newsletters"], {
+    query: "residentId={{residentId}}&page=1&limit=10",
+    tests: [
+      'pm.test("Newsletters fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.be.an("array");',
+      "});",
+    ],
+    description:
+      "Newsletters (menu): current and past issues of the resident's home, newest sent first. Query: residentId (required, it picks the home), page, limit. Only newsletters that were sent into the app are listed; drafts, scheduled ones and ones sent only by email are not. Each row has newsletterId, title, homeName, month, periodLabel (October 2026), issueNumber, sentAt, editedAt and a short summary from the welcome note.",
+  }),
+  req("read newsletter", "GET", ["app", "family", "newsletters", "{{newsletterId}}"], {
+    tests: [
+      'pm.test("Newsletter fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("newsletterId", "title", "periodLabel", "highlights", "comingUp", "notices", "gallery");',
+      "});",
+    ],
+    description:
+      "Newsletter screen: the whole issue for reading: title, homeName, periodLabel, issueNumber, sentAt, editedAt (the 'edited 1 Oct' line), the welcome note with signature, highlights (title, text, photoUrl, postedAt), coming up (date, time, title, description, category), notices, new residents, gallery and the footer. Only the sections the home switched on are returned. Posts removed, and residents whose photo sharing is now off, are left out on every read (BR-06). 404 newsletter_not_found for a draft, a scheduled one, one not sent into the app, or another home's. Send the family token; any of your linked homes works.",
+  }),
+  req("download newsletter pdf", "GET", ["app", "family", "newsletters", "{{newsletterId}}", "pdf"], {
+    query: "download=true",
+    tests: [
+      'pm.test("PDF returned", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.headers.get("Content-Type")).to.include("application/pdf");',
+      "});",
+    ],
+    description:
+      "The PDF button on the Newsletter screen: the same A4 PDF the home emails (the copy stored when it was sent, or drawn from what was sent when none was stored). download=false opens it inline; otherwise it is an attachment. Same visibility rules as read newsletter. Rate limited. In Postman use Send and Download to save it.",
+  }),
   req("community wall", "GET", ["app", "family", "wall"], {
     query: "residentId={{residentId}}&page=1&limit=10",
     tests: [
@@ -596,6 +629,53 @@ const staffRequests = [
     },
     response: [],
   },
+  req("newsletters", "GET", ["admin", "organizations", "{{organizationId}}", "family-newsletters"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("Newsletters fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("draft", "scheduled", "sending", "sent");',
+      "});",
+    ],
+    description:
+      "Newsletters page: every newsletter of the organization, newest month first. Optional query: status, branchId, month (2026-10), keyword (title), page, limit. meta.counts has draft, scheduled, sending and sent and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
+  }),
+  req("newsletter detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-newsletters", "{{newsletterId}}"], {
+    tests: [
+      'pm.test("Newsletter fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("newsletterId", "title", "sections", "highlights", "recipients");',
+      "});",
+    ],
+    description:
+      "Content Sections and Preview: title, month, issue number, status, the six sections with their switches, welcome, highlights with photos, coming up, notices, new residents, gallery, footer, and recipients (families and people who would receive it). Needs familyEngagement.view.",
+  }),
+  req("newsletter pdf", "GET", ["admin", "organizations", "{{organizationId}}", "family-newsletters", "{{newsletterId}}", "pdf"], {
+    query: "download=false",
+    tests: [
+      'pm.test("PDF returned", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.headers.get("Content-Type")).to.include("application/pdf");',
+      "});",
+    ],
+    description:
+      "The Preview and the Download PDF button. Returns the newsletter as an A4 PDF drawn like the home's template: header, welcome, the month's posts with photos, coming up and notices side by side, new residents, photo gallery and footer. Only the sections that are switched on are drawn. A draft is drawn fresh, leaving out posts removed and residents whose photo sharing is off since it was built; a sent newsletter serves the copy stored when it was sent (when the PDF channel was on). Query download=true sends it as an attachment, otherwise it opens inline. In Postman use Send and Download to save it. Needs familyEngagement.view.",
+  }),
+  req("family relationship options", "GET", ["admin", "family", "relationships"], {
+    tests: [
+      'pm.test("Relationship options fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.be.an("array");',
+      '    pm.expect(data[0]).to.have.keys(["value", "label"]);',
+      "});",
+    ],
+    description:
+      "Options for the Relationship dropdowns on the web panel: Invite Family Member, Manage Family Group and editing a member or invitation (Spouse, Partner, Son, Daughter, Grandson, Granddaughter, Brother, Sister, Nephew, Niece, Friend, Legal guardian, Other). Send the value (such as granddaughter) in relationship. A fixed list, so any signed-in user can call it: no x-org-id header, module or permission is needed.",
+  }),
   req("wall posts", "GET", ["admin", "organizations", "{{organizationId}}", "family-posts"], {
     query: "page=1&limit=10",
     tests: [
@@ -662,7 +742,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Family member detail: name, email, phone, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (waiting, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
+      "Family member detail: name, email, the phone from their account, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (waiting, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
@@ -891,10 +971,10 @@ const adminActions = [
     name: "update family member",
     method: "PUT",
     path: ["admin", "family", "members", "{{memberId}}"],
-    body: { relationship: "grandson", phone: "07700 900123" },
+    body: { relationship: "grandson" },
     tests: ['pm.test("Family member updated", function () {', "    pm.response.to.have.status(200);", "});"],
     description:
-      "Members: edit. Body, both optional: relationship (a value from relationship options) and phone (up to 30 characters; an empty string clears it). Their name and email belong to their account and are not changed here. Only active, pending and inactive members; a site or line manager can only change their own site. Returns the member detail. Needs familyEngagement.manage.",
+      "Members: edit. Body: relationship (a value from family relationship options). Their name, email and phone belong to their own account and are not changed here. Only active, pending and inactive members; a site or line manager can only change their own site. Returns the member detail. Needs familyEngagement.manage.",
   },
   {
     name: "deactivate family member",
@@ -927,10 +1007,10 @@ const adminActions = [
     name: "edit family invitation",
     method: "PUT",
     path: ["admin", "family-invitations", "{{familyInvitationId}}"],
-    body: { action: "edit", name: "Ellen Price", phone: "07700 900123", relationship: "niece" },
+    body: { action: "edit", name: "Ellen Price", relationship: "niece" },
     tests: ['pm.test("Invitation updated", function () {', "    pm.response.to.have.status(200);", "});"],
     description:
-      "Invitations: edit (pencil). Body: action edit and at least one of name, phone, relationship. Only a pending invitation that has not expired (409 invitation_not_editable otherwise). The email and the link stay the same. Returns the invitation detail. Needs familyEngagement.manage.",
+      "Invitations: edit (pencil). Body: action edit and at least one of name, relationship. Only a pending invitation that has not expired (409 invitation_not_editable otherwise). The email and the link stay the same. Returns the invitation detail. Needs familyEngagement.manage.",
   },
   {
     name: "delete family invitation",
@@ -950,7 +1030,102 @@ const adminActions = [
       "Community Wall: the reports on a post are judged unfounded; the post stays and its open reports close. Removing the post instead closes them as actioned. A site or line manager can only act on their own site. Needs familyEngagement.manage.",
   },
 ];
-adminActions.forEach(({ name, method, path, body, tests, description }) => {
+
+// Newsletter drafts: create, edit and remove.
+const newsletterRequests = [
+  {
+    name: "create newsletter",
+    method: "POST",
+    path: ["admin", "family", "newsletters"],
+    body: { branchId: "{{branchId}}", month: "2026-10" },
+    tests: [
+      'pm.test("Newsletter draft created", function () {',
+      "    pm.response.to.have.status(201);",
+      '    pm.expect(pm.response.json().data.status).to.eql("draft");',
+      '    pm.collectionVariables.set("newsletterId", pm.response.json().data.newsletterId);',
+      "});",
+    ],
+    description:
+      "Newsletters: pick the month (the Newsletter month dropdown). Body: branchId (an owner or super admin must pick the site; a site or line manager uses their own), month (2026-10), and optionally title and template (classic, the only one for now). One newsletter per site and month (409 newsletter_exists_for_month); remove the draft to start again. The draft is filled in: highlights from the month's live wall posts, gallery from their photos, new residents admitted that month with photo sharing on, the footer from the site, and who signs it (your name and role, such as Claire Adams, Site Manager). The response is the whole builder: the sections with their switches, the preview content (the home, organizationName, periodLabel and issueNumber for the Issue 14 line), counts for each section, and recipients {families, members} for the 42 families badge. Needs familyEngagement.manage.",
+  },
+  {
+    name: "update newsletter",
+    method: "PUT",
+    path: ["admin", "family", "newsletters", "{{newsletterId}}"],
+    body: {
+      title: "October newsletter",
+      sections: { gallery: true, notices: true },
+      welcome: { text: "Welcome to our October newsletter. It has been a lovely month.", signedBy: "Claire Adams, Site Manager" },
+      comingUp: [
+        { date: "2026-10-07", time: "10:30", title: "Flu jabs", description: "Annual winter wellness clinic", category: "Health" },
+        { date: "2026-10-17", time: "14:00", title: "Music session", description: "Acoustic guitar in the garden lounge", category: "Social" },
+      ],
+      notices: [{ title: "Half-term visiting", body: "Visiting runs as normal. Please book weekend visits through the TempyHub app." }],
+      footer: { phone: "0113 000 0000", email: "hello@florencehouse.example" },
+      delivery: { inApp: true, email: true, pdf: true },
+    },
+    tests: [
+      'pm.test("Newsletter saved", function () {',
+      "    pm.response.to.have.status(200);",
+      "});",
+    ],
+    description:
+      "Save draft (and every edit on the builder). Only a draft. Body, all optional: title, template, sections (welcome, highlights, comingUp, notices, newResidents, gallery as true or false), welcome {text, signedBy}, highlights [{postId, title, text, mediaId}], comingUp [{date, time (14:30), title, description, category}] (kept in date order), notices [{title, body}], newResidentIds [residentId], gallery [{mediaId, caption}], footer {homeName, address, phone, email}, delivery {inApp, email, pdf} (the choices under Send & Delivery). A list sent replaces the whole list; anything not sent is left alone. Highlights must be live posts of the site, gallery photos must come from them, and new residents must be admitted residents of the site with photo sharing on. 409 once scheduled or sent. Needs familyEngagement.manage.",
+  },
+  {
+    name: "send newsletter",
+    method: "PUT",
+    path: ["admin", "family", "newsletters", "{{newsletterId}}", "delivery"],
+    body: { action: "send", delivery: { inApp: true, email: true, pdf: true } },
+    tests: [
+      'pm.test("Newsletter sent", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("sent");',
+      "});",
+    ],
+    description:
+      "Send & Delivery: the Send newsletter button (When: Send now). Body: action send, and optionally delivery {inApp, email, pdf} to set the checkboxes now; without it the choices saved on the draft are used and at least one must be on (400 newsletter_delivery_required). A newsletter needs at least one switched-on section with something in it (400 newsletter_empty). Channels: inApp notifies every active family member at the site once each; pdf draws the PDF and stores it (pdfKey); email sends each distinct family address its own message (nobody sees another address) with the PDF attached. The email is sent only when EMAIL_ENABLED is true on the server; otherwise the channel is recorded as skipped. deliveryLog says what happened per channel: done with count (and failed), failed, or skipped. A failing address does not stop the others. Sending is done before the response returns, so a very large home takes longer. Posts removed, or residents whose photo sharing was switched off, since the draft are left out. The response is the sent newsletter with status sent, sentAt, sentBy, sentTo {families, members} and deliveryLog. One send wins if it is clicked twice (409 newsletter_already_sent for the other). Needs familyEngagement.manage.",
+  },
+  {
+    name: "schedule newsletter",
+    method: "PUT",
+    path: ["admin", "family", "newsletters", "{{newsletterId}}", "delivery"],
+    body: { action: "schedule", sendAt: "2026-11-02T09:00:00Z", delivery: { inApp: true, email: true, pdf: true } },
+    tests: [
+      'pm.test("Newsletter scheduled", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("scheduled");',
+      "});",
+    ],
+    description:
+      "Send & Delivery: Schedule for later. Body: action schedule, sendAt (an ISO date in the future, up to a year ahead) and optionally delivery. Calling it again on a scheduled newsletter moves it to a new time. While scheduled it cannot be edited or deleted; cancel the schedule first. A job checks every minute and sends what is due, on behalf of the person who scheduled it. 400 newsletter_send_at_invalid for a bad time.",
+  },
+  {
+    name: "cancel newsletter schedule",
+    method: "PUT",
+    path: ["admin", "family", "newsletters", "{{newsletterId}}", "delivery"],
+    body: { action: "cancel" },
+    tests: [
+      'pm.test("Schedule cancelled", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("draft");',
+      "});",
+    ],
+    description: "Takes a scheduled newsletter back to a draft so it can be edited again. 409 newsletter_not_scheduled for anything else.",
+  },
+  {
+    name: "remove newsletter",
+    method: "DELETE",
+    path: ["admin", "family", "newsletters", "{{newsletterId}}"],
+    tests: [
+      'pm.test("Newsletter removed", function () {',
+      "    pm.response.to.have.status(200);",
+      "});",
+    ],
+    description: "Removes a draft and frees its month. 409 for a scheduled or sent newsletter.",
+  },
+];
+[...adminActions, ...newsletterRequests].forEach(({ name, method, path, body, tests, description }) => {
   const request = staff(name, method, path, { tests, description });
   if (body) request.request.body = jsonBody(body);
   staffRequests.push(request);
@@ -1057,7 +1232,7 @@ if (invitationDetail) {
     (h) => String(h.key).toLowerCase() !== "x-org-id"
   );
   invitationDetail.request.description =
-    "Family invitation detail: name, email, phone, relationship, isNextOfKin, status (a pending one past its expiry reads as expired), the resident, room and home, who invited, createdAt, expiresAt, lastSentAt, sendCount, and who accepted or revoked it. The token hash is never returned. 404 for another organization's invitation. Needs familyEngagement.view; 404 when the module is off.";
+    "Family invitation detail: name, email, relationship, isNextOfKin, status (a pending one past its expiry reads as expired), the resident, room and home, who invited, createdAt, expiresAt, lastSentAt, sendCount, and who accepted or revoked it. The token hash is never returned. 404 for another organization's invitation. Needs familyEngagement.view; 404 when the module is off.";
 }
 if (allInvitations) {
   const path = ["admin", "organizations", "{{organizationId}}", "family-invitations"];
@@ -1086,7 +1261,7 @@ const retire = (item) => {
 retire(collection);
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

@@ -6,6 +6,7 @@ const NotificationTypes = {
   FAMILY_UPLOAD_APPROVED: "familyUploadApproved",
   FAMILY_NEW_POST: "familyNewPost",
   FAMILY_UPLOAD_REJECTED: "familyUploadRejected",
+  FAMILY_NEWSLETTER: "familyNewsletter",
   SYSTEM: "system",
   REMINDER: "reminder",
   DOCUMENTS_UPDATE: "documentsUpdate",

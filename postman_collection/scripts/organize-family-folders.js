@@ -53,13 +53,16 @@ const familyEngagement = folder(adminRoot, "Staff side of the family module, one
   folder("Community Wall", "Staff wall posts, with photos and tagged residents.", adminPlace(
     "wall posts", "dismiss post reports", "taggable residents", "upload post photo", "upload post photos", "create post", "update post", "remove post"
   )),
+  folder("Newsletters", "Monthly newsletters for a site: build the draft, edit every section, send.", adminPlace(
+    "newsletters", "newsletter detail", "newsletter pdf", "create newsletter", "update newsletter", "send newsletter", "schedule newsletter", "cancel newsletter schedule", "remove newsletter"
+  )),
   folder("Family Groups", "One row per resident with their family.", adminPlace("family groups")),
   folder("Family Membership", "Who is in each family, and how they get in.", [
     folder("Family Invitations", "Invite a family member, and follow the invitations.", adminPlace(
       "invite family member", "list family invitations", "get family invitation", "edit family invitation", "resend family invitation", "revoke family invitation", "delete family invitation"
     )),
     folder("Family Members", "Members, next of kin, family codes, join requests and handovers.", adminPlace(
-      "all family members", "family member detail", "family members", "update family member", "deactivate family member", "activate family member", "set next of kin", "remove family member",
+      "family relationship options", "all family members", "family member detail", "family members", "update family member", "deactivate family member", "activate family member", "set next of kin", "remove family member",
       "current family code", "make family code", "join requests", "approve join request", "reject join request", "open handovers"
     )),
   ]),
@@ -98,6 +101,7 @@ const family = folder("Family", "The family app: what a family member and the ne
     "upload photo", "upload photos", "send upload for approval", "my uploads", "edit and resend upload"
   )),
   folder("Timeline", "Everything shared about the resident.", appPlace("timeline")),
+  folder("Newsletters", "Current and past newsletters of the home: list, read and PDF.", appPlace("newsletters of my home", "read newsletter", "download newsletter pdf")),
   folder("Community Wall", "The home's wall: read it and react.", appPlace("community wall", "react to post", "remove reaction", "mark posts seen", "report post")),
 ]);
 

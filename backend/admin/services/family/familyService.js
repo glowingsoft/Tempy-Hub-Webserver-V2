@@ -101,7 +101,6 @@ const createInvitation = async ({
   resident,
   email,
   name,
-  phone,
   relationship,
   isNextOfKin = false,
 }) => {
@@ -151,7 +150,6 @@ const createInvitation = async ({
       residentId: resident._id,
       email: normalisedEmail,
       name: name || "",
-      phone: phone || "",
       relationship,
       isNextOfKin: Boolean(isNextOfKin),
       tokenHash: await bcrypt.hash(token, 10),
@@ -278,7 +276,6 @@ const getInvitation = async ({ invitationId, organizationId }) => {
         invitationId: "$_id",
         name: 1,
         email: 1,
-        phone: 1,
         relationship: 1,
         isNextOfKin: 1,
         status: invitationStatusNow(new Date()),
@@ -348,10 +345,9 @@ const resendInvitation = async ({ actor, invitationId, organizationId }) => {
 };
 
 const MAX_INVITEE_NAME = 120;
-const MAX_INVITEE_PHONE = 30;
 
-/** Fix a pending invitation's name, phone or relationship; the email and link stay as they were. */
-const editInvitation = async ({ actor, invitationId, organizationId, name, phone, relationship }) => {
+/** Fix a pending invitation's name or relationship; the email and link stay as they were. */
+const editInvitation = async ({ actor, invitationId, organizationId, name, relationship }) => {
   if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
 
   const invitation = await FamilyInvitation.findOne({ _id: invitationId, organizationId });
@@ -365,10 +361,6 @@ const editInvitation = async ({ actor, invitationId, organizationId, name, phone
   if (name !== undefined) {
     if (typeof name !== "string" || !name.trim() || name.trim().length > MAX_INVITEE_NAME) throw new AppError("name_required", 400);
     set.name = name.trim();
-  }
-  if (phone !== undefined) {
-    if (typeof phone !== "string" || phone.trim().length > MAX_INVITEE_PHONE) throw new AppError("phone_invalid", 400);
-    set.phone = phone.trim();
   }
   if (relationship !== undefined) {
     if (!Object.values(FamilyRelationship).includes(relationship)) throw new AppError("invalid_relationship", 400);
@@ -624,7 +616,6 @@ const redeemInvitation = async ({
       const linkFields = {
         relationship: invitation.relationship,
         isNextOfKin: invitation.isNextOfKin,
-        phone: invitation.phone,
         status: FamilyMemberStatus.ACTIVE,
         joinedVia: FamilyJoinSource.INVITATION,
         decidedBy: invitation.invitedByUserId,

@@ -10,6 +10,8 @@ const familyInviteService = require("@appServices/family/familyInviteService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const familyTimelineService = require("@appServices/family/familyTimelineService");
 const familyWallService = require("@appServices/family/familyWallService");
+const familyNewsletterService = require("@appServices/family/familyNewsletterService");
+const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
@@ -209,6 +211,34 @@ const listTimeline = respond(
   { paged: true }
 );
 
+const listNewsletters = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyNewsletterService.listNewsletters({ link: req.familyLink, page, limit, skip });
+  },
+  { paged: true }
+);
+
+const getNewsletter = respond((req) =>
+  familyNewsletterService.getNewsletter({ links: req.familyLinks, newsletterId: req.params.newsletterId })
+);
+
+const downloadNewsletterPdf = async (req, res) => {
+  try {
+    const { buffer, filename } = await familyNewsletterService.getPdf({ links: req.familyLinks, newsletterId: req.params.newsletterId });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Length": buffer.length,
+      "Content-Disposition": `${req.query.download === "false" ? "inline" : "attachment"}; filename="${filename}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.status(200).send(buffer);
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const listWall = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
@@ -274,6 +304,9 @@ const inviteRelative = respond(
 
 module.exports = {
   listRelationships,
+  listNewsletters,
+  getNewsletter,
+  downloadNewsletterPdf,
   listMyResidents,
   getCurrentFamilyCode,
   createFamilyCode,

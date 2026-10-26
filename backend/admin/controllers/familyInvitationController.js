@@ -27,7 +27,6 @@ const inviteFamilyMember = async (req, res) => {
       residentId: req.body.residentId,
       email: req.body.email,
       name: req.body.name,
-      phone: req.body.phone,
       relationship: req.body.relationship,
       isNextOfKin: req.body.isNextOfKin,
     });
@@ -109,7 +108,6 @@ const updateInvitation = respondByAction({
         invitationId: req.params.invitationId,
         organizationId: req.orgId,
         name: req.body.name,
-        phone: req.body.phone,
         relationship: req.body.relationship,
       }),
     translationKey: "invitation_updated",

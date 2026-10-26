@@ -37,7 +37,6 @@ const familyInvitationSchema = new mongoose.Schema(
       },
     },
     name: { type: String, default: "" },
-    phone: { type: String, default: "" },
     relationship: {
       type: String,
       enum: Object.values(FamilyRelationship),

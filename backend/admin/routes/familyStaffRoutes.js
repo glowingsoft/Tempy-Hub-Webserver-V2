@@ -21,6 +21,10 @@ const router = express.Router();
 const photoLimiter = createRateLimiter("family-post-photos", 15, 60);
 const photoBatchLimiter = createRateLimiter("family-post-photo-batches", 15, 12);
 const postLimiter = createRateLimiter("family-posts", 15, 60);
+const newsletterSendLimiter = createRateLimiter("family-newsletter-sends", 15, 20);
+
+// A fixed list for the form dropdowns: a signed-in user needs no organization, module or permission.
+router.get("/relationships", auth, familyStaffController.listRelationships);
 
 router.use(
   auth,
@@ -51,6 +55,11 @@ router.post("/posts", postLimiter, requirePermission(FAMILY_MANAGE), familyStaff
 router.put("/posts/:id", requirePermission(FAMILY_MANAGE), familyStaffController.updatePost);
 router.delete("/posts/:id", requirePermission(FAMILY_MANAGE), familyStaffController.removePost);
 router.put("/posts/:id/reports", requirePermission(FAMILY_MANAGE), familyStaffController.updatePostReports);
+
+router.post("/newsletters", requirePermission(FAMILY_MANAGE), familyStaffController.createNewsletter);
+router.put("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffController.updateNewsletter);
+router.put("/newsletters/:id/delivery", newsletterSendLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateNewsletterDelivery);
+router.delete("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffController.removeNewsletter);
 
 router.get("/handovers", requirePermission(FAMILY_VIEW), familyStaffController.listHandovers);
 

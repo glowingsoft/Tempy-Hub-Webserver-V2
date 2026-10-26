@@ -113,6 +113,13 @@ const FamilyPostReportStatus = {
   ACTIONED: "actioned",
 };
 
+const FamilyNewsletterStatus = {
+  DRAFT: "draft",
+  SCHEDULED: "scheduled",
+  SENDING: "sending",
+  SENT: "sent",
+};
+
 const FamilyJoinSource = {
   INVITATION: "invitation",
   CODE: "code",
@@ -416,6 +423,7 @@ module.exports = {
   FamilyUploadStatus,
   FamilyPostStatus,
   FamilyPostReportStatus,
+  FamilyNewsletterStatus,
   FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,

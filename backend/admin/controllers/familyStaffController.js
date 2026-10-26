@@ -1,13 +1,18 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const { queryText, queryId } = require("@utils/familyQuery");
+const { handleServiceError } = require("@services/_errors/handleServiceError");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyGroupService = require("@adminServices/family/familyGroupService");
 const familyModerationService = require("@adminServices/family/familyModerationService");
 const familyPostService = require("@adminServices/family/familyPostService");
 const familyWallActivityService = require("@adminServices/family/familyWallActivityService");
+const familyNewsletterService = require("@adminServices/family/familyNewsletterService");
 const familyUploadService = require("@appServices/family/familyUploadService");
+const familyAccessService = require("@appServices/family/familyAccessService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
+
+const listRelationships = respond(() => familyAccessService.listRelationships());
 
 const withScope = (req) => ({ actor: req.user, organizationId: req.orgId });
 
@@ -111,7 +116,6 @@ const updateMember = respond(
       organizationId: req.orgId,
       memberId: req.params.memberId,
       relationship: req.body.relationship,
-      phone: req.body.phone,
     }),
   { translationKey: "family_member_updated" }
 );
@@ -198,6 +202,97 @@ const removePost = respond(
   { translationKey: "post_removed" }
 );
 
+const listNewsletters = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyNewsletterService.listNewsletters({
+      organizationId: req.orgId,
+      branchId: queryId(req.query.branchId),
+      status: queryText(req.query.status),
+      month: queryText(req.query.month),
+      keyword: queryText(req.query.keyword),
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const getNewsletter = respond((req) =>
+  familyNewsletterService.getNewsletter({ organizationId: req.orgId, newsletterId: req.params.newsletterId })
+);
+
+const createNewsletter = respond(
+  (req) =>
+    familyNewsletterService.createDraft({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.body.branchId,
+      month: req.body.month,
+      title: req.body.title,
+      template: req.body.template,
+    }),
+  { statusCode: 201, translationKey: "newsletter_created" }
+);
+
+const NEWSLETTER_FIELDS = ["title", "sections", "welcome", "highlights", "comingUp", "notices", "newResidentIds", "gallery", "footer", "delivery", "template"];
+
+const updateNewsletter = respond(
+  (req) =>
+    familyNewsletterService.updateDraft({
+      actor: req.user,
+      organizationId: req.orgId,
+      newsletterId: req.params.id,
+      ...Object.fromEntries(NEWSLETTER_FIELDS.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]])),
+    }),
+  { translationKey: "newsletter_updated" }
+);
+
+const updateNewsletterDelivery = respondByAction({
+  send: {
+    run: (req) =>
+      familyNewsletterService.sendNow({ actor: req.user, organizationId: req.orgId, newsletterId: req.params.id, delivery: req.body.delivery }),
+    translationKey: "newsletter_sent",
+  },
+  schedule: {
+    run: (req) =>
+      familyNewsletterService.schedule({
+        actor: req.user,
+        organizationId: req.orgId,
+        newsletterId: req.params.id,
+        sendAt: req.body.sendAt,
+        delivery: req.body.delivery,
+      }),
+    translationKey: "newsletter_scheduled",
+  },
+  cancel: {
+    run: (req) => familyNewsletterService.cancelSchedule({ actor: req.user, organizationId: req.orgId, newsletterId: req.params.id }),
+    translationKey: "newsletter_schedule_cancelled",
+  },
+});
+
+const downloadNewsletterPdf = async (req, res) => {
+  try {
+    const { buffer, filename } = await familyNewsletterService.getPdf({ organizationId: req.orgId, newsletterId: req.params.newsletterId });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Length": buffer.length,
+      "Content-Disposition": `${req.query.download === "true" ? "attachment" : "inline"}; filename="${filename}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.status(200).send(buffer);
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const removeNewsletter = respond(
+  (req) => familyNewsletterService.deleteDraft({ actor: req.user, organizationId: req.orgId, newsletterId: req.params.id }),
+  { translationKey: "newsletter_removed" }
+);
+
 const setNextOfKin = respond(
   (req) =>
     familyStaffService.setNextOfKin({
@@ -274,6 +369,7 @@ const createCode = respond(
 );
 
 module.exports = {
+  listRelationships,
   listMembers,
   listAllMembers,
   getMember,
@@ -284,6 +380,13 @@ module.exports = {
   updateUpload,
   listPosts,
   updatePostReports,
+  listNewsletters,
+  getNewsletter,
+  createNewsletter,
+  updateNewsletter,
+  updateNewsletterDelivery,
+  downloadNewsletterPdf,
+  removeNewsletter,
   listTaggableResidents,
   uploadPostPhoto,
   uploadPostPhotos,

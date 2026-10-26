@@ -176,6 +176,7 @@ const sendEmailViaBrevo = async (emails, subject, body, config = {}) => {
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = body;
   sendSmtpEmail.sender = { email: "support@tempyhub.com", name: "Tempy Hub Support" };
+  if (config.attachments?.length) sendSmtpEmail.attachment = config.attachments;
 
   // Ensure to field is dynamically updated
   sendSmtpEmail.to = emails.map(email => ({ email }));
@@ -185,7 +186,8 @@ const sendEmailViaBrevo = async (emails, subject, body, config = {}) => {
     console.log("Email paused in dev environment", data);
   } catch (error) {
     console.error("Error sending email:", error);
-    // throw new Error (error.response.body)
+    // Other callers rely on a failed send not interrupting them; a caller that must know asks for the error.
+    if (config.throwOnError) throw error;
   }
 };
 

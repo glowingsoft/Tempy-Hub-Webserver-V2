@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const { acquireLock, releaseLock } = require("../redis/redisCache");
 
 const { runEventReminderCron } = require("./events/eventReminder.cron");
-const { runFamilyScheduledPostsCron } = require("./family/familyPosts.cron");
+const { runFamilyScheduledPostsCron, runFamilyScheduledNewslettersCron } = require("./family/familyPosts.cron");
 const startCrons = () => {
 
 
@@ -35,6 +35,21 @@ const startCrons = () => {
       await runFamilyScheduledPostsCron();
     } catch (err) {
       console.error("Family scheduled posts cron error:", err);
+    } finally {
+      await releaseLock(lockKey, lock);
+    }
+  });
+
+  cron.schedule("* * * * *", async () => {
+    const lockKey = "cron:family-scheduled-newsletters";
+    const lock = await acquireLock(lockKey, 50);
+
+    if (!lock) return;
+
+    try {
+      await runFamilyScheduledNewslettersCron();
+    } catch (err) {
+      console.error("Family scheduled newsletters cron error:", err);
     } finally {
       await releaseLock(lockKey, lock);
     }

@@ -222,7 +222,7 @@ const getMember = async ({ organizationId, memberId }) => {
         userId: 1,
         ...personFields(),
         email: { $ifNull: ["$user.email", ""] },
-        phone: { $ifNull: ["$user.phoneNumber", { $ifNull: ["$phone", ""] }] },
+        phone: { $ifNull: ["$user.phoneNumber", ""] },
         relationship: 1,
         isNextOfKin: 1,
         status: 1,
@@ -283,10 +283,9 @@ const listMembers = async ({ organizationId, residentId }) => {
 };
 
 const EDITABLE_STATUSES = [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING, FamilyMemberStatus.INACTIVE];
-const MAX_PHONE_LENGTH = 30;
 
-/** Staff fix how someone is listed: their relationship and phone. Their name and email belong to their account. */
-const editMember = async ({ actor, organizationId, memberId, relationship, phone }) => {
+/** Staff fix how someone is listed: their relationship. Their name, email and phone belong to their account. */
+const editMember = async ({ actor, organizationId, memberId, relationship }) => {
   const link = await loadLink({ organizationId, linkId: memberId, notFoundKey: "family_member_not_found" });
   await requireManageableResident({ actor, organizationId, residentId: link.residentId });
   if (!EDITABLE_STATUSES.includes(link.status)) throw new AppError("family_member_not_editable", 409);
@@ -295,10 +294,6 @@ const editMember = async ({ actor, organizationId, memberId, relationship, phone
   if (relationship !== undefined) {
     if (!Object.values(FamilyRelationship).includes(relationship)) throw new AppError("invalid_relationship", 400);
     set.relationship = relationship;
-  }
-  if (phone !== undefined) {
-    if (typeof phone !== "string" || phone.trim().length > MAX_PHONE_LENGTH) throw new AppError("phone_invalid", 400);
-    set.phone = phone.trim();
   }
   if (!Object.keys(set).length) throw new AppError("nothing_to_update", 400);
 

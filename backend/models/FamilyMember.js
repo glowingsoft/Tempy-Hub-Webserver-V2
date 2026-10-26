@@ -60,6 +60,13 @@ const familyMemberSchema = new mongoose.Schema(
       default: null,
     },
     removedAt: { type: Date, default: null },
+    /** Access paused by staff; they can switch it back on. */
+    inactiveBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    inactiveAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -125,7 +125,7 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
 
 /**
  * Why a member sees no residents: "active" (has links), "pending" (waiting for approval),
- * "removed" (every link ended by removal, so the app shows You no longer have access) or "none".
+ * "inactive" (staff paused their access), "removed" (every link ended by removal, so the app shows You no longer have access) or "none".
  */
 const resolveAccessState = async (userId, residentCount) => {
   if (residentCount > 0) return "active";
@@ -136,6 +136,7 @@ const resolveAccessState = async (userId, residentCount) => {
   ]);
   const statuses = rows.map((row) => row._id);
   if (statuses.includes(FamilyMemberStatus.PENDING)) return "pending";
+  if (statuses.includes(FamilyMemberStatus.INACTIVE)) return "inactive";
   if (statuses.includes(FamilyMemberStatus.REMOVED)) return "removed";
   return "none";
 };

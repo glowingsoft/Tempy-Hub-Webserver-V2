@@ -22,6 +22,39 @@ const decidePendingRequest = async ({ linkId, decision, actorId }) => {
   if (!result.modifiedCount) throw new AppError("join_request_not_pending", 409);
 };
 
+const cancelHandoversOf = (link, session) =>
+  FamilyHandover.updateMany(
+    {
+      residentId: link.residentId,
+      status: FamilyHandoverStatus.PENDING,
+      $or: [{ fromUserId: link.userId }, { toUserId: link.userId }],
+    },
+    { $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt: new Date() } },
+    { session }
+  );
+
+/** Pauses access without ending the link; any handover that involved them is cancelled. */
+const deactivateActiveLink = async ({ link, actorId }) => {
+  await inTransaction(async (session) => {
+    const paused = await FamilyMember.updateOne(
+      { _id: link._id, status: FamilyMemberStatus.ACTIVE, isNextOfKin: false },
+      { $set: { status: FamilyMemberStatus.INACTIVE, inactiveBy: actorId, inactiveAt: new Date() } },
+      { session }
+    );
+    if (!paused.modifiedCount) throw new AppError("family_member_not_active", 409);
+
+    await cancelHandoversOf(link, session);
+  });
+};
+
+const reactivateLink = async ({ link }) => {
+  const resumed = await FamilyMember.updateOne(
+    { _id: link._id, status: FamilyMemberStatus.INACTIVE },
+    { $set: { status: FamilyMemberStatus.ACTIVE, inactiveBy: null, inactiveAt: null } }
+  );
+  if (!resumed.modifiedCount) throw new AppError("family_member_not_inactive", 409);
+};
+
 /** Removing someone also ends any handover that involved them, and clears the next-of-kin role. */
 const removeActiveLink = async ({ link, actorId }) => {
   await inTransaction(async (session) => {
@@ -39,15 +72,7 @@ const removeActiveLink = async ({ link, actorId }) => {
     );
     if (!removed.modifiedCount) throw new AppError("family_member_not_found", 404);
 
-    await FamilyHandover.updateMany(
-      {
-        residentId: link.residentId,
-        status: FamilyHandoverStatus.PENDING,
-        $or: [{ fromUserId: link.userId }, { toUserId: link.userId }],
-      },
-      { $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt: new Date() } },
-      { session }
-    );
+    await cancelHandoversOf(link, session);
   });
 };
 
@@ -94,4 +119,11 @@ const assignNextOfKin = async ({ target }) => {
   });
 };
 
-module.exports = { decidePendingRequest, removeActiveLink, assignNextOfKin, inTransaction };
+module.exports = {
+  decidePendingRequest,
+  removeActiveLink,
+  deactivateActiveLink,
+  reactivateLink,
+  assignNextOfKin,
+  inTransaction,
+};

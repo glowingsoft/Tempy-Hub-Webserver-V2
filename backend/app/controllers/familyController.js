@@ -234,6 +234,22 @@ const addReaction = respond(
   { translationKey: "reaction_saved" }
 );
 
+const markPostsSeen = respond(
+  (req) => familyWallService.markSeen({ userId: req.user._id, links: req.familyLinks, postIds: req.body.postIds }),
+  { translationKey: "posts_marked_seen" }
+);
+
+const reportPost = respond(
+  (req) =>
+    familyWallService.reportPost({
+      userId: req.user._id,
+      links: req.familyLinks,
+      postId: req.params.postId,
+      reason: req.body.reason,
+    }),
+  { statusCode: 201, translationKey: "post_reported" }
+);
+
 const removeReaction = respond(
   (req) =>
     familyWallService.removeReaction({
@@ -284,4 +300,6 @@ module.exports = {
   listWall,
   addReaction,
   removeReaction,
+  markPostsSeen,
+  reportPost,
 };

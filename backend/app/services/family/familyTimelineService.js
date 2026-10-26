@@ -57,6 +57,7 @@ const itemStages = ({ residentId, userId }) => [
     $project: {
       _id: 0,
       type: "$kind",
+      audience: { $cond: [isUpload, "family", "everyone"] },
       uploadId: { $cond: [isUpload, "$_id", null] },
       postId: { $cond: [isUpload, null, "$_id"] },
       residentId: { $literal: toObjectId(residentId) },
@@ -64,6 +65,7 @@ const itemStages = ({ residentId, userId }) => [
       authorName: { $ifNull: ["$author.name", ""] },
       authorPhotoUrl: { $ifNull: ["$author.profileIcon", ""] },
       authorRelationship: 1,
+      title: { $ifNull: ["$title", ""] },
       message: 1,
       photos: 1,
       reactionCount: { $cond: [isUpload, 0, "$reactionCount"] },
@@ -106,6 +108,7 @@ const listTimeline = async ({ link, userId, page, limit, skip }) => {
               sortAt: "$createdAt",
               authorId: 1,
               branchId: 1,
+              title: 1,
               message: 1,
               mediaIds: 1,
             },

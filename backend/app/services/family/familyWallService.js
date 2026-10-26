@@ -4,11 +4,16 @@ const { Resident } = require("@models/Resident");
 const { FamilyPost } = require("@models/FamilyPost");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyReaction } = require("@models/FamilyReaction");
+const { FamilyPostView } = require("@models/FamilyPostView");
+const { FamilyPostReport } = require("@models/FamilyPostReport");
 const { FamilyPostStatus } = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
 const { reactionStats, postPhotos } = require("./familyWallPipeline");
+
+const MAX_SEEN_BATCH = 50;
+const MAX_REPORT_REASON = 500;
 
 const isDuplicateKey = (error) => error?.code === 11000;
 
@@ -48,9 +53,11 @@ const wallPostStages = ({ userId, linkedResidentIds }) => [
       homeName: { $ifNull: ["$branch.name", ""] },
       authorName: { $ifNull: ["$author.name", ""] },
       authorPhotoUrl: { $ifNull: ["$author.profileIcon", ""] },
+      title: 1,
       message: 1,
       photos: 1,
       taggedResidents: 1,
+      audience: { $literal: "everyone" },
       isPinned: 1,
       reactionCount: 1,
       reactedByMe: 1,
@@ -127,4 +134,73 @@ const removeReaction = async ({ userId, links, postId }) => {
   return reactionSummary({ postId, userId });
 };
 
-module.exports = { listWall, addReaction, removeReaction };
+const sameHome = (link, post) =>
+  String(link.organizationId) === String(post.organizationId) && String(link.branchId) === String(post.branchId);
+
+/** The posts the app showed on screen. Only posts the caller may see count, and sending one twice changes nothing. */
+const markSeen = async ({ userId, links, postIds }) => {
+  if (!Array.isArray(postIds) || !postIds.length) throw new AppError("post_ids_required", 400);
+  const ids = [...new Set(postIds.map(String))];
+  if (ids.length > MAX_SEEN_BATCH) throw new AppError("too_many_posts", 400);
+  if (!ids.every(isValidObjectId)) throw new AppError("post_not_found", 404);
+
+  const homes = [...new Map(links.map((link) => [`${link.organizationId}:${link.branchId}`, link])).values()];
+  if (!homes.length) return { seen: 0 };
+
+  const posts = await FamilyPost.aggregate([
+    {
+      $match: {
+        _id: { $in: ids.map(toObjectId) },
+        status: FamilyPostStatus.PUBLISHED,
+        $or: homes.map((link) => ({ organizationId: toObjectId(link.organizationId), branchId: toObjectId(link.branchId) })),
+      },
+    },
+    { $project: { organizationId: 1, branchId: 1 } },
+  ]);
+  if (!posts.length) return { seen: 0 };
+
+  await FamilyPostView.bulkWrite(
+    posts.map((post) => ({
+      updateOne: {
+        filter: { postId: post._id, userId: toObjectId(userId) },
+        update: {
+          $setOnInsert: { postId: post._id, userId: toObjectId(userId), organizationId: post.organizationId, branchId: post.branchId },
+          $addToSet: { residentIds: { $each: links.filter((link) => sameHome(link, post)).map((link) => toObjectId(link.residentId)) } },
+        },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
+  return { seen: posts.length };
+};
+
+/** Flag a post for staff. Reporting twice is the same as reporting once, and the poster is never told who. */
+const reportPost = async ({ userId, links, postId, reason }) => {
+  const post = await assertPostVisible({ postId, links });
+
+  if (reason !== undefined && reason !== null && typeof reason !== "string") throw new AppError("report_reason_invalid", 400);
+  const text = String(reason ?? "").trim();
+  if (text.length > MAX_REPORT_REASON) throw new AppError("report_reason_too_long", 400);
+
+  try {
+    await FamilyPostReport.updateOne(
+      { postId: toObjectId(postId), reporterId: toObjectId(userId) },
+      {
+        $setOnInsert: {
+          postId: toObjectId(postId),
+          reporterId: toObjectId(userId),
+          organizationId: post.organizationId,
+          branchId: post.branchId,
+          reason: text,
+        },
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    if (!isDuplicateKey(error)) throw error;
+  }
+  return { postId, reported: true };
+};
+
+module.exports = { listWall, addReaction, removeReaction, markSeen, reportPost };

@@ -3,6 +3,7 @@ const { User } = require("@models/UserModel");
 const { Resident } = require("@models/Resident");
 const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyMedia } = require("@models/FamilyMedia");
+const { FamilyMember } = require("@models/FamilyMember");
 const { NotificationExp } = require("@models/Notifications");
 const { FamilyUploadStatus } = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
@@ -12,15 +13,18 @@ const { actorStanding, assertMayAccessResidents } = require("@adminServices/resi
 const { blurAreas, validateAreas } = require("@appServices/family/familyImage");
 const { rejectedDeleteAfter } = require("@appServices/family/familyUploadService");
 const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
+const { searchClause } = require("./familySearch");
 
 const MAX_REASON_LENGTH = 500;
+
+const ALL = "all";
 
 const statusCountsOf = (rows = []) => {
   const counts = Object.fromEntries(Object.values(FamilyUploadStatus).map((status) => [status, 0]));
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
-  return counts;
+  return { total: Object.values(counts).reduce((sum, n) => sum + n, 0), ...counts };
 };
 
 const queueStages = [
@@ -28,6 +32,22 @@ const queueStages = [
   ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
   ...joinOne({ from: User, localField: "authorId", as: "author", optional: true }),
   ...joinOne({ from: User, localField: "decidedBy", as: "decider", optional: true }),
+  {
+    $lookup: {
+      from: FamilyMember.collection.name,
+      let: { authorId: "$authorId", residentId: "$residentId" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $and: [{ $eq: ["$userId", "$$authorId"] }, { $eq: ["$residentId", "$$residentId"] }] },
+          },
+        },
+        { $limit: 1 },
+        { $project: { relationship: 1 } },
+      ],
+      as: "authorLink",
+    },
+  },
   {
     $addFields: {
       photos: {
@@ -53,9 +73,12 @@ const queueStages = [
       branchId: 1,
       residentName: { $ifNull: ["$resident.name", ""] },
       roomNumber: { $ifNull: ["$resident.roomNumber", ""] },
+      residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
       authorId: 1,
       authorName: { $ifNull: ["$author.name", ""] },
       authorEmail: { $ifNull: ["$author.email", ""] },
+      authorPhotoUrl: { $ifNull: ["$author.profileIcon", ""] },
+      authorRelationship: { $ifNull: [{ $arrayElemAt: ["$authorLink.relationship", 0] }, ""] },
       message: 1,
       photos: 1,
       includeInGazette: 1,
@@ -68,29 +91,50 @@ const queueStages = [
   },
 ];
 
-/** The queue shows what is waiting by default; meta.counts covers every status and ignores the status filter. */
-const listUploads = async ({ organizationId, branchId, residentId, status, page, limit, skip }) => {
-  const wanted = status || FamilyUploadStatus.WAITING;
-  if (!Object.values(FamilyUploadStatus).includes(wanted)) throw new AppError("invalid_status_filter", 400);
+/** Every status by default, newest first; status=waiting lists the queue oldest first. meta.counts (with a total) ignores the status filter; meta.oldestWaitingAt feeds the "oldest" age. */
+const listUploads = async ({ organizationId, branchId, residentId, status, keyword, page, limit, skip }) => {
+  const wanted = status || ALL;
+  if (wanted !== ALL && !Object.values(FamilyUploadStatus).includes(wanted)) throw new AppError("invalid_status_filter", 400);
 
   const base = { organizationId: toObjectId(organizationId) };
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.residentId = toObjectId(residentId);
 
+  const or = await searchClause({
+    keyword,
+    organizationId,
+    branchId,
+    fields: ["message"],
+    resident: "residentId",
+    person: { model: FamilyUpload, field: "authorId", path: "authorId" },
+  });
+  if (or) base.$or = or;
+
   const { result, data, meta } = await paginateWithFacet({
     model: FamilyUpload,
-    match: { ...base, status: wanted },
+    match: wanted === ALL ? base : { ...base, status: wanted },
     page,
     limit,
     skip,
     sort: { createdAt: wanted === FamilyUploadStatus.WAITING ? 1 : -1 },
     extraFacets: {
       statusCounts: [{ $match: base }, { $group: { _id: "$status", count: { $sum: 1 } } }],
+      oldestWaiting: [
+        { $match: { ...base, status: FamilyUploadStatus.WAITING } },
+        { $group: { _id: null, createdAt: { $min: "$createdAt" } } },
+      ],
     },
     extraDataStages: queueStages,
   });
 
-  return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
+  return {
+    data,
+    meta: {
+      ...meta,
+      counts: statusCountsOf(result.statusCounts),
+      oldestWaitingAt: result.oldestWaiting?.[0]?.createdAt ?? null,
+    },
+  };
 };
 
 /** A site or line manager can only decide for their own site; 409 if another manager decided first. */

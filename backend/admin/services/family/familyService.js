@@ -8,7 +8,7 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { FamilyInvitation } = require("@models/FamilyInvitation");
 const { FamilyMember } = require("@models/FamilyMember");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet } = require("@utils/paginate");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { familyInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
@@ -16,6 +16,7 @@ const {
   FamilyInvitationStatus,
   FamilyJoinSource,
   FamilyMemberStatus,
+  FamilyRelationship,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -26,7 +27,7 @@ const {
   familyModuleOrganizationIds,
 } = require("@appServices/family/familyAccessService");
 const { joinOne, isValidObjectId } = require("@appServices/family/familyPipeline");
-const { searchText } = require("@utils/familyQuery");
+const { searchClause } = require("./familySearch");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
@@ -222,7 +223,7 @@ const listInvitations = async ({
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.residentId = toObjectId(residentId);
 
-  const or = keywordOr(searchText(keyword), ["email", "name"], { trim: true });
+  const or = await searchClause({ keyword, organizationId, branchId, fields: ["email", "name"], resident: "residentId" });
   if (or) base.$or = or;
 
   const now = new Date();
@@ -243,14 +244,18 @@ const listInvitations = async ({
     extraDataStages: [
       ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
       ...joinOne({ from: User, localField: "invitedByUserId", as: "invitedBy", optional: true }),
+      ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
       {
         $addFields: {
           residentName: { $ifNull: ["$resident.name", ""] },
+          roomNumber: { $ifNull: ["$resident.roomNumber", ""] },
+          residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
+          homeName: { $ifNull: ["$branch.name", ""] },
           invitedByName: { $ifNull: ["$invitedBy.name", ""] },
         },
       },
       { $addFields: { status: invitationStatusNow(now) } },
-      { $project: { tokenHash: 0, resident: 0, invitedBy: 0 } },
+      { $project: { tokenHash: 0, resident: 0, invitedBy: 0, branch: 0 } },
     ],
   });
 
@@ -340,6 +345,64 @@ const resendInvitation = async ({ actor, invitationId, organizationId }) => {
   });
 
   return { ...stripHash(invitation), acceptUrl };
+};
+
+const MAX_INVITEE_NAME = 120;
+const MAX_INVITEE_PHONE = 30;
+
+/** Fix a pending invitation's name, phone or relationship; the email and link stay as they were. */
+const editInvitation = async ({ actor, invitationId, organizationId, name, phone, relationship }) => {
+  if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
+
+  const invitation = await FamilyInvitation.findOne({ _id: invitationId, organizationId });
+  if (!invitation) throw new AppError("invitation_not_found", 404);
+  if (invitation.status !== FamilyInvitationStatus.PENDING || invitation.expiresAt <= new Date()) {
+    throw new AppError("invitation_not_editable", 409);
+  }
+  await requireManageableResident({ actor, organizationId, residentId: invitation.residentId });
+
+  const set = {};
+  if (name !== undefined) {
+    if (typeof name !== "string" || !name.trim() || name.trim().length > MAX_INVITEE_NAME) throw new AppError("name_required", 400);
+    set.name = name.trim();
+  }
+  if (phone !== undefined) {
+    if (typeof phone !== "string" || phone.trim().length > MAX_INVITEE_PHONE) throw new AppError("phone_invalid", 400);
+    set.phone = phone.trim();
+  }
+  if (relationship !== undefined) {
+    if (!Object.values(FamilyRelationship).includes(relationship)) throw new AppError("invalid_relationship", 400);
+    set.relationship = relationship;
+  }
+  if (!Object.keys(set).length) throw new AppError("nothing_to_update", 400);
+
+  const updated = await FamilyInvitation.updateOne(
+    { _id: invitation._id, status: FamilyInvitationStatus.PENDING },
+    { $set: set }
+  );
+  if (!updated.matchedCount) throw new AppError("invitation_not_editable", 409);
+
+  return getInvitation({ invitationId, organizationId });
+};
+
+/** Only an invitation that went nowhere can be deleted: revoked or expired. An accepted one stays as the record. */
+const deleteInvitation = async ({ actor, invitationId, organizationId }) => {
+  if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
+
+  const invitation = await FamilyInvitation.findOne({ _id: invitationId, organizationId });
+  if (!invitation) throw new AppError("invitation_not_found", 404);
+  await requireManageableResident({ actor, organizationId, residentId: invitation.residentId });
+
+  const lapsed =
+    invitation.status === FamilyInvitationStatus.REVOKED ||
+    invitation.status === FamilyInvitationStatus.EXPIRED ||
+    (invitation.status === FamilyInvitationStatus.PENDING && invitation.expiresAt <= new Date());
+  if (!lapsed) throw new AppError("invitation_cannot_be_deleted", 409);
+
+  const removed = await FamilyInvitation.deleteOne({ _id: invitation._id, status: invitation.status });
+  if (!removed.deletedCount) throw new AppError("invitation_cannot_be_deleted", 409);
+
+  return { invitationId: invitation._id, deleted: true };
 };
 
 const revokeInvitation = async ({ actor, invitationId, organizationId }) => {
@@ -627,6 +690,8 @@ module.exports = {
   inviteFamilyMember,
   listInvitations,
   getInvitation,
+  editInvitation,
+  deleteInvitation,
   resendInvitation,
   revokeInvitation,
   previewInvitation,

@@ -5,6 +5,7 @@ const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyGroupService = require("@adminServices/family/familyGroupService");
 const familyModerationService = require("@adminServices/family/familyModerationService");
 const familyPostService = require("@adminServices/family/familyPostService");
+const familyWallActivityService = require("@adminServices/family/familyWallActivityService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
@@ -23,6 +24,8 @@ const listAllMembers = respond(
       residentId: queryId(req.query.residentId),
       status: queryText(req.query.status),
       isNextOfKin: queryText(req.query.isNextOfKin),
+      keyword: queryText(req.query.keyword),
+      days: queryText(req.query.days),
       page,
       limit,
       skip,
@@ -55,6 +58,7 @@ const listUploads = respond(
       branchId: queryId(req.query.branchId),
       residentId: queryId(req.query.residentId),
       status: queryText(req.query.status),
+      keyword: queryText(req.query.keyword),
       page,
       limit,
       skip,
@@ -83,7 +87,14 @@ const listPosts = respond(
       organizationId: req.orgId,
       branchId: queryId(req.query.branchId),
       residentId: queryId(req.query.residentId),
+      authorId: queryId(req.query.authorId),
       status: queryText(req.query.status),
+      pinned: queryText(req.query.pinned),
+      hasPhotos: queryText(req.query.hasPhotos),
+      reported: queryText(req.query.reported),
+      from: queryText(req.query.from),
+      to: queryText(req.query.to),
+      sort: queryText(req.query.sort),
       keyword: queryText(req.query.keyword),
       page,
       limit,
@@ -93,9 +104,42 @@ const listPosts = respond(
   { paged: true }
 );
 
+const updateMember = respond(
+  (req) =>
+    familyStaffService.editMember({
+      actor: req.user,
+      organizationId: req.orgId,
+      memberId: req.params.memberId,
+      relationship: req.body.relationship,
+      phone: req.body.phone,
+    }),
+  { translationKey: "family_member_updated" }
+);
+
+const updateMemberAccess = respondByAction({
+  deactivate: {
+    run: (req) =>
+      familyStaffService.changeMemberAccess({ actor: req.user, organizationId: req.orgId, memberId: req.params.memberId, action: "deactivate" }),
+    translationKey: "family_member_deactivated",
+  },
+  activate: {
+    run: (req) =>
+      familyStaffService.changeMemberAccess({ actor: req.user, organizationId: req.orgId, memberId: req.params.memberId, action: "activate" }),
+    translationKey: "family_member_activated",
+  },
+});
+
 const getMember = respond((req) =>
   familyStaffService.getMember({ organizationId: req.orgId, memberId: req.params.memberId })
 );
+
+const updatePostReports = respondByAction({
+  dismiss: {
+    run: (req) =>
+      familyWallActivityService.dismissReports({ actor: req.user, organizationId: req.orgId, postId: req.params.id }),
+    translationKey: "post_reports_dismissed",
+  },
+});
 
 const listTaggableResidents = respond((req) =>
   familyPostService.listTaggableResidents({
@@ -121,7 +165,10 @@ const createPost = respond(
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.body.branchId,
+      title: req.body.title,
       message: req.body.message,
+      status: req.body.status,
+      scheduledAt: req.body.scheduledAt,
       mediaIds: req.body.mediaIds,
       taggedResidentIds: req.body.taggedResidentIds,
       isPinned: req.body.isPinned,
@@ -135,7 +182,10 @@ const updatePost = respond(
       actor: req.user,
       organizationId: req.orgId,
       postId: req.params.id,
+      title: req.body.title,
       message: req.body.message,
+      status: req.body.status,
+      scheduledAt: req.body.scheduledAt,
       mediaIds: req.body.mediaIds,
       taggedResidentIds: req.body.taggedResidentIds,
       isPinned: req.body.isPinned,
@@ -227,10 +277,13 @@ module.exports = {
   listMembers,
   listAllMembers,
   getMember,
+  updateMember,
+  updateMemberAccess,
   listFamilyGroups,
   listUploads,
   updateUpload,
   listPosts,
+  updatePostReports,
   listTaggableResidents,
   uploadPostPhoto,
   uploadPostPhotos,

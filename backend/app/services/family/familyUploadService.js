@@ -119,6 +119,31 @@ const effectiveUrl = (field) => ({
 });
 
 /** What the author sees: photos show the blurred copy once one exists. */
+const TITLE_LENGTH = 60;
+
+const STATUS_LABELS = {
+  [FamilyUploadStatus.APPROVED]: "Approved",
+  [FamilyUploadStatus.WAITING]: "Waiting For Approval",
+  [FamilyUploadStatus.REJECTED]: "Not Approved",
+};
+
+/** The card heading: the message's first line, cut to fit. */
+const firstLine = { $trim: { input: { $arrayElemAt: [{ $split: ["$message", "\n"] }, 0] } } };
+const cardTitle = {
+  $cond: [
+    { $gt: [{ $strLenCP: firstLine }, TITLE_LENGTH] },
+    { $concat: [{ $substrCP: [firstLine, 0, TITLE_LENGTH - 1] }, "…"] },
+    firstLine,
+  ],
+};
+
+const statusLabel = {
+  $switch: {
+    branches: Object.entries(STATUS_LABELS).map(([status, label]) => ({ case: { $eq: ["$status", status] }, then: label })),
+    default: "",
+  },
+};
+
 const myUploadStages = [
   { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },
   ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
@@ -135,10 +160,12 @@ const myUploadStages = [
       uploadId: "$_id",
       residentId: 1,
       residentName: { $ifNull: ["$resident.name", ""] },
+      title: cardTitle,
       message: 1,
       photos: 1,
       includeInGazette: 1,
       status: 1,
+      statusLabel,
       rejectionReason: 1,
       decidedAt: 1,
       createdAt: 1,

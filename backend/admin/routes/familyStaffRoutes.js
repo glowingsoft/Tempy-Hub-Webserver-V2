@@ -29,6 +29,9 @@ router.use(
   requireRoles(FAMILY_STAFF_ROLES)
 );
 
+router.put("/members/:memberId", requirePermission(FAMILY_MANAGE), familyStaffController.updateMember);
+router.put("/members/:memberId/access", requirePermission(FAMILY_MANAGE), familyStaffController.updateMemberAccess);
+
 router.get("/residents/:residentId/members", requirePermission(FAMILY_VIEW), familyStaffController.listMembers);
 router.delete("/residents/:residentId/members/:memberId", requirePermission(FAMILY_MANAGE), familyStaffController.removeMember);
 router.put("/residents/:residentId/next-of-kin", requirePermission(FAMILY_MANAGE), familyStaffController.setNextOfKin);
@@ -47,6 +50,7 @@ router.post("/posts/media", photoLimiter, requirePermission(FAMILY_MANAGE), rece
 router.post("/posts", postLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.createPost);
 router.put("/posts/:id", requirePermission(FAMILY_MANAGE), familyStaffController.updatePost);
 router.delete("/posts/:id", requirePermission(FAMILY_MANAGE), familyStaffController.removePost);
+router.put("/posts/:id/reports", requirePermission(FAMILY_MANAGE), familyStaffController.updatePostReports);
 
 router.get("/handovers", requirePermission(FAMILY_VIEW), familyStaffController.listHandovers);
 

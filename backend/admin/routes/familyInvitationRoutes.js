@@ -25,5 +25,6 @@ router.use(
 
 router.post("/", inviteLimiter, requirePermission(FAMILY_MANAGE), familyInvitationController.inviteFamilyMember);
 router.put("/:invitationId", inviteLimiter, requirePermission(FAMILY_MANAGE), familyInvitationController.updateInvitation);
+router.delete("/:invitationId", requirePermission(FAMILY_MANAGE), familyInvitationController.deleteInvitation);
 
 module.exports = router;

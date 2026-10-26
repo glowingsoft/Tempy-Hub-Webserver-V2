@@ -493,6 +493,36 @@ requests.find((r) => r.name === "community wall").event.push(
   ])
 );
 
+// ---------------------------------------------------------------- Community wall: seen and reports (family app)
+requests.push(
+  withBody(
+    req("mark posts seen", "PUT", ["app", "family", "wall", "seen"], {
+      tests: [
+        'pm.test("Posts marked seen", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data).to.have.property("seen");',
+        "});",
+      ],
+      description:
+        "Send the ids of the wall posts that were shown on screen (up to 50). Only posts you may see count, and sending one twice changes nothing. Staff see it as Seen 31/42 on each post.",
+    }),
+    { postIds: ["{{postId}}"] }
+  ),
+  withBody(
+    req("report post", "POST", ["app", "family", "wall", "{{postId}}", "report"], {
+      tests: [
+        'pm.test("Post reported", function () {',
+        "    pm.response.to.have.status(201);",
+        '    pm.expect(pm.response.json().data.reported).to.eql(true);',
+        "});",
+      ],
+      description:
+        "Report a post (post menu: Report). Body: reason (optional, up to 500 characters). Reporting twice is the same as once, the poster is never told who reported, and staff see it under Needs your attention. 404 for a removed post or one at a home you are not linked to.",
+    }),
+    { reason: "Wrong photo for this resident" }
+  )
+);
+
 // ---------------------------------------------------------------- Invite Family (by email)
 requests.push(
   req("invitations I sent", "GET", ["app", "family", "member-invitations"], {
@@ -577,7 +607,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Staff Community Wall: every post of the organization, pinned first then newest, with author, home, photos, all tagged residents and reactionCount. Optional query: status (published or removed), branchId, residentId (tagged), keyword, page, limit. meta.counts has published and removed and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
+      "Staff Community Wall: every post of the organization, pinned first then newest. Optional query: status (published, draft, scheduled or removed), branchId, residentId (tagged), authorId, pinned=true, hasPhotos=true, from and to (2026-10-01), sort (newest or oldest), keyword (post text, tagged resident or author), page, limit. Each post has the author (name, photo, role), the home, photos, tagged residents with their photos, isPinned and reactionCount. meta.counts has published, draft, scheduled, removed, pinned and photos for the tabs (scheduled posts are listed soonest first, drafts by last edit). The same response carries the rest of the screen: meta.attention (the Needs your attention card: pendingUploads {count, oldestAt}, reportedPosts {count, reports, oldestAt}, total) and meta.activity (Staff activity: days and authors with posts, name, photo and role; query days 1 to 365, default 30). Each post also has seenCount, audienceCount, recentReactors (latest 3), reportCount and reports (its open reports, newest 5: reporterName, reason, createdAt); they ignore the status, pinned and photos filters but follow the others. Needs familyEngagement.view; 404 when the module is off.",
   }),
   staff("taggable residents", "GET", ["admin", "family", "posts", "taggable-residents"], {
     query: "branchId={{branchId}}",
@@ -621,7 +651,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Moderation queue: uploads waiting for approval, oldest first, with author, resident, room and the original photos. Optional query: status (default waiting), branchId, residentId, page, limit. meta.counts has waiting, approved and rejected for the tabs and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
+      "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=waiting lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, waiting, approved and rejected for the tabs and ignores the status filter; meta.oldestWaitingAt is when the oldest waiting upload was sent. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family member detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-members", "{{memberId}}"], {
     tests: [
@@ -656,7 +686,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Every active and pending family member of the organization in the path, across residents, whoever invited them. Same shape as the organization members list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Without a status it lists active and pending. meta.counts gives the number of active, pending, rejected, cancelled and removed members; the counts ignore the status filter. Optional query: branchId, residentId, status, isNextOfKin, page, limit.",
+      "Every active and pending family member of the organization, across residents, whoever invited them. Without a status it lists active and pending. Optional query: status, branchId, residentId, isNextOfKin, keyword (member name or email, or the resident's name or room), page, limit. Each row has the member (name, email, photo), relationship, isNextOfKin, status, the resident (name, room, photo), the home, joinedAt and joinedVia. meta.counts gives active, pending, rejected, cancelled and removed and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.",
   }),
   staff("family members", "GET", ["admin", "family", "residents", "{{residentId}}", "members"], {
     tests: [
@@ -806,6 +836,7 @@ const wallPosts = [
     path: ["admin", "family", "posts"],
     body: {
       branchId: "{{branchId}}",
+      title: "Garden afternoon",
       message: "Garden afternoon: live music and scones on the lawn.",
       mediaIds: ["{{mediaId}}"],
       taggedResidentIds: ["{{residentId}}"],
@@ -819,20 +850,20 @@ const wallPosts = [
       "});",
     ],
     description:
-      "Staff Community Wall: new post. Body: branchId (an owner or super admin must pick the site; a site or line manager posts to their own), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. Goes live straight away with no approval and every active family member at the site gets a notification. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage.",
+      "Staff Community Wall: new post. Body: title (optional, up to 120 characters), branchId (an owner or super admin must pick the site; a site or line manager posts to their own), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. Goes live straight away with no approval and every active family member at the site gets a notification. Optional status: published (default), draft (saved, nobody sees it) or scheduled; scheduledAt (an ISO date in the future, up to a year ahead, such as 2026-11-02T09:00:00Z) alone also means scheduled. Families are notified when a scheduled post goes live, which a job checks every minute. 400 post_schedule_invalid for a bad date. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage.",
   },
   {
     name: "update post",
     method: "PUT",
     path: ["admin", "family", "posts", "{{postId}}"],
-    body: { message: "Garden afternoon: live music, scones and a raffle.", isPinned: true },
+    body: { title: "Garden afternoon and raffle", message: "Garden afternoon: live music, scones and a raffle.", isPinned: true },
     tests: [
       'pm.test("Post updated", function () {',
       "    pm.response.to.have.status(200);",
       "});",
     ],
     description:
-      "Edit the text, photos or tags, or pin and unpin. Anything not sent stays as it was. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again.",
+      "Edit the text, photos or tags, or pin and unpin. Anything not sent stays as it was. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again for a published post. A draft or scheduled post can also get status (draft, scheduled or published) and scheduledAt: published makes it live now, notifies families and sets its posted time to now. 409 post_already_published when a published post is sent back to draft or scheduled.",
   },
   {
     name: "remove post",
@@ -849,6 +880,77 @@ const wallPosts = [
   },
 ];
 wallPosts.forEach(({ name, method, path, body, tests, description }) => {
+  const request = staff(name, method, path, { tests, description });
+  if (body) request.request.body = jsonBody(body);
+  staffRequests.push(request);
+});
+
+// Editing members and invitations, pausing access, and dismissing reports.
+const adminActions = [
+  {
+    name: "update family member",
+    method: "PUT",
+    path: ["admin", "family", "members", "{{memberId}}"],
+    body: { relationship: "grandson", phone: "07700 900123" },
+    tests: ['pm.test("Family member updated", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "Members: edit. Body, both optional: relationship (a value from relationship options) and phone (up to 30 characters; an empty string clears it). Their name and email belong to their account and are not changed here. Only active, pending and inactive members; a site or line manager can only change their own site. Returns the member detail. Needs familyEngagement.manage.",
+  },
+  {
+    name: "deactivate family member",
+    method: "PUT",
+    path: ["admin", "family", "members", "{{memberId}}", "access"],
+    body: { action: "deactivate" },
+    tests: [
+      'pm.test("Family member deactivated", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("inactive");',
+      "});",
+    ],
+    description:
+      "Members: pause someone's access without removing them (they show as Inactive). The next of kin cannot be deactivated (409 next_of_kin_cannot_be_deactivated): set a new next of kin first. A handover that involved them is cancelled. Their login then reports accessState inactive. Needs familyEngagement.manage.",
+  },
+  {
+    name: "activate family member",
+    method: "PUT",
+    path: ["admin", "family", "members", "{{memberId}}", "access"],
+    body: { action: "activate" },
+    tests: [
+      'pm.test("Family member activated", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.status).to.eql("active");',
+      "});",
+    ],
+    description: "Members: switch a deactivated member's access back on. 409 family_member_not_inactive for anyone else. Needs familyEngagement.manage.",
+  },
+  {
+    name: "edit family invitation",
+    method: "PUT",
+    path: ["admin", "family-invitations", "{{familyInvitationId}}"],
+    body: { action: "edit", name: "Ellen Price", phone: "07700 900123", relationship: "niece" },
+    tests: ['pm.test("Invitation updated", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "Invitations: edit (pencil). Body: action edit and at least one of name, phone, relationship. Only a pending invitation that has not expired (409 invitation_not_editable otherwise). The email and the link stay the same. Returns the invitation detail. Needs familyEngagement.manage.",
+  },
+  {
+    name: "delete family invitation",
+    method: "DELETE",
+    path: ["admin", "family-invitations", "{{familyInvitationId}}"],
+    tests: ['pm.test("Invitation deleted", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "Invitations: delete (trash on a revoked one). Only a revoked or expired invitation can be deleted; a pending one must be revoked first and an accepted one stays as the record (409 invitation_cannot_be_deleted). Needs familyEngagement.manage.",
+  },
+  {
+    name: "dismiss post reports",
+    method: "PUT",
+    path: ["admin", "family", "posts", "{{postId}}", "reports"],
+    body: { action: "dismiss" },
+    tests: ['pm.test("Reports dismissed", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "Community Wall: the reports on a post are judged unfounded; the post stays and its open reports close. Removing the post instead closes them as actioned. A site or line manager can only act on their own site. Needs familyEngagement.manage.",
+  },
+];
+adminActions.forEach(({ name, method, path, body, tests, description }) => {
   const request = staff(name, method, path, { tests, description });
   if (body) request.request.body = jsonBody(body);
   staffRequests.push(request);
@@ -943,7 +1045,8 @@ for (const [name, action] of [
 }
 
 // The invitations list lives under the organization, like the members and invitations lists of staff.
-const familyInvitationItems = (adminFolder.item.find((i) => i.name === "Family Invitations") || { item: [] }).item;
+const requestsUnder = (item) => (item.item ? item.item.flatMap(requestsUnder) : [item]);
+const familyInvitationItems = requestsUnder(adminFolder);
 const allInvitations = familyInvitationItems.find((r) => r.name === "list family invitations");
 const invitationDetail = familyInvitationItems.find((r) => r.name === "get family invitation");
 if (invitationDetail) {
@@ -969,7 +1072,7 @@ if (allInvitations) {
     (h) => String(h.key).toLowerCase() !== "x-org-id"
   );
   allInvitations.request.description =
-    "Every family invitation of the organization in the path, whoever sent it, newest first. Same shape as the organization invitations list. Owners, super admins and managers with familyEngagement.view; 404 when the module is off. Optional query: branchId, status, residentId, keyword, page, limit. Rows carry residentName and invitedByName. meta.counts gives the number of pending, accepted, revoked and expired invitations (a pending one past its expiry counts as expired); the counts ignore the status filter.";
+    "Every family invitation of the organization in the path, whoever sent it, newest first. Optional query: branchId, status, residentId, keyword (name, email, or the resident's name or room), page, limit. Rows carry the resident (name, room, photo), the home, who invited, status (a pending one past its expiry reads as expired), expiresAt and lastSentAt. meta.counts has pending, accepted, revoked and expired and ignores the status filter. Needs familyEngagement.view; 404 when the module is off.";
 }
 
 // Requests saved by an earlier run may still say PATCH.
@@ -995,3 +1098,6 @@ collection.variable = vars;
 
 fs.writeFileSync(FILE, JSON.stringify(collection, null, 2));
 console.log("postman family access updated");
+
+// requests are generated flat; this files them under their module folders
+require("./organize-family-folders.js");

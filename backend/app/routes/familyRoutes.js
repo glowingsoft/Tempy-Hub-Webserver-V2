@@ -49,6 +49,8 @@ router.put("/handover/:id", familyController.updateHandover);
 router.get("/timeline", residentInQuery, familyController.listTimeline);
 
 router.get("/wall", residentInQuery, familyController.listWall);
+router.put("/wall/seen", requireFamilyAccess(), familyController.markPostsSeen);
+router.post("/wall/:postId/report", writeLimiter, requireFamilyAccess(), familyController.reportPost);
 router.put("/wall/:postId/reaction", requireFamilyAccess(), familyController.addReaction);
 router.delete("/wall/:postId/reaction", requireFamilyAccess(), familyController.removeReaction);
 

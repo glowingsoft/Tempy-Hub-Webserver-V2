@@ -3,7 +3,7 @@ const {
   validateParams,
   parsePaginationParams,
 } = require("@utils/responseUtil");
-const { respondByAction } = require("@utils/controllerResponse");
+const { respond, respondByAction } = require("@utils/controllerResponse");
 const familyService = require("@adminServices/family/familyService");
 const { queryText, queryId } = require("@utils/familyQuery");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
@@ -102,11 +102,34 @@ const invitationAction = (run, translationKey) => ({
 const updateInvitation = respondByAction({
   resend: invitationAction(familyService.resendInvitation, "invitation_sent_successfully"),
   revoke: invitationAction(familyService.revokeInvitation, "invitation_revoked_successfully"),
+  edit: {
+    run: (req) =>
+      familyService.editInvitation({
+        actor: req.user,
+        invitationId: req.params.invitationId,
+        organizationId: req.orgId,
+        name: req.body.name,
+        phone: req.body.phone,
+        relationship: req.body.relationship,
+      }),
+    translationKey: "invitation_updated",
+  },
 });
+
+const deleteInvitation = respond(
+  (req) =>
+    familyService.deleteInvitation({
+      actor: req.user,
+      invitationId: req.params.invitationId,
+      organizationId: req.orgId,
+    }),
+  { translationKey: "invitation_deleted" }
+);
 
 module.exports = {
   inviteFamilyMember,
   listInvitations,
   getInvitation,
   updateInvitation,
+  deleteInvitation,
 };

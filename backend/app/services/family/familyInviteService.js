@@ -47,8 +47,10 @@ const inviteRelative = async ({ userId, link, name, email, relationship }) => {
   };
 
   // The link reaches the invitee by email and the sender must not hold it. While email is off
-  // (development and testing) nothing is delivered, so the link is returned instead.
-  return process.env.EMAIL_ENABLED === "true" ? sent : { ...sent, acceptUrl: invitation.acceptUrl };
+  // (development and testing) nothing is delivered, so the link is returned instead; set
+  // FAMILY_INVITE_RETURN_LINK=true to return it even with email on (a test environment).
+  const returnsLink = process.env.EMAIL_ENABLED !== "true" || process.env.FAMILY_INVITE_RETURN_LINK === "true";
+  return returnsLink ? { ...sent, acceptUrl: invitation.acceptUrl } : sent;
 };
 
 const listSentInvitations = ({ userId, link, status, page, limit, skip }) =>

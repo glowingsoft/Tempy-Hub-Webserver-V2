@@ -76,6 +76,7 @@ const FamilyRelationship = {
 const FamilyMemberStatus = {
   PENDING: "pending",
   ACTIVE: "active",
+  INACTIVE: "inactive",
   REJECTED: "rejected",
   CANCELLED: "cancelled",
   REMOVED: "removed",
@@ -101,7 +102,15 @@ const FamilyUploadStatus = {
 
 const FamilyPostStatus = {
   PUBLISHED: "published",
+  DRAFT: "draft",
+  SCHEDULED: "scheduled",
   REMOVED: "removed",
+};
+
+const FamilyPostReportStatus = {
+  OPEN: "open",
+  DISMISSED: "dismissed",
+  ACTIONED: "actioned",
 };
 
 const FamilyJoinSource = {
@@ -406,6 +415,7 @@ module.exports = {
   FamilyHandoverStatus,
   FamilyUploadStatus,
   FamilyPostStatus,
+  FamilyPostReportStatus,
   FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,

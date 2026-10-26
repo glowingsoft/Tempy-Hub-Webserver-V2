@@ -513,11 +513,12 @@ requests.push(
         "    pm.response.to.have.status(201);",
         "    const data = pm.response.json().data;",
         '    pm.expect(data.status).to.eql("pending");',
-        '    pm.expect(data).to.not.have.any.keys("token", "acceptUrl", "tokenHash");',
+        '    pm.expect(data).to.not.have.any.keys("token", "tokenHash");',
+        '    if (data.acceptUrl) { pm.collectionVariables.set("familyInviteToken", data.acceptUrl.split("/").pop()); }',
         "});",
       ],
       description:
-        "Invite Family: the next of kin invites a relative. Body: residentId, name, email, relationship (a value from relationship options). The invitee gets an email with a one-time link valid for 7 days. The sender never receives the link: with EMAIL_ENABLED off the server prints it in its console, so copy the token from there into familyInviteToken to test accept family invitation. Next of kin only (403 otherwise); 400 for a missing name or bad relationship or email; 409 if the email belongs to a staff member, is already a member, or already has a pending invitation. Figma screen: Invite Family (Send Invite).",
+        "Invite Family: the next of kin invites a relative. Body: residentId, name, email, relationship (a value from relationship options). The invitee gets an email with a one-time link valid for 7 days. With EMAIL_ENABLED on the sender never receives the link. While it is off, nothing is delivered, so the response also includes acceptUrl and this request saves its token in familyInviteToken for accept family invitation. Next of kin only (403 otherwise); 400 for a missing name or bad relationship or email; 409 if the email belongs to a staff member, is already a member, or already has a pending invitation. Figma screen: Invite Family (Send Invite).",
     }),
     { residentId: "{{residentId}}", name: "Jane Doe", email: "{{relativeEmail}}", relationship: "granddaughter" }
   )

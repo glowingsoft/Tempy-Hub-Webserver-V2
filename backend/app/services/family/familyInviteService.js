@@ -37,8 +37,7 @@ const inviteRelative = async ({ userId, link, name, email, relationship }) => {
     relationship,
   });
 
-  // the link goes to the invitee by email; the sender never holds the token
-  return {
+  const sent = {
     invitationId: invitation._id,
     email: invitation.email,
     name: invitation.name,
@@ -46,6 +45,10 @@ const inviteRelative = async ({ userId, link, name, email, relationship }) => {
     status: invitation.status,
     expiresAt: invitation.expiresAt,
   };
+
+  // The link reaches the invitee by email and the sender must not hold it. While email is off
+  // (development and testing) nothing is delivered, so the link is returned instead.
+  return process.env.EMAIL_ENABLED === "true" ? sent : { ...sent, acceptUrl: invitation.acceptUrl };
 };
 
 const listSentInvitations = ({ userId, link, status, page, limit, skip }) =>

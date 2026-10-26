@@ -27,6 +27,7 @@ const { verifyActivationCode, issueActivationCode } = require("@adminServices/or
 const attendanceService = require("@adminServices/attendance/attendanceService");
 const { getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
 const communicationService = require("@commonServices/communication/communicationService");
+const { kioskCheckInOtpEmailTemplate } = require("@utils/emailTemplates");
 const { emitKioskPairingReady } = require("@config/sockets/kiosk/kioskSocketEmitter");
 const {
   BranchStatus,
@@ -405,6 +406,8 @@ const requestKioskCheckInOtp = async ({
   branchId,
   staffId,
 }) => {
+  if (!staffId) throw new AppError("staff_id_required", 400);
+
   const profile = await assertStaffAtKioskBranch({
     staffId,
     organizationId,
@@ -412,7 +415,7 @@ const requestKioskCheckInOtp = async ({
   });
 
   const user = await User.findById(profile.userId).select(
-    "phoneNumber otpInfo timezone accountState"
+    "email otpInfo timezone accountState"
   );
 
   if (!user) throw new AppError("user_not", 404);
@@ -420,19 +423,28 @@ const requestKioskCheckInOtp = async ({
     throw new AppError("your_account_4", 403);
   }
 
-  const phoneNumber = resolvePhoneForStaff(profile, user);
-  const otp = user.generateOtp("phoneNumber", user.timezone || "UTC");
+  const email = String(user.email || "").trim().toLowerCase();
+  if (!email) throw new AppError("staff_email_not_found", 400);
+
+  const otp = user.generateOtp("email", user.timezone || "UTC");
   if (otp?.error === "too_many_otp_requests") {
     throw new AppError("too_many_otp_requests", 400);
   }
 
   await user.save();
-  communicationService.sendSmsViaPinpointAws({ phoneNumber, otp }).catch(() => {});
+  communicationService
+    .sendEmailAws({
+      emails: [email],
+      subject: "Kiosk Check-in OTP",
+      body: kioskCheckInOtpEmailTemplate(otp),
+    })
+    .catch(() => {});
 
   return {
     staffId: profile._id,
-    phoneMasked: phoneNumber.replace(/.(?=.{4})/g, "*"),
-    expiresInMinutes: 5,
+    otp,
+    email,
+    expiresInMinutes: 10,
   };
 };
 
@@ -453,11 +465,11 @@ const verifyKioskCheckInOtp = async ({
   });
 
   const user = await User.findById(profile.userId).select(
-    "otpInfo timezone phoneNumber"
+    "otpInfo timezone email"
   );
   if (!user) throw new AppError("user_not", 404);
 
-  const userOtp = user.otpInfo?.phoneNumberOtp;
+  const userOtp = user.otpInfo?.emailOtp;
   if (!userOtp?.otp || userOtp.otp !== String(otp)) {
     throw new AppError("invalid_otp", 400);
   }

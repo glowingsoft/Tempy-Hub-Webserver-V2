@@ -1,4 +1,4 @@
-const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
+const { sendResponse, parsePaginationParams, validateParams } = require("@utils/responseUtil");
 
 const kioskService = require("@adminServices/kiosk/kioskService");
 const kioskWidgetService = require("@adminServices/kiosk/kioskWidgetService");
@@ -140,6 +140,9 @@ const getStaffPreview = async (req, res) => {
 
 
 const requestCheckInOtp = async (req, res) => {
+  if (!validateParams(req, res, { formFields: ["staffId"], objectIdFields: ["staffId"] })) {
+    return;
+  }
 
   try {
 

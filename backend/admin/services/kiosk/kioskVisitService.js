@@ -11,6 +11,7 @@ const {
   VisitSessionStatus,
   ExternalPersonType,
   DocumentCategory,
+  DocumentAudience,
   InvitationStatus,
   BadgeType,
   PersonCategoryAppliesTo,
@@ -22,6 +23,8 @@ const {
   parsePersonType,
 } = require("@adminServices/visitors/externalPersonService");
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
+const { toPublicImageUrl } = require("@utils/imageHelper");
+const { versionFile } = require("@adminServices/documents/documentService");
 
 const MIN_SEARCH_LENGTH = 2;
 
@@ -34,22 +37,38 @@ const POLICY_CATEGORIES = [
   DocumentCategory.CONTRACTORS,
 ];
 
-const shapeVisit = ({ session, person, kiosk, invitation }) => ({
-  session,
-  person: person
-    ? {
-        _id: person._id,
-        name: person.name,
-        type: person.type,
-        photoUrl: person.photoUrl || "",
-      }
-    : null,
-  locationLabel: kiosk?.locationLabel || "",
-  receptionIdentifier: kiosk?.receptionIdentifier || "",
-  arrivalWindow: invitation
-    ? { from: invitation.arrivalAt, until: invitation.visitingUntil }
-    : null,
-});
+const applyPersonPhoto = async (person, image) => {
+  if (!person?._id) return person;
+  const photoUrl = toPublicImageUrl(image);
+  if (photoUrl) {
+    await ExternalPerson.updateOne({ _id: person._id }, { $set: { photoUrl } });
+    return { ...person, photoUrl };
+  }
+  return { ...person, photoUrl: toPublicImageUrl(person.photoUrl) };
+};
+
+const shapeVisit = ({ session, person, kiosk, invitation }) => {
+  const url = toPublicImageUrl(person?.photoUrl);
+  return {
+    session,
+    person: person
+      ? {
+          _id: person._id,
+          name: person.name,
+          type: person.type,
+          photoUrl: url,
+          image: url,
+        }
+      : null,
+    image: url,
+    photoUrl: url,
+    locationLabel: kiosk?.locationLabel || "",
+    receptionIdentifier: kiosk?.receptionIdentifier || "",
+    arrivalWindow: invitation
+      ? { from: invitation.arrivalAt, until: invitation.visitingUntil }
+      : null,
+  };
+};
 
 const DEFAULT_CATEGORIES = [
   { name: "Family / Friend", appliesTo: PersonCategoryAppliesTo.VISITOR },
@@ -132,6 +151,11 @@ const searchVisitPeople = async ({
 };
 
 const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
+  const audience =
+    personType === ExternalPersonType.CONTRACTOR
+      ? DocumentAudience.CONTRACTOR
+      : DocumentAudience.VISITOR;
+
   const categories = [...POLICY_CATEGORIES];
   if (personType === ExternalPersonType.CONTRACTOR) {
     categories.push(DocumentCategory.CONTRACTORS);
@@ -142,8 +166,25 @@ const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
       $match: {
         organizationId,
         requiresSignature: true,
-        category: { $in: [...new Set(categories)] },
         $or: [{ branchId }, { branchId: null }],
+        $and: [
+          {
+            $or: [
+              { audiences: audience },
+              {
+                $and: [
+                  {
+                    $or: [
+                      { audiences: { $exists: false } },
+                      { audiences: { $size: 0 } },
+                    ],
+                  },
+                  { category: { $in: [...new Set(categories)] } },
+                ],
+              },
+            ],
+          },
+        ],
       },
     },
     { $sort: { title: 1 } },
@@ -155,18 +196,19 @@ const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
         as: "version",
       },
     },
-    { $unwind: { path: "$version", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        title: 1,
-        category: 1,
-        currentVersionId: 1,
-        body: "$version.fileUrl",
-      },
-    },
   ]);
 
-  return docs;
+  return docs.map((row) => {
+    const file = versionFile(row.version?.[0] || null);
+    return {
+      _id: row._id,
+      title: row.title,
+      category: row.category,
+      currentVersionId: row.currentVersionId,
+      file,
+      body: file?.url || "",
+    };
+  });
 };
 
 const applySignatures = async ({
@@ -257,9 +299,11 @@ const checkInByInvitation = async ({
           : ExternalPersonType.VISITOR,
       name: invitation.visitorName,
       email: invitation.visitorEmail,
-      photoUrl,
+      photoUrl: toPublicImageUrl(photoUrl),
     });
   }
+
+  person = await applyPersonPhoto(person, photoUrl);
 
   const session = await visitSessionService.createVisitSession({
     organizationId,
@@ -316,11 +360,13 @@ const checkInWalkIn = async ({
       name,
       email,
       phone,
-      photoUrl,
+      photoUrl: toPublicImageUrl(photoUrl),
       carRegistration,
       categoryId,
     });
   }
+
+  person = await applyPersonPhoto(person, photoUrl);
 
   const isContractor = person.type === ExternalPersonType.CONTRACTOR;
   const policies = firstVisit || isContractor

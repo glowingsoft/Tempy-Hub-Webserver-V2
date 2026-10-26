@@ -37,7 +37,7 @@ const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
         }
       : undefined,
     url: {
-      raw: `{{url}}${pathParts.join("/")}${query ? `?${query}` : ""}`,
+      raw: `{{url}}/${pathParts.join("/")}${query ? `?${query}` : ""}`,
       host: ["{{url}}"],
       path: pathParts,
       ...(query

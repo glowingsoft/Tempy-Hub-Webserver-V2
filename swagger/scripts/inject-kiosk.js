@@ -78,15 +78,6 @@ spec.components.schemas.KioskOtpVerifyRequest = {
   properties: {
     staffId: { type: "string" },
     otp: { type: "string" },
-    clientEventId: {
-      type: "string",
-      description: "Optional. Offline/retry key. Omit on kiosk PIN clock-in/out.",
-    },
-    occurredAt: { type: "string", format: "date-time" },
-    image: {
-      type: "string",
-      description: "S3 object key only. Server prefixes S3_BASE_URL and saves StaffProfile.photoUrl",
-    },
   },
 };
 
@@ -271,7 +262,8 @@ spec.paths["/app/kiosk/attendance/otp/request"] = {
 spec.paths["/app/kiosk/attendance/otp/verify"] = {
   post: {
     tags: tag,
-    summary: "Verify OTP and clock in at kiosk",
+    summary:
+      "Verify check-in OTP only. Returns staff, branch, and organization. Clock in with POST /app/kiosk/attendance/clock-in and staffId within 5 minutes.",
     parameters: [kioskToken],
     requestBody: {
       required: true,
@@ -281,7 +273,7 @@ spec.paths["/app/kiosk/attendance/otp/verify"] = {
         },
       },
     },
-    responses: { 201: ok, 400: { description: "Invalid OTP" } },
+    responses: { 200: ok, 400: { description: "Invalid OTP" } },
   },
 };
 

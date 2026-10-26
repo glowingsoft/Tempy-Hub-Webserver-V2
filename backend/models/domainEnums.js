@@ -303,6 +303,13 @@ const DocumentCategory = {
   OTHER: "other",
 };
 
+/** Who the document is shown to. Kiosk policies use visitor / contractor. */
+const DocumentAudience = {
+  STAFF: "staff",
+  VISITOR: "visitor",
+  CONTRACTOR: "contractor",
+};
+
 const ComplianceRecordStatus = {
   DUE: "due",
   COMPLETED: "completed",
@@ -417,6 +424,7 @@ module.exports = {
   EvacCheckStatus,
   DocumentScope,
   DocumentCategory,
+  DocumentAudience,
   ComplianceRecordStatus,
   ComplianceMeetingStatus,
   AppraisalKind,

@@ -44,8 +44,10 @@ const {
 } = require("@models/domainEnums");
 
 const MIN_SEARCH_LENGTH = 2;
-const SCAN_TOKEN_TTL_MS = 2 * 60 * 1000;
+const SCAN_TOKEN_TTL_MINUTES = 2;
+const SCAN_TOKEN_TTL_MS = SCAN_TOKEN_TTL_MINUTES * 60 * 1000;
 const PAIRING_SESSION_TTL_MS = 3 * 60 * 1000;
+const KIOSK_OTP_CLOCK_IN_MS = 5 * 60 * 1000;
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -451,12 +453,8 @@ const requestKioskCheckInOtp = async ({
 const verifyKioskCheckInOtp = async ({
   organizationId,
   branchId,
-  kioskId,
   staffId,
   otp,
-  clientEventId,
-  occurredAt,
-  image,
 }) => {
   const profile = await assertStaffAtKioskBranch({
     staffId,
@@ -479,30 +477,46 @@ const verifyKioskCheckInOtp = async ({
     throw new AppError("otp_has", 400);
   }
 
+  const clockInExpiresAt = new Date(Date.now() + KIOSK_OTP_CLOCK_IN_MS);
   userOtp.otp = "";
   userOtp.otpExpires = "";
   userOtp.otpUsed = true;
+  userOtp.kioskVerifiedUntil = clockInExpiresAt;
   await user.save();
 
-  const attendance = await attendanceService.clockInForStaff({
-    staffProfile: profile,
-    organizationId,
-    branchId,
-    checkInMethod: CheckInMethod.PHONE,
-    clientEventId,
-    occurredAt,
-    image,
-  });
+  const [staff, branch, organization, session] = await Promise.all([
+    shapeStaffPreview(profile),
+    Branch.findById(branchId)
+      .select("name code timezone status address organizationId")
+      .lean(),
+    publicOrganization(organizationId),
+    attendanceService.getOpenClockInSessionForStaff({ staffProfile: profile }),
+  ]);
 
-  touchLastCheckIn(kioskId);
-  return attendance;
+  return {
+    verified: true,
+    clockedIn: Boolean(session),
+    clockInExpiresAt,
+    staff,
+    branch: branch
+      ? {
+          _id: branch._id,
+          name: branch.name,
+          code: branch.code,
+          timezone: branch.timezone,
+          status: branch.status,
+          address: publicAddress(branch.address),
+        }
+      : null,
+    organization,
+    session: session || null,
+  };
 };
 
 const randomScanToken = () => crypto.randomBytes(24).toString("hex");
 
-const getKioskQr = async ({ kioskId }) => {
-  const kiosk = await Kiosk.findById(kioskId).lean();
-  if (!kiosk) throw new AppError("kiosk_not_found", 404);
+const getKioskQr = async ({ kiosk, organizationId }) => {
+  if (!kiosk?._id) throw new AppError("kiosk_not_found", 404);
 
   const now = Date.now();
   const stillValid =
@@ -517,14 +531,24 @@ const getKioskQr = async ({ kioskId }) => {
     scanToken = randomScanToken();
     scanTokenExpiresAt = new Date(now + SCAN_TOKEN_TTL_MS);
     await Kiosk.updateOne(
-      { _id: kioskId },
+      { _id: kiosk._id },
       { $set: { scanToken, scanTokenExpiresAt } }
     );
   }
 
+  const remainingMs = Math.max(
+    0,
+    new Date(scanTokenExpiresAt).getTime() - now
+  );
+
   return {
+    kioskId: kiosk._id,
+    branchId: kiosk.branchId,
+    organizationId,
     scanToken,
     expiresAt: scanTokenExpiresAt,
+    expiresInMinutes: SCAN_TOKEN_TTL_MINUTES,
+    remainingMinutes: Math.max(0, Math.ceil(remainingMs / 60000)),
     qrPayload: `tempyhub://kiosk?token=${scanToken}`,
   };
 };
@@ -845,11 +869,26 @@ const resolveStaffForKiosk = async ({
       throw new AppError("staff_pin_incorrect", 401);
     }
     checkInMethod = CheckInMethod.KIOSK;
-  } else if (staffId && process.env.NODE_ENV !== "prod") {
+  } else if (staffId) {
     profile = await StaffProfile.findOne({
       ...baseQuery,
       _id: staffId,
     }).lean();
+    if (!profile) throw new AppError("staff_identification_failed", 401);
+
+    const owner = await User.findById(profile.userId)
+      .select("otpInfo.emailOtp.kioskVerifiedUntil")
+      .lean();
+    const verifiedUntil = owner?.otpInfo?.emailOtp?.kioskVerifiedUntil;
+    if (verifiedUntil && new Date(verifiedUntil).getTime() > Date.now()) {
+      checkInMethod = CheckInMethod.PHONE;
+      await User.updateOne(
+        { _id: profile.userId },
+        { $set: { "otpInfo.emailOtp.kioskVerifiedUntil": null } }
+      );
+    } else if (process.env.NODE_ENV === "prod") {
+      throw new AppError("staff_identification_required", 400);
+    }
   } else {
     throw new AppError("staff_identification_required", 400);
   }

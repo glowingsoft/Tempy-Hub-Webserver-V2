@@ -185,37 +185,17 @@ const verifyCheckInOtp = async (req, res) => {
   try {
 
     const data = await kioskService.verifyKioskCheckInOtp({
-
       organizationId: req.orgId,
-
       branchId: req.branchId,
-
-      kioskId: req.kiosk._id,
-
       staffId: req.body.staffId,
-
       otp: req.body.otp,
-
-      clientEventId: req.body.clientEventId,
-
-      occurredAt: req.body.occurredAt,
-
-      image: req.body.image,
-
     });
 
-
-
     return sendResponse({
-
       res,
-
-      statusCode: 201,
-
-      translationKey: "attendance_clock_in_success",
-
+      statusCode: 200,
+      translationKey: "otp_verified",
       data,
-
     });
 
   } catch (error) {
@@ -232,7 +212,10 @@ const getQr = async (req, res) => {
 
   try {
 
-    const data = await kioskService.getKioskQr({ kioskId: req.kiosk._id });
+    const data = await kioskService.getKioskQr({
+      kiosk: req.kiosk,
+      organizationId: req.orgId,
+    });
 
 
 
@@ -306,7 +289,7 @@ const confirmPairing = async (req, res) => {
 
       occurredAt: req.body.occurredAt,
 
-      image: req.body.image,
+      image: req.body.image || req.body.photoUrl,
 
     });
 
@@ -563,7 +546,7 @@ const staffBody = (body) => ({
 
   occurredAt: body.occurredAt,
 
-  image: body.image,
+  image: body.image || body.photoUrl,
 
 });
 

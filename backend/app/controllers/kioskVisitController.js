@@ -108,7 +108,7 @@ const checkIn = async (req, res) => {
       email: req.body.email,
       phone: req.body.phone,
       carRegistration: req.body.carRegistration,
-      photoUrl: req.body.photoUrl,
+      photoUrl: req.body.image || req.body.photoUrl,
       hostStaffId: req.body.hostStaffId,
       hostName: req.body.hostName,
       purposeOfVisit: req.body.purposeOfVisit,

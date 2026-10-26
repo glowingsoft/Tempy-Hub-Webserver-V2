@@ -36,6 +36,7 @@ const residentMediaController = require("../controllers/residentMediaController"
 const floorPlanController = require("../controllers/floorPlanController");
 const peepRecordController = require("../controllers/peepRecordController");
 const kioskWidgetController = require("../controllers/kioskWidgetController");
+const documentController = require("../controllers/documentController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
@@ -59,6 +60,10 @@ const {
   PEEP_VIEW,
   PEEP_MANAGE,
 } = require("@adminServices/peep/floorPlanAccess");
+const {
+  DOCUMENTS_VIEW,
+  DOCUMENTS_MANAGE,
+} = require("@adminServices/documents/documentAccess");
 
 
 
@@ -600,6 +605,20 @@ scoped.get(
   requireModule(ModuleSlug.PEEP_FLOOR_PLAN),
   requirePermission(PEEP_VIEW),
   peepRecordController.getPeepRecordByResident
+);
+
+scoped.get(
+  "/documents",
+  requireModule(ModuleSlug.DOCUMENTS_ESIGN),
+  requirePermission(DOCUMENTS_VIEW),
+  documentController.listDocuments
+);
+scoped.post(
+  "/documents",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.DOCUMENTS_ESIGN),
+  requirePermission(DOCUMENTS_MANAGE),
+  documentController.createDocument
 );
 
 scoped.get(

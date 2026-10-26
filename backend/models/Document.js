@@ -1,5 +1,9 @@
 const mongoose = require("mongoose");
-const { DocumentScope, DocumentCategory } = require("./domainEnums");
+const {
+  DocumentScope,
+  DocumentCategory,
+  DocumentAudience,
+} = require("./domainEnums");
 
 const documentSchema = new mongoose.Schema(
   {
@@ -32,6 +36,15 @@ const documentSchema = new mongoose.Schema(
       default: DocumentCategory.OTHER,
       index: true,
     },
+    audiences: {
+      type: [
+        {
+          type: String,
+          enum: Object.values(DocumentAudience),
+        },
+      ],
+      default: [DocumentAudience.STAFF],
+    },
     /**
      * False for read-only material such as newsletters, which would otherwise
      * sit in a reader's action list forever waiting on a signature.
@@ -45,6 +58,9 @@ const documentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+documentSchema.index({ organizationId: 1, branchId: 1, createdAt: -1 });
+documentSchema.index({ organizationId: 1, audiences: 1 });
 
 const Document =
   mongoose.models.Document || mongoose.model("Document", documentSchema);

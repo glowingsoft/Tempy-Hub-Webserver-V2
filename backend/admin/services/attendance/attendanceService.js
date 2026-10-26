@@ -26,7 +26,7 @@ const {
   getShift,
   createScheduledShiftFromAttendance,
 } = require("@adminServices/rota/shiftService");
-const { getFullImageUrl } = require("@utils/imageHelper");
+const { toPublicImageUrl } = require("@utils/imageHelper");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -297,12 +297,7 @@ const findByClientEventId = async (clientEventId) => {
   return AttendanceDay.findOne({ clientEventId: id }).lean();
 };
 
-const toClockInPhotoUrl = (key) => {
-  const value = key == null ? "" : String(key).trim();
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  return getFullImageUrl(value);
-};
+const toClockInPhotoUrl = (key) => toPublicImageUrl(key);
 
 const CLOCK_IN_TZ = "Europe/London";
 

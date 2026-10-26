@@ -471,5 +471,14 @@
   "invalid_kiosk_widget_url": "This widget needs a valid http or https URL",
   "kiosk_widget_text_required": "A text widget needs body text",
   "kiosk_home_widget_limit": "A kiosk home screen can have at most 8 widgets",
-  "kiosk_widgets_saved": "Kiosk widgets saved"
+  "kiosk_widgets_saved": "Kiosk widgets saved",
+  "document_title_required": "Document title is required",
+  "document_file_required": "Upload a file key for this document",
+  "document_file_key_invalid": "Store the file key only, not a full URL",
+  "invalid_document_category": "Document category is not valid",
+  "invalid_document_audience": "Audience must be staff, visitor, or contractor",
+  "document_not_found": "Document not found",
+  "document_created_successfully": "Document created successfully",
+  "document_updated_successfully": "Document updated successfully",
+  "document_version_created_successfully": "Document version saved"
 }

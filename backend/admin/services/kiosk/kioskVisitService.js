@@ -10,7 +10,6 @@ const {
   VisitMethod,
   VisitSessionStatus,
   ExternalPersonType,
-  DocumentCategory,
   DocumentAudience,
   InvitationStatus,
   BadgeType,
@@ -24,18 +23,17 @@ const {
 } = require("@adminServices/visitors/externalPersonService");
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
 const { toPublicImageUrl } = require("@utils/imageHelper");
+const { Branch } = require("@models/Branch");
+const moment = require("moment-timezone");
 const { versionFile } = require("@adminServices/documents/documentService");
+const {
+  policyCategoryIds,
+} = require("@adminServices/documents/documentCategoryService");
 
 const MIN_SEARCH_LENGTH = 2;
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const POLICY_CATEGORIES = [
-  DocumentCategory.HEALTH_AND_SAFETY,
-  DocumentCategory.POLICY,
-  DocumentCategory.CONTRACTORS,
-];
 
 const applyPersonPhoto = async (person, image) => {
   if (!person?._id) return person;
@@ -47,8 +45,31 @@ const applyPersonPhoto = async (person, image) => {
   return { ...person, photoUrl: toPublicImageUrl(person.photoUrl) };
 };
 
-const shapeVisit = ({ session, person, kiosk, invitation }) => {
+const CLOCK_IN_TZ = "Europe/London";
+
+const greetingForHour = (hour) => {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const shapeVisit = async ({ session, person, kiosk, invitation }) => {
   const url = toPublicImageUrl(person?.photoUrl);
+  const branch = session?.branchId
+    ? await Branch.findById(session.branchId).select("timezone name").lean()
+    : null;
+  const tz = branch?.timezone || CLOCK_IN_TZ;
+  const clockMoment = moment.tz(session?.arrivedAt || new Date(), tz);
+  const shiftLabel =
+    invitation?.arrivalAt && invitation?.visitingUntil
+      ? `${moment.tz(invitation.arrivalAt, tz).format("HH:mm")} – ${moment
+          .tz(invitation.visitingUntil, tz)
+          .format("HH:mm")}`
+      : null;
+  const location = kiosk?.locationLabel || branch?.name || "";
+  const name = person?.name || "";
+  const time = clockMoment.format("hh:mm a");
+
   return {
     session,
     person: person
@@ -62,7 +83,18 @@ const shapeVisit = ({ session, person, kiosk, invitation }) => {
       : null,
     image: url,
     photoUrl: url,
-    locationLabel: kiosk?.locationLabel || "",
+    greeting: greetingForHour(clockMoment.hour()),
+    name,
+    time,
+    location,
+    shift: shiftLabel,
+    summary: {
+      name,
+      time,
+      shift: shiftLabel,
+      location,
+    },
+    locationLabel: location,
     receptionIdentifier: kiosk?.receptionIdentifier || "",
     arrivalWindow: invitation
       ? { from: invitation.arrivalAt, until: invitation.visitingUntil }
@@ -156,10 +188,7 @@ const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
       ? DocumentAudience.CONTRACTOR
       : DocumentAudience.VISITOR;
 
-  const categories = [...POLICY_CATEGORIES];
-  if (personType === ExternalPersonType.CONTRACTOR) {
-    categories.push(DocumentCategory.CONTRACTORS);
-  }
+  const categoryIds = await policyCategoryIds(organizationId);
 
   const docs = await Document.aggregate([
     {
@@ -179,7 +208,7 @@ const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
                       { audiences: { $size: 0 } },
                     ],
                   },
-                  { category: { $in: [...new Set(categories)] } },
+                  { categoryId: { $in: categoryIds } },
                 ],
               },
             ],
@@ -196,14 +225,25 @@ const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
         as: "version",
       },
     },
+    {
+      $lookup: {
+        from: "documentcategories",
+        localField: "categoryId",
+        foreignField: "_id",
+        as: "category",
+      },
+    },
   ]);
 
   return docs.map((row) => {
     const file = versionFile(row.version?.[0] || null);
+    const category = row.category?.[0] || null;
     return {
       _id: row._id,
       title: row.title,
-      category: row.category,
+      categoryId: row.categoryId || null,
+      category: category?.legacyKey || category?.title || "",
+      categoryTitle: category?.title || "",
       currentVersionId: row.currentVersionId,
       file,
       body: file?.url || "",

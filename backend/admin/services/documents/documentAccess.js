@@ -8,6 +8,7 @@ const {
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
+  duplicateKey,
 } = require("@adminServices/staff/staffAccess");
 
 const DOCUMENTS_VIEW = permissionKey(
@@ -26,4 +27,5 @@ module.exports = {
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
+  duplicateKey,
 };

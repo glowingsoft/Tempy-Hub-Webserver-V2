@@ -317,6 +317,26 @@ const ComplianceRecordStatus = {
   CANCELLED: "cancelled",
 };
 
+const RequirementType = {
+  TRAINING: "training",
+  COMPETENCY: "competency",
+};
+
+const RequirementAssignmentSource = {
+  JOB_TITLE: "jobTitle",
+  DEPARTMENT: "department",
+  MANUAL: "manual",
+};
+
+/** Derived from dates. Never stored on the assignment. */
+const RequirementCellStatus = {
+  VALID: "valid",
+  DUE_SOON: "due_soon",
+  EXPIRED: "expired",
+  IN_PROGRESS: "in_progress",
+  NA: "na",
+};
+
 /** Stored on a supervision or appraisal row. Due and overdue are calculated. */
 const ComplianceMeetingStatus = {
   SCHEDULED: "scheduled",
@@ -426,6 +446,9 @@ module.exports = {
   DocumentCategory,
   DocumentAudience,
   ComplianceRecordStatus,
+  RequirementType,
+  RequirementAssignmentSource,
+  RequirementCellStatus,
   ComplianceMeetingStatus,
   AppraisalKind,
   LeaveType,

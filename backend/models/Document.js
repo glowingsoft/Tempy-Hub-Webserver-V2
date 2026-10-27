@@ -1,9 +1,5 @@
 const mongoose = require("mongoose");
-const {
-  DocumentScope,
-  DocumentCategory,
-  DocumentAudience,
-} = require("./domainEnums");
+const { DocumentScope, DocumentAudience } = require("./domainEnums");
 
 const documentSchema = new mongoose.Schema(
   {
@@ -30,10 +26,10 @@ const documentSchema = new mongoose.Schema(
       enum: Object.values(DocumentScope),
       required: true,
     },
-    category: {
-      type: String,
-      enum: Object.values(DocumentCategory),
-      default: DocumentCategory.OTHER,
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DocumentCategory",
+      default: null,
       index: true,
     },
     audiences: {

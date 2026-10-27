@@ -47,6 +47,8 @@ const organizationSchema = new mongoose.Schema(
           ref: "StaffProfile",
         },
       ],
+      /** Null until Philip confirms a default (Q1). Per-requirement override wins. */
+      amberDays: { type: Number, default: null, min: 1 },
     },
   },
   { timestamps: true }

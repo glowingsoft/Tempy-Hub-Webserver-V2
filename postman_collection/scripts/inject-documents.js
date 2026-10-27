@@ -71,12 +71,66 @@ const upsertFolder = (parent, folderName, requests) => {
   return folder;
 };
 
+const saveCategoryId = {
+  listen: "test",
+  script: {
+    type: "text/javascript",
+    exec: [
+      'pm.test("OK", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));',
+      "const json = pm.response.json();",
+      "const row = Array.isArray(json.data) ? json.data[0] : json.data;",
+      'if (row && row._id) pm.collectionVariables.set("documentCategoryId", row._id);',
+    ],
+  },
+};
+
+upsertFolder(adminPanel, "Document Categories", [
+  req(
+    "GET /admin/organizations/:id/document-categories",
+    "GET",
+    ["admin", "organizations", "{{organizationId}}", "document-categories"],
+    { test: saveCategoryId, query: "page=1&limit=10&keyword=&status=active" }
+  ),
+  req(
+    "POST /admin/organizations/:id/document-categories",
+    "POST",
+    ["admin", "organizations", "{{organizationId}}", "document-categories"],
+    {
+      test: saveCategoryId,
+      body: { title: "Training" },
+    }
+  ),
+  req(
+    "PATCH /admin/organizations/:id/document-categories/:categoryId",
+    "PATCH",
+    [
+      "admin",
+      "organizations",
+      "{{organizationId}}",
+      "document-categories",
+      "{{documentCategoryId}}",
+    ],
+    { body: { title: "Training materials", active: true } }
+  ),
+  req(
+    "DELETE /admin/organizations/:id/document-categories/:categoryId",
+    "DELETE",
+    [
+      "admin",
+      "organizations",
+      "{{organizationId}}",
+      "document-categories",
+      "{{documentCategoryId}}",
+    ]
+  ),
+]);
+
 upsertFolder(adminPanel, "Documents", [
   req(
     "GET /admin/organizations/:id/documents",
     "GET",
     ["admin", "organizations", "{{organizationId}}", "documents"],
-    { query: "page=1&limit=10&branchId={{branchId}}&keyword=&category=&audience=visitor" }
+    { query: "page=1&limit=10&branchId={{branchId}}&keyword=&categoryId={{documentCategoryId}}&audience=visitor&scope=org" }
   ),
   req(
     "POST /admin/organizations/:id/documents",
@@ -86,7 +140,7 @@ upsertFolder(adminPanel, "Documents", [
       test: saveDocumentId,
       body: {
         title: "Health & Safety Policy",
-        category: "healthAndSafety",
+        categoryId: "{{documentCategoryId}}",
         audiences: ["visitor", "staff"],
         branchId: null,
         requiresSignature: true,
@@ -129,6 +183,11 @@ upsertFolder(adminPanel, "Documents", [
     }
   ),
   req(
+    "DELETE /admin/documents/:id",
+    "DELETE",
+    ["admin", "documents", "{{documentId}}"]
+  ),
+  req(
     "GET /admin/documents/:id/acknowledgements",
     "GET",
     ["admin", "documents", "{{documentId}}", "acknowledgements"],
@@ -139,6 +198,9 @@ upsertFolder(adminPanel, "Documents", [
 const vars = collection.variable || [];
 if (!vars.find((v) => v.key === "documentId")) {
   vars.push({ key: "documentId", value: "", type: "string" });
+}
+if (!vars.find((v) => v.key === "documentCategoryId")) {
+  vars.push({ key: "documentCategoryId", value: "", type: "string" });
 }
 collection.variable = vars;
 

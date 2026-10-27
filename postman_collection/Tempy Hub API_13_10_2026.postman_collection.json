@@ -17597,7 +17597,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/documents?page=1&limit=10&branchId={{branchId}}&keyword=&category=&audience=visitor",
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/documents?page=1&limit=10&branchId={{branchId}}&keyword=&categoryId={{documentCategoryId}}&audience=visitor&scope=org",
                   "host": [
                     "{{url}}"
                   ],
@@ -17625,12 +17625,16 @@
                       "value": ""
                     },
                     {
-                      "key": "category",
-                      "value": ""
+                      "key": "categoryId",
+                      "value": "{{documentCategoryId}}"
                     },
                     {
                       "key": "audience",
                       "value": "visitor"
+                    },
+                    {
+                      "key": "scope",
+                      "value": "org"
                     }
                   ]
                 }
@@ -17666,7 +17670,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"title\": \"Health & Safety Policy\",\n  \"category\": \"healthAndSafety\",\n  \"audiences\": [\n    \"visitor\",\n    \"staff\"\n  ],\n  \"branchId\": null,\n  \"requiresSignature\": true,\n  \"file\": {\n    \"key\": \"documents/health-safety.pdf\",\n    \"originalName\": \"Health-and-Safety.pdf\",\n    \"mimeType\": \"application/pdf\",\n    \"sizeBytes\": 248391\n  }\n}",
+                  "raw": "{\n  \"title\": \"Health & Safety Policy\",\n  \"categoryId\": \"{{documentCategoryId}}\",\n  \"audiences\": [\n    \"visitor\",\n    \"staff\"\n  ],\n  \"branchId\": null,\n  \"requiresSignature\": true,\n  \"file\": {\n    \"key\": \"documents/health-safety.pdf\",\n    \"originalName\": \"Health-and-Safety.pdf\",\n    \"mimeType\": \"application/pdf\",\n    \"sizeBytes\": 248391\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -17827,6 +17831,45 @@
               "response": []
             },
             {
+              "name": "DELETE /admin/documents/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/documents/{{documentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "documents",
+                    "{{documentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
               "name": "GET /admin/documents/:id/acknowledgements",
               "event": [
                 {
@@ -17870,6 +17913,788 @@
                     {
                       "key": "limit",
                       "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Document Categories",
+          "item": [
+            {
+              "name": "GET /admin/organizations/:id/document-categories",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "const row = Array.isArray(json.data) ? json.data[0] : json.data;",
+                      "if (row && row._id) pm.collectionVariables.set(\"documentCategoryId\", row._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/document-categories?page=1&limit=10&keyword=&status=active",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "document-categories"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": "active"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/organizations/:id/document-categories",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "const row = Array.isArray(json.data) ? json.data[0] : json.data;",
+                      "if (row && row._id) pm.collectionVariables.set(\"documentCategoryId\", row._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Training\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/document-categories",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "document-categories"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH /admin/organizations/:id/document-categories/:categoryId",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Training materials\",\n  \"active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/document-categories/{{documentCategoryId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "document-categories",
+                    "{{documentCategoryId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE /admin/organizations/:id/document-categories/:categoryId",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/document-categories/{{documentCategoryId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "document-categories",
+                    "{{documentCategoryId}}"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Training & Competency",
+          "item": [
+            {
+              "name": "GET /admin/organizations/:id/requirements",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/requirements?type=competency&keyword=",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "requirements"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "competency"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/organizations/:id/requirements",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"requirementId\", json.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Medication competency\",\n  \"type\": \"competency\",\n  \"renewalMonths\": 12,\n  \"firstCompletionDays\": 30,\n  \"amberDaysOverride\": null,\n  \"evidenceRequired\": false,\n  \"staffEvidenceAllowed\": false,\n  \"appliesTo\": {\n    \"jobTitleIds\": [],\n    \"departmentIds\": []\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/requirements",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "requirements"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH /admin/requirements/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"requirementId\", json.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"renewalMonths\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/requirements/{{requirementId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "requirements",
+                    "{{requirementId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/organizations/:id/assignments",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/assignments?type=&staffId=&requirementId=&keyword=&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "assignments"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": ""
+                    },
+                    {
+                      "key": "staffId",
+                      "value": ""
+                    },
+                    {
+                      "key": "requirementId",
+                      "value": ""
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/organizations/:id/assignments",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "const row = json.data && json.data.assignments && json.data.assignments[0];",
+                      "if (row && (row.assignmentId || row._id)) pm.collectionVariables.set(\"assignmentId\", row.assignmentId || row._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"requirementId\": \"{{requirementId}}\",\n  \"staffIds\": [\n    \"{{staffProfileId}}\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/assignments",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "assignments"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/assignments/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH /admin/assignments/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"dueDate\": \"2026-12-01\",\n  \"renewalMonthsOverride\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/assignments/:id/records",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"completedAt\": \"2026-10-27\",\n  \"notes\": \"Signed off\",\n  \"documents\": [\n    {\n      \"key\": \"requirements/example.pdf\",\n      \"originalName\": \"certificate.pdf\",\n      \"mimeType\": \"application/pdf\",\n      \"sizeBytes\": 12000\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}/records",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}",
+                    "records"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE /admin/assignments/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/organizations/:id/competency-matrix",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/competency-matrix?keyword=&staffId=&jobTitleId=&departmentId=&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "competency-matrix"
+                  ],
+                  "query": [
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "staffId",
+                      "value": ""
+                    },
+                    {
+                      "key": "jobTitleId",
+                      "value": ""
+                    },
+                    {
+                      "key": "departmentId",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/organizations/:id/training-records",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/training-records?keyword=&status=&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "training-records"
+                  ],
+                  "query": [
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
                     }
                   ]
                 }
@@ -18129,6 +18954,21 @@
     },
     {
       "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentCategoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requirementId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assignmentId",
       "value": "",
       "type": "string"
     }

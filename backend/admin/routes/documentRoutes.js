@@ -49,5 +49,11 @@ router.patch(
   requirePermission(DOCUMENTS_MANAGE),
   documentController.updateDocument
 );
+router.delete(
+  "/:documentId",
+  requireRoles(MANAGERS),
+  requirePermission(DOCUMENTS_MANAGE),
+  documentController.deleteDocument
+);
 
 module.exports = router;

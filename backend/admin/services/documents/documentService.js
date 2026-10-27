@@ -8,33 +8,23 @@ const { ExternalPerson } = require("@models/ExternalPerson");
 const { paginateWithFacet, keywordOr } = require("@utils/paginate");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
-const {
-  DocumentScope,
-  DocumentCategory,
-  DocumentAudience,
-  MembershipRole,
-} = require("@models/domainEnums");
+const { DocumentScope, DocumentAudience, MembershipRole } = require("@models/domainEnums");
 const {
   actorStanding,
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./documentAccess");
+const { resolveCategoryId } = require("./documentCategoryService");
 
-const CATEGORIES = new Set(Object.values(DocumentCategory));
 const AUDIENCES = new Set(Object.values(DocumentAudience));
+const SCOPES = new Set(Object.values(DocumentScope));
 
 const toOid = (value) => {
   if (!value || !mongoose.Types.ObjectId.isValid(String(value))) {
     throw new AppError("invalid_id", 400);
   }
   return new mongoose.Types.ObjectId(String(value));
-};
-
-const parseCategory = (value) => {
-  if (value == null || value === "") return DocumentCategory.OTHER;
-  if (!CATEGORIES.has(value)) throw new AppError("invalid_document_category", 400);
-  return value;
 };
 
 const parseAudiences = (value) => {
@@ -89,7 +79,14 @@ const shapeDocument = (row) => {
     ownerUserId: row.ownerUserId,
     title: row.title,
     scope: row.scope,
-    category: row.category,
+    categoryId: row.categoryId || null,
+    category: row._category
+      ? {
+          _id: row._category._id,
+          title: row._category.title,
+          active: row._category.active !== false,
+        }
+      : null,
     audiences: row.audiences?.length ? row.audiences : [DocumentAudience.STAFF],
     requiresSignature: row.requiresSignature !== false,
     currentVersionId: row.currentVersionId,
@@ -118,6 +115,15 @@ const versionLookup = [
     },
   },
   { $unwind: { path: "$_version", preserveNullAndEmptyArrays: true } },
+  {
+    $lookup: {
+      from: "documentcategories",
+      localField: "categoryId",
+      foreignField: "_id",
+      as: "_category",
+    },
+  },
+  { $unwind: { path: "$_category", preserveNullAndEmptyArrays: true } },
 ];
 
 const visibleMatch = (organizationId, standing, branchId) => {
@@ -166,17 +172,30 @@ const listDocuments = async ({
   branchId,
   keyword,
   category,
+  categoryId,
   audience,
+  scope,
   requiresSignature,
 }) => {
   const standing = await actorStanding(actor, organizationId);
   if (branchId) await assertBranchInOrganization(branchId, organizationId);
 
   const match = visibleMatch(organizationId, standing, branchId);
-  if (category && category !== "all") match.category = parseCategory(category);
+  if ((categoryId && categoryId !== "all") || (category && category !== "all")) {
+    match.categoryId = await resolveCategoryId({
+      organizationId,
+      categoryId: categoryId && categoryId !== "all" ? categoryId : undefined,
+      category,
+      allowInactive: true,
+    });
+  }
   if (audience) {
     if (!AUDIENCES.has(audience)) throw new AppError("invalid_document_audience", 400);
     match.audiences = audience;
+  }
+  if (scope && scope !== "all") {
+    if (!SCOPES.has(scope)) throw new AppError("invalid_document_scope", 400);
+    match.scope = scope;
   }
   if (requiresSignature === "true" || requiresSignature === true) {
     match.requiresSignature = true;
@@ -215,6 +234,7 @@ const createDocument = async ({
   organizationId,
   title,
   category,
+  categoryId,
   audiences,
   branchId,
   requiresSignature,
@@ -232,6 +252,12 @@ const createDocument = async ({
   assertMayManageStaff(standing, siteId || standing.branchId);
 
   const storedFile = parseStoredFile(file);
+  const resolvedCategoryId = await resolveCategoryId({
+    organizationId,
+    categoryId,
+    category,
+    fallbackToOther: true,
+  });
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -244,7 +270,7 @@ const createDocument = async ({
           ownerUserId: actor._id,
           title: name,
           scope: siteId ? DocumentScope.BRANCH : DocumentScope.ORG,
-          category: parseCategory(category),
+          categoryId: resolvedCategoryId,
           audiences: parseAudiences(audiences),
           requiresSignature: requiresSignature !== false,
         },
@@ -283,6 +309,7 @@ const updateDocument = async ({
   documentId,
   title,
   category,
+  categoryId,
   audiences,
   branchId,
   requiresSignature,
@@ -301,7 +328,14 @@ const updateDocument = async ({
     if (!name) throw new AppError("document_title_required", 400);
     doc.title = name;
   }
-  if (category !== undefined) doc.category = parseCategory(category);
+  if (categoryId !== undefined || category !== undefined) {
+    doc.categoryId = await resolveCategoryId({
+      organizationId,
+      categoryId,
+      category,
+      fallbackToOther: categoryId === null || category === null || category === "",
+    });
+  }
   if (audiences !== undefined) doc.audiences = parseAudiences(audiences);
   if (requiresSignature !== undefined) {
     doc.requiresSignature = Boolean(requiresSignature);
@@ -319,6 +353,33 @@ const updateDocument = async ({
 
   await doc.save();
   return loadShaped({ _id: doc._id });
+};
+
+const deleteDocument = async ({ actor, organizationId, documentId }) => {
+  const standing = await actorStanding(actor, organizationId);
+  const doc = await Document.findOne({
+    _id: toOid(documentId),
+    organizationId,
+  });
+  if (!doc) throw new AppError("document_not_found", 404);
+  assertCanViewDocument(doc, standing);
+  assertMayManageStaff(standing, doc.branchId || standing.branchId);
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    await DocumentSignature.deleteMany({ documentId: doc._id }, { session });
+    await DocumentVersion.deleteMany({ documentId: doc._id }, { session });
+    await doc.deleteOne({ session });
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+
+  return { _id: doc._id };
 };
 
 const addDocumentVersion = async ({
@@ -446,6 +507,7 @@ module.exports = {
   getDocument,
   createDocument,
   updateDocument,
+  deleteDocument,
   addDocumentVersion,
   listDocumentAcknowledgements,
   versionFile,

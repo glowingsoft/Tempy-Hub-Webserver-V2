@@ -37,6 +37,7 @@ const floorPlanController = require("../controllers/floorPlanController");
 const peepRecordController = require("../controllers/peepRecordController");
 const kioskWidgetController = require("../controllers/kioskWidgetController");
 const documentController = require("../controllers/documentController");
+const requirementController = require("../controllers/requirementController");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { TEAM_APPROVER_ROLES } = require("@adminServices/staff/staffAccess");
 const {
@@ -366,6 +367,42 @@ scoped.post(
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   appraisalController.managerSignAppraisal
 );
+scoped.get(
+  "/requirements",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.listRequirements
+);
+scoped.post(
+  "/requirements",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.createRequirement
+);
+scoped.get(
+  "/assignments",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.listAssignments
+);
+scoped.post(
+  "/assignments",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.createAssignments
+);
+scoped.get(
+  "/competency-matrix",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.competencyMatrix
+);
+scoped.get(
+  "/training-records",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.listTrainingRecords
+);
 
 scoped.post(
   "/shifts",
@@ -607,6 +644,35 @@ scoped.get(
   peepRecordController.getPeepRecordByResident
 );
 
+const CATEGORY_MANAGERS = [...MANAGERS, MembershipRole.LINE_MANAGER];
+
+scoped.get(
+  "/document-categories",
+  requireModule(ModuleSlug.DOCUMENTS_ESIGN),
+  requirePermission(DOCUMENTS_VIEW),
+  documentController.listDocumentCategories
+);
+scoped.post(
+  "/document-categories",
+  requireRoles(CATEGORY_MANAGERS),
+  requireModule(ModuleSlug.DOCUMENTS_ESIGN),
+  requirePermission(DOCUMENTS_MANAGE),
+  documentController.createDocumentCategory
+);
+scoped.patch(
+  "/document-categories/:categoryId",
+  requireRoles(CATEGORY_MANAGERS),
+  requireModule(ModuleSlug.DOCUMENTS_ESIGN),
+  requirePermission(DOCUMENTS_MANAGE),
+  documentController.updateDocumentCategory
+);
+scoped.delete(
+  "/document-categories/:categoryId",
+  requireRoles(CATEGORY_MANAGERS),
+  requireModule(ModuleSlug.DOCUMENTS_ESIGN),
+  requirePermission(DOCUMENTS_MANAGE),
+  documentController.deleteDocumentCategory
+);
 scoped.get(
   "/documents",
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),

@@ -21753,6 +21753,43 @@
                     "description": "Family Groups page: one row per admitted resident with nextOfKinName, nextOfKinRelationship, membersCount and status. Status is active (someone is linked), invitePending (only invitations out) or noFamily. Buttons: active shows Manage (GET residents/:residentId/members) and Invite (POST /admin/family-invitations); invitePending shows Manage and Resend (PUT /admin/family-invitations/:pendingInvitationId with action resend); noFamily shows Add next of kin (POST /admin/family-invitations with isNextOfKin true). meta.counts gives total, active, invitePending and noFamily for the cards and tabs; the counts ignore the status filter and follow branchId and keyword. Optional query: status, keyword (resident, room or next of kin), branchId, page, limit. Owners, super admins and managers with familyEngagement.view; 404 when the module is off."
                   },
                   "response": []
+                },
+                {
+                  "name": "family group detail",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Family group fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.include.keys(\"residentId\", \"residentName\", \"status\", \"primaryNextOfKin\", \"members\", \"summary\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/admin/organizations/{{organizationId}}/family-groups/{{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "organizations",
+                        "{{organizationId}}",
+                        "family-groups",
+                        "{{residentId}}"
+                      ]
+                    },
+                    "description": "Family Groups, the group page (the eye icon). The id is the resident's id. Resident details: residentName, photoUrl, roomNumber, homeName (Care site / Branch), branchId and status (active, invitePending, noFamily). primaryNextOfKin: name, photoUrl, relationship, email and phone (from their account); an invited next of kin who has not accepted yet shows with status invited and a null memberId; null when there is none. members: the Family Members (n) table, next of kin first then in the order they joined, each with memberId, name, photoUrl, email, phone, relationship, isNextOfKin (the NOK badge), status (active or inactive) and joinedAt. pendingInvitations lists invitations still waiting. summary: totalLinkedMembers, activePortalUsers (active members), pendingInvites and groupId. 404 resident_not_found for another organization's, a discharged or an unknown resident. Needs familyEngagement.view."
+                  },
+                  "response": []
                 }
               ]
             },

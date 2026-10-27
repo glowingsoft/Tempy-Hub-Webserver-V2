@@ -744,6 +744,17 @@ const staffRequests = [
     description:
       "Family member detail: name, email, the phone from their account, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (waiting, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
   }),
+  req("family group detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups", "{{residentId}}"], {
+    tests: [
+      'pm.test("Family group fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("residentId", "residentName", "status", "primaryNextOfKin", "members", "summary");',
+      "});",
+    ],
+    description:
+      "Family Groups, the group page (the eye icon). The id is the resident's id. Resident details: residentName, photoUrl, roomNumber, homeName (Care site / Branch), branchId and status (active, invitePending, noFamily). primaryNextOfKin: name, photoUrl, relationship, email and phone (from their account); an invited next of kin who has not accepted yet shows with status invited and a null memberId; null when there is none. members: the Family Members (n) table, next of kin first then in the order they joined, each with memberId, name, photoUrl, email, phone, relationship, isNextOfKin (the NOK badge), status (active or inactive) and joinedAt. pendingInvitations lists invitations still waiting. summary: totalLinkedMembers, activePortalUsers (active members), pendingInvites and groupId. 404 resident_not_found for another organization's, a discharged or an unknown resident. Needs familyEngagement.view.",
+  }),
   req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
     tests: [

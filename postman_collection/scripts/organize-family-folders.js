@@ -56,7 +56,7 @@ const familyEngagement = folder(adminRoot, "Staff side of the family module, one
   folder("Newsletters", "Monthly newsletters for a site: build the draft, edit every section, send.", adminPlace(
     "newsletters", "newsletter detail", "newsletter pdf", "create newsletter", "update newsletter", "send newsletter", "schedule newsletter", "cancel newsletter schedule", "remove newsletter"
   )),
-  folder("Family Groups", "One row per resident with their family.", adminPlace("family groups")),
+  folder("Family Groups", "One row per resident with their family.", adminPlace("family groups", "family group detail")),
   folder("Family Membership", "Who is in each family, and how they get in.", [
     folder("Family Invitations", "Invite a family member, and follow the invitations.", adminPlace(
       "invite family member", "list family invitations", "get family invitation", "edit family invitation", "resend family invitation", "revoke family invitation", "delete family invitation"

@@ -20,6 +20,7 @@ router.get("/family-newsletters/:newsletterId", canViewFamily, familyStaffContro
 router.get("/family-newsletters/:newsletterId/pdf", pdfLimiter, canViewFamily, familyStaffController.downloadNewsletterPdf);
 router.get("/family-uploads", canViewFamily, familyStaffController.listUploads);
 router.get("/family-groups", canViewFamily, familyStaffController.listFamilyGroups);
+router.get("/family-groups/:residentId", canViewFamily, familyStaffController.getFamilyGroup);
 router.get("/family-members", canViewFamily, familyStaffController.listAllMembers);
 router.get("/family-members/:memberId", canViewFamily, familyStaffController.getMember);
 router.get("/family-invitations/:invitationId", canViewFamily, familyInvitationController.getInvitation);

@@ -55,6 +55,10 @@ const listFamilyGroups = respond(
   { paged: true }
 );
 
+const getFamilyGroup = respond((req) =>
+  familyGroupService.getFamilyGroup({ organizationId: req.orgId, residentId: req.params.residentId })
+);
+
 const listUploads = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
@@ -376,6 +380,7 @@ module.exports = {
   updateMember,
   updateMemberAccess,
   listFamilyGroups,
+  getFamilyGroup,
   listUploads,
   updateUpload,
   listPosts,

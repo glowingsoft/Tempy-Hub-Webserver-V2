@@ -21,11 +21,7 @@ const MAX_LIFE_POSTS = 6;
 const NUMBER_RETRIES = 3;
 const isDuplicateKey = (error) => error?.code === 11000;
 
-/**
- * Which period a build is for. The schedule builds the issue that has just closed; a manager asking by
- * hand gets the issue that is open now, so they can print what has arrived so far. With no schedule saved a
- * manual build covers the last cycle's worth of days.
- */
+// The schedule builds the issue that just closed; a manager asking by hand gets the one open now.
 const choosePeriod = ({ rules, timezone, at = new Date(), scheduled = false }) => {
   const options = { anchorDate: rules.anchorDate, issueEveryDays: rules.issueEveryDays, timezone, at };
   if (scheduled) return rules.configured ? lastClosedPeriod(options) : null;
@@ -34,21 +30,13 @@ const choosePeriod = ({ rules, timezone, at = new Date(), scheduled = false }) =
 
 const idOf = (value) => String(value);
 
-/**
- * Decides one resident's gazette from what is on hand. Pure: the caller fetches, this chooses.
- * - Messages are approved family uploads the family put in the gazette, sent before the issue closed,
- *   and not already printed in an earlier issue or taken out by staff. Newest first, up to the cap; the
- *   rest wait for the next issue.
- * - A resident with no family linked, or with no messages, gets no PDF: wall posts alone do not make a gazette.
- * - The wall posts tagged to the resident (already filtered for photo consent) fill "Life at the home".
- */
+// Wall posts alone do not make a gazette: no family or no messages means no PDF. Messages are approved, sent before the close, and not already used or taken out.
 const selectContent = ({ cap, familyCount, uploads, usedUploadIds, removedUploadIds, posts, chosenUploadIds = null }) => {
   const used = new Set([...usedUploadIds, ...removedUploadIds].map(idOf));
   const eligible = uploads
     .filter((upload) => !used.has(idOf(upload._id)))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt) || idOf(b._id).localeCompare(idOf(a._id)));
 
-  // Staff can choose exactly which messages go in; otherwise it is the newest up to the cap.
   const chosen = chosenUploadIds ? new Set(chosenUploadIds.map(idOf)) : null;
   const included = chosen ? eligible.filter((upload) => chosen.has(idOf(upload._id))) : eligible.slice(0, cap);
   const moved = chosen ? eligible.filter((upload) => !chosen.has(idOf(upload._id))) : eligible.slice(cap);
@@ -84,7 +72,6 @@ const group = (rows, key) => {
   return map;
 };
 
-/** Everything the choice needs for every resident of a site, in a handful of queries. */
 const gather = async ({ organizationId, branchId, period, issueId, onlyResidentId = null }) => {
   const org = toObjectId(organizationId);
   const branch = toObjectId(branchId);
@@ -118,7 +105,7 @@ const gather = async ({ organizationId, branchId, period, issueId, onlyResidentI
       { $project: { residentId: 1, uploadIds: 1, removedUploadIds: 1 } },
     ]),
     FamilyPost.aggregate([
-      ...publishedPostsOfSite({ organizationId, branchId }),
+      ...publishedPostsOfSite({ organizationId, branchId, includeTagged: true }),
       { $match: { createdAt: { $gte: period.start, $lte: period.end }, taggedResidentIds: { $in: residentIds } } },
       { $project: { createdAt: 1, taggedResidentIds: 1 } },
     ]),
@@ -154,7 +141,6 @@ const findIssue = async ({ branchId, periodStart }) => {
   return issue || null;
 };
 
-/** One issue per site and period: asking again finds the one that is there. */
 const openIssue = async ({ organizationId, branchId, period, cap, actor }) => {
   const existing = await findIssue({ branchId, periodStart: period.start });
   if (existing) return existing;
@@ -182,11 +168,7 @@ const openIssue = async ({ organizationId, branchId, period, cap, actor }) => {
   throw new AppError("gazette_issue_busy", 409);
 };
 
-/**
- * Builds, or rebuilds, the issue for a site and period: every admitted resident gets an item holding what
- * their gazette will say. A gazette that was already printed is left exactly as it is. Content is stored
- * here, before any PDF, so a failed render can be retried without losing it.
- */
+// Content is stored before any PDF so a failed render can be retried; printed gazettes are never changed.
 const generateIssue = async ({ organizationId, branchId, period, actor = null, now = new Date() }) => {
   if (!period) throw new AppError("gazette_period_required", 400);
 
@@ -239,11 +221,7 @@ const generateIssue = async ({ organizationId, branchId, period, actor = null, n
   return { issue, residents: data.residents.length, counts, overCap };
 };
 
-/**
- * Rebuilds one resident's gazette after staff change it: messages taken out stay out for good, and a chosen
- * list replaces the newest-first pick. Every message must be one this gazette could hold (sent for it and
- * still unused), and no more than the cap can be chosen.
- */
+// Messages taken out stay out; a chosen list must be unused messages within the cap.
 const rebuildItem = async ({ item, issue, removeUploadIds = [], chosenUploadIds = null, now = new Date() }) => {
   const period = { start: issue.periodStart, end: issue.periodEnd };
   const data = await gather({ organizationId: item.organizationId, branchId: item.branchId, period, issueId: issue._id, onlyResidentId: item.residentId });

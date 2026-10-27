@@ -130,6 +130,7 @@ const listAllMembers = respond(
       isNextOfKin: queryText(req.query.isNextOfKin),
       keyword: queryText(req.query.keyword),
       days: queryText(req.query.days),
+      audience: queryText(req.query.audience),
       page,
       limit,
       skip,
@@ -278,6 +279,7 @@ const createPost = respond(
       scheduledAt: req.body.scheduledAt,
       mediaIds: req.body.mediaIds,
       taggedResidentIds: req.body.taggedResidentIds,
+      audience: req.body.audience,
       isPinned: req.body.isPinned,
     }),
   { statusCode: 201, translationKey: "post_created" }
@@ -295,6 +297,7 @@ const updatePost = respond(
       scheduledAt: req.body.scheduledAt,
       mediaIds: req.body.mediaIds,
       taggedResidentIds: req.body.taggedResidentIds,
+      audience: req.body.audience,
       isPinned: req.body.isPinned,
     }),
   { translationKey: "post_updated" }

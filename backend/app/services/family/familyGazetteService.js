@@ -22,12 +22,6 @@ const single = async (model, match, project) => {
   return row || null;
 };
 
-/**
- * The gazette that is being collected now for this resident: its dates, when it closes and how many of the
- * messages it can hold have been used. A message counts once it is approved and meant for the gazette, so
- * "9 of 30 messages" is what would be printed if it closed today. Nothing is shown until the organization
- * has saved a gazette schedule.
- */
 const nextGazette = async ({ link, now = new Date() }) => {
   const rules = await getGazetteRules({ organizationId: link.organizationId });
   if (!rules.configured) return { scheduled: false, issue: null, messageCap: rules.messageCap };
@@ -91,7 +85,6 @@ const nextGazette = async ({ link, now = new Date() }) => {
   };
 };
 
-/** The gazettes the home has printed for this resident, newest first; the newest is flagged Latest. */
 const listGazettes = async ({ link, page, limit, skip }) => {
   const match = { residentId: toObjectId(link.residentId), organizationId: toObjectId(link.organizationId), status: FamilyGazetteItemStatus.PRINTED };
 
@@ -140,7 +133,6 @@ const listGazettes = async ({ link, page, limit, skip }) => {
   };
 };
 
-/** A printed gazette the caller's links reach: for one of their residents, at the home they are linked to. Anything else is "not found". */
 const loadVisible = async ({ links, gazetteId }) => {
   if (!isValidObjectId(gazetteId)) throw new AppError("gazette_not_found", 404);
 
@@ -157,11 +149,7 @@ const loadVisible = async ({ links, gazetteId }) => {
   return item;
 };
 
-/**
- * The reader: the cover photo and its message, then every message from the family and "Life at the home", as
- * the printed copy has them. What is no longer allowed (a resident's photo sharing switched off, a post
- * removed) is left out on every read.
- */
+// Privacy is re-checked on every read: a resident whose photo sharing is off has no photos, and a removed post is gone.
 const getGazette = async ({ links, gazetteId }) => {
   const item = await loadVisible({ links, gazetteId });
   const { gazette } = await adminGazettes.loadInput({ item });
@@ -205,7 +193,6 @@ const getGazette = async ({ links, gazetteId }) => {
   };
 };
 
-/** The PDF the home printed: the stored copy, or drawn again from the saved content when it was lost. */
 const getPdf = async ({ links, gazetteId }) => {
   const item = await loadVisible({ links, gazetteId });
   return adminGazettes.getItemPdf({ itemId: item._id });

@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { FamilyPostStatus } = require("./domainEnums");
+const { FamilyPostAudience, FamilyPostStatus } = require("./domainEnums");
 
 /**
  * A staff post on the community wall (Figma: Community Wall). It goes live straight away, with
@@ -26,6 +26,8 @@ const familyPostSchema = new mongoose.Schema(
     message: { type: String, default: "", trim: true },
     mediaIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "FamilyMedia" }],
     taggedResidentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resident" }],
+    /** all: every family in the organization; branch: the families at this site; tagged: only the families of the tagged residents. */
+    audience: { type: String, enum: Object.values(FamilyPostAudience), default: FamilyPostAudience.BRANCH },
     isPinned: { type: Boolean, default: false },
     /** When a scheduled post goes live. createdAt moves to that moment, so it reads as posted then. */
     scheduledAt: { type: Date, default: null },

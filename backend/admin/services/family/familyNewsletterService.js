@@ -68,7 +68,6 @@ const firstLine = (message) => String(message || "").split(/\r?\n/).find((line) 
 
 const cut = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
 
-/** The post's first line becomes the title and the rest the text; a single line is used for both. */
 const highlightFromPost = (post) => {
   const lines = String(post.message || "").trim().split(/\r?\n/).filter((line) => line.trim());
   const title = cut(firstLine(post.message).trim(), MAX_TITLE);
@@ -186,7 +185,6 @@ const checkFooter = (value) => {
   return set;
 };
 
-/** Highlights must be live posts of this site, and a photo must belong to its own post. */
 const checkHighlights = async ({ value, organizationId, branchId }) => {
   const items = objectList(value, MAX_HIGHLIGHTS);
   const postIds = items.map((item) => String(item.postId));
@@ -218,7 +216,6 @@ const checkHighlights = async ({ value, organizationId, branchId }) => {
   });
 };
 
-/** Gallery photos must come from live, consented wall posts of this site. */
 const checkGallery = async ({ value, organizationId, branchId }) => {
   const items = objectList(value, MAX_GALLERY);
   const mediaIds = items.map((item) => String(item.mediaId));
@@ -240,7 +237,6 @@ const checkGallery = async ({ value, organizationId, branchId }) => {
   }));
 };
 
-/** New residents are named to every family, so only residents of this site with photo sharing on may be listed. */
 const checkNewResidents = async ({ value, organizationId, branchId }) => {
   if (!Array.isArray(value)) throw new AppError("newsletter_list_invalid", 400);
   if (value.length > MAX_NEW_RESIDENTS) throw new AppError("newsletter_list_too_long", 400, { max: MAX_NEW_RESIDENTS });
@@ -277,7 +273,6 @@ const statusCountsOf = (rows = []) => {
   return counts;
 };
 
-/** Families and people the newsletter would reach: everyone actively linked at the site. */
 const recipientsOf = async ({ organizationId, branchId }) => {
   const [row] = await FamilyMember.aggregate([
     {
@@ -332,7 +327,6 @@ const getNewsletter = async ({ organizationId, newsletterId }) => {
   };
 };
 
-/** Newest month first; meta.counts covers every status and ignores the status filter. */
 const listNewsletters = async ({ organizationId, branchId, status, month, keyword, page, limit, skip }) => {
   if (status && !Object.values(FamilyNewsletterStatus).includes(status)) throw new AppError("invalid_status_filter", 400);
   if (month && !MONTH_FORMAT.test(month)) throw new AppError("newsletter_month_invalid", 400);
@@ -425,7 +419,6 @@ const nextIssueNumber = async (branchId) => {
   return (row?.latest ?? 0) + 1;
 };
 
-/** A draft for one site and month, filled in from the month's wall posts, ready to edit. */
 const createDraft = async ({ actor, organizationId, branchId, month, title, template }) => {
   const site = await resolveSite({ actor, organizationId, branchId });
   if (typeof month !== "string" || !MONTH_FORMAT.test(month)) throw new AppError("newsletter_month_invalid", 400);
@@ -486,7 +479,6 @@ const loadDraft = async ({ actor, organizationId, newsletterId }) => {
   return newsletter;
 };
 
-/** Only what is sent is changed; every list sent replaces the whole list. */
 const updateDraft = async ({ actor, organizationId, newsletterId, ...patch }) => {
   const draft = await loadDraft({ actor, organizationId, newsletterId });
   const site = { organizationId, branchId: draft.branchId };
@@ -528,7 +520,6 @@ const updateDraft = async ({ actor, organizationId, newsletterId, ...patch }) =>
   return getNewsletter({ organizationId, newsletterId });
 };
 
-/** A draft can be thrown away, which frees its month; a sent newsletter stays as the record. */
 const deleteDraft = async ({ actor, organizationId, newsletterId }) => {
   const draft = await loadDraft({ actor, organizationId, newsletterId });
 
@@ -538,7 +529,6 @@ const deleteDraft = async ({ actor, organizationId, newsletterId }) => {
   return { newsletterId: draft._id, deleted: true };
 };
 
-/** A schedule is a date and time in the future, no more than a year away. */
 const parseSendAt = (value) => {
   const when = typeof value === "string" ? moment.utc(value, moment.ISO_8601, true) : null;
   const now = moment.utc();
@@ -560,7 +550,6 @@ const loadForDelivery = async ({ actor, organizationId, newsletterId }) => {
   return newsletter;
 };
 
-/** What the newsletter will say with only the sections that are switched on. */
 const hasContent = (newsletter) => {
   const on = newsletter.sections;
   return Boolean(
@@ -573,7 +562,6 @@ const hasContent = (newsletter) => {
   );
 };
 
-/** The delivery chosen on the draft, with any change sent now laid over it. */
 const chosenDelivery = (newsletter, change) => {
   const merged = { ...newsletter.delivery };
   if (change !== undefined) {
@@ -589,10 +577,7 @@ const assertReadyToSend = (newsletter) => {
   if (!hasContent(newsletter)) throw new AppError("newsletter_empty", 400);
 };
 
-/**
- * One claim moves a draft or a scheduled newsletter to "sending", so a double click, two servers or
- * the scheduler racing a manager can never deliver it twice.
- */
+// One claim moves it to sending, so a double click or two servers never deliver it twice.
 const claim = (filter, set = {}) =>
   FamilyNewsletter.findOneAndUpdate(
     filter,
@@ -600,7 +585,7 @@ const claim = (filter, set = {}) =>
     { new: true, lean: true }
   );
 
-/** Posts removed, or residents whose photo sharing was switched off since the draft, drop out at send time (BR-06). */
+// Posts removed, or residents whose photo sharing was switched off since the draft, drop out at send time (BR-06).
 const pruneForSend = async (newsletter) => {
   const site = { organizationId: newsletter.organizationId, branchId: newsletter.branchId };
   const live = await FamilyPost.aggregate([...publishedPostsOfSite(site), { $project: { mediaIds: 1 } }]);
@@ -673,7 +658,6 @@ const slug = (text) =>
 const pdfFilename = (newsletter, homeName) =>
   `${slug(newsletter.footer?.homeName || homeName || "home")}-${newsletter.month}-newsletter.pdf`;
 
-/** The photos the newsletter shows, read once from storage; one that cannot be read is simply left out. */
 const loadPhotos = async (newsletter) => {
   const ids = [...new Set([...newsletter.highlights.map((item) => item.mediaId), ...newsletter.gallery.map((item) => item.mediaId)].filter(Boolean).map(String))];
   if (!ids.length) return new Map();
@@ -692,7 +676,6 @@ const loadPhotos = async (newsletter) => {
   return new Map(loaded.filter(Boolean));
 };
 
-/** Draws the newsletter as it is now. A draft is shown without what would be dropped at send time. */
 const buildPdf = async (newsletter) => {
   const content = newsletter.status === FamilyNewsletterStatus.SENT ? newsletter : { ...newsletter, ...(await pruneForSend(newsletter)) };
   const [[branch], [organization], photos] = await Promise.all([
@@ -710,7 +693,6 @@ const buildPdf = async (newsletter) => {
   return { buffer, filename: pdfFilename(content, branch?.name) };
 };
 
-/** The PDF channel: a sent copy is stored, so email attachments and downloads are the same file. */
 const storePdf = async ({ newsletter, ctx }) => {
   const { buffer, filename } = await buildPdf({ ...newsletter, status: FamilyNewsletterStatus.SENT });
   ctx.pdf = { buffer, filename };
@@ -723,7 +705,6 @@ const storePdf = async ({ newsletter, ctx }) => {
   return buffer.length;
 };
 
-/** Preview and download. Anything not sent is drawn fresh; a sent newsletter serves the copy stored at send time. */
 const getPdf = async ({ organizationId, newsletterId }) => {
   if (!isValidObjectId(newsletterId)) throw new AppError("newsletter_not_found", 404);
 
@@ -742,7 +723,6 @@ const getPdf = async ({ organizationId, newsletterId }) => {
   return buildPdf(newsletter);
 };
 
-/** The email carries the same PDF that is stored, drawn once whichever of the two channels asks first. */
 const emailFamilies = async ({ newsletter, homeName, ctx }) => {
   if (!ctx.pdf) ctx.pdf = await buildPdf({ ...newsletter, status: FamilyNewsletterStatus.SENT });
   return sendNewsletterEmails({
@@ -756,19 +736,16 @@ const emailFamilies = async ({ newsletter, homeName, ctx }) => {
   });
 };
 
-/** One handler per channel. A handler returns a count, or its own { status, count, failed }. */
 const CHANNEL_HANDLERS = { inApp: notifyInApp, pdf: storePdf, email: emailFamilies };
 
-/** The PDF goes first, so the email can attach the stored copy instead of drawing it again. */
 const DELIVERY_ORDER = ["pdf", "inApp", "email"];
 
-/** Delivers on each chosen channel. A channel that fails is recorded and does not stop the others. */
 const deliver = async (newsletter) => {
   const content = await pruneForSend(newsletter);
   const [branch] = await Branch.aggregate([{ $match: { _id: newsletter.branchId } }, { $project: { name: 1 } }]);
   const homeName = branch?.name || "";
 
-  // Each channel is written down as soon as it finishes, so a send that is resumed after a crash skips what is done.
+  // Each channel is recorded as it finishes, so a resumed send skips what is done.
   const log = { ...(newsletter.deliveryLog || {}) };
   const ctx = {};
   for (const channel of DELIVERY_ORDER) {
@@ -797,7 +774,6 @@ const deliver = async (newsletter) => {
 
 const SENDABLE = [FamilyNewsletterStatus.DRAFT, FamilyNewsletterStatus.SCHEDULED];
 
-/** Draft or scheduled to sent, now. The channels are chosen here or were saved on the draft. */
 const sendNow = async ({ actor, organizationId, newsletterId, delivery }) => {
   const newsletter = await loadForDelivery({ actor, organizationId, newsletterId });
   if (!SENDABLE.includes(newsletter.status)) throw new AppError("newsletter_already_sent", 409);
@@ -811,7 +787,6 @@ const sendNow = async ({ actor, organizationId, newsletterId, delivery }) => {
   return getNewsletter({ organizationId, newsletterId });
 };
 
-/** Draft to scheduled, or a new time for a scheduled one. It stays locked until the schedule is cancelled. */
 const schedule = async ({ actor, organizationId, newsletterId, sendAt, delivery }) => {
   const newsletter = await loadForDelivery({ actor, organizationId, newsletterId });
   if (!SENDABLE.includes(newsletter.status)) throw new AppError("newsletter_already_sent", 409);
@@ -826,7 +801,6 @@ const schedule = async ({ actor, organizationId, newsletterId, sendAt, delivery 
   return getNewsletter({ organizationId, newsletterId });
 };
 
-/** Scheduled back to a draft, so it can be edited again. */
 const cancelSchedule = async ({ actor, organizationId, newsletterId }) => {
   const newsletter = await loadForDelivery({ actor, organizationId, newsletterId });
   const updated = await FamilyNewsletter.updateOne(
@@ -837,7 +811,6 @@ const cancelSchedule = async ({ actor, organizationId, newsletterId }) => {
   return getNewsletter({ organizationId, newsletterId });
 };
 
-/** Run every minute: scheduled newsletters that are due go out, each claimed once. */
 const sendDueNewsletters = async ({ now = new Date(), limit = DUE_PER_RUN } = {}) => {
   let sent = 0;
   for (let i = 0; i < limit; i += 1) {
@@ -853,11 +826,7 @@ const sendDueNewsletters = async ({ now = new Date(), limit = DUE_PER_RUN } = {}
   return { sent };
 };
 
-/**
- * A server that died mid-send leaves a newsletter in "sending". Once it has made no progress for a while it is
- * taken over and finished: channels that were completed are skipped, people already notified or emailed are not
- * contacted again. Taking it over is one claim, so two servers never finish the same one.
- */
+// A send that stopped part-way is finished once: done channels are skipped and nobody is notified or emailed twice.
 const recoverStuckNewsletters = async ({ now = new Date(), limit = DUE_PER_RUN } = {}) => {
   let recovered = 0;
   const cutoff = new Date(now.getTime() - STUCK_AFTER_MS);

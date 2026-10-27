@@ -16,10 +16,6 @@ const REMINDER_LEAD_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const isDuplicateKey = (error) => error?.code === 11000;
 
-/**
- * Every active site of every organization that has saved a gazette schedule and has the family module on.
- * Saving the schedule is what switches this on, so nothing runs for an organization that never set one.
- */
 const scheduledSites = async () => {
   const configured = await FamilySettings.aggregate([
     { $match: { "gazette.anchorDate": { $ne: null } } },
@@ -34,7 +30,7 @@ const scheduledSites = async () => {
   for (const organization of organizations.filter((entry) => isFamilyModuleActive(entry))) {
     const rules = await getGazetteRules({ organizationId: organization._id });
     const branches = await Branch.aggregate([
-      { $match: { organizationId: organization._id, status: BranchStatus.ACTIVE } },
+      { $match: { organizationId: organization._id, status: { $ne: BranchStatus.SUSPENDED } } },
       { $project: { name: 1, timezone: 1 } },
     ]);
     branches.forEach((branch) => sites.push({ organizationId: organization._id, branch, rules, timezone: branch.timezone || "Europe/London" }));
@@ -42,11 +38,6 @@ const scheduledSites = async () => {
   return sites;
 };
 
-/**
- * When a site's issue period has closed, its gazettes are worked out and then drawn in the background. An issue
- * that is already there (built by hand, or by an earlier run) is left alone, so this never builds one twice; a
- * site with no admitted residents gets none. One site failing does not stop the others.
- */
 const generateDueIssues = async ({ now = new Date() } = {}) => {
   const result = { built: 0, skipped: 0, failed: 0 };
 
@@ -79,10 +70,7 @@ const generateDueIssues = async ({ now = new Date() } = {}) => {
   return result;
 };
 
-/**
- * Three days before an issue closes, everyone linked to a resident at the site is reminded once. The row that is
- * inserted first is the one that sends; if sending fails the row is removed so the next run tries again.
- */
+// The reminder row inserted first sends; if sending fails it is removed so the next run tries again.
 const sendDueReminders = async ({ now = new Date() } = {}) => {
   const result = { sent: 0, skipped: 0, failed: 0 };
 

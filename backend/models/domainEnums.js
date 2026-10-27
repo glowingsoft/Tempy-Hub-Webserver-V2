@@ -107,6 +107,13 @@ const FamilyPostStatus = {
   REMOVED: "removed",
 };
 
+/** Who can see a wall post. A post with none saved is a branch post. */
+const FamilyPostAudience = {
+  ALL: "all",
+  BRANCH: "branch",
+  TAGGED: "tagged",
+};
+
 const FamilyPostReportStatus = {
   OPEN: "open",
   DISMISSED: "dismissed",
@@ -438,6 +445,7 @@ module.exports = {
   FamilyUploadStatus,
   FamilyPostStatus,
   FamilyPostReportStatus,
+  FamilyPostAudience,
   FamilyNewsletterStatus,
   FamilyGazetteIssueStatus,
   FamilyGazetteItemStatus,

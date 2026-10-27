@@ -73,7 +73,6 @@ const LABELS = {
 const labelOf = (state, cap) =>
   state === "overCap" ? `Over ${cap} messages` : LABELS[state];
 
-/** What a row shows as its status: the most important thing about it. */
 const stateExpression = {
   $switch: {
     branches: [
@@ -104,10 +103,6 @@ const TAB_FILTERS = {
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/**
- * The issue each site is on now (its newest). The Gazettes page works on "this issue", so across several sites it
- * shows each site's current one; nothing on the page asks for an older one.
- */
 const currentIssues = async ({ organizationId, branchId }) =>
   FamilyGazetteIssue.aggregate([
     {
@@ -144,7 +139,6 @@ const homeNames = async (branchIds) => {
   return new Map(branches.map((branch) => [String(branch._id), branch.name]));
 };
 
-/** States whose label contains what was typed, so "print" finds the printed ones. */
 const statesMatching = (text) => {
   const needle = text.toLowerCase();
   return STATES.filter((state) =>
@@ -154,10 +148,6 @@ const statesMatching = (text) => {
   );
 };
 
-/**
- * The Gazettes page: one row per resident for the issue each site is on. meta.counts feeds the cards and tabs
- * and ignores the tab chosen. The page shows nothing about the issue itself, so none of it is returned.
- */
 const listGazettes = async ({
   organizationId,
   branchId,
@@ -374,10 +364,6 @@ const loadItemInOrganization = async ({ organizationId, itemId }) => {
 const photoOf = (media) =>
   media ? { mediaId: media._id, url: media.blurredUrl || media.url } : null;
 
-/**
- * One resident's gazette for the staff to check and fix: every message that was sent for it, whether it is in the
- * gazette, was left for the next issue or was taken out, plus the wall posts for "Life at the home".
- */
 const getGazette = async ({ organizationId, itemId }) => {
   const item = await loadItemInOrganization({ organizationId, itemId });
   const [issue] = await FamilyGazetteIssue.aggregate([
@@ -528,11 +514,9 @@ const stateOf = (item) => {
   return item.status === Status.READY ? "ready" : "building";
 };
 
-// ---------------------------------------------------------------- making gazettes
 
 const rendering = new Set();
 
-/** Draws every gazette of an issue that is waiting for its PDF, a couple at a time, then closes the issue's building state. */
 const renderIssue = async ({ issueId, now = new Date() }) => {
   const key = String(issueId);
   if (rendering.has(key)) return { skipped: true };
@@ -568,12 +552,7 @@ const renderIssue = async ({ issueId, now = new Date() }) => {
   }
 };
 
-/**
- * Drawing runs inside the server that took the request, so a restart can leave gazettes at Building with nobody
- * drawing them. Run on a schedule, this takes over any that have waited a long time without a drawing being started
- * and draws them. Taking one over is a single claim, so two servers never draw the same gazette; the issue is marked
- * ready once none of its gazettes is still waiting.
- */
+// A claim takes each stuck gazette over, so two servers never draw the same one.
 const recoverStuckGazettes = async ({ now = new Date(), limit = RECOVER_PER_RUN } = {}) => {
   const cutoff = new Date(now.getTime() - STUCK_AFTER_MS);
   const touched = new Set();
@@ -606,7 +585,6 @@ const recoverStuckGazettes = async ({ now = new Date(), limit = RECOVER_PER_RUN 
   return counts;
 };
 
-/** Rendering runs after the request has been answered; the page watches the rows change from Building to Ready. */
 const renderInBackground = (issueId) => {
   setImmediate(() => {
     renderIssue({ issueId }).catch((error) =>
@@ -615,10 +593,6 @@ const renderInBackground = (issueId) => {
   });
 };
 
-/**
- * "Generate all": works out what every resident's gazette will say for the site's current issue, answers at once,
- * and draws the PDFs in the background. Asking again builds the issue again (printed gazettes are left alone).
- */
 const generateForSite = async ({
   actor,
   organizationId,
@@ -663,10 +637,6 @@ const generateForSite = async ({
   };
 };
 
-/**
- * The site's current issue, for a button that acts on "this page". A site or line manager works on their own site;
- * an owner or super admin says which site, as with Generate all.
- */
 const currentIssueForStaff = async ({ actor, organizationId, branchId }) => {
   const site = await resolveSite({ actor, organizationId, branchId });
   const [issue] = await currentIssues({ organizationId, branchId: site.branchId });
@@ -674,7 +644,6 @@ const currentIssueForStaff = async ({ actor, organizationId, branchId }) => {
   return issue;
 };
 
-/** Mark printed for the page: every ready gazette of the site's current issue, or just the ones named. */
 const printAll = async ({
   actor,
   organizationId,
@@ -697,7 +666,7 @@ const printAll = async ({
       throw new AppError("gazette_items_invalid", 400);
     filter._id = { $in: itemIds.map(toObjectId) };
   }
-  // Each gazette is moved to printed on its own, so the family of exactly the ones that moved are told, once.
+  // Moved one at a time so only the families of gazettes that really changed are told.
   const candidates = await FamilyGazetteItem.aggregate([{ $match: filter }, { $project: { _id: 1 } }]);
   let printed = 0;
   for (const candidate of candidates) {
@@ -713,7 +682,6 @@ const printAll = async ({
   return { printed };
 };
 
-/** Failed gazettes of the site's current issue are drawn again, with their content untouched. */
 const retryIssue = async ({
   actor,
   organizationId,
@@ -746,10 +714,6 @@ const idList = (value, key) => {
   return value;
 };
 
-/**
- * Fix one resident's gazette and draw it again: take messages out for good (removeUploadIds), or choose exactly
- * which go in (uploadIds, at most the cap), then the PDF is redrawn. A printed gazette cannot be changed.
- */
 const regenerate = async ({
   actor,
   organizationId,
@@ -781,7 +745,6 @@ const regenerate = async ({
   return getGazette({ organizationId, itemId });
 };
 
-/** The gazette is on paper. It must have been drawn first, and marking it twice changes nothing. */
 const markPrinted = async ({
   actor,
   organizationId,
@@ -803,7 +766,6 @@ const markPrinted = async ({
   return getGazette({ organizationId, itemId });
 };
 
-/** The day the home gave the printed copy to the resident. Today unless a day is given; not in the future. */
 const markGiven = async ({
   actor,
   organizationId,
@@ -836,14 +798,12 @@ const markGiven = async ({
   return getGazette({ organizationId, itemId });
 };
 
-// ---------------------------------------------------------------- reading the PDFs
 
 const getPdf = async ({ organizationId, itemId }) => {
   await loadItemInOrganization({ organizationId, itemId });
   return getItemPdf({ itemId });
 };
 
-/** The PDFs to put in the zip: every drawn gazette of the issue each site is on, in resident order. */
 const downloadEntries = async ({ organizationId, branchId }) => {
   const issues = await currentIssues({ organizationId, branchId });
   if (!issues.length) throw new AppError("gazette_nothing_to_download", 404);
@@ -907,10 +867,7 @@ const downloadEntries = async ({ organizationId, branchId }) => {
   };
 };
 
-/**
- * The zip, as a stream that starts flowing at once. Each PDF is read from storage one at a time and stored as it
- * is (PDFs do not compress); one that cannot be read is left out and logged rather than ending the download.
- */
+// PDFs are stored as they are; one that cannot be read is skipped and logged.
 const zipStream = (entries) => {
   const zip = new yazl.ZipFile();
   (async () => {

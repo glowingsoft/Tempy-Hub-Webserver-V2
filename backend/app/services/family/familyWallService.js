@@ -7,6 +7,7 @@ const { FamilyReaction } = require("@models/FamilyReaction");
 const { FamilyPostView } = require("@models/FamilyPostView");
 const { FamilyPostReport } = require("@models/FamilyPostReport");
 const { FamilyPostStatus } = require("@models/domainEnums");
+const { visibleToLink, visibleToAny } = require("@utils/familyPostVisibility");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
@@ -57,7 +58,7 @@ const wallPostStages = ({ userId, linkedResidentIds }) => [
       message: 1,
       photos: 1,
       taggedResidents: 1,
-      audience: { $literal: "everyone" },
+      audience: { $ifNull: ["$audience", "branch"] },
       isPinned: 1,
       reactionCount: 1,
       reactedByMe: 1,
@@ -69,11 +70,7 @@ const wallPostStages = ({ userId, linkedResidentIds }) => [
 const listWall = ({ link, userId, links, page, limit, skip }) =>
   paginateWithFacet({
     model: FamilyPost,
-    match: {
-      organizationId: toObjectId(link.organizationId),
-      branchId: toObjectId(link.branchId),
-      status: FamilyPostStatus.PUBLISHED,
-    },
+    match: visibleToLink(link),
     page,
     limit,
     skip,
@@ -99,17 +96,10 @@ const assertPostVisible = async ({ postId, links }) => {
   if (!isValidObjectId(postId)) throw new AppError("post_not_found", 404);
 
   const [post] = await FamilyPost.aggregate([
-    { $match: { _id: toObjectId(postId), status: FamilyPostStatus.PUBLISHED } },
+    { $match: { _id: toObjectId(postId), ...visibleToAny(links) } },
     { $project: { organizationId: 1, branchId: 1 } },
   ]);
-  const visible =
-    post &&
-    links.some(
-      (link) =>
-        String(link.organizationId) === String(post.organizationId) &&
-        String(link.branchId) === String(post.branchId)
-    );
-  if (!visible) throw new AppError("post_not_found", 404);
+  if (!post) throw new AppError("post_not_found", 404);
   return post;
 };
 
@@ -151,8 +141,7 @@ const markSeen = async ({ userId, links, postIds }) => {
     {
       $match: {
         _id: { $in: ids.map(toObjectId) },
-        status: FamilyPostStatus.PUBLISHED,
-        $or: homes.map((link) => ({ organizationId: toObjectId(link.organizationId), branchId: toObjectId(link.branchId) })),
+        ...visibleToAny(links),
       },
     },
     { $project: { organizationId: 1, branchId: 1 } },

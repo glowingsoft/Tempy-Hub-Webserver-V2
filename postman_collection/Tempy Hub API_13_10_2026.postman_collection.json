@@ -9711,6 +9711,18 @@
                         {
                           "key": "limit",
                           "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "waiting",
+                          "description": "Tab: waiting, approved or rejected",
+                          "disabled": true
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "description": "One resident",
+                          "disabled": true
                         }
                       ]
                     },
@@ -20872,6 +20884,30 @@
                         {
                           "key": "limit",
                           "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "waiting",
+                          "description": "Tab: all (default), waiting, approved or rejected",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site",
+                          "disabled": true
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "description": "One resident",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "margaret",
+                          "description": "Search caption, resident, room or uploader",
+                          "disabled": true
                         }
                       ]
                     },
@@ -21078,10 +21114,88 @@
                         {
                           "key": "limit",
                           "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "published",
+                          "description": "Tab: published (default), draft, scheduled or removed",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site",
+                          "disabled": true
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "description": "Resident filter: posts tagged to this resident",
+                          "disabled": true
+                        },
+                        {
+                          "key": "authorId",
+                          "value": "{{authorId}}",
+                          "description": "Author filter",
+                          "disabled": true
+                        },
+                        {
+                          "key": "audience",
+                          "value": "all",
+                          "description": "Group filter: all, branch or tagged",
+                          "disabled": true
+                        },
+                        {
+                          "key": "days",
+                          "value": "30",
+                          "description": "Last 30 days: 1 to 365. Cannot be used with from and to",
+                          "disabled": true
+                        },
+                        {
+                          "key": "from",
+                          "value": "2026-10-01",
+                          "description": "Posts from this day (not with days)",
+                          "disabled": true
+                        },
+                        {
+                          "key": "to",
+                          "value": "2026-10-31",
+                          "description": "Posts up to this day (not with days)",
+                          "disabled": true
+                        },
+                        {
+                          "key": "pinned",
+                          "value": "true",
+                          "description": "Pin tab: only pinned posts",
+                          "disabled": true
+                        },
+                        {
+                          "key": "hasPhotos",
+                          "value": "true",
+                          "description": "Photos tab: only posts with photos",
+                          "disabled": true
+                        },
+                        {
+                          "key": "reported",
+                          "value": "true",
+                          "description": "Only posts with an open report",
+                          "disabled": true
+                        },
+                        {
+                          "key": "sort",
+                          "value": "newest",
+                          "description": "Newest first (default) or oldest",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "garden",
+                          "description": "Search post, tagged resident or author",
+                          "disabled": true
                         }
                       ]
                     },
-                    "description": "Staff Community Wall: every post of the organization, pinned first then newest. Optional query: status (published, draft, scheduled or removed), branchId, residentId (tagged), authorId, pinned=true, hasPhotos=true, from and to (2026-10-01), sort (newest or oldest), keyword (post text, tagged resident or author), page, limit. Each post has the author (name, photo, role), the home, photos, tagged residents with their photos, isPinned and reactionCount. meta.counts has published, draft, scheduled, removed, pinned and photos for the tabs (scheduled posts are listed soonest first, drafts by last edit). The same response carries the rest of the screen: meta.attention (the Needs your attention card: pendingUploads {count, oldestAt}, reportedPosts {count, reports, oldestAt}, total) and meta.activity (Staff activity: days and authors with posts, name, photo and role; query days 1 to 365, default 30). Each post also has seenCount, audienceCount, recentReactors (latest 3), reportCount and reports (its open reports, newest 5: reporterName, reason, createdAt); they ignore the status, pinned and photos filters but follow the others. Needs familyEngagement.view; 404 when the module is off."
+                    "description": "Staff Community Wall: every post of the organization, pinned first then newest. Optional query: status (published, draft, scheduled or removed), branchId, residentId (the Resident filter: tagged), authorId (the Author filter), audience (the Group filter: all, branch or tagged), days (Last 30 days: 1 to 365; it cannot be combined with from and to; it also sets the window of meta.activity), pinned=true, hasPhotos=true, from and to (2026-10-01), sort (newest or oldest), keyword (post text, tagged resident or author), page, limit. Each post has the author (name, photo, role), the home, photos, tagged residents with their photos, isPinned and reactionCount. meta.counts has published, draft, scheduled, removed, pinned and photos for the tabs (scheduled posts are listed soonest first, drafts by last edit). Each post has audience (all, branch or tagged) and audienceLabel (All families & residents, Florence House families or Tagged resident families), and audienceCount is how many families it is for (the 42 in Seen 31/42). The same response carries the rest of the screen: meta.gazette is the 'Gazette no. 14 closes in 3 days' card (pass branchId for one site; without it the card covers every site that is not suspended: the resident counts are added up, the earliest close is shown, number is the highest next number and sites says how many sites it covers): scheduled (false until a gazette schedule is saved), number, state, periodLabel, closesAt, closesInDays, messageCap, residents {total, withContent, noContent, noFamily, overCap} ('33 of 42 residents have content', '4 no content', '1 over 30') and percentWithContent for the progress bar; it is null only when the organization has no site that is not suspended, or the branchId is not one of its sites. Also meta.attention (the Needs your attention card: pendingUploads {count, oldestAt}, reportedPosts {count, reports, oldestAt}, total) and meta.activity (Staff activity: days and authors with posts, name, photo and role; query days 1 to 365, default 30). Each post also has seenCount, audienceCount, recentReactors (latest 3), reportCount and reports (its open reports, newest 5: reporterName, reason, createdAt); they ignore the status, pinned and photos filters but follow the others. Needs familyEngagement.view; 404 when the module is off."
                   },
                   "response": []
                 },
@@ -21330,10 +21444,10 @@
                         "posts"
                       ]
                     },
-                    "description": "Staff Community Wall: new post. Body: title (optional, up to 120 characters), branchId (an owner or super admin must pick the site; a site or line manager posts to their own), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. Goes live straight away with no approval and every active family member at the site gets a notification. Optional status: published (default), draft (saved, nobody sees it) or scheduled; scheduledAt (an ISO date in the future, up to a year ahead, such as 2026-11-02T09:00:00Z) alone also means scheduled. Families are notified when a scheduled post goes live, which a job checks every minute. 400 post_schedule_invalid for a bad date. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "Staff Community Wall: new post. Body: title (optional, up to 120 characters), branchId (a site or line manager posts to their own site and leaves it out. An owner or super admin can leave it out when the post is for tagged residents' families (the site is the one the tagged residents are at; tagged residents at two sites return 400 tagged_residents_different_sites) or when the organization has only one active site; otherwise they must send it, or get 400 branch_required), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. audience is Who can see this post?: all (All Families & Residents, the default: every family in the organization, at every site), branch (the site's families, such as Florence House Families) or tagged (Tagged Resident Families Only: only the families of the residents tagged, so at least one resident must be tagged, 400 audience_needs_tags). 400 invalid_post_audience for any other value. Goes live straight away with no approval and the people the audience reaches get a notification: everyone in the organization, the site's families, or the families of the tagged residents. Optional status: published (default), draft (saved, nobody sees it) or scheduled; scheduledAt (an ISO date in the future, up to a year ahead, such as 2026-11-02T09:00:00Z) alone also means scheduled. Families are notified when a scheduled post goes live, which a job checks every minute. 400 post_schedule_invalid for a bad date. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"title\": \"Garden afternoon\",\n  \"message\": \"Garden afternoon: live music and scones on the lawn.\",\n  \"mediaIds\": [\n    \"{{mediaId}}\"\n  ],\n  \"taggedResidentIds\": [\n    \"{{residentId}}\"\n  ],\n  \"isPinned\": false\n}",
+                      "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"title\": \"Garden afternoon\",\n  \"message\": \"Garden afternoon: live music and scones on the lawn.\",\n  \"mediaIds\": [\n    \"{{mediaId}}\"\n  ],\n  \"taggedResidentIds\": [\n    \"{{residentId}}\"\n  ],\n  \"audience\": \"all\",\n  \"isPinned\": false\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -21380,7 +21494,7 @@
                         "{{postId}}"
                       ]
                     },
-                    "description": "Edit the text, photos or tags, or pin and unpin. Anything not sent stays as it was. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again for a published post. A draft or scheduled post can also get status (draft, scheduled or published) and scheduledAt: published makes it live now, notifies families and sets its posted time to now. 409 post_already_published when a published post is sent back to draft or scheduled. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "Edit the text, photos or tags, change who can see it (audience), or pin and unpin. Anything not sent stays as it was; changing the audience does not notify anyone again. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again for a published post. A draft or scheduled post can also get status (draft, scheduled or published) and scheduledAt: published makes it live now, notifies families and sets its posted time to now. 409 post_already_published when a published post is sent back to draft or scheduled. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"title\": \"Garden afternoon and raffle\",\n  \"message\": \"Garden afternoon: live music, scones and a raffle.\",\n  \"isPinned\": true\n}",
@@ -21481,6 +21595,30 @@
                         {
                           "key": "limit",
                           "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "draft",
+                          "description": "Tab: draft, scheduled, sending or sent",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site",
+                          "disabled": true
+                        },
+                        {
+                          "key": "month",
+                          "value": "2026-10",
+                          "description": "One month",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "october",
+                          "description": "Search the title",
+                          "disabled": true
                         }
                       ]
                     },
@@ -21922,6 +22060,24 @@
                         {
                           "key": "limit",
                           "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "ready",
+                          "description": "Tab: ready, noContent, overCap, printed, noFamily, failed or building",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site (the page shows each site's current issue)",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "margaret",
+                          "description": "Search resident, room or status",
+                          "disabled": true
                         }
                       ]
                     },
@@ -22487,6 +22643,24 @@
                         {
                           "key": "limit",
                           "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "active",
+                          "description": "Tab: active, invitePending or noFamily",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "margaret",
+                          "description": "Search resident, next of kin or room",
+                          "disabled": true
                         }
                       ]
                     },
@@ -22639,6 +22813,24 @@
                             {
                               "key": "status",
                               "value": "pending"
+                            },
+                            {
+                              "key": "branchId",
+                              "value": "{{branchId}}",
+                              "description": "One site",
+                              "disabled": true
+                            },
+                            {
+                              "key": "residentId",
+                              "value": "{{residentId}}",
+                              "description": "One resident",
+                              "disabled": true
+                            },
+                            {
+                              "key": "keyword",
+                              "value": "emily",
+                              "description": "Search name, email, or the resident's name or room",
+                              "disabled": true
                             }
                           ]
                         },
@@ -22953,6 +23145,36 @@
                             {
                               "key": "limit",
                               "value": "10"
+                            },
+                            {
+                              "key": "status",
+                              "value": "active",
+                              "description": "Tab: active, pending, inactive, rejected or cancelled (removed members are never listed)",
+                              "disabled": true
+                            },
+                            {
+                              "key": "branchId",
+                              "value": "{{branchId}}",
+                              "description": "One site",
+                              "disabled": true
+                            },
+                            {
+                              "key": "residentId",
+                              "value": "{{residentId}}",
+                              "description": "One resident",
+                              "disabled": true
+                            },
+                            {
+                              "key": "isNextOfKin",
+                              "value": "true",
+                              "description": "Only next of kin (true) or everyone else (false)",
+                              "disabled": true
+                            },
+                            {
+                              "key": "keyword",
+                              "value": "sarah",
+                              "description": "Search member name or email, or the resident's name or room",
+                              "disabled": true
                             }
                           ]
                         },

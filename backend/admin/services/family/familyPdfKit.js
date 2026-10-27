@@ -60,7 +60,6 @@ const registerFonts = (doc) => {
   setFont(style);
 };
 
-/** Line endings are made uniform and control characters dropped. */
 const printable = (value) =>
   String(value ?? "")
     .replace(/\r\n?/g, "\n")

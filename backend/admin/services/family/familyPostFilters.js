@@ -12,12 +12,14 @@ const everyTaggedResidentConsents = {
 };
 
 /** The live posts of one site that are safe to reuse in a printed or sent document. */
-const publishedPostsOfSite = ({ organizationId, branchId }) => [
+const publishedPostsOfSite = ({ organizationId, branchId, includeTagged = false }) => [
   {
     $match: {
       organizationId: toObjectId(organizationId),
       branchId: toObjectId(branchId),
       status: FamilyPostStatus.PUBLISHED,
+      // A post for the families of tagged residents only is not for a document the whole site receives.
+      ...(includeTagged ? {} : { audience: { $ne: "tagged" } }),
     },
   },
   { $lookup: { from: Resident.collection.name, localField: "taggedResidentIds", foreignField: "_id", as: "tagged" } },

@@ -27,7 +27,6 @@ const cut = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1
 
 const relationshipLabels = () => new Map(listRelationships().map((option) => [option.value, option.label]));
 
-/** A wall post as a "Life at the home" entry: its own title, or its first line. */
 const lifeEntry = (post) => {
   const lines = String(post.message || "").trim().split(/\r?\n/).filter((line) => line.trim());
   const title = post.title ? cut(post.title, TITLE_LENGTH) : cut(lines[0] || "", TITLE_LENGTH);
@@ -35,10 +34,8 @@ const lifeEntry = (post) => {
   return { title, text, mediaId: post.mediaIds?.[0] ?? null, postedAt: post.createdAt };
 };
 
-/** The newest message with a photo gives the cover its picture. */
 const coverOf = (messages) => [...messages].reverse().find((message) => message.mediaIds.length)?.mediaIds[0] ?? null;
 
-/** The next of kin first, then whoever wrote the most, then by name. */
 const sendersOf = (messages, kinOf) => {
   const writers = new Map();
   messages.forEach((message) => {
@@ -54,12 +51,7 @@ const single = async (model, match, project) => {
   return row || null;
 };
 
-/**
- * What the PDF will say, read fresh from the records so the checks hold at the moment of printing: only
- * messages that are still approved and meant for the gazette, only wall posts that are still live and safe
- * to reuse, only the blurred copy of a photo that was blurred, and no photos at all for a resident whose
- * photo sharing is off.
- */
+// Read fresh at print time (BR-06): only still-approved messages and live wall posts, the blurred copy of a blurred photo, and no photos for a resident whose photo sharing is off.
 const loadInput = async ({ item }) => {
   const [issue, resident, rules] = await Promise.all([
     single(FamilyGazetteIssue, { _id: item.issueId }, { number: 1, periodStart: 1, periodEnd: 1, closesAt: 1 }),
@@ -108,7 +100,7 @@ const loadInput = async ({ item }) => {
 
   const posts = item.postIds.length
     ? await FamilyPost.aggregate([
-        ...publishedPostsOfSite({ organizationId: item.organizationId, branchId: item.branchId }),
+        ...publishedPostsOfSite({ organizationId: item.organizationId, branchId: item.branchId, includeTagged: true }),
         { $match: { _id: { $in: item.postIds }, taggedResidentIds: item.residentId } },
         { $sort: { createdAt: -1, _id: -1 } },
         { $project: { title: 1, message: 1, mediaIds: 1, createdAt: 1 } },
@@ -137,7 +129,6 @@ const loadInput = async ({ item }) => {
   };
 };
 
-/** Reads the photos the PDF needs, a few at a time; one that cannot be read is simply left out. */
 const loadPhotos = async (gazette) => {
   const wanted = [...new Set([...gazette.messages.flatMap((message) => message.mediaIds), ...gazette.life.map((entry) => entry.mediaId), gazette.coverMediaId].filter(Boolean).map(String))];
   if (!wanted.length) return new Map();
@@ -179,11 +170,7 @@ const fileNameOf = (gazette) => {
   return `${slug}-gazette-issue-${gazette.issueNumber}.pdf`;
 };
 
-/**
- * Draws one resident's gazette and stores it. The content was chosen and saved earlier, so a failure here
- * (a photo store that is down, a bad file) marks the gazette failed and keeps everything for a retry. If the
- * messages are no longer valid when it is drawn, no PDF is made and the gazette says "no content".
- */
+// A failed render keeps the content for a retry; with no valid message left the gazette becomes no content and no PDF is made.
 const renderItem = async ({ itemId, now = new Date() }) => {
   const item = await loadItem(itemId);
   if (!RENDERABLE.includes(item.status)) throw new AppError("gazette_not_renderable", 409);
@@ -215,7 +202,6 @@ const renderItem = async ({ itemId, now = new Date() }) => {
   }
 };
 
-/** Preview and download: the stored copy when there is one, otherwise drawn now from the saved content. */
 const getItemPdf = async ({ itemId }) => {
   const item = await loadItem(itemId);
   if ([FamilyGazetteItemStatus.NO_CONTENT, FamilyGazetteItemStatus.NO_FAMILY].includes(item.status)) throw new AppError("gazette_nothing_to_show", 409);

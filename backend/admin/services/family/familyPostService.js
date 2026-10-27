@@ -6,7 +6,9 @@ const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyPostReport } = require("@models/FamilyPostReport");
 const { FamilyMember } = require("@models/FamilyMember");
 const { NotificationExp } = require("@models/Notifications");
-const { AdmissionStatus, FamilyMemberStatus, FamilyPostReportStatus, FamilyPostStatus } = require("@models/domainEnums");
+const { AdmissionStatus, BranchStatus, FamilyMemberStatus, FamilyPostAudience, FamilyPostReportStatus, FamilyPostStatus } = require("@models/domainEnums");
+const { audienceLabelOf } = require("@utils/familyPostVisibility");
+const { getWallGazetteCard } = require("./familyGazetteCard");
 const moment = require("moment-timezone");
 const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
@@ -36,7 +38,6 @@ const MAX_PHOTOS = 10;
 const MAX_TAGS = 50;
 const NOTIFY_CHUNK = 1000;
 
-/** A schedule is a date and time in the future, no more than a year away. */
 const parseSchedule = (value) => {
   const when = moment.utc(value, moment.ISO_8601, true);
   const now = moment.utc();
@@ -44,6 +45,14 @@ const parseSchedule = (value) => {
     throw new AppError("post_schedule_invalid", 400);
   }
   return when.toDate();
+};
+
+const AUDIENCES = Object.values(FamilyPostAudience);
+
+const checkAudience = (audience, tags) => {
+  if (!AUDIENCES.includes(audience)) throw new AppError("invalid_post_audience", 400);
+  if (audience === FamilyPostAudience.TAGGED && !tags.length) throw new AppError("audience_needs_tags", 400);
+  return audience;
 };
 
 const normaliseTitle = (title) => {
@@ -69,7 +78,6 @@ const normaliseIds = (ids, { max, tooMany, invalid }) => {
 const PHOTO_RULES = { max: MAX_PHOTOS, tooMany: "too_many_photos", invalid: "media_not_found" };
 const TAG_RULES = { max: MAX_TAGS, tooMany: "too_many_tags", invalid: "residents_cannot_be_tagged" };
 
-/** A post can only tag residents of its own site whose photo sharing is on; anyone else is refused, not skipped. */
 const assertTaggable = async ({ organizationId, branchId, residentIds }) => {
   if (!residentIds.length) return;
 
@@ -86,6 +94,31 @@ const assertTaggable = async ({ organizationId, branchId, residentIds }) => {
     { $count: "count" },
   ]);
   if ((found?.count ?? 0) !== residentIds.length) throw new AppError("residents_cannot_be_tagged", 400);
+};
+
+// An owner leaving the site out gets the tagged residents' site, or the organization's only active site; otherwise it is still required.
+const inferSite = async ({ actor, organizationId, branchId, audience, taggedResidentIds }) => {
+  if (branchId) return branchId;
+  if ((await actorStanding(actor, organizationId)).branchId) return undefined;
+
+  if (audience === FamilyPostAudience.TAGGED) {
+    const tags = normaliseIds(taggedResidentIds, TAG_RULES);
+    if (tags.length) {
+      const sites = await Resident.aggregate([
+        { $match: { _id: { $in: tags.map(toObjectId) }, organizationId: toObjectId(organizationId) } },
+        { $group: { _id: "$branchId" } },
+      ]);
+      if (sites.length > 1) throw new AppError("tagged_residents_different_sites", 400);
+      if (sites.length === 1) return String(sites[0]._id);
+    }
+  }
+
+  const branches = await Branch.aggregate([
+    { $match: { organizationId: toObjectId(organizationId), status: { $ne: BranchStatus.SUSPENDED } } },
+    { $project: { _id: 1 } },
+    { $limit: 2 },
+  ]);
+  return branches.length === 1 ? String(branches[0]._id) : undefined;
 };
 
 const assertMediaUsable = async ({ userId, mediaIds, postId = null }) => {
@@ -140,6 +173,7 @@ const postRowStages = (userId = null) => [
       message: 1,
       photos: 1,
       taggedResidents: 1,
+      audience: { $ifNull: ["$audience", FamilyPostAudience.BRANCH] },
       isPinned: 1,
       status: 1,
       scheduledAt: 1,
@@ -168,11 +202,6 @@ const dateFilter = ({ from, to }) => {
   return Object.keys(range).length ? range : null;
 };
 
-/**
- * The staff Community Wall: pinned first, then newest (or oldest with sort=oldest). meta.counts has
- * published, removed, pinned and photos for the tabs; they ignore the status, pinned and photos
- * filters but follow the site, resident, author, date and search filters.
- */
 const listPosts = async ({
   organizationId,
   branchId,
@@ -187,6 +216,7 @@ const listPosts = async ({
   sort,
   keyword,
   days,
+  audience,
   page,
   limit,
   skip,
@@ -194,13 +224,19 @@ const listPosts = async ({
   const wanted = status || FamilyPostStatus.PUBLISHED;
   if (!Object.values(FamilyPostStatus).includes(wanted)) throw new AppError("invalid_status_filter", 400);
   if (sort !== undefined && !["newest", "oldest"].includes(sort)) throw new AppError("invalid_sort", 400);
+  if (audience !== undefined && !AUDIENCES.includes(audience)) throw new AppError("invalid_post_audience", 400);
 
   const base = { organizationId: toObjectId(organizationId) };
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.taggedResidentIds = toObjectId(residentId);
   if (authorId) base.authorId = toObjectId(authorId);
-  const range = dateFilter({ from, to });
+  const lastDays = days === undefined ? null : Number(days);
+  if (lastDays !== null && (!Number.isInteger(lastDays) || lastDays < 1 || lastDays > 365)) throw new AppError("invalid_days", 400);
+  if (lastDays !== null && (from !== undefined || to !== undefined)) throw new AppError("invalid_date_filter", 400);
+  const range = lastDays === null ? dateFilter({ from, to }) : { $gte: new Date(Date.now() - lastDays * 24 * 60 * 60 * 1000) };
   if (range) base.createdAt = range;
+  if (audience === FamilyPostAudience.BRANCH) base.audience = { $in: [FamilyPostAudience.BRANCH, null] };
+  else if (audience) base.audience = audience;
 
   const or = await searchClause({
     keyword,
@@ -226,7 +262,7 @@ const listPosts = async ({
   const live = { ...base, status: FamilyPostStatus.PUBLISHED };
   const direction = sort === "oldest" ? 1 : -1;
 
-  const [{ result, data, meta }, attention, activity] = await Promise.all([
+  const [{ result, data, meta }, attention, activity, gazette] = await Promise.all([
     paginateWithFacet({
       model: FamilyPost,
       match: narrowed,
@@ -248,10 +284,11 @@ const listPosts = async ({
     }),
     getAttention({ organizationId, branchId }),
     getStaffActivity({ organizationId, branchId, days }),
+    getWallGazetteCard({ organizationId, branchId }),
   ]);
 
   return {
-    data: await decoratePosts({ rows: data, organizationId }),
+    data: (await decoratePosts({ rows: data, organizationId })).map((row) => ({ ...row, audienceLabel: audienceLabelOf(row.audience, row.homeName) })),
     meta: {
       ...meta,
       counts: {
@@ -261,13 +298,14 @@ const listPosts = async ({
       },
       attention,
       activity,
+      gazette,
     },
   };
 };
 
 const getPostRow = async (postId) => {
   const [row] = await FamilyPost.aggregate([{ $match: { _id: toObjectId(postId) } }, ...postRowStages()]);
-  return row;
+  return row ? { ...row, audienceLabel: audienceLabelOf(row.audience, row.homeName) } : row;
 };
 
 const listTaggableResidents = async ({ actor, organizationId, branchId }) => {
@@ -299,19 +337,12 @@ const listTaggableResidents = async ({ actor, organizationId, branchId }) => {
   ]);
 };
 
-/** Families at the site hear about it once; a failure here never undoes the post. */
 const notifyFamilies = async ({ post, actorId, homeName }) => {
   try {
-    const members = await FamilyMember.aggregate([
-      {
-        $match: {
-          organizationId: toObjectId(post.organizationId),
-          branchId: toObjectId(post.branchId),
-          status: FamilyMemberStatus.ACTIVE,
-        },
-      },
-      { $group: { _id: "$userId" } },
-    ]);
+    const reach = { organizationId: toObjectId(post.organizationId), status: FamilyMemberStatus.ACTIVE };
+    if (post.audience === FamilyPostAudience.TAGGED) reach.residentId = { $in: post.taggedResidentIds.map(toObjectId) };
+    else if (post.audience !== FamilyPostAudience.ALL) reach.branchId = toObjectId(post.branchId);
+    const members = await FamilyMember.aggregate([{ $match: reach }, { $group: { _id: "$userId" } }]);
 
     const title = `New post from ${homeName || "your home"}`;
     const body = post.message ? post.message.slice(0, 140) : "Photos were shared on the community wall.";
@@ -334,8 +365,10 @@ const notifyFamilies = async ({ post, actorId, homeName }) => {
   }
 };
 
-const createPost = async ({ actor, organizationId, branchId, title, message, status, scheduledAt, mediaIds = [], taggedResidentIds = [], isPinned }) => {
-  const site = await resolveBranch({ actor, organizationId, branchId });
+const createPost = async ({ actor, organizationId, branchId, title, message, status, scheduledAt, mediaIds = [], taggedResidentIds = [], isPinned, audience = FamilyPostAudience.ALL }) => {
+  // Audience is checked before the site so its mistakes are reported as that.
+  checkAudience(audience, normaliseIds(taggedResidentIds, TAG_RULES));
+  const site = await resolveBranch({ actor, organizationId, branchId: await inferSite({ actor, organizationId, branchId, audience, taggedResidentIds }) });
   const text = normaliseMessage(message);
   const heading = normaliseTitle(title);
   const state = status === undefined ? (scheduledAt === undefined ? FamilyPostStatus.PUBLISHED : FamilyPostStatus.SCHEDULED) : status;
@@ -361,6 +394,7 @@ const createPost = async ({ actor, organizationId, branchId, title, message, sta
           message: text,
           mediaIds: photos.map(toObjectId),
           taggedResidentIds: tags.map(toObjectId),
+          audience,
           isPinned: Boolean(isPinned),
           status: state,
           scheduledAt: goesLiveAt,
@@ -394,7 +428,7 @@ const loadOpenPost = async ({ actor, organizationId, postId }) => {
         status: { $in: OPEN_STATUSES },
       },
     },
-    { $project: { organizationId: 1, branchId: 1, authorId: 1, status: 1, title: 1, message: 1, mediaIds: 1, taggedResidentIds: 1, isPinned: 1 } },
+    { $project: { organizationId: 1, branchId: 1, authorId: 1, status: 1, title: 1, message: 1, mediaIds: 1, taggedResidentIds: 1, audience: 1, isPinned: 1 } },
   ]);
   if (!post) throw new AppError("post_not_found", 404);
 
@@ -402,7 +436,7 @@ const loadOpenPost = async ({ actor, organizationId, postId }) => {
   return post;
 };
 
-const updatePost = async ({ actor, organizationId, postId, title, message, status, scheduledAt, mediaIds, taggedResidentIds, isPinned }) => {
+const updatePost = async ({ actor, organizationId, postId, title, message, status, scheduledAt, mediaIds, taggedResidentIds, isPinned, audience }) => {
   const post = await loadOpenPost({ actor, organizationId, postId });
 
   const text = message === undefined ? post.message : normaliseMessage(message);
@@ -416,6 +450,8 @@ const updatePost = async ({ actor, organizationId, postId, title, message, statu
       ? post.taggedResidentIds.map(String)
       : normaliseIds(taggedResidentIds, TAG_RULES);
   if (!text && !photos.length) throw new AppError("post_empty", 400);
+  const reach = audience === undefined ? post.audience || FamilyPostAudience.BRANCH : audience;
+  checkAudience(reach, tags);
 
   const next = nextState({ post, status, scheduledAt });
 
@@ -434,6 +470,7 @@ const updatePost = async ({ actor, organizationId, postId, title, message, statu
           message: text,
           mediaIds: photos.map(toObjectId),
           taggedResidentIds: tags.map(toObjectId),
+          audience: reach,
           isPinned: isPinned === undefined ? post.isPinned : Boolean(isPinned),
         },
       },
@@ -460,10 +497,6 @@ const updatePost = async ({ actor, organizationId, postId, title, message, statu
   return row;
 };
 
-/**
- * A published post stays published. A draft or scheduled one can be kept as a draft, scheduled
- * (again) or published now; going live moves createdAt to now, and that is when families are told.
- */
 const nextState = ({ post, status, scheduledAt }) => {
   if (post.status === FamilyPostStatus.PUBLISHED) {
     if ((status !== undefined && status !== FamilyPostStatus.PUBLISHED) || scheduledAt !== undefined) {
@@ -487,10 +520,7 @@ const nextState = ({ post, status, scheduledAt }) => {
   return { set: { status: target, scheduledAt: null }, wentLive: false };
 };
 
-/**
- * Run every minute: scheduled posts that are due go live. Each one is claimed by the update itself,
- * so two servers running this at once never publish or announce the same post twice.
- */
+// Each due post is claimed by the update itself, so two servers never publish or announce it twice.
 const publishDuePosts = async ({ now = new Date(), limit = DUE_PER_RUN } = {}) => {
   let published = 0;
 
@@ -510,7 +540,6 @@ const publishDuePosts = async ({ now = new Date(), limit = DUE_PER_RUN } = {}) =
   return { published };
 };
 
-/** Removed posts leave every feed, and later newsletters and gazettes. The row is kept. */
 const removePost = async ({ actor, organizationId, postId }) => {
   const post = await loadOpenPost({ actor, organizationId, postId });
 

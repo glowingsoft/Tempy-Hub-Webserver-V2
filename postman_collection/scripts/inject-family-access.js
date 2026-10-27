@@ -13,7 +13,14 @@ const test = (lines) => ({
   script: { type: "text/javascript", exec: lines },
 });
 
-const req = (name, method, pathParts, { query, tests, description, header } = {}) => ({
+/**
+ * Optional filters, listed on the Params tab switched off with a note on each: tick one to use it. They are not
+ * part of the URL until ticked, so a request still sends only what it needs.
+ */
+const optionalParams = (optional = {}) =>
+  Object.entries(optional).map(([key, [value, description]]) => ({ key, value, description, disabled: true }));
+
+const req = (name, method, pathParts, { query, optional, tests, description, header } = {}) => ({
   name,
   event: tests ? [test(tests)] : [],
   request: {
@@ -24,12 +31,17 @@ const req = (name, method, pathParts, { query, tests, description, header } = {}
       host: ["{{url}}"],
       path: pathParts,
       // Postman reads the Params tab from this list, not from the raw string.
-      ...(query
+      ...(query || optional
         ? {
-            query: query.split("&").map((pair) => {
-              const [key, ...rest] = pair.split("=");
-              return { key, value: rest.join("=") };
-            }),
+            query: [
+              ...(query
+                ? query.split("&").map((pair) => {
+                    const [key, ...rest] = pair.split("=");
+                    return { key, value: rest.join("=") };
+                  })
+                : []),
+              ...optionalParams(optional),
+            ],
           }
         : {}),
     },
@@ -454,6 +466,10 @@ requests.push(
   }),
   req("my uploads", "GET", ["app", "family", "uploads"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["waiting", "Tab: waiting, approved or rejected"],
+      residentId: ["{{residentId}}", "One resident"],
+    },
     tests: [
       'pm.test("My uploads fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -676,6 +692,12 @@ const staffRequests = [
   },
   req("newsletters", "GET", ["admin", "organizations", "{{organizationId}}", "family-newsletters"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["draft", "Tab: draft, scheduled, sending or sent"],
+      branchId: ["{{branchId}}", "One site"],
+      month: ["2026-10", "One month"],
+      keyword: ["october", "Search the title"],
+    },
     tests: [
       'pm.test("Newsletters fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -723,6 +745,11 @@ const staffRequests = [
   }),
   req("gazettes", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["ready", "Tab: ready, noContent, overCap, printed, noFamily, failed or building"],
+      branchId: ["{{branchId}}", "One site (the page shows each site's current issue)"],
+      keyword: ["margaret", "Search resident, room or status"],
+    },
     tests: [
       'pm.test("Gazettes fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -768,6 +795,21 @@ const staffRequests = [
   }),
   req("wall posts", "GET", ["admin", "organizations", "{{organizationId}}", "family-posts"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["published", "Tab: published (default), draft, scheduled or removed"],
+      branchId: ["{{branchId}}", "One site"],
+      residentId: ["{{residentId}}", "Resident filter: posts tagged to this resident"],
+      authorId: ["{{authorId}}", "Author filter"],
+      audience: ["all", "Group filter: all, branch or tagged"],
+      days: ["30", "Last 30 days: 1 to 365. Cannot be used with from and to"],
+      from: ["2026-10-01", "Posts from this day (not with days)"],
+      to: ["2026-10-31", "Posts up to this day (not with days)"],
+      pinned: ["true", "Pin tab: only pinned posts"],
+      hasPhotos: ["true", "Photos tab: only posts with photos"],
+      reported: ["true", "Only posts with an open report"],
+      sort: ["newest", "Newest first (default) or oldest"],
+      keyword: ["garden", "Search post, tagged resident or author"],
+    },
     tests: [
       'pm.test("Wall posts fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -777,7 +819,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Staff Community Wall: every post of the organization, pinned first then newest. Optional query: status (published, draft, scheduled or removed), branchId, residentId (tagged), authorId, pinned=true, hasPhotos=true, from and to (2026-10-01), sort (newest or oldest), keyword (post text, tagged resident or author), page, limit. Each post has the author (name, photo, role), the home, photos, tagged residents with their photos, isPinned and reactionCount. meta.counts has published, draft, scheduled, removed, pinned and photos for the tabs (scheduled posts are listed soonest first, drafts by last edit). The same response carries the rest of the screen: meta.attention (the Needs your attention card: pendingUploads {count, oldestAt}, reportedPosts {count, reports, oldestAt}, total) and meta.activity (Staff activity: days and authors with posts, name, photo and role; query days 1 to 365, default 30). Each post also has seenCount, audienceCount, recentReactors (latest 3), reportCount and reports (its open reports, newest 5: reporterName, reason, createdAt); they ignore the status, pinned and photos filters but follow the others. Needs familyEngagement.view; 404 when the module is off.",
+      "Staff Community Wall: every post of the organization, pinned first then newest. Optional query: status (published, draft, scheduled or removed), branchId, residentId (the Resident filter: tagged), authorId (the Author filter), audience (the Group filter: all, branch or tagged), days (Last 30 days: 1 to 365; it cannot be combined with from and to; it also sets the window of meta.activity), pinned=true, hasPhotos=true, from and to (2026-10-01), sort (newest or oldest), keyword (post text, tagged resident or author), page, limit. Each post has the author (name, photo, role), the home, photos, tagged residents with their photos, isPinned and reactionCount. meta.counts has published, draft, scheduled, removed, pinned and photos for the tabs (scheduled posts are listed soonest first, drafts by last edit). Each post has audience (all, branch or tagged) and audienceLabel (All families & residents, Florence House families or Tagged resident families), and audienceCount is how many families it is for (the 42 in Seen 31/42). The same response carries the rest of the screen: meta.gazette is the 'Gazette no. 14 closes in 3 days' card (pass branchId for one site; without it the card covers every site that is not suspended: the resident counts are added up, the earliest close is shown, number is the highest next number and sites says how many sites it covers): scheduled (false until a gazette schedule is saved), number, state, periodLabel, closesAt, closesInDays, messageCap, residents {total, withContent, noContent, noFamily, overCap} ('33 of 42 residents have content', '4 no content', '1 over 30') and percentWithContent for the progress bar; it is null only when the organization has no site that is not suspended, or the branchId is not one of its sites. Also meta.attention (the Needs your attention card: pendingUploads {count, oldestAt}, reportedPosts {count, reports, oldestAt}, total) and meta.activity (Staff activity: days and authors with posts, name, photo and role; query days 1 to 365, default 30). Each post also has seenCount, audienceCount, recentReactors (latest 3), reportCount and reports (its open reports, newest 5: reporterName, reason, createdAt); they ignore the status, pinned and photos filters but follow the others. Needs familyEngagement.view; 404 when the module is off.",
   }),
   staff("taggable residents", "GET", ["admin", "family", "posts", "taggable-residents"], {
     query: "branchId={{branchId}}",
@@ -812,6 +854,12 @@ const staffRequests = [
   },
   req("upload queue", "GET", ["admin", "organizations", "{{organizationId}}", "family-uploads"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["waiting", "Tab: all (default), waiting, approved or rejected"],
+      branchId: ["{{branchId}}", "One site"],
+      residentId: ["{{residentId}}", "One resident"],
+      keyword: ["margaret", "Search caption, resident, room or uploader"],
+    },
     tests: [
       'pm.test("Upload queue fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -859,6 +907,11 @@ const staffRequests = [
   }),
   req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["active", "Tab: active, invitePending or noFamily"],
+      branchId: ["{{branchId}}", "One site"],
+      keyword: ["margaret", "Search resident, next of kin or room"],
+    },
     tests: [
       'pm.test("Family groups fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -872,6 +925,13 @@ const staffRequests = [
   }),
   req("all family members", "GET", ["admin", "organizations", "{{organizationId}}", "family-members"], {
     query: "page=1&limit=10",
+    optional: {
+      status: ["active", "Tab: active, pending, inactive, rejected or cancelled (removed members are never listed)"],
+      branchId: ["{{branchId}}", "One site"],
+      residentId: ["{{residentId}}", "One resident"],
+      isNextOfKin: ["true", "Only next of kin (true) or everyone else (false)"],
+      keyword: ["sarah", "Search member name or email, or the resident's name or room"],
+    },
     tests: [
       'pm.test("All family members fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -1033,6 +1093,7 @@ const wallPosts = [
       message: "Garden afternoon: live music and scones on the lawn.",
       mediaIds: ["{{mediaId}}"],
       taggedResidentIds: ["{{residentId}}"],
+      audience: "all",
       isPinned: false,
     },
     tests: [
@@ -1043,7 +1104,7 @@ const wallPosts = [
       "});",
     ],
     description:
-      "Staff Community Wall: new post. Body: title (optional, up to 120 characters), branchId (an owner or super admin must pick the site; a site or line manager posts to their own), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. Goes live straight away with no approval and every active family member at the site gets a notification. Optional status: published (default), draft (saved, nobody sees it) or scheduled; scheduledAt (an ISO date in the future, up to a year ahead, such as 2026-11-02T09:00:00Z) alone also means scheduled. Families are notified when a scheduled post goes live, which a job checks every minute. 400 post_schedule_invalid for a bad date. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage.",
+      "Staff Community Wall: new post. Body: title (optional, up to 120 characters), branchId (a site or line manager posts to their own site and leaves it out. An owner or super admin can leave it out when the post is for tagged residents' families (the site is the one the tagged residents are at; tagged residents at two sites return 400 tagged_residents_different_sites) or when the organization has only one active site; otherwise they must send it, or get 400 branch_required), message (up to 2000 characters), mediaIds (up to 10, from upload post photo), taggedResidentIds (up to 50, only residents of that site with photo sharing on, from taggable residents) and isPinned. Needs text or a photo. audience is Who can see this post?: all (All Families & Residents, the default: every family in the organization, at every site), branch (the site's families, such as Florence House Families) or tagged (Tagged Resident Families Only: only the families of the residents tagged, so at least one resident must be tagged, 400 audience_needs_tags). 400 invalid_post_audience for any other value. Goes live straight away with no approval and the people the audience reaches get a notification: everyone in the organization, the site's families, or the families of the tagged residents. Optional status: published (default), draft (saved, nobody sees it) or scheduled; scheduledAt (an ISO date in the future, up to a year ahead, such as 2026-11-02T09:00:00Z) alone also means scheduled. Families are notified when a scheduled post goes live, which a job checks every minute. 400 post_schedule_invalid for a bad date. 400 residents_cannot_be_tagged for a resident with photo sharing off or at another site. Needs familyEngagement.manage.",
   },
   {
     name: "update post",
@@ -1056,7 +1117,7 @@ const wallPosts = [
       "});",
     ],
     description:
-      "Edit the text, photos or tags, or pin and unpin. Anything not sent stays as it was. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again for a published post. A draft or scheduled post can also get status (draft, scheduled or published) and scheduledAt: published makes it live now, notifies families and sets its posted time to now. 409 post_already_published when a published post is sent back to draft or scheduled.",
+      "Edit the text, photos or tags, change who can see it (audience), or pin and unpin. Anything not sent stays as it was; changing the audience does not notify anyone again. Same checks as create. A site or line manager can only change their own site's posts. Families are not notified again for a published post. A draft or scheduled post can also get status (draft, scheduled or published) and scheduledAt: published makes it live now, notifies families and sets its posted time to now. 409 post_already_published when a published post is sent back to draft or scheduled.",
   },
   {
     name: "remove post",
@@ -1428,6 +1489,11 @@ if (allInvitations) {
     { key: "page", value: "1" },
     { key: "limit", value: "10" },
     { key: "status", value: "pending" },
+    ...optionalParams({
+      branchId: ["{{branchId}}", "One site"],
+      residentId: ["{{residentId}}", "One resident"],
+      keyword: ["emily", "Search name, email, or the resident's name or room"],
+    }),
   ];
   allInvitations.request.header = (allInvitations.request.header || []).filter(
     (h) => String(h.key).toLowerCase() !== "x-org-id"

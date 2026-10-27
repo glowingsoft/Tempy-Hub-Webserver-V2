@@ -11,6 +11,7 @@ const familyUploadService = require("@appServices/family/familyUploadService");
 const familyTimelineService = require("@appServices/family/familyTimelineService");
 const familyWallService = require("@appServices/family/familyWallService");
 const familyNewsletterService = require("@appServices/family/familyNewsletterService");
+const familyGazetteService = require("@appServices/family/familyGazetteService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
@@ -211,6 +212,34 @@ const listTimeline = respond(
   { paged: true }
 );
 
+const getNextGazette = respond((req) => familyGazetteService.nextGazette({ link: req.familyLink }));
+
+const listGazettes = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyGazetteService.listGazettes({ link: req.familyLink, page, limit, skip });
+  },
+  { paged: true }
+);
+
+const getGazette = respond((req) => familyGazetteService.getGazette({ links: req.familyLinks, gazetteId: req.params.gazetteId }));
+
+const downloadGazettePdf = async (req, res) => {
+  try {
+    const { buffer, filename } = await familyGazetteService.getPdf({ links: req.familyLinks, gazetteId: req.params.gazetteId });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Length": buffer.length,
+      "Content-Disposition": `${req.query.download === "false" ? "inline" : "attachment"}; filename="${filename}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.status(200).send(buffer);
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const listNewsletters = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
@@ -304,6 +333,10 @@ const inviteRelative = respond(
 
 module.exports = {
   listRelationships,
+  getNextGazette,
+  listGazettes,
+  getGazette,
+  downloadGazettePdf,
   listNewsletters,
   getNewsletter,
   downloadNewsletterPdf,

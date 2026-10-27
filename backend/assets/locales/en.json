@@ -543,6 +543,7 @@
   "gazette_too_many_to_download": "That is more than {max} gazettes. Choose one site",
   "gazette_issue_busy": "Another gazette build is running for this site. Try again in a moment",
   "gazette_period_required": "There is no gazette issue due yet",
+  "gazette_not_found": "Gazette not found",
   "newsletter_created": "Newsletter draft created",
   "newsletter_updated": "Newsletter updated",
   "newsletter_removed": "Newsletter removed",

@@ -97,21 +97,24 @@ const memberRow = {
   requestedAt: 1,
 };
 
+/** Someone who was removed from a family is gone from these lists, the counts and the pages. */
+const LISTED_STATUSES = Object.values(FamilyMemberStatus).filter((status) => status !== FamilyMemberStatus.REMOVED);
+
 const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(Object.values(FamilyMemberStatus).map((status) => [status, 0]));
+  const counts = Object.fromEntries(LISTED_STATUSES.map((status) => [status, 0]));
   rows.forEach((row) => {
-    counts[row._id] = row.count;
+    if (row._id in counts) counts[row._id] = row.count;
   });
   return counts;
 };
 
-/** Without a status it lists active, pending and inactive; meta.counts covers every status and ignores the status filter. */
+/** Without a status it lists active, pending and inactive; meta.counts covers the other statuses too (never removed) and ignores the status filter. */
 const listAllMembers = async ({ organizationId, branchId, residentId, status, isNextOfKin, keyword, page, limit, skip }) => {
-  if (status && !Object.values(FamilyMemberStatus).includes(status)) {
+  if (status && !LISTED_STATUSES.includes(status)) {
     throw new AppError("invalid_status_filter", 400);
   }
 
-  const base = { organizationId: toObjectId(organizationId) };
+  const base = { organizationId: toObjectId(organizationId), status: { $ne: FamilyMemberStatus.REMOVED } };
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.residentId = toObjectId(residentId);
   if (isNextOfKin === "true" || isNextOfKin === "false") base.isNextOfKin = isNextOfKin === "true";

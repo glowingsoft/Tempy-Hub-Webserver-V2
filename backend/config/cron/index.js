@@ -3,6 +3,7 @@ const { acquireLock, releaseLock } = require("../redis/redisCache");
 
 const { runEventReminderCron } = require("./events/eventReminder.cron");
 const { runFamilyScheduledPostsCron, runFamilyScheduledNewslettersCron } = require("./family/familyPosts.cron");
+const { runFamilyGazetteRecoveryCron, runFamilyGazetteSchedulerCron } = require("./family/familyGazettes.cron");
 const startCrons = () => {
 
 
@@ -50,6 +51,36 @@ const startCrons = () => {
       await runFamilyScheduledNewslettersCron();
     } catch (err) {
       console.error("Family scheduled newsletters cron error:", err);
+    } finally {
+      await releaseLock(lockKey, lock);
+    }
+  });
+
+  cron.schedule("*/15 * * * *", async () => {
+    const lockKey = "cron:family-gazette-scheduler";
+    const lock = await acquireLock(lockKey, 800);
+
+    if (!lock) return;
+
+    try {
+      await runFamilyGazetteSchedulerCron();
+    } catch (err) {
+      console.error("Family gazette scheduler cron error:", err);
+    } finally {
+      await releaseLock(lockKey, lock);
+    }
+  });
+
+  cron.schedule("*/5 * * * *", async () => {
+    const lockKey = "cron:family-gazette-recovery";
+    const lock = await acquireLock(lockKey, 280);
+
+    if (!lock) return;
+
+    try {
+      await runFamilyGazetteRecoveryCron();
+    } catch (err) {
+      console.error("Family gazette recovery cron error:", err);
     } finally {
       await releaseLock(lockKey, lock);
     }

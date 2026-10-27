@@ -32,8 +32,12 @@ const familyGazetteItemSchema = new mongoose.Schema(
     /** People linked to the resident when the issue was built. */
     familyCount: { type: Number, default: 0 },
     pdfKey: { type: String, default: "" },
+    /** Pages in the drawn PDF, for the reader ("2/6"). */
+    pageCount: { type: Number, default: 0 },
     failureReason: { type: String, default: "" },
     generatedAt: { type: Date, default: null },
+    /** When a drawing of this gazette was last started; a drawing that never finished is picked up again after a while. */
+    renderClaimedAt: { type: Date, default: null },
     printedBy: objectId("User", { default: null }),
     printedAt: { type: Date, default: null },
     /** The day the home gave the printed copy to the resident. */

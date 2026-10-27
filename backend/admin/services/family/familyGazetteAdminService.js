@@ -34,9 +34,12 @@ const {
 const yazl = require("yazl");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { renderItem, getItemPdf, lifeEntry } = require("./familyGazetteService");
+const { notifyPrinted } = require("./familyGazetteNotifications");
 
 const MAX_CONCURRENT_RENDERS = 2;
 const MAX_ZIP_FILES = 100;
+const STUCK_AFTER_MS = 20 * 60 * 1000;
+const RECOVER_PER_RUN = 20;
 
 const Status = FamilyGazetteItemStatus;
 const STATES = [
@@ -102,30 +105,14 @@ const TAB_FILTERS = {
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * The issue each site is on now (its newest), or one chosen issue. The Gazettes page works on "this issue",
- * so across several sites it shows each site's current one.
+ * The issue each site is on now (its newest). The Gazettes page works on "this issue", so across several sites it
+ * shows each site's current one; nothing on the page asks for an older one.
  */
-const currentIssues = async ({ organizationId, branchId, issueId }) => {
-  const org = toObjectId(organizationId);
-  if (issueId) {
-    if (!isValidObjectId(issueId))
-      throw new AppError("gazette_issue_not_found", 404);
-    const [issue] = await FamilyGazetteIssue.aggregate([
-      {
-        $match: {
-          _id: toObjectId(issueId),
-          organizationId: org,
-          ...(branchId ? { branchId: toObjectId(branchId) } : {}),
-        },
-      },
-    ]);
-    if (!issue) throw new AppError("gazette_issue_not_found", 404);
-    return [issue];
-  }
-  return FamilyGazetteIssue.aggregate([
+const currentIssues = async ({ organizationId, branchId }) =>
+  FamilyGazetteIssue.aggregate([
     {
       $match: {
-        organizationId: org,
+        organizationId: toObjectId(organizationId),
         ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
@@ -134,7 +121,6 @@ const currentIssues = async ({ organizationId, branchId, issueId }) => {
     { $replaceRoot: { newRoot: "$issue" } },
     { $sort: { branchId: 1 } },
   ]);
-};
 
 const issueSummary = (issue, homes) => ({
   issueId: issue._id,
@@ -170,12 +156,11 @@ const statesMatching = (text) => {
 
 /**
  * The Gazettes page: one row per resident for the issue each site is on. meta.counts feeds the cards and tabs
- * and ignores the tab chosen; meta.issue (or meta.issues across sites) says which issue it is.
+ * and ignores the tab chosen. The page shows nothing about the issue itself, so none of it is returned.
  */
 const listGazettes = async ({
   organizationId,
   branchId,
-  issueId,
   status,
   keyword,
   page,
@@ -184,13 +169,7 @@ const listGazettes = async ({
 }) => {
   if (status && !TABS.includes(status))
     throw new AppError("invalid_status_filter", 400);
-  const issues = await currentIssues({ organizationId, branchId, issueId });
-  const homes = await homeNames([
-    ...new Set(issues.map((issue) => issue.branchId)),
-  ]);
-  const summaries = issues.map((issue) => issueSummary(issue, homes));
-  const meta =
-    issues.length === 1 ? { issue: summaries[0] } : { issues: summaries };
+  const issues = await currentIssues({ organizationId, branchId });
   const emptyCounts = {
     total: 0,
     ready: 0,
@@ -208,7 +187,6 @@ const listGazettes = async ({
       meta: {
         ...generateMeta(page, limit, 0),
         counts: emptyCounts,
-        issues: [],
       },
     };
 
@@ -364,28 +342,16 @@ const listGazettes = async ({
   const capOf = new Map(
     issues.map((issue) => [String(issue._id), issue.messageCap]),
   );
-  const homeOf = new Map(
-    issues.map((issue) => [
-      String(issue._id),
-      {
-        number: issue.number,
-        homeName: homes.get(String(issue.branchId)) || "",
-      },
-    ]),
-  );
   const { _id, ...counts } = result.counts[0] || { ...emptyCounts };
 
   return {
-    data: result.data.map((row) => ({
+    data: result.data.map(({ issueId, ...row }) => ({
       ...row,
-      statusLabel: labelOf(row.state, capOf.get(String(row.issueId))),
-      issueNumber: homeOf.get(String(row.issueId))?.number,
-      homeName: homeOf.get(String(row.issueId))?.homeName,
+      statusLabel: labelOf(row.state, capOf.get(String(issueId))),
     })),
     meta: {
       ...generateMeta(page, limit, facetCount(result.totalCount)),
       counts: { ...emptyCounts, ...counts },
-      ...meta,
     },
   };
 };
@@ -578,11 +544,9 @@ const renderIssue = async ({ issueId, now = new Date() }) => {
     ]);
     const counts = { ready: 0, failed: 0, noContent: 0 };
     for (let i = 0; i < waiting.length; i += MAX_CONCURRENT_RENDERS) {
-      const results = await Promise.all(
-        waiting
-          .slice(i, i + MAX_CONCURRENT_RENDERS)
-          .map((item) => renderItem({ itemId: item._id, now })),
-      );
+      const batch = waiting.slice(i, i + MAX_CONCURRENT_RENDERS);
+      await FamilyGazetteItem.updateMany({ _id: { $in: batch.map((item) => item._id) }, status: Status.BUILDING }, { $set: { renderClaimedAt: now } });
+      const results = await Promise.all(batch.map((item) => renderItem({ itemId: item._id, now })));
       results.forEach((result) => {
         if (result.status === Status.READY) counts.ready += 1;
         else if (result.status === Status.FAILED) counts.failed += 1;
@@ -602,6 +566,44 @@ const renderIssue = async ({ issueId, now = new Date() }) => {
   } finally {
     rendering.delete(key);
   }
+};
+
+/**
+ * Drawing runs inside the server that took the request, so a restart can leave gazettes at Building with nobody
+ * drawing them. Run on a schedule, this takes over any that have waited a long time without a drawing being started
+ * and draws them. Taking one over is a single claim, so two servers never draw the same gazette; the issue is marked
+ * ready once none of its gazettes is still waiting.
+ */
+const recoverStuckGazettes = async ({ now = new Date(), limit = RECOVER_PER_RUN } = {}) => {
+  const cutoff = new Date(now.getTime() - STUCK_AFTER_MS);
+  const touched = new Set();
+  const counts = { recovered: 0, ready: 0, failed: 0, noContent: 0 };
+
+  for (let i = 0; i < limit; i += 1) {
+    const claimed = await FamilyGazetteItem.findOneAndUpdate(
+      {
+        status: Status.BUILDING,
+        generatedAt: { $lt: cutoff },
+        $or: [{ renderClaimedAt: null }, { renderClaimedAt: { $lt: cutoff } }],
+      },
+      { $set: { renderClaimedAt: now } },
+      { sort: { generatedAt: 1, _id: 1 }, new: true, lean: true }
+    );
+    if (!claimed) break;
+
+    const result = await renderItem({ itemId: claimed._id, now });
+    touched.add(String(claimed.issueId));
+    counts.recovered += 1;
+    if (result.status === Status.READY) counts.ready += 1;
+    else if (result.status === Status.FAILED) counts.failed += 1;
+    else if (result.status === Status.NO_CONTENT) counts.noContent += 1;
+  }
+
+  for (const issueId of touched) {
+    const [stillBuilding] = await FamilyGazetteItem.aggregate([{ $match: { issueId: toObjectId(issueId), status: Status.BUILDING } }, { $count: "count" }]);
+    if (!stillBuilding?.count) await FamilyGazetteIssue.updateOne({ _id: toObjectId(issueId) }, { $set: { status: FamilyGazetteIssueStatus.READY } });
+  }
+  return counts;
 };
 
 /** Rendering runs after the request has been answered; the page watches the rows change from Building to Ready. */
@@ -661,35 +663,26 @@ const generateForSite = async ({
   };
 };
 
-const loadIssueForStaff = async ({ actor, organizationId, issueId }) => {
-  if (!isValidObjectId(issueId))
-    throw new AppError("gazette_issue_not_found", 404);
-  const [issue] = await FamilyGazetteIssue.aggregate([
-    {
-      $match: {
-        _id: toObjectId(issueId),
-        organizationId: toObjectId(organizationId),
-      },
-    },
-  ]);
+/**
+ * The site's current issue, for a button that acts on "this page". A site or line manager works on their own site;
+ * an owner or super admin says which site, as with Generate all.
+ */
+const currentIssueForStaff = async ({ actor, organizationId, branchId }) => {
+  const site = await resolveSite({ actor, organizationId, branchId });
+  const [issue] = await currentIssues({ organizationId, branchId: site.branchId });
   if (!issue) throw new AppError("gazette_issue_not_found", 404);
-  await assertMayChangeSite({
-    actor,
-    organizationId,
-    branchId: issue.branchId,
-  });
   return issue;
 };
 
-/** Mark printed for the whole issue (every ready gazette, or just the ones named), or retry the ones that failed. */
+/** Mark printed for the page: every ready gazette of the site's current issue, or just the ones named. */
 const printAll = async ({
   actor,
   organizationId,
-  issueId,
+  branchId,
   itemIds,
   now = new Date(),
 }) => {
-  const issue = await loadIssueForStaff({ actor, organizationId, issueId });
+  const issue = await currentIssueForStaff({ actor, organizationId, branchId });
   const filter = {
     issueId: issue._id,
     status: Status.READY,
@@ -704,20 +697,30 @@ const printAll = async ({
       throw new AppError("gazette_items_invalid", 400);
     filter._id = { $in: itemIds.map(toObjectId) };
   }
-  const result = await FamilyGazetteItem.updateMany(filter, {
-    $set: { status: Status.PRINTED, printedBy: actor._id, printedAt: now },
-  });
-  return { issueId: issue._id, printed: result.modifiedCount ?? 0 };
+  // Each gazette is moved to printed on its own, so the family of exactly the ones that moved are told, once.
+  const candidates = await FamilyGazetteItem.aggregate([{ $match: filter }, { $project: { _id: 1 } }]);
+  let printed = 0;
+  for (const candidate of candidates) {
+    const done = await FamilyGazetteItem.findOneAndUpdate(
+      { _id: candidate._id, status: Status.READY, pdfKey: { $ne: "" } },
+      { $set: { status: Status.PRINTED, printedBy: actor._id, printedAt: now } },
+      { new: true, lean: true },
+    );
+    if (!done) continue;
+    printed += 1;
+    await notifyPrinted({ item: done, actorId: actor._id });
+  }
+  return { printed };
 };
 
-/** Failed (and still-building) gazettes are drawn again, with their content untouched. */
+/** Failed gazettes of the site's current issue are drawn again, with their content untouched. */
 const retryIssue = async ({
   actor,
   organizationId,
-  issueId,
+  branchId,
   background = true,
 }) => {
-  const issue = await loadIssueForStaff({ actor, organizationId, issueId });
+  const issue = await currentIssueForStaff({ actor, organizationId, branchId });
   const reset = await FamilyGazetteItem.updateMany(
     { issueId: issue._id, status: Status.FAILED },
     { $set: { status: Status.BUILDING, failureReason: "" } },
@@ -727,7 +730,7 @@ const retryIssue = async ({
     { $set: { status: FamilyGazetteIssueStatus.BUILDING } },
   );
   if (background) renderInBackground(issue._id);
-  return { issueId: issue._id, retrying: reset.modifiedCount ?? 0 };
+  return { retrying: reset.modifiedCount ?? 0 };
 };
 
 const loadItemForStaff = async ({ actor, organizationId, itemId }) => {
@@ -796,6 +799,7 @@ const markPrinted = async ({
     { $set: { status: Status.PRINTED, printedBy: actor._id, printedAt: now } },
   );
   if (!done.matchedCount) throw new AppError("gazette_not_ready", 409);
+  await notifyPrinted({ item, actorId: actor._id });
   return getGazette({ organizationId, itemId });
 };
 
@@ -840,8 +844,8 @@ const getPdf = async ({ organizationId, itemId }) => {
 };
 
 /** The PDFs to put in the zip: every drawn gazette of the issue each site is on, in resident order. */
-const downloadEntries = async ({ organizationId, branchId, issueId }) => {
-  const issues = await currentIssues({ organizationId, branchId, issueId });
+const downloadEntries = async ({ organizationId, branchId }) => {
+  const issues = await currentIssues({ organizationId, branchId });
   if (!issues.length) throw new AppError("gazette_nothing_to_download", 404);
   const homes = await homeNames([
     ...new Set(issues.map((issue) => issue.branchId)),
@@ -928,7 +932,9 @@ const zipStream = (entries) => {
 };
 
 module.exports = {
+  renderInBackground,
   zipStream,
+  recoverStuckGazettes,
   listGazettes,
   getGazette,
   generateForSite,

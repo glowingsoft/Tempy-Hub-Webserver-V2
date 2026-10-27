@@ -13,7 +13,7 @@ const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
 const { listRelationships } = require("@appServices/family/familyAccessService");
-const { renderGazettePdf } = require("./familyGazettePdf");
+const { drawGazette } = require("./familyGazettePdf");
 const { publishedPostsOfSite } = require("./familyPostFilters");
 const { getGazetteRules } = require("./familySettingsService");
 
@@ -170,7 +170,8 @@ const draw = async (item) => {
   if (!input.gazette.messages.length) return { empty: true, input };
 
   const photos = await loadPhotos(input.gazette);
-  return { empty: false, input, buffer: await renderGazettePdf({ gazette: input.gazette, photos }) };
+  const drawn = await drawGazette({ gazette: input.gazette, photos });
+  return { empty: false, input, buffer: drawn.buffer, pageCount: drawn.pageCount };
 };
 
 const fileNameOf = (gazette) => {
@@ -201,7 +202,7 @@ const renderItem = async ({ itemId, now = new Date() }) => {
     });
     await FamilyGazetteItem.updateOne(
       { _id: item._id, status: { $in: RENDERABLE } },
-      { $set: { status: FamilyGazetteItemStatus.READY, pdfKey: key, failureReason: "", generatedAt: now } }
+      { $set: { status: FamilyGazetteItemStatus.READY, pdfKey: key, pageCount: drawn.pageCount, failureReason: "", generatedAt: now } }
     );
     return { status: FamilyGazetteItemStatus.READY, pdfKey: key };
   } catch (error) {

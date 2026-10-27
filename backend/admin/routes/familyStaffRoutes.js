@@ -65,7 +65,7 @@ router.put("/posts/:id/reports", requirePermission(FAMILY_MANAGE), familyStaffCo
 router.post("/newsletters", requirePermission(FAMILY_MANAGE), familyStaffController.createNewsletter);
 router.put("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffController.updateNewsletter);
 router.post("/gazette-issues", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.generateGazettes);
-router.put("/gazette-issues/:issueId", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateGazetteIssue);
+router.put("/gazette-issues", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateGazetteIssue);
 router.put("/gazettes/:itemId", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateGazette);
 
 router.put("/newsletters/:id/delivery", newsletterSendLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateNewsletterDelivery);

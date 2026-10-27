@@ -2,7 +2,9 @@ const { randomUUID } = require("crypto");
 const { Resident } = require("@models/Resident");
 const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyMedia } = require("@models/FamilyMedia");
-const { FamilyUploadStatus } = require("@models/domainEnums");
+const { FamilyGazetteItem } = require("@models/FamilyGazetteItem");
+const { FamilyGazetteIssue } = require("@models/FamilyGazetteIssue");
+const { FamilyGazetteItemStatus, FamilyUploadStatus } = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
@@ -173,6 +175,46 @@ const myUploadStages = [
   },
 ];
 
+/**
+ * Where an approved message meant for the gazette is: waiting for the next one, left for the next one because the
+ * issue was full ("Moved to next gazette"), printed in an issue, or taken out by staff. Anything else has no place.
+ */
+const gazettePlacements = async (rows) => {
+  const wanted = rows.filter((row) => row.status === FamilyUploadStatus.APPROVED && row.includeInGazette);
+  if (!wanted.length) return new Map();
+
+  const ids = wanted.map((row) => row.uploadId);
+  const items = await FamilyGazetteItem.aggregate([
+    { $match: { $or: [{ uploadIds: { $in: ids } }, { movedUploadIds: { $in: ids } }, { removedUploadIds: { $in: ids } }] } },
+    ...joinOne({ from: FamilyGazetteIssue, localField: "issueId", as: "issue", optional: true }),
+    { $sort: { "issue.number": -1 } },
+    { $project: { status: 1, uploadIds: 1, movedUploadIds: 1, removedUploadIds: 1, issueNumber: { $ifNull: ["$issue.number", 0] } } },
+  ]);
+
+  const placements = new Map();
+  wanted.forEach((row) => {
+    const id = String(row.uploadId);
+    const has = (list) => list.some((value) => String(value) === id);
+    const item = items.find((entry) => has(entry.uploadIds) || has(entry.movedUploadIds) || has(entry.removedUploadIds));
+
+    let placement = { status: "next", label: "In the next gazette", issueNumber: null };
+    if (item && has(item.removedUploadIds)) placement = { status: "removed", label: "Not in the gazette", issueNumber: item.issueNumber };
+    else if (item && has(item.movedUploadIds)) placement = { status: "moved", label: "Moved to next gazette", issueNumber: item.issueNumber };
+    else if (item && has(item.uploadIds)) {
+      placement = item.status === FamilyGazetteItemStatus.PRINTED
+        ? { status: "printed", label: `In gazette no. ${item.issueNumber}`, issueNumber: item.issueNumber }
+        : { status: "next", label: "In the next gazette", issueNumber: item.issueNumber };
+    }
+    placements.set(id, placement);
+  });
+  return placements;
+};
+
+const withGazette = async (rows) => {
+  const placements = await gazettePlacements(rows);
+  return rows.map((row) => ({ ...row, gazette: placements.get(String(row.uploadId)) ?? null }));
+};
+
 const statusCountsOf = (rows = []) => {
   const counts = Object.fromEntries(Object.values(FamilyUploadStatus).map((status) => [status, 0]));
   rows.forEach((row) => {
@@ -206,7 +248,7 @@ const listMyUploads = async ({ userId, residentId, status, page, limit, skip }) 
     extraDataStages: myUploadStages,
   });
 
-  return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
+  return { data: await withGazette(data), meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
 };
 
 const getMyUpload = async ({ userId, uploadId }) => {
@@ -217,7 +259,7 @@ const getMyUpload = async ({ userId, uploadId }) => {
     ...myUploadStages,
   ]);
   if (!upload) throw new AppError("upload_not_found", 404);
-  return upload;
+  return (await withGazette([upload]))[0];
 };
 
 /** Send For Approval. The same clientId returns the upload already made instead of a second one. */

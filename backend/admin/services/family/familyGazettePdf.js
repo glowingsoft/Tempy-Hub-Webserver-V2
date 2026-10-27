@@ -208,7 +208,7 @@ const drawFooters = (doc, gazette) => {
  * your family" with every message, "Life at the home" with the wall posts about them, and a note on how to
  * be in the next issue. Large print for easy reading. `photos` maps a media id to the image bytes.
  */
-const renderGazettePdf = async ({ gazette, photos = new Map() }) => {
+const drawGazette = async ({ gazette, photos = new Map() }) => {
   const doc = new PDFDocument({
     size: "A4",
     margin: 0,
@@ -246,8 +246,11 @@ const renderGazettePdf = async ({ gazette, photos = new Map() }) => {
   }
 
   drawFooters(doc, gazette);
+  const pageCount = doc.bufferedPageRange().count;
   doc.end();
-  return finished;
+  return { buffer: await finished, pageCount };
 };
 
-module.exports = { renderGazettePdf, gazetteTitle, periodLabel };
+const renderGazettePdf = async (options) => (await drawGazette(options)).buffer;
+
+module.exports = { renderGazettePdf, drawGazette, gazetteTitle, periodLabel };

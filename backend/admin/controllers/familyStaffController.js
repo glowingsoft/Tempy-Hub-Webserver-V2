@@ -20,7 +20,6 @@ const listGazettes = respond(
     return familyGazetteAdminService.listGazettes({
       organizationId: req.orgId,
       branchId: queryId(req.query.branchId, "branchId"),
-      issueId: queryId(req.query.issueId, "issueId"),
       status: queryText(req.query.status),
       keyword: queryText(req.query.keyword),
       page,
@@ -54,7 +53,6 @@ const downloadGazetteZip = async (req, res) => {
     const { entries, fileName } = await familyGazetteAdminService.downloadEntries({
       organizationId: req.orgId,
       branchId: queryId(req.query.branchId, "branchId"),
-      issueId: queryId(req.query.issueId, "issueId"),
     });
     res.set({
       "Content-Type": "application/zip",
@@ -75,11 +73,11 @@ const generateGazettes = respond(
 
 const updateGazetteIssue = respondByAction({
   printed: {
-    run: (req) => familyGazetteAdminService.printAll({ actor: req.user, organizationId: req.orgId, issueId: req.params.issueId, itemIds: req.body.itemIds }),
+    run: (req) => familyGazetteAdminService.printAll({ actor: req.user, organizationId: req.orgId, branchId: req.body.branchId, itemIds: req.body.itemIds }),
     translationKey: "gazette_marked_printed",
   },
   retry: {
-    run: (req) => familyGazetteAdminService.retryIssue({ actor: req.user, organizationId: req.orgId, issueId: req.params.issueId }),
+    run: (req) => familyGazetteAdminService.retryIssue({ actor: req.user, organizationId: req.orgId, branchId: req.body.branchId }),
     translationKey: "gazette_retrying",
   },
 });

@@ -17,6 +17,7 @@ const photoBatchLimiter = createRateLimiter("family-photo-batches", 15, 12);
 const writeLimiter = createRateLimiter("family-writes", 15, 60);
 const inviteLimiter = createRateLimiter("family-invites", 15, 20);
 const pdfLimiter = createRateLimiter("family-newsletter-pdfs", 15, 30);
+const gazettePdfLimiter = createRateLimiter("family-gazette-pdfs", 15, 30);
 
 const residentInQuery = requireFamilyAccess({ param: "residentId", from: "query" });
 const residentInBody = requireFamilyAccess({ param: "residentId", from: "body" });
@@ -48,6 +49,11 @@ router.get("/handover/current", familyController.getCurrentHandover);
 router.put("/handover/:id", familyController.updateHandover);
 
 router.get("/timeline", residentInQuery, familyController.listTimeline);
+
+router.get("/gazettes/next", residentInQuery, familyController.getNextGazette);
+router.get("/gazettes", residentInQuery, familyController.listGazettes);
+router.get("/gazettes/:gazetteId", requireFamilyAccess(), familyController.getGazette);
+router.get("/gazettes/:gazetteId/pdf", gazettePdfLimiter, requireFamilyAccess(), familyController.downloadGazettePdf);
 
 router.get("/newsletters", residentInQuery, familyController.listNewsletters);
 router.get("/newsletters/:newsletterId", requireFamilyAccess(), familyController.getNewsletter);

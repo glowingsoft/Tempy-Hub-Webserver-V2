@@ -7,6 +7,8 @@ const NotificationTypes = {
   FAMILY_NEW_POST: "familyNewPost",
   FAMILY_UPLOAD_REJECTED: "familyUploadRejected",
   FAMILY_NEWSLETTER: "familyNewsletter",
+  FAMILY_GAZETTE: "familyGazette",
+  FAMILY_GAZETTE_REMINDER: "familyGazetteReminder",
   SYSTEM: "system",
   REMINDER: "reminder",
   DOCUMENTS_UPDATE: "documentsUpdate",

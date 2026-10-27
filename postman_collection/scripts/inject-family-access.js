@@ -676,6 +676,51 @@ const staffRequests = [
     description:
       "Options for the Relationship dropdowns on the web panel: Invite Family Member, Manage Family Group and editing a member or invitation (Spouse, Partner, Son, Daughter, Grandson, Granddaughter, Brother, Sister, Nephew, Niece, Friend, Legal guardian, Other). Send the value (such as granddaughter) in relationship. A fixed list, so any signed-in user can call it: no x-org-id header, module or permission is needed.",
   }),
+  req("gazettes", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("Gazettes fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const body = pm.response.json();",
+      '    pm.expect(body.data).to.be.an("array");',
+      '    pm.expect(body.meta.counts).to.include.keys("total", "ready", "noContent", "overCap", "printed", "noFamily", "needReview");',
+      '    if (body.data.length) { pm.collectionVariables.set("gazetteItemId", body.data[0].itemId); pm.collectionVariables.set("gazetteIssueId", body.data[0].issueId); }',
+      "});",
+    ],
+    description:
+      "The Gazettes page: one row per resident for the issue each site is on now. Optional query: branchId (one site), issueId (an older issue), status (the tab: all, ready, noContent, overCap, printed, noFamily, failed or building), keyword (resident, room or status), page, limit. Each row has itemId, issueId, residentName, photoUrl, roomNumber, familyCount (Family column), messageCount (Messages column; it can be over the cap, like 31), state and statusLabel (Ready, No content, Over 30 messages, Printed, No family linked, Failed or Building), hasPdf, generatedAt, printedAt and givenAt. meta.counts feeds the cards and tabs: total (Residents in this issue), ready (Ready to print), noContent, overCap, printed, noFamily, failed, building and needReview (the Need review card: no content, failed or over the cap); it ignores the tab chosen. meta.issue (one site) or meta.issues (several) says which issue: number, period, closesAt, messageCap and status. Needs familyEngagement.view.",
+  }),
+  req("gazette detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes", "{{gazetteItemId}}"], {
+    tests: [
+      'pm.test("Gazette fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.include.keys("itemId", "resident", "state", "messages", "life");',
+      "});",
+    ],
+    description:
+      "One resident's gazette to check and fix: the issue, the resident, state and statusLabel, familyCount, messageCount, includedCount, overCap, hasPdf and the print dates. messages lists every message sent for it with uploadId, authorName, relationshipLabel, message, photos (the blurred copy, which is what is printed), sentAt and placement: included, movedToNext (over the cap, waiting for the next issue) or removed (taken out by staff). life lists the wall posts for Life at the home. Needs familyEngagement.view.",
+  }),
+  req("gazette pdf", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes", "{{gazetteItemId}}", "pdf"], {
+    query: "download=false",
+    tests: [
+      'pm.test("PDF returned", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.headers.get("Content-Type")).to.include("application/pdf");',
+      "});",
+    ],
+    description:
+      "The eye icon (preview) and the download: the resident's gazette as an A4 PDF, the stored copy when there is one, otherwise drawn from the saved content. download=true sends it as an attachment, otherwise it opens inline. 409 gazette_nothing_to_show for a resident with no messages or no family. In Postman use Send and Download to save it. Needs familyEngagement.view.",
+  }),
+  req("download all gazette pdfs", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes", "download"], {
+    tests: [
+      'pm.test("Zip returned", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.headers.get("Content-Type")).to.include("application/zip");',
+      "});",
+    ],
+    description:
+      "The Download all PDFs button: a zip of every drawn gazette (ready or printed) of the issue each site is on, one PDF per resident named like margaret-hughes-gazette-issue-14.pdf; with several sites each has a folder. Optional query: branchId, issueId. 404 gazette_nothing_to_download when nothing has been drawn yet, 400 for more than 100 gazettes (choose a site). Rate limited. Needs familyEngagement.view.",
+  }),
   req("wall posts", "GET", ["admin", "organizations", "{{organizationId}}", "family-posts"], {
     query: "page=1&limit=10",
     tests: [
@@ -754,6 +799,17 @@ const staffRequests = [
     ],
     description:
       "Family Groups, the group page (the eye icon). The id is the resident's id. Resident details: residentName, photoUrl, roomNumber, homeName (Care site / Branch), branchId and status (active, invitePending, noFamily). primaryNextOfKin: name, photoUrl, relationship, email and phone (from their account); an invited next of kin who has not accepted yet shows with status invited and a null memberId; null when there is none. members: the Family Members (n) table, next of kin first then in the order they joined, each with memberId, name, photoUrl, email, phone, relationship, isNextOfKin (the NOK badge), status (active or inactive) and joinedAt. pendingInvitations lists invitations still waiting. summary: totalLinkedMembers, activePortalUsers (active members), pendingInvites and groupId. 404 resident_not_found for another organization's, a discharged or an unknown resident. Needs familyEngagement.view.",
+  }),
+  req("family settings", "GET", ["admin", "family", "settings"], {
+    tests: [
+      'pm.test("Settings fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("configured", "gazette");',
+      "});",
+    ],
+    description:
+      "Family settings for the organization (the x-org-id header). gazette.issueEveryDays (days between issues, default 14), gazette.messageCap (most family messages in one resident's gazette, default 30) and gazette.anchorDate (the first day of an issue, such as 2026-10-01; every later issue starts a whole number of cycles after it). configured is false until the settings are saved; nothing runs on a schedule before that, and the values shown are the defaults. Owners and super admins only. Needs familyEngagement.view.",
   }),
   req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
@@ -978,6 +1034,80 @@ wallPosts.forEach(({ name, method, path, body, tests, description }) => {
 
 // Editing members and invitations, pausing access, and dismissing reports.
 const adminActions = [
+  {
+    name: "generate gazettes",
+    method: "POST",
+    path: ["admin", "family", "gazette-issues"],
+    body: { branchId: "{{branchId}}" },
+    tests: [
+      'pm.test("Gazettes are being built", function () {',
+      "    pm.response.to.have.status(202);",
+      '    pm.collectionVariables.set("gazetteIssueId", pm.response.json().data.issueId);',
+      "});",
+    ],
+    description:
+      "The Generate all button. Works out what every resident's gazette will say for the site's current issue and answers at once (202); the PDFs are drawn in the background, so the rows show Building and then Ready as each one finishes. Body: branchId (an owner or super admin must pick the site; a site or line manager uses their own). With no gazette schedule saved the issue covers the last cycle's days; with one it is the issue that is open now. Asking again builds the same issue again: new messages come in, and gazettes already printed are left exactly as they are. The response has the issue (issueId, number, period, closesAt) and counts of what was built. Needs familyEngagement.manage.",
+  },
+  {
+    name: "mark all gazettes printed",
+    method: "PUT",
+    path: ["admin", "family", "gazette-issues", "{{gazetteIssueId}}"],
+    body: { action: "printed" },
+    tests: ['pm.test("Marked printed", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "The Mark printed button for the whole issue. Body: action printed, and optionally itemIds to mark only some. Only gazettes that are Ready are marked; printed, no-content and no-family ones are not touched. Returns how many were marked. Marking again changes nothing. Needs familyEngagement.manage and, for a site or line manager, the issue must be on their own site.",
+  },
+  {
+    name: "retry failed gazettes",
+    method: "PUT",
+    path: ["admin", "family", "gazette-issues", "{{gazetteIssueId}}"],
+    body: { action: "retry" },
+    tests: ['pm.test("Retrying", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "Body: action retry. Gazettes that failed to draw go back to Building and are drawn again in the background; their content is untouched. Returns how many are retrying.",
+  },
+  {
+    name: "regenerate gazette",
+    method: "PUT",
+    path: ["admin", "family", "gazettes", "{{gazetteItemId}}"],
+    body: { action: "regenerate" },
+    tests: ['pm.test("Gazette redrawn", function () {', "    pm.response.to.have.status(200);", '    pm.expect(pm.response.json().data).to.include.keys("itemId", "messages");', "});"],
+    description:
+      "The refresh icon: picks up messages that arrived since and draws the PDF again, then returns the gazette like gazette detail. Optional body: removeUploadIds (messages in this gazette to take out for good; they never come back in a later issue) and uploadIds (exactly which messages go in, from the ones sent for this gazette, at least one and at most the cap; the rest wait for the next issue, which is how staff choose the final 30 when more were sent). 400 gazette_upload_invalid or gazette_selection_invalid for a bad choice. 409 gazette_already_printed once printed. Needs familyEngagement.manage; a site or line manager only on their own site.",
+  },
+  {
+    name: "mark gazette printed",
+    method: "PUT",
+    path: ["admin", "family", "gazettes", "{{gazetteItemId}}"],
+    body: { action: "printed" },
+    tests: ['pm.test("Marked printed", function () {', "    pm.response.to.have.status(200);", '    pm.expect(pm.response.json().data.status).to.eql("printed");', "});"],
+    description:
+      "Marks one gazette as printed (who and when are kept). It must have been drawn first (409 gazette_not_ready). Marking it again changes nothing, and a printed gazette can no longer be changed or redrawn.",
+  },
+  {
+    name: "mark gazette given",
+    method: "PUT",
+    path: ["admin", "family", "gazettes", "{{gazetteItemId}}"],
+    body: { action: "given", givenOn: "2026-10-30" },
+    tests: ['pm.test("Given date saved", function () {', "    pm.response.to.have.status(200);", "});"],
+    description:
+      "The day the home gave the printed gazette to the resident, which the family sees. Body: action given and optionally givenOn (2026-10-30; today when left out, never in the future). Only a printed gazette (409 gazette_not_printed). 400 gazette_given_invalid for a bad day.",
+  },
+
+  {
+    name: "update family settings",
+    method: "PUT",
+    path: ["admin", "family", "settings"],
+    body: { gazette: { anchorDate: "2026-10-01", issueEveryDays: 14, messageCap: 30 } },
+    tests: [
+      'pm.test("Settings saved", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.configured).to.eql(true);',
+      "});",
+    ],
+    description:
+      "Saves the gazette settings; only what is sent changes. gazette.issueEveryDays is a whole number from 1 to 90, gazette.messageCap from 1 to 100 and gazette.anchorDate a day like 2026-10-01. The first save must include anchorDate, because saving is what starts the schedule: the first issue begins on that day and each later one follows without a gap, in whole days in each site's timezone. 400 gazette_setting_invalid or gazette_anchor_invalid for a bad value. Owners and super admins only. Needs familyEngagement.manage.",
+  },
   {
     name: "update family member",
     method: "PUT",

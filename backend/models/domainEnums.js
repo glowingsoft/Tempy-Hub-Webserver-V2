@@ -120,6 +120,21 @@ const FamilyNewsletterStatus = {
   SENT: "sent",
 };
 
+/** An issue is the whole round for a site; its items are the residents' own gazettes. */
+const FamilyGazetteIssueStatus = {
+  BUILDING: "building",
+  READY: "ready",
+};
+
+const FamilyGazetteItemStatus = {
+  BUILDING: "building",
+  READY: "ready",
+  NO_CONTENT: "noContent",
+  NO_FAMILY: "noFamily",
+  FAILED: "failed",
+  PRINTED: "printed",
+};
+
 const FamilyJoinSource = {
   INVITATION: "invitation",
   CODE: "code",
@@ -424,6 +439,8 @@ module.exports = {
   FamilyPostStatus,
   FamilyPostReportStatus,
   FamilyNewsletterStatus,
+  FamilyGazetteIssueStatus,
+  FamilyGazetteItemStatus,
   FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,

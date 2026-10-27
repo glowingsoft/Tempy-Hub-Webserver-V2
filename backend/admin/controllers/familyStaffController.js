@@ -8,9 +8,110 @@ const familyModerationService = require("@adminServices/family/familyModerationS
 const familyPostService = require("@adminServices/family/familyPostService");
 const familyWallActivityService = require("@adminServices/family/familyWallActivityService");
 const familyNewsletterService = require("@adminServices/family/familyNewsletterService");
+const familySettingsService = require("@adminServices/family/familySettingsService");
+const familyGazetteAdminService = require("@adminServices/family/familyGazetteAdminService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const familyAccessService = require("@appServices/family/familyAccessService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
+
+const listGazettes = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyGazetteAdminService.listGazettes({
+      organizationId: req.orgId,
+      branchId: queryId(req.query.branchId, "branchId"),
+      issueId: queryId(req.query.issueId, "issueId"),
+      status: queryText(req.query.status),
+      keyword: queryText(req.query.keyword),
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true }
+);
+
+const getGazette = respond((req) => familyGazetteAdminService.getGazette({ organizationId: req.orgId, itemId: req.params.itemId }));
+
+const downloadGazettePdf = async (req, res) => {
+  try {
+    const { buffer, filename } = await familyGazetteAdminService.getPdf({ organizationId: req.orgId, itemId: req.params.itemId });
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Length": buffer.length,
+      "Content-Disposition": `${req.query.download === "true" ? "attachment" : "inline"}; filename="${filename}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.status(200).send(buffer);
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const downloadGazetteZip = async (req, res) => {
+  try {
+    const { entries, fileName } = await familyGazetteAdminService.downloadEntries({
+      organizationId: req.orgId,
+      branchId: queryId(req.query.branchId, "branchId"),
+      issueId: queryId(req.query.issueId, "issueId"),
+    });
+    res.set({
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return familyGazetteAdminService.zipStream(entries).pipe(res);
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const generateGazettes = respond(
+  (req) => familyGazetteAdminService.generateForSite({ actor: req.user, organizationId: req.orgId, branchId: req.body.branchId }),
+  { statusCode: 202, translationKey: "gazette_generation_started" }
+);
+
+const updateGazetteIssue = respondByAction({
+  printed: {
+    run: (req) => familyGazetteAdminService.printAll({ actor: req.user, organizationId: req.orgId, issueId: req.params.issueId, itemIds: req.body.itemIds }),
+    translationKey: "gazette_marked_printed",
+  },
+  retry: {
+    run: (req) => familyGazetteAdminService.retryIssue({ actor: req.user, organizationId: req.orgId, issueId: req.params.issueId }),
+    translationKey: "gazette_retrying",
+  },
+});
+
+const updateGazette = respondByAction({
+  regenerate: {
+    run: (req) =>
+      familyGazetteAdminService.regenerate({
+        actor: req.user,
+        organizationId: req.orgId,
+        itemId: req.params.itemId,
+        removeUploadIds: req.body.removeUploadIds,
+        uploadIds: req.body.uploadIds,
+      }),
+    translationKey: "gazette_regenerated",
+  },
+  printed: {
+    run: (req) => familyGazetteAdminService.markPrinted({ actor: req.user, organizationId: req.orgId, itemId: req.params.itemId }),
+    translationKey: "gazette_marked_printed",
+  },
+  given: {
+    run: (req) => familyGazetteAdminService.markGiven({ actor: req.user, organizationId: req.orgId, itemId: req.params.itemId, givenOn: req.body.givenOn }),
+    translationKey: "gazette_given_saved",
+  },
+});
+
+const getSettings = respond((req) => familySettingsService.getSettings({ organizationId: req.orgId }));
+
+const updateSettings = respond(
+  (req) => familySettingsService.updateSettings({ actor: req.user, organizationId: req.orgId, gazette: req.body.gazette }),
+  { translationKey: "family_settings_saved" }
+);
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
 
@@ -373,6 +474,15 @@ const createCode = respond(
 );
 
 module.exports = {
+  listGazettes,
+  getGazette,
+  downloadGazettePdf,
+  downloadGazetteZip,
+  generateGazettes,
+  updateGazetteIssue,
+  updateGazette,
+  getSettings,
+  updateSettings,
   listRelationships,
   listMembers,
   listAllMembers,

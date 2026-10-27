@@ -13,6 +13,7 @@ const {
   FAMILY_STAFF_ROLES,
 } = require("@adminServices/family/familyAccess");
 const { receivePhoto, receivePhotos } = require("@middlewares/familyPhotoMiddleware");
+const { MembershipRole } = require("@models/domainEnums");
 const createRateLimiter = require("@utils/rateLimiter");
 const familyStaffController = require("../controllers/familyStaffController");
 
@@ -22,6 +23,7 @@ const photoLimiter = createRateLimiter("family-post-photos", 15, 60);
 const photoBatchLimiter = createRateLimiter("family-post-photo-batches", 15, 12);
 const postLimiter = createRateLimiter("family-posts", 15, 60);
 const newsletterSendLimiter = createRateLimiter("family-newsletter-sends", 15, 20);
+const gazetteLimiter = createRateLimiter("family-gazette-builds", 15, 60);
 
 // A fixed list for the form dropdowns: a signed-in user needs no organization, module or permission.
 router.get("/relationships", auth, familyStaffController.listRelationships);
@@ -32,6 +34,10 @@ router.use(
   requireFamilyModule,
   requireRoles(FAMILY_STAFF_ROLES)
 );
+
+const ORG_ADMIN_ROLES = [MembershipRole.OWNER, MembershipRole.SUPER_ADMIN];
+router.get("/settings", requireRoles(ORG_ADMIN_ROLES), requirePermission(FAMILY_VIEW), familyStaffController.getSettings);
+router.put("/settings", requireRoles(ORG_ADMIN_ROLES), requirePermission(FAMILY_MANAGE), familyStaffController.updateSettings);
 
 router.put("/members/:memberId", requirePermission(FAMILY_MANAGE), familyStaffController.updateMember);
 router.put("/members/:memberId/access", requirePermission(FAMILY_MANAGE), familyStaffController.updateMemberAccess);
@@ -58,6 +64,10 @@ router.put("/posts/:id/reports", requirePermission(FAMILY_MANAGE), familyStaffCo
 
 router.post("/newsletters", requirePermission(FAMILY_MANAGE), familyStaffController.createNewsletter);
 router.put("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffController.updateNewsletter);
+router.post("/gazette-issues", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.generateGazettes);
+router.put("/gazette-issues/:issueId", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateGazetteIssue);
+router.put("/gazettes/:itemId", gazetteLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateGazette);
+
 router.put("/newsletters/:id/delivery", newsletterSendLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.updateNewsletterDelivery);
 router.delete("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffController.removeNewsletter);
 

@@ -1,113 +1,15 @@
 const PDFDocument = require("pdfkit");
-const sharp = require("sharp");
 const moment = require("moment-timezone");
-const path = require("path");
-const fontkit = require("fontkit");
+const { PAGE, COLORS, registerFonts, printable, prepareImage, fitText, drawPhoto } = require("./familyPdfKit");
 
-const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 45;
 const CONTENT = PAGE.width - MARGIN * 2;
 const BOTTOM = PAGE.height - MARGIN;
 const GAP = 24;
 
-const COLORS = {
-  navy: "#1f3a5f",
-  ink: "#1a1a1a",
-  muted: "#555555",
-  soft: "#f1f3f7",
-  line: "#d9dde4",
-  accent: "#c8553d",
-  placeholder: "#dfe5ec",
-};
-
-const PHOTO_WIDTH = 600;
-const PHOTO_QUALITY = 80;
 const HIGHLIGHT_PHOTO = { width: 212, height: 155 };
 const GALLERY_PHOTO = { width: 161, height: 113 };
 const LABEL_LETTER_SPACING = 1.5;
-
-/**
- * Arimo and Tinos are the fonts the template is set in (the same letter shapes and widths as Arial and
- * Times New Roman), embedded so every viewer and printer shows the same pages. The files cover Latin
- * (including Polish, Czech, Welsh and Vietnamese), Greek, Cyrillic and Hebrew letters.
- */
-const FONT_FILES = {
-  Sans: "@expo-google-fonts/arimo/400Regular/Arimo_400Regular.ttf",
-  "Sans-Bold": "@expo-google-fonts/arimo/700Bold/Arimo_700Bold.ttf",
-  "Serif-Bold": "@expo-google-fonts/tinos/700Bold/Tinos_700Bold.ttf",
-};
-
-const fonts = new Map();
-const fontOf = (style) => {
-  if (!fonts.has(style)) fonts.set(style, fontkit.openSync(require.resolve(FONT_FILES[style])));
-  return fonts.get(style);
-};
-
-const isLetter = (char) => !/\s/u.test(char);
-
-/** A letter the font does not have (an emoji, Arabic or Chinese) is shown as ? instead of an empty box. */
-const showable = (style, value) => {
-  const font = fontOf(style);
-  return [...String(value ?? "")].map((char) => (isLetter(char) && !font.hasGlyphForCodePoint(char.codePointAt(0)) ? "?" : char)).join("");
-};
-
-const registerFonts = (doc) => {
-  Object.entries(FONT_FILES).forEach(([style, file]) => doc.registerFont(style, require.resolve(file)));
-
-  let style = "Sans";
-  const setFont = doc.font.bind(doc);
-  const drawText = doc.text.bind(doc);
-  const measure = doc.heightOfString.bind(doc);
-
-  doc.font = (name, ...rest) => {
-    if (FONT_FILES[name]) style = name;
-    return setFont(name, ...rest);
-  };
-  doc.text = (value, ...rest) => drawText(showable(style, value), ...rest);
-  doc.heightOfString = (value, ...rest) => measure(showable(style, value), ...rest);
-  setFont(style);
-};
-
-/** Line endings are made uniform and control characters dropped. */
-const printable = (value) =>
-  String(value ?? "")
-    .replace(/\r\n?/g, "\n")
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
-
-/** Photos come from our own storage; a photo that cannot be read leaves a plain box rather than a failed PDF. */
-const prepareImage = async (buffer) => {
-  try {
-    return await sharp(buffer, { limitInputPixels: 40_000_000 })
-      .rotate()
-      .resize({ width: PHOTO_WIDTH, withoutEnlargement: true })
-      .jpeg({ quality: PHOTO_QUALITY })
-      .toBuffer();
-  } catch (error) {
-    return null;
-  }
-};
-
-const fitText = (doc, text, width, maxLines, size) => {
-  doc.fontSize(size);
-  const lineHeight = doc.currentLineHeight(true);
-  const maxHeight = lineHeight * maxLines;
-  if (doc.heightOfString(text, { width }) <= maxHeight) return text;
-
-  let cut = text;
-  while (cut.length > 1 && doc.heightOfString(`${cut}…`, { width }) > maxHeight) cut = cut.slice(0, -1);
-  return `${cut.trimEnd()}…`;
-};
-
-const drawPhoto = (doc, image, x, y, { width, height }, radius = 8) => {
-  doc.save();
-  doc.roundedRect(x, y, width, height, radius).clip();
-  if (image) {
-    doc.image(image, x, y, { cover: [width, height], align: "center", valign: "center" });
-  } else {
-    doc.rect(x, y, width, height).fill(COLORS.placeholder);
-  }
-  doc.restore();
-};
 
 const ensureSpace = (doc, y, needed) => {
   if (y + needed <= BOTTOM) return y;

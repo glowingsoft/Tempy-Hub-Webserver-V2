@@ -56,6 +56,11 @@ const familyEngagement = folder(adminRoot, "Staff side of the family module, one
   folder("Newsletters", "Monthly newsletters for a site: build the draft, edit every section, send.", adminPlace(
     "newsletters", "newsletter detail", "newsletter pdf", "create newsletter", "update newsletter", "send newsletter", "schedule newsletter", "cancel newsletter schedule", "remove newsletter"
   )),
+  folder("Gazettes", "Build, check, fix and print each resident's gazette.", adminPlace(
+    "gazettes", "gazette detail", "gazette pdf", "download all gazette pdfs", "generate gazettes", "regenerate gazette",
+    "mark gazette printed", "mark gazette given", "mark all gazettes printed", "retry failed gazettes"
+  )),
+  folder("Settings", "How often gazettes are built and how many messages one holds.", adminPlace("family settings", "update family settings")),
   folder("Family Groups", "One row per resident with their family.", adminPlace("family groups", "family group detail")),
   folder("Family Membership", "Who is in each family, and how they get in.", [
     folder("Family Invitations", "Invite a family member, and follow the invitations.", adminPlace(

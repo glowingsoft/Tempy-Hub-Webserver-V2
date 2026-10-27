@@ -20,6 +20,7 @@ const { NotificationExp } = require("@models/Notifications");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { renderNewsletterPdf } = require("./familyNewsletterPdf");
 const { sendNewsletterEmails } = require("./familyNewsletterEmail");
+const { publishedPostsOfSite } = require("./familyPostFilters");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
 const { resolveSite, assertMayChangeSite } = require("./familySite");
@@ -62,27 +63,6 @@ const ROLE_LABELS = {
 };
 
 const isDuplicateKey = (error) => error?.code === 11000;
-
-/** BR-06: a resident with photo sharing off never appears in a newsletter, even if the post was tagged before. */
-const everyTaggedResidentConsents = {
-  $expr: {
-    $allElementsTrue: [
-      { $map: { input: "$tagged", as: "resident", in: { $eq: ["$$resident.photographyConsent", true] } } },
-    ],
-  },
-};
-
-const publishedPostsOfSite = ({ organizationId, branchId }) => [
-  {
-    $match: {
-      organizationId: toObjectId(organizationId),
-      branchId: toObjectId(branchId),
-      status: FamilyPostStatus.PUBLISHED,
-    },
-  },
-  { $lookup: { from: Resident.collection.name, localField: "taggedResidentIds", foreignField: "_id", as: "tagged" } },
-  { $match: everyTaggedResidentConsents },
-];
 
 const firstLine = (message) => String(message || "").split(/\r?\n/).find((line) => line.trim()) || "";
 

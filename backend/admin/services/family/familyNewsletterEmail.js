@@ -63,9 +63,11 @@ const emailRecipients = async ({ organizationId, branchId }) => {
  * Each family member gets their own message with the PDF attached, so nobody sees another family's
  * address. A message that fails is counted and the rest still go out.
  */
-const sendNewsletterEmails = async ({ newsletter, homeName, periodLabel, pdf, filename }) => {
-  const recipients = await emailRecipients(newsletter);
-  if (!recipients.length) return { status: "skipped", count: 0, failed: 0 };
+const sendNewsletterEmails = async ({ newsletter, homeName, periodLabel, pdf, filename, alreadySent = [], onSent }) => {
+  const everyone = await emailRecipients(newsletter);
+  const done = new Set(alreadySent);
+  const recipients = everyone.filter((address) => !done.has(address));
+  if (!everyone.length) return { status: "skipped", count: 0, failed: 0 };
 
   const subject = oneLine(`${homeName}: ${newsletter.title}`);
   const html = renderEmailHtml({
@@ -76,24 +78,26 @@ const sendNewsletterEmails = async ({ newsletter, homeName, periodLabel, pdf, fi
   });
   const attachments = [{ name: filename, content: pdf.toString("base64") }];
 
-  let delivered = 0;
+  let delivered = done.size;
   let failed = 0;
   let sendingIsOff = false;
 
   for (let i = 0; i < recipients.length; i += SEND_BATCH) {
-    const results = await Promise.allSettled(
-      recipients.slice(i, i + SEND_BATCH).map((to) => sendTransactionalEmail({ to, subject, html, attachments, throwOnError: true }))
-    );
-    results.forEach((result) => {
+    const batch = recipients.slice(i, i + SEND_BATCH);
+    const results = await Promise.allSettled(batch.map((to) => sendTransactionalEmail({ to, subject, html, attachments, throwOnError: true })));
+    const sent = [];
+    results.forEach((result, index) => {
       if (result.status === "rejected") {
         failed += 1;
         console.error("family newsletter email failed", result.reason?.message);
       } else if (result.value?.delivered) {
         delivered += 1;
+        sent.push(batch[index]);
       } else {
         sendingIsOff = true;
       }
     });
+    if (sent.length && onSent) await onSent(sent);
   }
 
   if (!delivered && !failed && sendingIsOff) return { status: "skipped", count: 0, failed: 0 };

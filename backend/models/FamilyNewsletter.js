@@ -93,6 +93,8 @@ const familyNewsletterSchema = new mongoose.Schema(
       members: { type: Number, default: 0 },
     },
     deliveryLog: { type: mongoose.Schema.Types.Mixed, default: {} },
+    /** Addresses already emailed, so a send that is resumed after a crash never mails anyone twice. */
+    emailedTo: { type: [String], default: [] },
   },
   { timestamps: true }
 );

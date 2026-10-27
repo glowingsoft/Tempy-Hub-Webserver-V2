@@ -2,6 +2,7 @@ const PDFDocument = require("pdfkit");
 const sharp = require("sharp");
 const moment = require("moment-timezone");
 const path = require("path");
+const fontkit = require("fontkit");
 
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGIN = 45;
@@ -27,23 +28,51 @@ const LABEL_LETTER_SPACING = 1.5;
 
 /**
  * Arimo and Tinos are the fonts the template is set in (the same letter shapes and widths as Arial and
- * Times New Roman), embedded so every viewer and printer shows the same pages.
+ * Times New Roman), embedded so every viewer and printer shows the same pages. The files cover Latin
+ * (including Polish, Czech, Welsh and Vietnamese), Greek, Cyrillic and Hebrew letters.
  */
-const fontFile = (family, weight) =>
-  path.join(path.dirname(require.resolve(`@fontsource/${family}/package.json`)), "files", `${family}-latin-${weight}-normal.woff`);
-
-const registerFonts = (doc) => {
-  doc.registerFont("Sans", fontFile("arimo", 400));
-  doc.registerFont("Sans-Bold", fontFile("arimo", 700));
-  doc.registerFont("Serif-Bold", fontFile("tinos", 700));
+const FONT_FILES = {
+  Sans: "@expo-google-fonts/arimo/400Regular/Arimo_400Regular.ttf",
+  "Sans-Bold": "@expo-google-fonts/arimo/700Bold/Arimo_700Bold.ttf",
+  "Serif-Bold": "@expo-google-fonts/tinos/700Bold/Tinos_700Bold.ttf",
 };
 
-/** The embedded fonts cover Western European text; anything outside it would print as garbage. */
-const CP1252_EXTRAS = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+const fonts = new Map();
+const fontOf = (style) => {
+  if (!fonts.has(style)) fonts.set(style, fontkit.openSync(require.resolve(FONT_FILES[style])));
+  return fonts.get(style);
+};
+
+const isLetter = (char) => !/\s/u.test(char);
+
+/** A letter the font does not have (an emoji, Arabic or Chinese) is shown as ? instead of an empty box. */
+const showable = (style, value) => {
+  const font = fontOf(style);
+  return [...String(value ?? "")].map((char) => (isLetter(char) && !font.hasGlyphForCodePoint(char.codePointAt(0)) ? "?" : char)).join("");
+};
+
+const registerFonts = (doc) => {
+  Object.entries(FONT_FILES).forEach(([style, file]) => doc.registerFont(style, require.resolve(file)));
+
+  let style = "Sans";
+  const setFont = doc.font.bind(doc);
+  const drawText = doc.text.bind(doc);
+  const measure = doc.heightOfString.bind(doc);
+
+  doc.font = (name, ...rest) => {
+    if (FONT_FILES[name]) style = name;
+    return setFont(name, ...rest);
+  };
+  doc.text = (value, ...rest) => drawText(showable(style, value), ...rest);
+  doc.heightOfString = (value, ...rest) => measure(showable(style, value), ...rest);
+  setFont(style);
+};
+
+/** Line endings are made uniform and control characters dropped. */
 const printable = (value) =>
   String(value ?? "")
     .replace(/\r\n?/g, "\n")
-    .replace(/[^\n\x20-\x7e\xa0-\xff]/gu, (char) => (CP1252_EXTRAS.includes(char) ? char : "?"));
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
 
 /** Photos come from our own storage; a photo that cannot be read leaves a plain box rather than a failed PDF. */
 const prepareImage = async (buffer) => {

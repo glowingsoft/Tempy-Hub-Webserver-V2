@@ -240,7 +240,7 @@ const createNewsletter = respond(
   { statusCode: 201, translationKey: "newsletter_created" }
 );
 
-const NEWSLETTER_FIELDS = ["title", "sections", "welcome", "highlights", "comingUp", "notices", "newResidentIds", "gallery", "footer", "delivery", "template"];
+const NEWSLETTER_FIELDS = ["title", "sections", "welcome", "highlights", "comingUp", "notices", "newResidentIds", "gallery", "footer", "delivery", "template", "refill"];
 
 const updateNewsletter = respond(
   (req) =>

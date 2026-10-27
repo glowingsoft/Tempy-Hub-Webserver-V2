@@ -44,6 +44,14 @@ const ISSUE_RETRIES = 3;
 const MAX_SCHEDULE_DAYS = 365;
 const DUE_PER_RUN = 20;
 const NOTIFY_CHUNK = 1000;
+const DEFAULT_NOTICES = [
+  {
+    title: "Share your photos",
+    body: "Send photos to your relative through the app and they will appear in their family gazette.",
+  },
+];
+const REFILLABLE = ["highlights", "gallery", "newResidents"];
+const STUCK_AFTER_MS = 15 * 60 * 1000;
 const CHANNELS = ["inApp", "email", "pdf"];
 
 const ROLE_LABELS = {
@@ -469,6 +477,7 @@ const createDraft = async ({ actor, organizationId, branchId, month, title, temp
         issueNumber: await nextIssueNumber(site.branchId),
         title: title === undefined ? `${window.label} newsletter` : plainText(title, { max: MAX_TITLE, required: true }),
         template: template === undefined ? TEMPLATES[0] : checkTemplate(template),
+        notices: DEFAULT_NOTICES,
         welcome: { text: `Welcome to our ${window.label} newsletter.`, signedBy: [actor.name, ROLE_LABELS[site.standing.role]].filter(Boolean).join(", ") },
         footer: { homeName, address: formatAddress(branch.address), phone: "", email: "" },
         ...filled,
@@ -488,7 +497,7 @@ const loadDraft = async ({ actor, organizationId, newsletterId }) => {
 
   const [newsletter] = await FamilyNewsletter.aggregate([
     { $match: { _id: toObjectId(newsletterId), organizationId: toObjectId(organizationId) } },
-    { $project: { branchId: 1, status: 1 } },
+    { $project: { branchId: 1, status: 1, periodStart: 1, periodEnd: 1 } },
   ]);
   if (!newsletter) throw new AppError("newsletter_not_found", 404);
 
@@ -503,6 +512,15 @@ const updateDraft = async ({ actor, organizationId, newsletterId, ...patch }) =>
   const site = { organizationId, branchId: draft.branchId };
   const set = {};
 
+  if (patch.refill !== undefined) {
+    if (!Array.isArray(patch.refill) || !patch.refill.length || new Set(patch.refill).size !== patch.refill.length || patch.refill.some((name) => !REFILLABLE.includes(name))) {
+      throw new AppError("newsletter_refill_invalid", 400, { sections: REFILLABLE.join(", ") });
+    }
+    const fresh = await autoFill({ ...site, start: draft.periodStart, end: draft.periodEnd });
+    patch.refill.forEach((name) => {
+      set[name] = fresh[name];
+    });
+  }
   if (patch.title !== undefined) set.title = plainText(patch.title, { max: MAX_TITLE, required: true });
   if (patch.sections !== undefined) Object.assign(set, checkSections(patch.sections));
   if (patch.welcome !== undefined) {
@@ -643,7 +661,8 @@ const recipientUsers = ({ organizationId, branchId }) =>
   ]);
 
 const notifyInApp = async ({ newsletter, homeName }) => {
-  const members = await recipientUsers(newsletter);
+  const told = new Set((await NotificationExp.distinct("receiverId", { type: "familyNewsletter", objectId: newsletter._id })).map(String));
+  const members = (await recipientUsers(newsletter)).filter((member) => !told.has(String(member._id)));
   const title = `${homeName || "Your home"}: ${newsletter.title}`;
 
   for (let i = 0; i < members.length; i += NOTIFY_CHUNK) {
@@ -752,6 +771,8 @@ const emailFamilies = async ({ newsletter, homeName, ctx }) => {
     periodLabel: moment.utc(`${newsletter.month}-01`).format("MMMM YYYY"),
     pdf: ctx.pdf.buffer,
     filename: ctx.pdf.filename,
+    alreadySent: newsletter.emailedTo || [],
+    onSent: (addresses) => FamilyNewsletter.updateOne({ _id: newsletter._id }, { $addToSet: { emailedTo: { $each: addresses } } }),
   });
 };
 
@@ -767,22 +788,24 @@ const deliver = async (newsletter) => {
   const [branch] = await Branch.aggregate([{ $match: { _id: newsletter.branchId } }, { $project: { name: 1 } }]);
   const homeName = branch?.name || "";
 
-  const log = {};
+  // Each channel is written down as soon as it finishes, so a send that is resumed after a crash skips what is done.
+  const log = { ...(newsletter.deliveryLog || {}) };
   const ctx = {};
   for (const channel of DELIVERY_ORDER) {
-    if (!newsletter.delivery[channel]) continue;
+    if (!newsletter.delivery[channel] || log[channel]) continue;
     const handler = CHANNEL_HANDLERS[channel];
     if (!handler) {
       log[channel] = { status: "skipped" };
-      continue;
+    } else {
+      try {
+        const outcome = await handler({ newsletter: { ...newsletter, ...content }, homeName, ctx });
+        log[channel] = typeof outcome === "object" ? outcome : { status: "done", count: outcome };
+      } catch (error) {
+        console.error(`family newsletter ${channel} delivery failed`, error.message);
+        log[channel] = { status: "failed" };
+      }
     }
-    try {
-      const outcome = await handler({ newsletter: { ...newsletter, ...content }, homeName, ctx });
-      log[channel] = typeof outcome === "object" ? outcome : { status: "done", count: outcome };
-    } catch (error) {
-      console.error(`family newsletter ${channel} delivery failed`, error.message);
-      log[channel] = { status: "failed" };
-    }
+    await FamilyNewsletter.updateOne({ _id: newsletter._id, status: FamilyNewsletterStatus.SENDING }, { $set: { [`deliveryLog.${channel}`]: log[channel] } });
   }
 
   const sentTo = await recipientsOf(newsletter);
@@ -850,6 +873,27 @@ const sendDueNewsletters = async ({ now = new Date(), limit = DUE_PER_RUN } = {}
   return { sent };
 };
 
+/**
+ * A server that died mid-send leaves a newsletter in "sending". Once it has made no progress for a while it is
+ * taken over and finished: channels that were completed are skipped, people already notified or emailed are not
+ * contacted again. Taking it over is one claim, so two servers never finish the same one.
+ */
+const recoverStuckNewsletters = async ({ now = new Date(), limit = DUE_PER_RUN } = {}) => {
+  let recovered = 0;
+  const cutoff = new Date(now.getTime() - STUCK_AFTER_MS);
+  for (let i = 0; i < limit; i += 1) {
+    const claimed = await FamilyNewsletter.findOneAndUpdate(
+      { status: FamilyNewsletterStatus.SENDING, updatedAt: { $lt: cutoff } },
+      { $set: { updatedAt: now } },
+      { sort: { updatedAt: 1, _id: 1 }, new: true, lean: true }
+    );
+    if (!claimed) break;
+    await deliver(claimed);
+    recovered += 1;
+  }
+  return { recovered };
+};
+
 module.exports = {
   createDraft,
   updateDraft,
@@ -860,6 +904,7 @@ module.exports = {
   schedule,
   cancelSchedule,
   sendDueNewsletters,
+  recoverStuckNewsletters,
   getPdf,
   pruneForSend,
 };

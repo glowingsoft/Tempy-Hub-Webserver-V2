@@ -518,6 +518,7 @@
   "newsletter_empty": "Switch on a section that has something in it before sending",
   "newsletter_delivery_required": "Choose at least one way to deliver it: in the app, email or PDF",
   "newsletter_send_at_invalid": "Choose a date and time in the future, up to a year ahead, like 2026-11-02T09:00:00Z",
+  "newsletter_refill_invalid": "Refill must be a list of sections to pull from the wall again: {sections}",
   "newsletter_created": "Newsletter draft created",
   "newsletter_updated": "Newsletter updated",
   "newsletter_removed": "Newsletter removed",

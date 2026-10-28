@@ -23,7 +23,7 @@ function createRateLimiter(endpoint, timeWindow = 10, maxRequests = 15) {
         res,
         statusCode: 429,
         translationKey: `Too many requests to ${endpoint}. Please try again later.`,
-        error: true
+        error: true,
       });
     },
   });

@@ -26,14 +26,27 @@ const TEMPLATE_DIR = path.join(__dirname, "../../../assets/pdf/family");
  * (including Polish, Czech, Welsh and Vietnamese), Greek, Cyrillic and Hebrew letters.
  */
 const FONT_FILES = {
-  Sans: { family: "Arimo", weight: 400, file: "@expo-google-fonts/arimo/400Regular/Arimo_400Regular.ttf" },
-  "Sans-Bold": { family: "Arimo", weight: 700, file: "@expo-google-fonts/arimo/700Bold/Arimo_700Bold.ttf" },
-  "Serif-Bold": { family: "Tinos", weight: 700, file: "@expo-google-fonts/tinos/700Bold/Tinos_700Bold.ttf" },
+  Sans: {
+    family: "Arimo",
+    weight: 400,
+    file: "@expo-google-fonts/arimo/400Regular/Arimo_400Regular.ttf",
+  },
+  "Sans-Bold": {
+    family: "Arimo",
+    weight: 700,
+    file: "@expo-google-fonts/arimo/700Bold/Arimo_700Bold.ttf",
+  },
+  "Serif-Bold": {
+    family: "Tinos",
+    weight: 700,
+    file: "@expo-google-fonts/tinos/700Bold/Tinos_700Bold.ttf",
+  },
 };
 
 const fonts = new Map();
 const fontOf = (style) => {
-  if (!fonts.has(style)) fonts.set(style, fontkit.openSync(require.resolve(FONT_FILES[style].file)));
+  if (!fonts.has(style))
+    fonts.set(style, fontkit.openSync(require.resolve(FONT_FILES[style].file)));
   return fonts.get(style);
 };
 
@@ -59,13 +72,20 @@ const printable = (value) =>
 /** A letter the font does not have (an emoji, Arabic or Chinese) is shown as ? instead of an empty box. */
 const showable = (style, value) => {
   const font = fontOf(style);
-  return [...printable(value)].map((char) => (/\s/u.test(char) || font.hasGlyphForCodePoint(char.codePointAt(0)) ? char : "?")).join("");
+  return [...printable(value)]
+    .map((char) =>
+      /\s/u.test(char) || font.hasGlyphForCodePoint(char.codePointAt(0))
+        ? char
+        : "?",
+    )
+    .join("");
 };
 
 /** The largest font size, from max down to min, at which the text fits one line of the given width in points. */
 const fitFontSize = ({ style, text, width, max, min }) => {
   const font = fontOf(style);
-  const unitsWide = font.layout(showable(style, text)).advanceWidth / font.unitsPerEm;
+  const unitsWide =
+    font.layout(showable(style, text)).advanceWidth / font.unitsPerEm;
   return Math.max(min, Math.min(max, Math.floor(width / (unitsWide || 1))));
 };
 
@@ -94,8 +114,11 @@ const photoUris = async (photos) => {
   await Promise.all(
     [...photos.entries()].map(async ([id, bytes]) => {
       const image = await prepareImage(bytes);
-      uris.set(String(id), image ? `data:image/jpeg;base64,${image.toString("base64")}` : null);
-    })
+      uris.set(
+        String(id),
+        image ? `data:image/jpeg;base64,${image.toString("base64")}` : null,
+      );
+    }),
   );
   return uris;
 };
@@ -105,9 +128,26 @@ const templates = new Map();
 const renderTemplate = (name, data) => {
   if (!templates.has(name)) {
     const filename = path.join(TEMPLATE_DIR, `${name}.ejs`);
-    templates.set(name, ejs.compile(fs.readFileSync(filename, "utf8"), { filename }));
+    templates.set(
+      name,
+      ejs.compile(fs.readFileSync(filename, "utf8"), { filename }),
+    );
   }
-  return templates.get(name)({ colors: COLORS, fontCss: fontCss(), cssString, ...data });
+  return templates.get(name)({
+    colors: COLORS,
+    fontCss: fontCss(),
+    cssString,
+    ...data,
+  });
 };
 
-module.exports = { COLORS, printable, showable, fitFontSize, cssString, prepareImage, photoUris, renderTemplate };
+module.exports = {
+  COLORS,
+  printable,
+  showable,
+  fitFontSize,
+  cssString,
+  prepareImage,
+  photoUris,
+  renderTemplate,
+};

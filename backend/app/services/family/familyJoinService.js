@@ -13,7 +13,10 @@ const {
   FamilyMemberStatus,
   FamilyRelationship,
 } = require("@models/domainEnums");
-const { isFamilyModuleActive, isStaffAccount } = require("./familyAccessService");
+const {
+  isFamilyModuleActive,
+  isStaffAccount,
+} = require("./familyAccessService");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
 const { hashCode, normaliseCode } = require("./familyCodeCrypto");
 
@@ -36,7 +39,8 @@ const assertNotLocked = async (userId) => {
   ]);
   if (failures.length < MAX_FAILED_TRIES) return;
 
-  const lockedUntil = new Date(failures[MAX_FAILED_TRIES - 1].createdAt).getTime() + LOCK_MS;
+  const lockedUntil =
+    new Date(failures[MAX_FAILED_TRIES - 1].createdAt).getTime() + LOCK_MS;
   const minutes = Math.max(1, Math.ceil((lockedUntil - now) / 60000));
   throw new AppError("family_code_locked", 429, { minutes });
 };
@@ -49,8 +53,18 @@ const failCode = async (userId, translationKey, statusCode) => {
 const findCodeWithHome = async (value) => {
   const [doc] = await FamilyCode.aggregate([
     { $match: { codeHash: hashCode(value) } },
-    ...joinOne({ from: Organization, localField: "organizationId", as: "organization", optional: true }),
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({
+      from: Organization,
+      localField: "organizationId",
+      as: "organization",
+      optional: true,
+    }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
     {
       $project: {
         organizationId: 1,
@@ -68,7 +82,8 @@ const findCodeWithHome = async (value) => {
 };
 
 const isCodeUsable = (doc) =>
-  doc.status === FamilyCodeStatus.ACTIVE && new Date(doc.expiresAt) > new Date();
+  doc.status === FamilyCodeStatus.ACTIVE &&
+  new Date(doc.expiresAt) > new Date();
 
 /** Wrong, expired and replaced codes all count towards the lock. Returns the home, never the resident: that is shown only after approval. */
 const checkCode = async ({ userId, code }) => {
@@ -122,7 +137,9 @@ const assertCanRequest = async (userId, residentId) => {
     throw new AppError("join_request_pending", 409);
   }
 
-  const existing = mine.find((link) => String(link.residentId) === String(residentId));
+  const existing = mine.find(
+    (link) => String(link.residentId) === String(residentId),
+  );
   if (existing?.status === FamilyMemberStatus.ACTIVE) {
     throw new AppError("family_link_exists", 409);
   }
@@ -152,7 +169,7 @@ const saveRequest = async ({ userId, code, relationship, existing }) => {
       return await FamilyMember.findOneAndUpdate(
         { _id: existing._id },
         { $set: fields },
-        { new: true }
+        { new: true },
       ).lean();
     }
 
@@ -161,7 +178,9 @@ const saveRequest = async ({ userId, code, relationship, existing }) => {
       residentId: code.residentId,
       ...fields,
     });
-    return typeof created.toObject === "function" ? created.toObject() : created;
+    return typeof created.toObject === "function"
+      ? created.toObject()
+      : created;
   } catch (error) {
     // a double tap: the unique (user, resident) index caught the second request
     if (error.code === 11000) throw new AppError("join_request_pending", 409);
@@ -171,11 +190,20 @@ const saveRequest = async ({ userId, code, relationship, existing }) => {
 
 const requestToJoin = async ({ user, code: typedCode, relationship }) => {
   assertValidRelationship(relationship);
-  if (await isStaffAccount(user)) throw new AppError("email_used_by_staff", 409);
+  if (await isStaffAccount(user))
+    throw new AppError("email_used_by_staff", 409);
 
-  const { code, homeName } = await checkCode({ userId: user._id, code: typedCode });
+  const { code, homeName } = await checkCode({
+    userId: user._id,
+    code: typedCode,
+  });
   const existing = await assertCanRequest(user._id, code.residentId);
-  const row = await saveRequest({ userId: user._id, code, relationship, existing });
+  const row = await saveRequest({
+    userId: user._id,
+    code,
+    relationship,
+    existing,
+  });
 
   await FamilyCodeFailure.deleteMany({ userId: user._id });
   return shapeRequest(row, homeName);
@@ -183,10 +211,20 @@ const requestToJoin = async ({ user, code: typedCode, relationship }) => {
 
 const getCurrentRequest = async (userId) => {
   const [row] = await FamilyMember.aggregate([
-    { $match: { userId: toObjectId(userId), status: FamilyMemberStatus.PENDING } },
+    {
+      $match: {
+        userId: toObjectId(userId),
+        status: FamilyMemberStatus.PENDING,
+      },
+    },
     { $sort: { requestedAt: -1 } },
     { $limit: 1 },
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
     {
       $project: {
         status: 1,
@@ -201,7 +239,8 @@ const getCurrentRequest = async (userId) => {
 };
 
 const cancelRequest = async ({ userId, requestId }) => {
-  if (!isValidObjectId(requestId)) throw new AppError("join_request_not_found", 404);
+  if (!isValidObjectId(requestId))
+    throw new AppError("join_request_not_found", 404);
 
   const [row] = await FamilyMember.aggregate([
     { $match: { _id: toObjectId(requestId), userId: toObjectId(userId) } },
@@ -220,7 +259,7 @@ const cancelRequest = async ({ userId, requestId }) => {
         decidedBy: userId,
         decidedAt: new Date(),
       },
-    }
+    },
   );
 
   return { requestId: row._id, status: FamilyMemberStatus.CANCELLED };

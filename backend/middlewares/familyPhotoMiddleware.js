@@ -8,14 +8,19 @@ const MAX_BATCH_BYTES = 50 * 1024 * 1024;
 const isImage = (req, file, cb) => cb(null, /^image\//i.test(file.mimetype));
 const storage = multer.memoryStorage();
 
-const photoUpload = multer({ storage, limits: { fileSize: MAX_PHOTO_BYTES, files: 1 }, fileFilter: isImage }).single("file");
+const photoUpload = multer({
+  storage,
+  limits: { fileSize: MAX_PHOTO_BYTES, files: 1 },
+  fileFilter: isImage,
+}).single("file");
 const photosUpload = multer({
   storage,
   limits: { fileSize: MAX_PHOTO_BYTES, files: MAX_BATCH_PHOTOS },
   fileFilter: isImage,
 }).array("files", MAX_BATCH_PHOTOS);
 
-const refusal = (res, translationKey) => sendResponse({ res, statusCode: 400, translationKey });
+const refusal = (res, translationKey) =>
+  sendResponse({ res, statusCode: 400, translationKey });
 
 /** One image from the "file" field; anything else, or a file over 10 MB, is a 400. */
 const receivePhoto = (req, res, next) =>
@@ -42,7 +47,9 @@ const receivePhotos = (req, res, next) =>
     }
 
     const total = (req.files || []).reduce((sum, file) => sum + file.size, 0);
-    return total > MAX_BATCH_BYTES ? refusal(res, "photos_batch_too_large") : next();
+    return total > MAX_BATCH_BYTES
+      ? refusal(res, "photos_batch_too_large")
+      : next();
   });
 
 module.exports = { receivePhoto, receivePhotos };

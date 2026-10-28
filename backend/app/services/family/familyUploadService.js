@@ -4,7 +4,10 @@ const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyGazetteItem } = require("@models/FamilyGazetteItem");
 const { FamilyGazetteIssue } = require("@models/FamilyGazetteIssue");
-const { FamilyGazetteItemStatus, FamilyUploadStatus } = require("@models/domainEnums");
+const {
+  FamilyGazetteItemStatus,
+  FamilyUploadStatus,
+} = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
@@ -22,10 +25,13 @@ const isDuplicateKey = (error) => error?.code === 11000;
 
 const assertRoomForPhotos = async ({ userId, count }) => {
   const [waiting] = await FamilyMedia.aggregate([
-    { $match: { uploadedBy: toObjectId(userId), uploadId: null, postId: null } },
+    {
+      $match: { uploadedBy: toObjectId(userId), uploadId: null, postId: null },
+    },
     { $count: "count" },
   ]);
-  if ((waiting?.count ?? 0) + count > MAX_UNATTACHED_PHOTOS) throw new AppError("too_many_unused_photos", 429);
+  if ((waiting?.count ?? 0) + count > MAX_UNATTACHED_PHOTOS)
+    throw new AppError("too_many_unused_photos", 429);
 };
 
 const storePhoto = async ({ userId, image }) => {
@@ -50,7 +56,8 @@ const storePhoto = async ({ userId, image }) => {
 
 /** Up to 10 photos in one request. Every file is checked before any is stored, so one bad file stores nothing. */
 const uploadPhotos = async ({ userId, files }) => {
-  if (!Array.isArray(files) || !files.length) throw new AppError("file_required", 400);
+  if (!Array.isArray(files) || !files.length)
+    throw new AppError("file_required", 400);
   if (files.length > MAX_PHOTOS) throw new AppError("too_many_photos", 400);
 
   await assertRoomForPhotos({ userId, count: files.length });
@@ -60,7 +67,9 @@ const uploadPhotos = async ({ userId, files }) => {
     try {
       images.push(await prepareUpload(file.buffer));
     } catch (error) {
-      throw new AppError("invalid_image_file", 400, { file: file.originalname || "a file" });
+      throw new AppError("invalid_image_file", 400, {
+        file: file.originalname || "a file",
+      });
     }
   }
 
@@ -78,7 +87,8 @@ const uploadPhoto = async ({ userId, file }) => {
 
 const normaliseMessage = (message) => {
   const text = String(message ?? "").trim();
-  if (text.length > MAX_MESSAGE_LENGTH) throw new AppError("message_too_long", 400);
+  if (text.length > MAX_MESSAGE_LENGTH)
+    throw new AppError("message_too_long", 400);
   return text;
 };
 
@@ -86,17 +96,24 @@ const normaliseMediaIds = (mediaIds) => {
   if (!Array.isArray(mediaIds)) throw new AppError("media_ids_invalid", 400);
   const unique = [...new Set(mediaIds.map(String))];
   if (unique.length > MAX_PHOTOS) throw new AppError("too_many_photos", 400);
-  if (!unique.every(isValidObjectId)) throw new AppError("media_not_found", 400);
+  if (!unique.every(isValidObjectId))
+    throw new AppError("media_not_found", 400);
   return unique;
 };
 
 const assertPhotosAllowed = async ({ organizationId, residentId }) => {
   const [resident] = await Resident.aggregate([
-    { $match: { _id: toObjectId(residentId), organizationId: toObjectId(organizationId) } },
+    {
+      $match: {
+        _id: toObjectId(residentId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
     { $project: { photographyConsent: 1 } },
   ]);
   if (!resident) throw new AppError("resident_not_found", 404);
-  if (!resident.photographyConsent) throw new AppError("photos_cannot_be_shared", 400);
+  if (!resident.photographyConsent)
+    throw new AppError("photos_cannot_be_shared", 400);
 };
 
 const assertMediaUsable = async ({ userId, mediaIds, uploadId = null }) => {
@@ -112,11 +129,16 @@ const assertMediaUsable = async ({ userId, mediaIds, uploadId = null }) => {
     },
     { $count: "count" },
   ]);
-  if ((found?.count ?? 0) !== mediaIds.length) throw new AppError("media_not_found", 400);
+  if ((found?.count ?? 0) !== mediaIds.length)
+    throw new AppError("media_not_found", 400);
 };
 
 const effectiveUrl = (field) => ({
-  $cond: [{ $ne: [`$$media.blurredUrl`, ""] }, `$$media.blurredUrl`, `$$media.${field}`],
+  $cond: [
+    { $ne: [`$$media.blurredUrl`, ""] },
+    `$$media.blurredUrl`,
+    `$$media.${field}`,
+  ],
 });
 
 const TITLE_LENGTH = 60;
@@ -127,7 +149,9 @@ const STATUS_LABELS = {
   [FamilyUploadStatus.REJECTED]: "Not Approved",
 };
 
-const firstLine = { $trim: { input: { $arrayElemAt: [{ $split: ["$message", "\n"] }, 0] } } };
+const firstLine = {
+  $trim: { input: { $arrayElemAt: [{ $split: ["$message", "\n"] }, 0] } },
+};
 const cardTitle = {
   $cond: [
     { $gt: [{ $strLenCP: firstLine }, TITLE_LENGTH] },
@@ -138,18 +162,37 @@ const cardTitle = {
 
 const statusLabel = {
   $switch: {
-    branches: Object.entries(STATUS_LABELS).map(([status, label]) => ({ case: { $eq: ["$status", status] }, then: label })),
+    branches: Object.entries(STATUS_LABELS).map(([status, label]) => ({
+      case: { $eq: ["$status", status] },
+      then: label,
+    })),
     default: "",
   },
 };
 
 const myUploadStages = [
-  { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },
-  ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
+  {
+    $lookup: {
+      from: FamilyMedia.collection.name,
+      localField: "mediaIds",
+      foreignField: "_id",
+      as: "media",
+    },
+  },
+  ...joinOne({
+    from: Resident,
+    localField: "residentId",
+    as: "resident",
+    optional: true,
+  }),
   {
     $addFields: {
       photos: {
-        $map: { input: "$media", as: "media", in: { mediaId: "$$media._id", url: effectiveUrl("url") } },
+        $map: {
+          input: "$media",
+          as: "media",
+          in: { mediaId: "$$media._id", url: effectiveUrl("url") },
+        },
       },
     },
   },
@@ -177,30 +220,81 @@ const myUploadStages = [
  * issue was full ("Moved to next gazette"), printed in an issue, or taken out by staff. Anything else has no place.
  */
 const gazettePlacements = async (rows) => {
-  const wanted = rows.filter((row) => row.status === FamilyUploadStatus.APPROVED && row.includeInGazette);
+  const wanted = rows.filter(
+    (row) => row.status === FamilyUploadStatus.APPROVED && row.includeInGazette,
+  );
   if (!wanted.length) return new Map();
 
   const ids = wanted.map((row) => row.uploadId);
   const items = await FamilyGazetteItem.aggregate([
-    { $match: { $or: [{ uploadIds: { $in: ids } }, { movedUploadIds: { $in: ids } }, { removedUploadIds: { $in: ids } }] } },
-    ...joinOne({ from: FamilyGazetteIssue, localField: "issueId", as: "issue", optional: true }),
+    {
+      $match: {
+        $or: [
+          { uploadIds: { $in: ids } },
+          { movedUploadIds: { $in: ids } },
+          { removedUploadIds: { $in: ids } },
+        ],
+      },
+    },
+    ...joinOne({
+      from: FamilyGazetteIssue,
+      localField: "issueId",
+      as: "issue",
+      optional: true,
+    }),
     { $sort: { "issue.number": -1 } },
-    { $project: { status: 1, uploadIds: 1, movedUploadIds: 1, removedUploadIds: 1, issueNumber: { $ifNull: ["$issue.number", 0] } } },
+    {
+      $project: {
+        status: 1,
+        uploadIds: 1,
+        movedUploadIds: 1,
+        removedUploadIds: 1,
+        issueNumber: { $ifNull: ["$issue.number", 0] },
+      },
+    },
   ]);
 
   const placements = new Map();
   wanted.forEach((row) => {
     const id = String(row.uploadId);
     const has = (list) => list.some((value) => String(value) === id);
-    const item = items.find((entry) => has(entry.uploadIds) || has(entry.movedUploadIds) || has(entry.removedUploadIds));
+    const item = items.find(
+      (entry) =>
+        has(entry.uploadIds) ||
+        has(entry.movedUploadIds) ||
+        has(entry.removedUploadIds),
+    );
 
-    let placement = { status: "next", label: "In the next gazette", issueNumber: null };
-    if (item && has(item.removedUploadIds)) placement = { status: "removed", label: "Not in the gazette", issueNumber: item.issueNumber };
-    else if (item && has(item.movedUploadIds)) placement = { status: "moved", label: "Moved to next gazette", issueNumber: item.issueNumber };
+    let placement = {
+      status: "next",
+      label: "In the next gazette",
+      issueNumber: null,
+    };
+    if (item && has(item.removedUploadIds))
+      placement = {
+        status: "removed",
+        label: "Not in the gazette",
+        issueNumber: item.issueNumber,
+      };
+    else if (item && has(item.movedUploadIds))
+      placement = {
+        status: "moved",
+        label: "Moved to next gazette",
+        issueNumber: item.issueNumber,
+      };
     else if (item && has(item.uploadIds)) {
-      placement = item.status === FamilyGazetteItemStatus.PRINTED
-        ? { status: "printed", label: `In gazette no. ${item.issueNumber}`, issueNumber: item.issueNumber }
-        : { status: "next", label: "In the next gazette", issueNumber: item.issueNumber };
+      placement =
+        item.status === FamilyGazetteItemStatus.PRINTED
+          ? {
+              status: "printed",
+              label: `In gazette no. ${item.issueNumber}`,
+              issueNumber: item.issueNumber,
+            }
+          : {
+              status: "next",
+              label: "In the next gazette",
+              issueNumber: item.issueNumber,
+            };
     }
     placements.set(id, placement);
   });
@@ -209,11 +303,16 @@ const gazettePlacements = async (rows) => {
 
 const withGazette = async (rows) => {
   const placements = await gazettePlacements(rows);
-  return rows.map((row) => ({ ...row, gazette: placements.get(String(row.uploadId)) ?? null }));
+  return rows.map((row) => ({
+    ...row,
+    gazette: placements.get(String(row.uploadId)) ?? null,
+  }));
 };
 
 const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(Object.values(FamilyUploadStatus).map((status) => [status, 0]));
+  const counts = Object.fromEntries(
+    Object.values(FamilyUploadStatus).map((status) => [status, 0]),
+  );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -224,11 +323,19 @@ const stillVisible = (now) => ({
   $or: [{ deleteAfter: null }, { deleteAfter: { $gt: now } }],
 });
 
-const listMyUploads = async ({ userId, residentId, status, page, limit, skip }) => {
+const listMyUploads = async ({
+  userId,
+  residentId,
+  status,
+  page,
+  limit,
+  skip,
+}) => {
   if (status && !Object.values(FamilyUploadStatus).includes(status)) {
     throw new AppError("invalid_status_filter", 400);
   }
-  if (residentId && !isValidObjectId(residentId)) throw new AppError("resident_not_found", 404);
+  if (residentId && !isValidObjectId(residentId))
+    throw new AppError("resident_not_found", 404);
 
   const base = { authorId: toObjectId(userId), ...stillVisible(new Date()) };
   if (residentId) base.residentId = toObjectId(residentId);
@@ -240,12 +347,18 @@ const listMyUploads = async ({ userId, residentId, status, page, limit, skip }) 
     limit,
     skip,
     extraFacets: {
-      statusCounts: [{ $match: base }, { $group: { _id: "$status", count: { $sum: 1 } } }],
+      statusCounts: [
+        { $match: base },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ],
     },
     extraDataStages: myUploadStages,
   });
 
-  return { data: await withGazette(data), meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
+  return {
+    data: await withGazette(data),
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+  };
 };
 
 const getMyUpload = async ({ userId, uploadId }) => {
@@ -260,8 +373,16 @@ const getMyUpload = async ({ userId, uploadId }) => {
 };
 
 /** Send For Approval. The same clientId returns the upload already made instead of a second one. */
-const createUpload = async ({ userId, link, message, mediaIds = [], includeInGazette, clientId }) => {
-  const cleanClientId = clientId == null ? null : String(clientId).slice(0, MAX_CLIENT_ID_LENGTH);
+const createUpload = async ({
+  userId,
+  link,
+  message,
+  mediaIds = [],
+  includeInGazette,
+  clientId,
+}) => {
+  const cleanClientId =
+    clientId == null ? null : String(clientId).slice(0, MAX_CLIENT_ID_LENGTH);
 
   if (cleanClientId) {
     const [existing] = await FamilyUpload.aggregate([
@@ -276,7 +397,10 @@ const createUpload = async ({ userId, link, message, mediaIds = [], includeInGaz
   if (!text && !ids.length) throw new AppError("upload_empty", 400);
 
   if (ids.length) {
-    await assertPhotosAllowed({ organizationId: link.organizationId, residentId: link.residentId });
+    await assertPhotosAllowed({
+      organizationId: link.organizationId,
+      residentId: link.residentId,
+    });
     await assertMediaUsable({ userId, mediaIds: ids });
   }
 
@@ -296,16 +420,21 @@ const createUpload = async ({ userId, link, message, mediaIds = [], includeInGaz
             clientId: cleanClientId,
           },
         ],
-        { session }
+        { session },
       );
 
       if (ids.length) {
         const attached = await FamilyMedia.updateMany(
-          { _id: { $in: ids.map(toObjectId) }, uploadedBy: userId, uploadId: null },
+          {
+            _id: { $in: ids.map(toObjectId) },
+            uploadedBy: userId,
+            uploadId: null,
+          },
           { $set: { uploadId: created._id } },
-          { session }
+          { session },
         );
-        if (attached.modifiedCount !== ids.length) throw new AppError("media_not_found", 400);
+        if (attached.modifiedCount !== ids.length)
+          throw new AppError("media_not_found", 400);
       }
     });
   } catch (error) {
@@ -326,23 +455,49 @@ const createUpload = async ({ userId, link, message, mediaIds = [], includeInGaz
  * Edit And Resend: a Waiting or Not Approved upload goes back to Waiting. An approved one is final.
  * `links` are the caller's active links, so a removed member can no longer edit.
  */
-const updateUpload = async ({ userId, links, uploadId, message, mediaIds, includeInGazette }) => {
+const updateUpload = async ({
+  userId,
+  links,
+  uploadId,
+  message,
+  mediaIds,
+  includeInGazette,
+}) => {
   if (!isValidObjectId(uploadId)) throw new AppError("upload_not_found", 404);
 
   const [current] = await FamilyUpload.aggregate([
     { $match: { _id: toObjectId(uploadId), authorId: toObjectId(userId) } },
-    { $project: { organizationId: 1, residentId: 1, message: 1, mediaIds: 1, includeInGazette: 1, status: 1 } },
+    {
+      $project: {
+        organizationId: 1,
+        residentId: 1,
+        message: 1,
+        mediaIds: 1,
+        includeInGazette: 1,
+        status: 1,
+      },
+    },
   ]);
-  const link = current && links.find((l) => String(l.residentId) === String(current.residentId));
+  const link =
+    current &&
+    links.find((l) => String(l.residentId) === String(current.residentId));
   if (!link) throw new AppError("upload_not_found", 404);
-  if (current.status === FamilyUploadStatus.APPROVED) throw new AppError("upload_not_editable", 409);
+  if (current.status === FamilyUploadStatus.APPROVED)
+    throw new AppError("upload_not_editable", 409);
 
-  const text = message === undefined ? current.message : normaliseMessage(message);
-  const ids = mediaIds === undefined ? current.mediaIds.map(String) : normaliseMediaIds(mediaIds);
+  const text =
+    message === undefined ? current.message : normaliseMessage(message);
+  const ids =
+    mediaIds === undefined
+      ? current.mediaIds.map(String)
+      : normaliseMediaIds(mediaIds);
   if (!text && !ids.length) throw new AppError("upload_empty", 400);
 
   if (ids.length) {
-    await assertPhotosAllowed({ organizationId: link.organizationId, residentId: link.residentId });
+    await assertPhotosAllowed({
+      organizationId: link.organizationId,
+      residentId: link.residentId,
+    });
     await assertMediaUsable({ userId, mediaIds: ids, uploadId });
   }
 
@@ -351,13 +506,18 @@ const updateUpload = async ({ userId, links, uploadId, message, mediaIds, includ
       {
         _id: current._id,
         authorId: toObjectId(userId),
-        status: { $in: [FamilyUploadStatus.WAITING, FamilyUploadStatus.REJECTED] },
+        status: {
+          $in: [FamilyUploadStatus.WAITING, FamilyUploadStatus.REJECTED],
+        },
       },
       {
         $set: {
           message: text,
           mediaIds: ids.map(toObjectId),
-          includeInGazette: includeInGazette === undefined ? current.includeInGazette : Boolean(includeInGazette),
+          includeInGazette:
+            includeInGazette === undefined
+              ? current.includeInGazette
+              : Boolean(includeInGazette),
           status: FamilyUploadStatus.WAITING,
           rejectionReason: "",
           decidedBy: null,
@@ -365,20 +525,20 @@ const updateUpload = async ({ userId, links, uploadId, message, mediaIds, includ
           deleteAfter: null,
         },
       },
-      { session }
+      { session },
     );
     if (!updated.modifiedCount) throw new AppError("upload_not_editable", 409);
 
     await FamilyMedia.updateMany(
       { uploadId: current._id, _id: { $nin: ids.map(toObjectId) } },
       { $set: { uploadId: null } },
-      { session }
+      { session },
     );
     if (ids.length) {
       await FamilyMedia.updateMany(
         { _id: { $in: ids.map(toObjectId) }, uploadedBy: userId },
         { $set: { uploadId: current._id } },
-        { session }
+        { session },
       );
     }
   });

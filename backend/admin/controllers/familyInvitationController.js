@@ -99,8 +99,14 @@ const invitationAction = (run, translationKey) => ({
 });
 
 const updateInvitation = respondByAction({
-  resend: invitationAction(familyService.resendInvitation, "invitation_sent_successfully"),
-  revoke: invitationAction(familyService.revokeInvitation, "invitation_revoked_successfully"),
+  resend: invitationAction(
+    familyService.resendInvitation,
+    "invitation_sent_successfully",
+  ),
+  revoke: invitationAction(
+    familyService.revokeInvitation,
+    "invitation_revoked_successfully",
+  ),
   edit: {
     run: (req) =>
       familyService.editInvitation({
@@ -121,7 +127,7 @@ const deleteInvitation = respond(
       invitationId: req.params.invitationId,
       organizationId: req.orgId,
     }),
-  { translationKey: "invitation_deleted" }
+  { translationKey: "invitation_deleted" },
 );
 
 module.exports = {

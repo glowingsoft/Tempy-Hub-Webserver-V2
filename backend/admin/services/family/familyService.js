@@ -26,7 +26,10 @@ const {
   isStaffAccount,
   familyModuleOrganizationIds,
 } = require("@appServices/family/familyAccessService");
-const { joinOne, isValidObjectId } = require("@appServices/family/familyPipeline");
+const {
+  joinOne,
+  isValidObjectId,
+} = require("@appServices/family/familyPipeline");
 const { searchClause } = require("./familySearch");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
@@ -35,7 +38,8 @@ const INVITE_TTL_DAYS = Number(process.env.FAMILY_INVITE_TTL_DAYS || 7);
 
 const buildAcceptUrl = (token) => {
   const base = (
-    process.env.FAMILY_INVITE_ACCEPT_URL || "http://localhost:3000/family-invite"
+    process.env.FAMILY_INVITE_ACCEPT_URL ||
+    "http://localhost:3000/family-invite"
   ).replace(/\/+$/, "");
   return `${base}/${token}`;
 };
@@ -158,7 +162,8 @@ const createInvitation = async ({
       lastSentAt: new Date(),
     });
   } catch (error) {
-    if (error.code === 11000) throw new AppError("invitation_already_pending", 409);
+    if (error.code === 11000)
+      throw new AppError("invitation_already_pending", 409);
     throw error;
   }
 
@@ -175,9 +180,23 @@ const createInvitation = async ({
   return { ...stripHash(invitation), acceptUrl };
 };
 
-const inviteFamilyMember = async ({ actor, organizationId, residentId, ...fields }) => {
-  const resident = await requireManageableResident({ actor, organizationId, residentId });
-  return createInvitation({ inviterId: actor._id, organizationId, resident, ...fields });
+const inviteFamilyMember = async ({
+  actor,
+  organizationId,
+  residentId,
+  ...fields
+}) => {
+  const resident = await requireManageableResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  return createInvitation({
+    inviterId: actor._id,
+    organizationId,
+    resident,
+    ...fields,
+  });
 };
 
 // pending past its expiry reads as expired, since nothing flips the stored status yet
@@ -195,7 +214,9 @@ const invitationStatusNow = (now) => ({
 });
 
 const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(Object.values(FamilyInvitationStatus).map((status) => [status, 0]));
+  const counts = Object.fromEntries(
+    Object.values(FamilyInvitationStatus).map((status) => [status, 0]),
+  );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -221,11 +242,19 @@ const listInvitations = async ({
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.residentId = toObjectId(residentId);
 
-  const or = await searchClause({ keyword, organizationId, branchId, fields: ["email", "name"], resident: "residentId" });
+  const or = await searchClause({
+    keyword,
+    organizationId,
+    branchId,
+    fields: ["email", "name"],
+    resident: "residentId",
+  });
   if (or) base.$or = or;
 
   const now = new Date();
-  const match = status ? { ...base, $expr: { $eq: [invitationStatusNow(now), status] } } : base;
+  const match = status
+    ? { ...base, $expr: { $eq: [invitationStatusNow(now), status] } }
+    : base;
 
   const { result, data, meta } = await paginateWithFacet({
     model: FamilyInvitation,
@@ -240,9 +269,24 @@ const listInvitations = async ({
       ],
     },
     extraDataStages: [
-      ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
-      ...joinOne({ from: User, localField: "invitedByUserId", as: "invitedBy", optional: true }),
-      ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+      ...joinOne({
+        from: Resident,
+        localField: "residentId",
+        as: "resident",
+        optional: true,
+      }),
+      ...joinOne({
+        from: User,
+        localField: "invitedByUserId",
+        as: "invitedBy",
+        optional: true,
+      }),
+      ...joinOne({
+        from: Branch,
+        localField: "branchId",
+        as: "branch",
+        optional: true,
+      }),
       {
         $addFields: {
           residentName: { $ifNull: ["$resident.name", ""] },
@@ -257,19 +301,53 @@ const listInvitations = async ({
     ],
   });
 
-  return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
+  return {
+    data,
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+  };
 };
 
 const getInvitation = async ({ invitationId, organizationId }) => {
-  if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
+  if (!isValidObjectId(invitationId))
+    throw new AppError("invitation_not_found", 404);
 
   const [invitation] = await FamilyInvitation.aggregate([
-    { $match: { _id: toObjectId(invitationId), organizationId: toObjectId(organizationId) } },
-    ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
-    ...joinOne({ from: User, localField: "invitedByUserId", as: "invitedBy", optional: true }),
-    ...joinOne({ from: User, localField: "acceptedByUserId", as: "acceptedBy", optional: true }),
-    ...joinOne({ from: User, localField: "revokedByUserId", as: "revokedBy", optional: true }),
+    {
+      $match: {
+        _id: toObjectId(invitationId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
+    ...joinOne({
+      from: Resident,
+      localField: "residentId",
+      as: "resident",
+      optional: true,
+    }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
+    ...joinOne({
+      from: User,
+      localField: "invitedByUserId",
+      as: "invitedBy",
+      optional: true,
+    }),
+    ...joinOne({
+      from: User,
+      localField: "acceptedByUserId",
+      as: "acceptedBy",
+      optional: true,
+    }),
+    ...joinOne({
+      from: User,
+      localField: "revokedByUserId",
+      as: "revokedBy",
+      optional: true,
+    }),
     {
       $project: {
         _id: 0,
@@ -322,7 +400,7 @@ const resendInvitation = async ({ actor, invitationId, organizationId }) => {
   const token = crypto.randomBytes(32).toString("hex");
   invitation.tokenHash = await bcrypt.hash(token, 10);
   invitation.expiresAt = new Date(
-    Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000
+    Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000,
   );
   invitation.lastSentAt = new Date();
   invitation.sendCount += 1;
@@ -347,30 +425,53 @@ const resendInvitation = async ({ actor, invitationId, organizationId }) => {
 const MAX_INVITEE_NAME = 120;
 
 /** Fix a pending invitation's name or relationship; the email and link stay as they were. */
-const editInvitation = async ({ actor, invitationId, organizationId, name, relationship }) => {
-  if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
+const editInvitation = async ({
+  actor,
+  invitationId,
+  organizationId,
+  name,
+  relationship,
+}) => {
+  if (!isValidObjectId(invitationId))
+    throw new AppError("invitation_not_found", 404);
 
-  const invitation = await FamilyInvitation.findOne({ _id: invitationId, organizationId });
+  const invitation = await FamilyInvitation.findOne({
+    _id: invitationId,
+    organizationId,
+  });
   if (!invitation) throw new AppError("invitation_not_found", 404);
-  if (invitation.status !== FamilyInvitationStatus.PENDING || invitation.expiresAt <= new Date()) {
+  if (
+    invitation.status !== FamilyInvitationStatus.PENDING ||
+    invitation.expiresAt <= new Date()
+  ) {
     throw new AppError("invitation_not_editable", 409);
   }
-  await requireManageableResident({ actor, organizationId, residentId: invitation.residentId });
+  await requireManageableResident({
+    actor,
+    organizationId,
+    residentId: invitation.residentId,
+  });
 
   const set = {};
   if (name !== undefined) {
-    if (typeof name !== "string" || !name.trim() || name.trim().length > MAX_INVITEE_NAME) throw new AppError("name_required", 400);
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      name.trim().length > MAX_INVITEE_NAME
+    )
+      throw new AppError("name_required", 400);
     set.name = name.trim();
   }
   if (relationship !== undefined) {
-    if (!Object.values(FamilyRelationship).includes(relationship)) throw new AppError("invalid_relationship", 400);
+    if (!Object.values(FamilyRelationship).includes(relationship))
+      throw new AppError("invalid_relationship", 400);
     set.relationship = relationship;
   }
   if (!Object.keys(set).length) throw new AppError("nothing_to_update", 400);
 
   const updated = await FamilyInvitation.updateOne(
     { _id: invitation._id, status: FamilyInvitationStatus.PENDING },
-    { $set: set }
+    { $set: set },
   );
   if (!updated.matchedCount) throw new AppError("invitation_not_editable", 409);
 
@@ -379,20 +480,33 @@ const editInvitation = async ({ actor, invitationId, organizationId, name, relat
 
 /** Only an invitation that went nowhere can be deleted: revoked or expired. An accepted one stays as the record. */
 const deleteInvitation = async ({ actor, invitationId, organizationId }) => {
-  if (!isValidObjectId(invitationId)) throw new AppError("invitation_not_found", 404);
+  if (!isValidObjectId(invitationId))
+    throw new AppError("invitation_not_found", 404);
 
-  const invitation = await FamilyInvitation.findOne({ _id: invitationId, organizationId });
+  const invitation = await FamilyInvitation.findOne({
+    _id: invitationId,
+    organizationId,
+  });
   if (!invitation) throw new AppError("invitation_not_found", 404);
-  await requireManageableResident({ actor, organizationId, residentId: invitation.residentId });
+  await requireManageableResident({
+    actor,
+    organizationId,
+    residentId: invitation.residentId,
+  });
 
   const lapsed =
     invitation.status === FamilyInvitationStatus.REVOKED ||
     invitation.status === FamilyInvitationStatus.EXPIRED ||
-    (invitation.status === FamilyInvitationStatus.PENDING && invitation.expiresAt <= new Date());
+    (invitation.status === FamilyInvitationStatus.PENDING &&
+      invitation.expiresAt <= new Date());
   if (!lapsed) throw new AppError("invitation_cannot_be_deleted", 409);
 
-  const removed = await FamilyInvitation.deleteOne({ _id: invitation._id, status: invitation.status });
-  if (!removed.deletedCount) throw new AppError("invitation_cannot_be_deleted", 409);
+  const removed = await FamilyInvitation.deleteOne({
+    _id: invitation._id,
+    status: invitation.status,
+  });
+  if (!removed.deletedCount)
+    throw new AppError("invitation_cannot_be_deleted", 409);
 
   return { invitationId: invitation._id, deleted: true };
 };
@@ -453,10 +567,32 @@ const findByToken = async (token) => {
 const shapeInvitationPreview = async (invitation) => {
   const [preview] = await FamilyInvitation.aggregate([
     { $match: { _id: invitation._id } },
-    ...joinOne({ from: Organization, localField: "organizationId", as: "organization", optional: true }),
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
-    ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
-    { $lookup: { from: User.collection.name, localField: "email", foreignField: "email", as: "accounts" } },
+    ...joinOne({
+      from: Organization,
+      localField: "organizationId",
+      as: "organization",
+      optional: true,
+    }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
+    ...joinOne({
+      from: Resident,
+      localField: "residentId",
+      as: "resident",
+      optional: true,
+    }),
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "email",
+        foreignField: "email",
+        as: "accounts",
+      },
+    },
     {
       $project: {
         _id: 0,
@@ -485,7 +621,9 @@ const previewInvitation = async (token) => {
 };
 
 const listMyInvitations = async ({ user, page, limit, skip }) => {
-  const email = String(user.email || "").trim().toLowerCase();
+  const email = String(user.email || "")
+    .trim()
+    .toLowerCase();
   if (!email) throw new AppError("email_required", 400);
 
   const pending = {
@@ -497,7 +635,9 @@ const listMyInvitations = async ({ user, page, limit, skip }) => {
     { $match: pending },
     { $group: { _id: "$organizationId" } },
   ]);
-  const activeHomes = await familyModuleOrganizationIds(homes.map((home) => home._id));
+  const activeHomes = await familyModuleOrganizationIds(
+    homes.map((home) => home._id),
+  );
 
   const { data, meta } = await paginateWithFacet({
     model: FamilyInvitation,
@@ -516,7 +656,9 @@ const listMyInvitations = async ({ user, page, limit, skip }) => {
 };
 
 const requireMyPendingInvitation = async ({ user, invitationId }) => {
-  const email = String(user.email || "").trim().toLowerCase();
+  const email = String(user.email || "")
+    .trim()
+    .toLowerCase();
   if (!email) throw new AppError("email_required", 400);
 
   const invitation = await FamilyInvitation.findOne({
@@ -553,8 +695,7 @@ const redeemInvitation = async ({
     throw new AppError("email_invalid", 400);
   }
 
-  let user =
-    existingUser || (await User.findOne({ email: invitation.email }));
+  let user = existingUser || (await User.findOne({ email: invitation.email }));
 
   if (!user && !password) throw new AppError("password_required", 400);
 
@@ -585,7 +726,7 @@ const redeemInvitation = async ({
               verificationStatus: { email: "verified" },
             },
           ],
-          { session }
+          { session },
         );
         user = created;
       }
@@ -609,7 +750,7 @@ const redeemInvitation = async ({
             isNextOfKin: true,
           },
           { $set: { isNextOfKin: false } },
-          { session }
+          { session },
         );
       }
 
@@ -639,7 +780,7 @@ const redeemInvitation = async ({
               ...linkFields,
             },
           ],
-          { session }
+          { session },
         );
         familyMember = created;
       }

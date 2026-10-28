@@ -25,9 +25,15 @@ const familyPostSchema = new mongoose.Schema(
     title: { type: String, default: "", trim: true },
     message: { type: String, default: "", trim: true },
     mediaIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "FamilyMedia" }],
-    taggedResidentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resident" }],
+    taggedResidentIds: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "Resident" },
+    ],
     /** all: every family in the organization; branch: the families at this site; tagged: only the families of the tagged residents. */
-    audience: { type: String, enum: Object.values(FamilyPostAudience), default: FamilyPostAudience.BRANCH },
+    audience: {
+      type: String,
+      enum: Object.values(FamilyPostAudience),
+      default: FamilyPostAudience.BRANCH,
+    },
     isPinned: { type: Boolean, default: false },
     /** When a scheduled post goes live. createdAt moves to that moment, so it reads as posted then. */
     scheduledAt: { type: Date, default: null },
@@ -43,10 +49,16 @@ const familyPostSchema = new mongoose.Schema(
     },
     removedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-familyPostSchema.index({ organizationId: 1, branchId: 1, status: 1, isPinned: -1, createdAt: -1 });
+familyPostSchema.index({
+  organizationId: 1,
+  branchId: 1,
+  status: 1,
+  isPinned: -1,
+  createdAt: -1,
+});
 familyPostSchema.index({ taggedResidentIds: 1, status: 1, createdAt: -1 });
 familyPostSchema.index({ status: 1, scheduledAt: 1 });
 

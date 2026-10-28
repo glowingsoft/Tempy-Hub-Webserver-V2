@@ -12,13 +12,13 @@ const familyCodeFailureSchema = new mongoose.Schema(
     },
     createdAt: { type: Date, default: Date.now },
   },
-  { versionKey: false }
+  { versionKey: false },
 );
 
 familyCodeFailureSchema.index({ userId: 1, createdAt: 1 });
 familyCodeFailureSchema.index(
   { createdAt: 1 },
-  { expireAfterSeconds: FAMILY_CODE_LOCK_MINUTES * 60 }
+  { expireAfterSeconds: FAMILY_CODE_LOCK_MINUTES * 60 },
 );
 
 const FamilyCodeFailure =

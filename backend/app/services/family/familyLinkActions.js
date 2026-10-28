@@ -2,7 +2,10 @@ const mongoose = require("mongoose");
 const { FamilyMember } = require("@models/FamilyMember");
 const { FamilyHandover } = require("@models/FamilyHandover");
 const { AppError } = require("@services/_errors/AppError");
-const { FamilyHandoverStatus, FamilyMemberStatus } = require("@models/domainEnums");
+const {
+  FamilyHandoverStatus,
+  FamilyMemberStatus,
+} = require("@models/domainEnums");
 
 const inTransaction = async (work) => {
   const session = await mongoose.startSession();
@@ -17,9 +20,10 @@ const inTransaction = async (work) => {
 const decidePendingRequest = async ({ linkId, decision, actorId }) => {
   const result = await FamilyMember.updateOne(
     { _id: linkId, status: FamilyMemberStatus.PENDING },
-    { $set: { status: decision, decidedBy: actorId, decidedAt: new Date() } }
+    { $set: { status: decision, decidedBy: actorId, decidedAt: new Date() } },
   );
-  if (!result.modifiedCount) throw new AppError("join_request_not_pending", 409);
+  if (!result.modifiedCount)
+    throw new AppError("join_request_not_pending", 409);
 };
 
 const cancelHandoversOf = (link, session) =>
@@ -30,7 +34,7 @@ const cancelHandoversOf = (link, session) =>
       $or: [{ fromUserId: link.userId }, { toUserId: link.userId }],
     },
     { $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt: new Date() } },
-    { session }
+    { session },
   );
 
 /** Pauses access without ending the link; any handover that involved them is cancelled. */
@@ -38,10 +42,17 @@ const deactivateActiveLink = async ({ link, actorId }) => {
   await inTransaction(async (session) => {
     const paused = await FamilyMember.updateOne(
       { _id: link._id, status: FamilyMemberStatus.ACTIVE, isNextOfKin: false },
-      { $set: { status: FamilyMemberStatus.INACTIVE, inactiveBy: actorId, inactiveAt: new Date() } },
-      { session }
+      {
+        $set: {
+          status: FamilyMemberStatus.INACTIVE,
+          inactiveBy: actorId,
+          inactiveAt: new Date(),
+        },
+      },
+      { session },
     );
-    if (!paused.modifiedCount) throw new AppError("family_member_not_active", 409);
+    if (!paused.modifiedCount)
+      throw new AppError("family_member_not_active", 409);
 
     await cancelHandoversOf(link, session);
   });
@@ -50,9 +61,16 @@ const deactivateActiveLink = async ({ link, actorId }) => {
 const reactivateLink = async ({ link }) => {
   const resumed = await FamilyMember.updateOne(
     { _id: link._id, status: FamilyMemberStatus.INACTIVE },
-    { $set: { status: FamilyMemberStatus.ACTIVE, inactiveBy: null, inactiveAt: null } }
+    {
+      $set: {
+        status: FamilyMemberStatus.ACTIVE,
+        inactiveBy: null,
+        inactiveAt: null,
+      },
+    },
   );
-  if (!resumed.modifiedCount) throw new AppError("family_member_not_inactive", 409);
+  if (!resumed.modifiedCount)
+    throw new AppError("family_member_not_inactive", 409);
 };
 
 /** Removing someone also ends any handover that involved them, and clears the next-of-kin role. */
@@ -68,9 +86,10 @@ const removeActiveLink = async ({ link, actorId }) => {
           removedAt: new Date(),
         },
       },
-      { session }
+      { session },
     );
-    if (!removed.modifiedCount) throw new AppError("family_member_not_found", 404);
+    if (!removed.modifiedCount)
+      throw new AppError("family_member_not_found", 404);
 
     await cancelHandoversOf(link, session);
   });
@@ -91,15 +110,16 @@ const assignNextOfKin = async ({ target }) => {
         _id: { $ne: target._id },
       },
       { $set: { isNextOfKin: false } },
-      { session }
+      { session },
     );
 
     const promoted = await FamilyMember.updateOne(
       { _id: target._id, status: FamilyMemberStatus.ACTIVE },
       { $set: { isNextOfKin: true } },
-      { session }
+      { session },
     );
-    if (!promoted.modifiedCount) throw new AppError("family_member_not_found", 404);
+    if (!promoted.modifiedCount)
+      throw new AppError("family_member_not_found", 404);
 
     const decidedAt = new Date();
     await FamilyHandover.updateMany(
@@ -109,12 +129,12 @@ const assignNextOfKin = async ({ target }) => {
         $or: [{ homeChooses: true }, { toUserId: target.userId }],
       },
       { $set: { status: FamilyHandoverStatus.ACCEPTED, decidedAt } },
-      { session }
+      { session },
     );
     await FamilyHandover.updateMany(
       { residentId: target.residentId, status: FamilyHandoverStatus.PENDING },
       { $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt } },
-      { session }
+      { session },
     );
   });
 };

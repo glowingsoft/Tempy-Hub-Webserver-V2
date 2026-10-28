@@ -514,6 +514,23 @@ requests.push(
   })
 );
 
+// ---------------------------------------------------------------- Gallery
+requests.push(
+  req("gallery", "GET", ["app", "family", "gallery"], {
+    query: "residentId={{residentId}}&tab=all&page=1&limit=30",
+    tests: [
+      'pm.test("Gallery fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("all", "thisMonth", "fromMe");',
+      "});",
+    ],
+    description:
+      "The Gallery screen. Query: residentId (required), tab (all, thisMonth or fromMe: the tabs All, This Month and From Me; 400 invalid_gallery_tab for anything else), page, limit (default 30, max 60). One tile per photo, newest first: mediaId, url (the blurred copy where the home made one), width, height, source (upload or wallPost), uploadId or postId, takenAt, fromMe. The photos are the approved family uploads for the resident plus the published wall posts that tag them; waiting and rejected uploads never appear. meta.counts has the three tab totals and meta.photoSharing is false, with no photos at all, when the resident has photo sharing switched off: it is checked on every request, so the photos leave at once.",
+  })
+);
+
 // ---------------------------------------------------------------- Community wall (family app)
 requests.push(
   req("newsletters of my home", "GET", ["app", "family", "newsletters"], {

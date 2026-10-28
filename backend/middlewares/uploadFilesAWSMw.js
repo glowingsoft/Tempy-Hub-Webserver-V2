@@ -1,6 +1,5 @@
 const multer = require("multer");
 
-
 // Memory storage for multer
 const storage = multer.memoryStorage(); // Store files in memory as a buffer
 
@@ -17,7 +16,8 @@ const uploads3Mw = multer({
 function checkFileType(file, cb) {
   const name = file.originalname.toLowerCase();
   const allowedExt = /\.(jpe?g|png|gif|bmp|tiff|webp|pdf)$/;
-  const allowedMime = /^(image\/(jpeg|jpg|png|gif|bmp|tiff|webp)|application\/pdf)$/i;
+  const allowedMime =
+    /^(image\/(jpeg|jpg|png|gif|bmp|tiff|webp)|application\/pdf)$/i;
 
   if (allowedExt.test(name) && allowedMime.test(file.mimetype)) {
     cb(null, true);
@@ -25,7 +25,6 @@ function checkFileType(file, cb) {
     cb(new Error("Invalid file type. Only images and PDF are allowed."));
   }
 }
-
 
 module.exports = {
   uploads3Mw,

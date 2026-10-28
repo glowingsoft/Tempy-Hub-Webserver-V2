@@ -30,7 +30,7 @@ const familyMediaSchema = new mongoose.Schema(
     height: { type: Number, default: 0 },
     size: { type: Number, default: 0 },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyMediaSchema.index({ uploadedBy: 1, uploadId: 1 });
@@ -38,6 +38,7 @@ familyMediaSchema.index({ uploadId: 1 });
 familyMediaSchema.index({ postId: 1 });
 
 const FamilyMedia =
-  mongoose.models.FamilyMedia || mongoose.model("FamilyMedia", familyMediaSchema);
+  mongoose.models.FamilyMedia ||
+  mongoose.model("FamilyMedia", familyMediaSchema);
 
 module.exports = { FamilyMedia };

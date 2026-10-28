@@ -37,14 +37,22 @@ const {
 } = require("@appServices/family/familyPipeline");
 
 const joinUser = joinOne({ from: User, localField: "userId", as: "user" });
-const joinResident = joinOne({ from: Resident, localField: "residentId", as: "resident" });
+const joinResident = joinOne({
+  from: Resident,
+  localField: "residentId",
+  as: "resident",
+});
 
 /** What a list covers: one resident, or everything the caller's role allows (a site manager sees their own site). */
 const listScope = async ({ actor, organizationId, branchId, residentId }) => {
   const match = { organizationId: toObjectId(organizationId) };
 
   if (residentId) {
-    const resident = await requireManageableResident({ actor, organizationId, residentId });
+    const resident = await requireManageableResident({
+      actor,
+      organizationId,
+      residentId,
+    });
     return { ...match, residentId: toObjectId(resident._id) };
   }
 
@@ -59,10 +67,18 @@ const listScope = async ({ actor, organizationId, branchId, residentId }) => {
   return match;
 };
 
-const loadLink = async ({ organizationId, linkId, residentId, notFoundKey }) => {
+const loadLink = async ({
+  organizationId,
+  linkId,
+  residentId,
+  notFoundKey,
+}) => {
   if (!isValidObjectId(linkId)) throw new AppError(notFoundKey, 404);
 
-  const match = { _id: toObjectId(linkId), organizationId: toObjectId(organizationId) };
+  const match = {
+    _id: toObjectId(linkId),
+    organizationId: toObjectId(organizationId),
+  };
   if (residentId) match.residentId = toObjectId(residentId);
 
   const [link] = await FamilyMember.aggregate([
@@ -75,9 +91,15 @@ const loadLink = async ({ organizationId, linkId, residentId, notFoundKey }) => 
 
 // reading is open across the organization; changing stays within the caller's site
 const requireReadableResident = async ({ organizationId, residentId }) => {
-  if (!isValidObjectId(residentId)) throw new AppError("resident_not_found", 404);
+  if (!isValidObjectId(residentId))
+    throw new AppError("resident_not_found", 404);
   const [resident] = await Resident.aggregate([
-    { $match: { _id: toObjectId(residentId), organizationId: toObjectId(organizationId) } },
+    {
+      $match: {
+        _id: toObjectId(residentId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
     { $project: { name: 1, branchId: 1 } },
   ]);
   if (!resident) throw new AppError("resident_not_found", 404);
@@ -98,10 +120,14 @@ const memberRow = {
 };
 
 /** Someone who was removed from a family is gone from these lists, the counts and the pages. */
-const LISTED_STATUSES = Object.values(FamilyMemberStatus).filter((status) => status !== FamilyMemberStatus.REMOVED);
+const LISTED_STATUSES = Object.values(FamilyMemberStatus).filter(
+  (status) => status !== FamilyMemberStatus.REMOVED,
+);
 
 const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(LISTED_STATUSES.map((status) => [status, 0]));
+  const counts = Object.fromEntries(
+    LISTED_STATUSES.map((status) => [status, 0]),
+  );
   rows.forEach((row) => {
     if (row._id in counts) counts[row._id] = row.count;
   });
@@ -109,15 +135,29 @@ const statusCountsOf = (rows = []) => {
 };
 
 /** Without a status it lists active, pending and inactive; meta.counts covers the other statuses too (never removed) and ignores the status filter. */
-const listAllMembers = async ({ organizationId, branchId, residentId, status, isNextOfKin, keyword, page, limit, skip }) => {
+const listAllMembers = async ({
+  organizationId,
+  branchId,
+  residentId,
+  status,
+  isNextOfKin,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
   if (status && !LISTED_STATUSES.includes(status)) {
     throw new AppError("invalid_status_filter", 400);
   }
 
-  const base = { organizationId: toObjectId(organizationId), status: { $ne: FamilyMemberStatus.REMOVED } };
+  const base = {
+    organizationId: toObjectId(organizationId),
+    status: { $ne: FamilyMemberStatus.REMOVED },
+  };
   if (branchId) base.branchId = toObjectId(branchId);
   if (residentId) base.residentId = toObjectId(residentId);
-  if (isNextOfKin === "true" || isNextOfKin === "false") base.isNextOfKin = isNextOfKin === "true";
+  if (isNextOfKin === "true" || isNextOfKin === "false")
+    base.isNextOfKin = isNextOfKin === "true";
 
   const or = await searchClause({
     keyword,
@@ -130,7 +170,13 @@ const listAllMembers = async ({ organizationId, branchId, residentId, status, is
 
   const match = {
     ...base,
-    status: status || { $in: [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING, FamilyMemberStatus.INACTIVE] },
+    status: status || {
+      $in: [
+        FamilyMemberStatus.ACTIVE,
+        FamilyMemberStatus.PENDING,
+        FamilyMemberStatus.INACTIVE,
+      ],
+    },
   };
 
   const { result, data, meta } = await paginateWithFacet({
@@ -141,12 +187,20 @@ const listAllMembers = async ({ organizationId, branchId, residentId, status, is
     skip,
     sort: { createdAt: 1 },
     extraFacets: {
-      statusCounts: [{ $match: base }, { $group: { _id: "$status", count: { $sum: 1 } } }],
+      statusCounts: [
+        { $match: base },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ],
     },
     extraDataStages: [
       ...joinUser,
       ...joinResident,
-      ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+      ...joinOne({
+        from: Branch,
+        localField: "branchId",
+        as: "branch",
+        optional: true,
+      }),
       {
         $project: {
           ...memberRow,
@@ -161,11 +215,16 @@ const listAllMembers = async ({ organizationId, branchId, residentId, status, is
     ],
   });
 
-  return { data, meta: { ...meta, counts: statusCountsOf(result.statusCounts) } };
+  return {
+    data,
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+  };
 };
 
 const uploadCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(Object.values(FamilyUploadStatus).map((status) => [status, 0]));
+  const counts = Object.fromEntries(
+    Object.values(FamilyUploadStatus).map((status) => [status, 0]),
+  );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -173,16 +232,42 @@ const uploadCountsOf = (rows = []) => {
 };
 
 const getMember = async ({ organizationId, memberId }) => {
-  if (!isValidObjectId(memberId)) throw new AppError("family_member_not_found", 404);
+  if (!isValidObjectId(memberId))
+    throw new AppError("family_member_not_found", 404);
 
   const [member] = await FamilyMember.aggregate([
-    { $match: { _id: toObjectId(memberId), organizationId: toObjectId(organizationId) } },
+    {
+      $match: {
+        _id: toObjectId(memberId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
     ...joinUser,
     ...joinResident,
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
-    ...joinOne({ from: User, localField: "decidedBy", as: "decider", optional: true }),
-    ...joinOne({ from: User, localField: "removedBy", as: "remover", optional: true }),
-    ...joinOne({ from: User, localField: "inactiveBy", as: "pauser", optional: true }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
+    ...joinOne({
+      from: User,
+      localField: "decidedBy",
+      as: "decider",
+      optional: true,
+    }),
+    ...joinOne({
+      from: User,
+      localField: "removedBy",
+      as: "remover",
+      optional: true,
+    }),
+    ...joinOne({
+      from: User,
+      localField: "inactiveBy",
+      as: "pauser",
+      optional: true,
+    }),
     {
       $lookup: {
         from: FamilyUpload.collection.name,
@@ -190,7 +275,12 @@ const getMember = async ({ organizationId, memberId }) => {
         pipeline: [
           {
             $match: {
-              $expr: { $and: [{ $eq: ["$authorId", "$$authorId"] }, { $eq: ["$residentId", "$$residentId"] }] },
+              $expr: {
+                $and: [
+                  { $eq: ["$authorId", "$$authorId"] },
+                  { $eq: ["$residentId", "$$residentId"] },
+                ],
+              },
             },
           },
           { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -236,7 +326,9 @@ const getMember = async ({ organizationId, memberId }) => {
         residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
         branchId: 1,
         homeName: { $ifNull: ["$branch.name", ""] },
-        familySize: { $ifNull: [{ $arrayElemAt: ["$familySize.count", 0] }, 0] },
+        familySize: {
+          $ifNull: [{ $arrayElemAt: ["$familySize.count", 0] }, 0],
+        },
         uploadStats: 1,
         joinedAt: "$createdAt",
         requestedAt: 1,
@@ -256,13 +348,18 @@ const getMember = async ({ organizationId, memberId }) => {
 };
 
 const listMembers = async ({ organizationId, residentId }) => {
-  const resident = await requireReadableResident({ organizationId, residentId });
+  const resident = await requireReadableResident({
+    organizationId,
+    residentId,
+  });
 
   const members = await FamilyMember.aggregate([
     {
       $match: {
         residentId: toObjectId(resident._id),
-        status: { $in: [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING] },
+        status: {
+          $in: [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING],
+        },
       },
     },
     ...joinUser,
@@ -285,35 +382,73 @@ const listMembers = async ({ organizationId, residentId }) => {
   return { residentId: resident._id, residentName: resident.name, members };
 };
 
-const EDITABLE_STATUSES = [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING, FamilyMemberStatus.INACTIVE];
+const EDITABLE_STATUSES = [
+  FamilyMemberStatus.ACTIVE,
+  FamilyMemberStatus.PENDING,
+  FamilyMemberStatus.INACTIVE,
+];
 
 /** Staff fix how someone is listed: their relationship. Their name, email and phone belong to their account. */
-const editMember = async ({ actor, organizationId, memberId, relationship }) => {
-  const link = await loadLink({ organizationId, linkId: memberId, notFoundKey: "family_member_not_found" });
-  await requireManageableResident({ actor, organizationId, residentId: link.residentId });
-  if (!EDITABLE_STATUSES.includes(link.status)) throw new AppError("family_member_not_editable", 409);
+const editMember = async ({
+  actor,
+  organizationId,
+  memberId,
+  relationship,
+}) => {
+  const link = await loadLink({
+    organizationId,
+    linkId: memberId,
+    notFoundKey: "family_member_not_found",
+  });
+  await requireManageableResident({
+    actor,
+    organizationId,
+    residentId: link.residentId,
+  });
+  if (!EDITABLE_STATUSES.includes(link.status))
+    throw new AppError("family_member_not_editable", 409);
 
   const set = {};
   if (relationship !== undefined) {
-    if (!Object.values(FamilyRelationship).includes(relationship)) throw new AppError("invalid_relationship", 400);
+    if (!Object.values(FamilyRelationship).includes(relationship))
+      throw new AppError("invalid_relationship", 400);
     set.relationship = relationship;
   }
   if (!Object.keys(set).length) throw new AppError("nothing_to_update", 400);
 
-  const updated = await FamilyMember.updateOne({ _id: link._id, status: { $in: EDITABLE_STATUSES } }, { $set: set });
-  if (!updated.modifiedCount && !updated.matchedCount) throw new AppError("family_member_not_editable", 409);
+  const updated = await FamilyMember.updateOne(
+    { _id: link._id, status: { $in: EDITABLE_STATUSES } },
+    { $set: set },
+  );
+  if (!updated.modifiedCount && !updated.matchedCount)
+    throw new AppError("family_member_not_editable", 409);
 
   return getMember({ organizationId, memberId });
 };
 
 /** Pause someone's access, or switch it back on. The next of kin cannot be paused: hand over first. */
-const changeMemberAccess = async ({ actor, organizationId, memberId, action }) => {
-  const link = await loadLink({ organizationId, linkId: memberId, notFoundKey: "family_member_not_found" });
-  await requireManageableResident({ actor, organizationId, residentId: link.residentId });
+const changeMemberAccess = async ({
+  actor,
+  organizationId,
+  memberId,
+  action,
+}) => {
+  const link = await loadLink({
+    organizationId,
+    linkId: memberId,
+    notFoundKey: "family_member_not_found",
+  });
+  await requireManageableResident({
+    actor,
+    organizationId,
+    residentId: link.residentId,
+  });
 
   if (action === "deactivate") {
-    if (link.isNextOfKin) throw new AppError("next_of_kin_cannot_be_deactivated", 409);
-    if (link.status !== FamilyMemberStatus.ACTIVE) throw new AppError("family_member_not_active", 409);
+    if (link.isNextOfKin)
+      throw new AppError("next_of_kin_cannot_be_deactivated", 409);
+    if (link.status !== FamilyMemberStatus.ACTIVE)
+      throw new AppError("family_member_not_active", 409);
     await deactivateActiveLink({ link, actorId: actor._id });
     return { memberId: link._id, status: FamilyMemberStatus.INACTIVE };
   }
@@ -323,7 +458,12 @@ const changeMemberAccess = async ({ actor, organizationId, memberId, action }) =
 };
 
 /** Also how the home finishes a "let the home choose" handover. */
-const setNextOfKin = async ({ actor, organizationId, residentId, memberId }) => {
+const setNextOfKin = async ({
+  actor,
+  organizationId,
+  residentId,
+  memberId,
+}) => {
   await requireManageableResident({ actor, organizationId, residentId });
   const link = await loadLink({
     organizationId,
@@ -345,7 +485,12 @@ const setNextOfKin = async ({ actor, organizationId, residentId, memberId }) => 
 };
 
 /** Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. */
-const removeMember = async ({ actor, organizationId, residentId, memberId }) => {
+const removeMember = async ({
+  actor,
+  organizationId,
+  residentId,
+  memberId,
+}) => {
   await requireManageableResident({ actor, organizationId, residentId });
   const link = await loadLink({
     organizationId,
@@ -365,8 +510,21 @@ const removeMember = async ({ actor, organizationId, residentId, memberId }) => 
   return { memberId: link._id, status: FamilyMemberStatus.REMOVED };
 };
 
-const listJoinRequests = async ({ actor, organizationId, branchId, residentId, page, limit, skip }) => {
-  const match = await listScope({ actor, organizationId, branchId, residentId });
+const listJoinRequests = async ({
+  actor,
+  organizationId,
+  branchId,
+  residentId,
+  page,
+  limit,
+  skip,
+}) => {
+  const match = await listScope({
+    actor,
+    organizationId,
+    branchId,
+    residentId,
+  });
 
   return paginateWithFacet({
     model: FamilyMember,
@@ -394,24 +552,51 @@ const listJoinRequests = async ({ actor, organizationId, branchId, residentId, p
   });
 };
 
-const decideJoinRequest = async ({ actor, organizationId, requestId, decision }) => {
+const decideJoinRequest = async ({
+  actor,
+  organizationId,
+  requestId,
+  decision,
+}) => {
   const link = await loadLink({
     organizationId,
     linkId: requestId,
     notFoundKey: "join_request_not_found",
   });
-  await requireManageableResident({ actor, organizationId, residentId: link.residentId });
+  await requireManageableResident({
+    actor,
+    organizationId,
+    residentId: link.residentId,
+  });
 
   if (link.status !== FamilyMemberStatus.PENDING) {
     throw new AppError("join_request_not_pending", 409);
   }
 
-  await decidePendingRequest({ linkId: link._id, decision, actorId: actor._id });
+  await decidePendingRequest({
+    linkId: link._id,
+    decision,
+    actorId: actor._id,
+  });
   return { requestId: link._id, status: decision };
 };
 
-const listHandovers = async ({ actor, organizationId, branchId, residentId, homeChooses, page, limit, skip }) => {
-  const scope = await listScope({ actor, organizationId, branchId, residentId });
+const listHandovers = async ({
+  actor,
+  organizationId,
+  branchId,
+  residentId,
+  homeChooses,
+  page,
+  limit,
+  skip,
+}) => {
+  const scope = await listScope({
+    actor,
+    organizationId,
+    branchId,
+    residentId,
+  });
   const match = { ...scope, status: FamilyHandoverStatus.PENDING };
   if (String(homeChooses) === "true") match.homeChooses = true;
 
@@ -425,7 +610,12 @@ const listHandovers = async ({ actor, organizationId, branchId, residentId, home
     extraDataStages: [
       ...joinResident,
       ...joinOne({ from: User, localField: "fromUserId", as: "from" }),
-      ...joinOne({ from: User, localField: "toUserId", as: "to", optional: true }),
+      ...joinOne({
+        from: User,
+        localField: "toUserId",
+        as: "to",
+        optional: true,
+      }),
       {
         $project: {
           _id: 0,
@@ -462,13 +652,24 @@ const codeLinkFor = (resident) => ({
 });
 
 const getCode = async ({ actor, organizationId, residentId }) => {
-  const resident = await requireManageableResident({ actor, organizationId, residentId });
+  const resident = await requireManageableResident({
+    actor,
+    organizationId,
+    residentId,
+  });
   return familyCodeService.getCurrentCode({ link: codeLinkFor(resident) });
 };
 
 const createCode = async ({ actor, organizationId, residentId }) => {
-  const resident = await requireManageableResident({ actor, organizationId, residentId });
-  return familyCodeService.createCode({ link: codeLinkFor(resident), userId: actor._id });
+  const resident = await requireManageableResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  return familyCodeService.createCode({
+    link: codeLinkFor(resident),
+    userId: actor._id,
+  });
 };
 
 module.exports = {

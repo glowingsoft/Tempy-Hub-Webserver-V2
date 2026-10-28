@@ -14,7 +14,10 @@ const getBrowser = () => {
         headless: true,
         executablePath: process.env.PDF_BROWSER_PATH || undefined,
         // Chromium's sandbox is only switched off where the host cannot run it (some containers), by explicit choice.
-        args: process.env.PDF_BROWSER_NO_SANDBOX === "true" ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
+        args:
+          process.env.PDF_BROWSER_NO_SANDBOX === "true"
+            ? ["--no-sandbox", "--disable-setuid-sandbox"]
+            : [],
       })
       .then((browser) => {
         browser.on("disconnected", () => {
@@ -47,7 +50,9 @@ const release = () => {
   else running -= 1;
 };
 
-const pageCountOf = (buffer) => (buffer.toString("latin1").match(/\/Type\s*\/Page(?![A-Za-z])/g) || []).length;
+const pageCountOf = (buffer) =>
+  (buffer.toString("latin1").match(/\/Type\s*\/Page(?![A-Za-z])/g) || [])
+    .length;
 
 /**
  * Prints the page to an A4 PDF. The page has no scripts and may load nothing but the data inside it, so
@@ -61,10 +66,23 @@ const htmlToPdf = async (html) => {
     page = await browser.newPage();
     await page.setJavaScriptEnabled(false);
     await page.setRequestInterception(true);
-    page.on("request", (request) => (request.url().startsWith("data:") || request.url() === "about:blank" ? request.continue() : request.abort()));
+    page.on("request", (request) =>
+      request.url().startsWith("data:") || request.url() === "about:blank"
+        ? request.continue()
+        : request.abort(),
+    );
 
-    await page.setContent(html, { waitUntil: "load", timeout: LOAD_TIMEOUT_MS });
-    const buffer = Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true, timeout: PDF_TIMEOUT_MS }));
+    await page.setContent(html, {
+      waitUntil: "load",
+      timeout: LOAD_TIMEOUT_MS,
+    });
+    const buffer = Buffer.from(
+      await page.pdf({
+        preferCSSPageSize: true,
+        printBackground: true,
+        timeout: PDF_TIMEOUT_MS,
+      }),
+    );
     return { buffer, pageCount: pageCountOf(buffer) };
   } finally {
     if (page) await page.close().catch(() => {});

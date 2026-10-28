@@ -11,7 +11,11 @@ const {
   FamilyMemberStatus,
   FamilyInvitationStatus,
 } = require("@models/domainEnums");
-const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
+const {
+  toObjectId,
+  isValidObjectId,
+  joinOne,
+} = require("@appServices/family/familyPipeline");
 const { searchText } = require("@utils/familyQuery");
 
 const FamilyGroupStatus = {
@@ -23,7 +27,11 @@ const FamilyGroupStatus = {
 const first = (array) => ({ $arrayElemAt: [array, 0] });
 
 const nextOfKinOnly = (array) => ({
-  $filter: { input: array, as: "item", cond: { $eq: ["$$item.isNextOfKin", true] } },
+  $filter: {
+    input: array,
+    as: "item",
+    cond: { $eq: ["$$item.isNextOfKin", true] },
+  },
 });
 
 const groupStages = (now) => [
@@ -78,40 +86,72 @@ const groupStages = (now) => [
       status: {
         $switch: {
           branches: [
-            { case: { $gt: [{ $size: "$activeLinks" }, 0] }, then: FamilyGroupStatus.ACTIVE },
-            { case: { $gt: [{ $size: "$pendingInvites" }, 0] }, then: FamilyGroupStatus.INVITE_PENDING },
+            {
+              case: { $gt: [{ $size: "$activeLinks" }, 0] },
+              then: FamilyGroupStatus.ACTIVE,
+            },
+            {
+              case: { $gt: [{ $size: "$pendingInvites" }, 0] },
+              then: FamilyGroupStatus.INVITE_PENDING,
+            },
           ],
           default: FamilyGroupStatus.NO_FAMILY,
         },
       },
     },
   },
-  ...joinOne({ from: User, localField: "nokLink.userId", as: "nokUser", optional: true }),
+  ...joinOne({
+    from: User,
+    localField: "nokLink.userId",
+    as: "nokUser",
+    optional: true,
+  }),
   {
     $addFields: {
-      nextOfKinName: { $ifNull: ["$nokUser.name", { $ifNull: ["$nokInvite.name", ""] }] },
+      nextOfKinName: {
+        $ifNull: ["$nokUser.name", { $ifNull: ["$nokInvite.name", ""] }],
+      },
       nextOfKinPhotoUrl: { $ifNull: ["$nokUser.profileIcon", ""] },
       nextOfKinRelationship: {
-        $ifNull: ["$nokLink.relationship", { $ifNull: ["$nokInvite.relationship", ""] }],
+        $ifNull: [
+          "$nokLink.relationship",
+          { $ifNull: ["$nokInvite.relationship", ""] },
+        ],
       },
       // the invitation Resend acts on: the next of kin's, else the newest pending one
       pendingInvitationId: {
-        $ifNull: ["$nokInvite._id", { $ifNull: [first("$pendingInvites._id"), null] }],
+        $ifNull: [
+          "$nokInvite._id",
+          { $ifNull: [first("$pendingInvites._id"), null] },
+        ],
       },
     },
   },
 ];
 
 const countsOf = (rows = []) => {
-  const counts = Object.fromEntries(Object.values(FamilyGroupStatus).map((status) => [status, 0]));
+  const counts = Object.fromEntries(
+    Object.values(FamilyGroupStatus).map((status) => [status, 0]),
+  );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
-  return { total: Object.values(counts).reduce((sum, n) => sum + n, 0), ...counts };
+  return {
+    total: Object.values(counts).reduce((sum, n) => sum + n, 0),
+    ...counts,
+  };
 };
 
 /** One row per admitted resident. meta.counts ignores the status filter so the tabs stay stable. */
-const listFamilyGroups = async ({ organizationId, branchId, status, keyword, page, limit, skip }) => {
+const listFamilyGroups = async ({
+  organizationId,
+  branchId,
+  status,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
   if (status && !Object.values(FamilyGroupStatus).includes(status)) {
     throw new AppError("invalid_status_filter", 400);
   }
@@ -123,7 +163,11 @@ const listFamilyGroups = async ({ organizationId, branchId, status, keyword, pag
   if (branchId) resident.branchId = toObjectId(branchId);
 
   const search = [];
-  const or = keywordOr(searchText(keyword), ["name", "roomNumber", "nextOfKinName"], { trim: true });
+  const or = keywordOr(
+    searchText(keyword),
+    ["name", "roomNumber", "nextOfKinName"],
+    { trim: true },
+  );
   if (or) search.push({ $match: { $or: or } });
 
   const wanted = status ? [{ $match: { status } }] : [];
@@ -165,17 +209,24 @@ const listFamilyGroups = async ({ organizationId, branchId, status, keyword, pag
 
   const counts = countsOf(result.statusCounts);
   const totalRecords = facetCount(result.totalCount);
-  return { data: result.data, meta: { ...generateMeta(page, limit, totalRecords), counts } };
+  return {
+    data: result.data,
+    meta: { ...generateMeta(page, limit, totalRecords), counts },
+  };
 };
 
-const GROUP_MEMBER_STATUSES = [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.INACTIVE];
+const GROUP_MEMBER_STATUSES = [
+  FamilyMemberStatus.ACTIVE,
+  FamilyMemberStatus.INACTIVE,
+];
 
 /**
  * One resident's family group, as the detail page shows it: the resident, the primary next of kin,
  * the linked members and a summary. The group id is the resident's id.
  */
 const getFamilyGroup = async ({ organizationId, residentId }) => {
-  if (!isValidObjectId(residentId)) throw new AppError("resident_not_found", 404);
+  if (!isValidObjectId(residentId))
+    throw new AppError("resident_not_found", 404);
 
   const now = new Date();
   const [resident] = await Resident.aggregate([
@@ -187,7 +238,12 @@ const getFamilyGroup = async ({ organizationId, residentId }) => {
       },
     },
     ...groupStages(now),
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
     {
       $project: {
         _id: 0,
@@ -213,7 +269,12 @@ const getFamilyGroup = async ({ organizationId, residentId }) => {
           status: { $in: GROUP_MEMBER_STATUSES },
         },
       },
-      ...joinOne({ from: User, localField: "userId", as: "user", optional: true }),
+      ...joinOne({
+        from: User,
+        localField: "userId",
+        as: "user",
+        optional: true,
+      }),
       { $sort: { isNextOfKin: -1, createdAt: 1, _id: 1 } },
       {
         $project: {
@@ -241,18 +302,50 @@ const getFamilyGroup = async ({ organizationId, residentId }) => {
         },
       },
       { $sort: { isNextOfKin: -1, createdAt: -1 } },
-      { $project: { _id: 0, invitationId: "$_id", name: 1, email: 1, relationship: 1, isNextOfKin: 1, expiresAt: 1, createdAt: 1 } },
+      {
+        $project: {
+          _id: 0,
+          invitationId: "$_id",
+          name: 1,
+          email: 1,
+          relationship: 1,
+          isNextOfKin: 1,
+          expiresAt: 1,
+          createdAt: 1,
+        },
+      },
     ]),
   ]);
 
   const rows = members;
 
-  const kin = rows.find((member) => member.isNextOfKin && member.status === FamilyMemberStatus.ACTIVE);
-  const kinInvite = pendingInvitations.find((invitation) => invitation.isNextOfKin);
+  const kin = rows.find(
+    (member) =>
+      member.isNextOfKin && member.status === FamilyMemberStatus.ACTIVE,
+  );
+  const kinInvite = pendingInvitations.find(
+    (invitation) => invitation.isNextOfKin,
+  );
   const primaryNextOfKin = kin
-    ? { memberId: kin.memberId, name: kin.name, photoUrl: kin.photoUrl, relationship: kin.relationship, email: kin.email, phone: kin.phone, status: kin.status }
+    ? {
+        memberId: kin.memberId,
+        name: kin.name,
+        photoUrl: kin.photoUrl,
+        relationship: kin.relationship,
+        email: kin.email,
+        phone: kin.phone,
+        status: kin.status,
+      }
     : kinInvite
-      ? { memberId: null, name: kinInvite.name, photoUrl: "", relationship: kinInvite.relationship, email: kinInvite.email, phone: "", status: "invited" }
+      ? {
+          memberId: null,
+          name: kinInvite.name,
+          photoUrl: "",
+          relationship: kinInvite.relationship,
+          email: kinInvite.email,
+          phone: "",
+          status: "invited",
+        }
       : null;
 
   return {
@@ -260,10 +353,14 @@ const getFamilyGroup = async ({ organizationId, residentId }) => {
     groupId: resident.residentId,
     primaryNextOfKin,
     members: rows,
-    pendingInvitations: pendingInvitations.map(({ isNextOfKin, ...invitation }) => ({ ...invitation, isNextOfKin })),
+    pendingInvitations: pendingInvitations.map(
+      ({ isNextOfKin, ...invitation }) => ({ ...invitation, isNextOfKin }),
+    ),
     summary: {
       totalLinkedMembers: rows.length,
-      activePortalUsers: rows.filter((member) => member.status === FamilyMemberStatus.ACTIVE).length,
+      activePortalUsers: rows.filter(
+        (member) => member.status === FamilyMemberStatus.ACTIVE,
+      ).length,
       pendingInvites: pendingInvitations.length,
       groupId: resident.residentId,
     },

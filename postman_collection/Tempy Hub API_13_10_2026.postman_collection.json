@@ -10013,6 +10013,66 @@
               ]
             },
             {
+              "name": "Gallery",
+              "description": "The resident's photos: All, This Month and From Me.",
+              "item": [
+                {
+                  "name": "gallery",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Gallery fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const json = pm.response.json();",
+                          "    pm.expect(json.data).to.be.an(\"array\");",
+                          "    pm.expect(json.meta.counts).to.have.all.keys(\"all\", \"thisMonth\", \"fromMe\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/gallery?residentId={{residentId}}&tab=all&page=1&limit=30",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "gallery"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        },
+                        {
+                          "key": "tab",
+                          "value": "all"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "30"
+                        }
+                      ]
+                    },
+                    "description": "The Gallery screen. Query: residentId (required), tab (all, thisMonth or fromMe: the tabs All, This Month and From Me; 400 invalid_gallery_tab for anything else), page, limit (default 30, max 60). One tile per photo, newest first: mediaId, url (the blurred copy where the home made one), width, height, source (upload or wallPost), uploadId or postId, takenAt, fromMe. The photos are the approved family uploads for the resident plus the published wall posts that tag them; waiting and rejected uploads never appear. meta.counts has the three tab totals and meta.photoSharing is false, with no photos at all, when the resident has photo sharing switched off: it is checked on every request, so the photos leave at once."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
               "name": "Newsletters",
               "description": "Current and past newsletters of the home: list, read and PDF.",
               "item": [

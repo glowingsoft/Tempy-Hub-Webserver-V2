@@ -3,7 +3,10 @@ const {
   isFamilyModuleActive,
   listActiveLinks,
 } = require("@appServices/family/familyAccessService");
-const { isValidObjectId, toObjectId } = require("@appServices/family/familyPipeline");
+const {
+  isValidObjectId,
+  toObjectId,
+} = require("@appServices/family/familyPipeline");
 const { Branch } = require("@models/Branch");
 const { Resident } = require("@models/Resident");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
@@ -15,7 +18,8 @@ const { queryId } = require("../helperUtils/familyQuery");
 const notFound = (res, translationKey = "resident_not_found") =>
   sendResponse({ res, statusCode: 404, translationKey });
 
-const readResidentId = (req, { param, from = "params" }) => (req[from] || {})[param];
+const readResidentId = (req, { param, from = "params" }) =>
+  (req[from] || {})[param];
 
 /**
  * Reads the caller's links live on every request, so a removed member or a module
@@ -41,7 +45,11 @@ const requireFamilyAccess =
           });
         }
         if (!isValidObjectId(residentId)) {
-          return sendResponse({ res, statusCode: 400, translationKey: "invalid_resident_id" });
+          return sendResponse({
+            res,
+            statusCode: 400,
+            translationKey: "invalid_resident_id",
+          });
         }
 
         link = links.find((l) => String(l.residentId) === String(residentId));
@@ -52,7 +60,12 @@ const requireFamilyAccess =
       req.familyLink = link;
       return next();
     } catch (error) {
-      return sendResponse({ res, statusCode: 500, translationKey: "an_error", error });
+      return sendResponse({
+        res,
+        statusCode: 500,
+        translationKey: "an_error",
+        error,
+      });
     }
   };
 
@@ -63,15 +76,24 @@ const requireFamilyAccess =
  */
 const requireFamilyModule = (req, res, next) => {
   if (!req.organization) {
-    return sendResponse({ res, statusCode: 403, translationKey: "no_membership_for_scope" });
+    return sendResponse({
+      res,
+      statusCode: 403,
+      translationKey: "no_membership_for_scope",
+    });
   }
-  if (req.isPlatformAdmin || isFamilyModuleActive(req.organization)) return next();
+  if (req.isPlatformAdmin || isFamilyModuleActive(req.organization))
+    return next();
   return notFound(res, "family_module_not_enabled");
 };
 
 const requireNextOfKin = (req, res, next) => {
   if (!req.familyLink?.isNextOfKin) {
-    return sendResponse({ res, statusCode: 403, translationKey: "next_of_kin_only" });
+    return sendResponse({
+      res,
+      statusCode: 403,
+      translationKey: "next_of_kin_only",
+    });
   }
   return next();
 };
@@ -89,8 +111,12 @@ const checkFamilyFilters = async (req, res, next) => {
     const organizationId = toObjectId(req.orgId);
 
     const [branch, resident] = await Promise.all([
-      branchId ? Branch.exists({ _id: toObjectId(branchId), organizationId }) : true,
-      residentId ? Resident.exists({ _id: toObjectId(residentId), organizationId }) : true,
+      branchId
+        ? Branch.exists({ _id: toObjectId(branchId), organizationId })
+        : true,
+      residentId
+        ? Resident.exists({ _id: toObjectId(residentId), organizationId })
+        : true,
     ]);
     if (!branch) throw new AppError("branch_not_found", 404);
     if (!resident) throw new AppError("resident_not_found", 404);
@@ -100,4 +126,9 @@ const checkFamilyFilters = async (req, res, next) => {
   }
 };
 
-module.exports = { requireFamilyAccess, requireNextOfKin, requireFamilyModule, checkFamilyFilters };
+module.exports = {
+  requireFamilyAccess,
+  requireNextOfKin,
+  requireFamilyModule,
+  checkFamilyFilters,
+};

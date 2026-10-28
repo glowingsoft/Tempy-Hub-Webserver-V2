@@ -18,7 +18,12 @@ const authorRoleStages = () => [
       pipeline: [
         {
           $match: {
-            $expr: { $and: [{ $eq: ["$userId", "$$authorId"] }, { $eq: ["$organizationId", "$$organizationId"] }] },
+            $expr: {
+              $and: [
+                { $eq: ["$userId", "$$authorId"] },
+                { $eq: ["$organizationId", "$$organizationId"] },
+              ],
+            },
           },
         },
         { $limit: 1 },
@@ -32,7 +37,9 @@ const authorRoleStages = () => [
       authorRole: {
         $switch: {
           branches: Object.entries(ROLE_LABELS).map(([role, label]) => ({
-            case: { $eq: [{ $arrayElemAt: ["$authorMembership.role", 0] }, role] },
+            case: {
+              $eq: [{ $arrayElemAt: ["$authorMembership.role", 0] }, role],
+            },
             then: label,
           })),
           default: "",

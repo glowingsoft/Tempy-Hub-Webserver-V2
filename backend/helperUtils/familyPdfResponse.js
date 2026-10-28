@@ -7,8 +7,17 @@ const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
  */
 const sendPdf = async ({ req, res, pdf, attachment }) => {
   if (req.query.format === "url" && pdf.key) {
-    const { url, expiresAt } = await uploadAwsService.signedPdfUrl({ key: pdf.key, filename: pdf.filename, attachment });
-    return sendResponse({ res, statusCode: 200, translationKey: "data_fetched_successfully", data: { url, expiresAt, filename: pdf.filename } });
+    const { url, expiresAt } = await uploadAwsService.signedPdfUrl({
+      key: pdf.key,
+      filename: pdf.filename,
+      attachment,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { url, expiresAt, filename: pdf.filename },
+    });
   }
 
   res.set({

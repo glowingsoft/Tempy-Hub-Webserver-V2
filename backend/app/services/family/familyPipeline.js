@@ -29,7 +29,8 @@ const joinOne = ({ from, localField, as, optional = false }) => [
  * `prefix` the fields are flat (fromName, fromPhotoUrl), for rows that carry two people.
  */
 const personFields = (as = "user", prefix = "") => {
-  const field = (name) => (prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name);
+  const field = (name) =>
+    prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
   return {
     [field("name")]: { $ifNull: [`$${as}.name`, ""] },
     [field("photoUrl")]: { $ifNull: [`$${as}.profileIcon`, ""] },
@@ -41,4 +42,10 @@ const pickPerson = (row, prefix) => ({
   photoUrl: row[`${prefix}PhotoUrl`],
 });
 
-module.exports = { toObjectId, isValidObjectId, joinOne, personFields, pickPerson };
+module.exports = {
+  toObjectId,
+  isValidObjectId,
+  joinOne,
+  personFields,
+  pickPerson,
+};

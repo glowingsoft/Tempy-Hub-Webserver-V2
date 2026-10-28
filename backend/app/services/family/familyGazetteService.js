@@ -4,33 +4,62 @@ const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyGazetteIssue } = require("@models/FamilyGazetteIssue");
 const { FamilyGazetteItem } = require("@models/FamilyGazetteItem");
-const { FamilyGazetteItemStatus, FamilyUploadStatus } = require("@models/domainEnums");
+const {
+  FamilyGazetteItemStatus,
+  FamilyUploadStatus,
+} = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
-const { getGazetteRules } = require("@adminServices/family/familySettingsService");
+const {
+  getGazetteRules,
+} = require("@adminServices/family/familySettingsService");
 const { currentPeriod } = require("@adminServices/family/familyGazettePeriod");
-const { gazetteTitle, periodLabel } = require("@adminServices/family/familyGazettePdf");
+const {
+  gazetteTitle,
+  periodLabel,
+} = require("@adminServices/family/familyGazettePdf");
 const adminGazettes = require("@adminServices/family/familyGazetteService");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
 
 const HEADLINE_LENGTH = 80;
 
-const cut = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
+const cut = (text, max) =>
+  text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
 const single = async (model, match, project) => {
-  const [row] = await model.aggregate([{ $match: match }, { $project: project }]);
+  const [row] = await model.aggregate([
+    { $match: match },
+    { $project: project },
+  ]);
   return row || null;
 };
 
 const nextGazette = async ({ link, now = new Date() }) => {
   const rules = await getGazetteRules({ organizationId: link.organizationId });
-  if (!rules.configured) return { scheduled: false, issue: null, messageCap: rules.messageCap };
+  if (!rules.configured)
+    return { scheduled: false, issue: null, messageCap: rules.messageCap };
 
-  const branch = await single(Branch, { _id: toObjectId(link.branchId) }, { timezone: 1 });
+  const branch = await single(
+    Branch,
+    { _id: toObjectId(link.branchId) },
+    { timezone: 1 },
+  );
   const timezone = branch?.timezone || "Europe/London";
-  const period = currentPeriod({ anchorDate: rules.anchorDate, issueEveryDays: rules.issueEveryDays, timezone, at: now });
+  const period = currentPeriod({
+    anchorDate: rules.anchorDate,
+    issueEveryDays: rules.issueEveryDays,
+    timezone,
+    at: now,
+  });
 
-  const [built] = await FamilyGazetteIssue.aggregate([{ $match: { branchId: toObjectId(link.branchId), periodStart: period.start } }]);
+  const [built] = await FamilyGazetteIssue.aggregate([
+    {
+      $match: {
+        branchId: toObjectId(link.branchId),
+        periodStart: period.start,
+      },
+    },
+  ]);
   const [latest] = await FamilyGazetteIssue.aggregate([
     { $match: { branchId: toObjectId(link.branchId) } },
     { $group: { _id: null, number: { $max: "$number" } } },
@@ -41,7 +70,12 @@ const nextGazette = async ({ link, now = new Date() }) => {
   const residentId = toObjectId(link.residentId);
   const [earlier, uploads, own] = await Promise.all([
     FamilyGazetteItem.aggregate([
-      { $match: { residentId, ...(built ? { issueId: { $ne: built._id } } : {}) } },
+      {
+        $match: {
+          residentId,
+          ...(built ? { issueId: { $ne: built._id } } : {}),
+        },
+      },
       { $project: { uploadIds: 1, removedUploadIds: 1 } },
     ]),
     FamilyUpload.aggregate([
@@ -57,10 +91,22 @@ const nextGazette = async ({ link, now = new Date() }) => {
       },
       { $project: { _id: 1 } },
     ]),
-    built ? FamilyGazetteItem.aggregate([{ $match: { issueId: built._id, residentId } }, { $project: { removedUploadIds: 1 } }]) : [],
+    built
+      ? FamilyGazetteItem.aggregate([
+          { $match: { issueId: built._id, residentId } },
+          { $project: { removedUploadIds: 1 } },
+        ])
+      : [],
   ]);
 
-  const used = new Set([...earlier, ...own].flatMap((item) => [...(item.uploadIds ?? []), ...(item.removedUploadIds ?? [])]).map(String));
+  const used = new Set(
+    [...earlier, ...own]
+      .flatMap((item) => [
+        ...(item.uploadIds ?? []),
+        ...(item.removedUploadIds ?? []),
+      ])
+      .map(String),
+  );
   const sent = uploads.filter((upload) => !used.has(String(upload._id))).length;
   const messagesUsed = Math.min(sent, cap);
   const started = now >= period.start;
@@ -72,7 +118,11 @@ const nextGazette = async ({ link, now = new Date() }) => {
       state: started ? "collecting" : "notStarted",
       periodStart: period.start,
       periodEnd: period.end,
-      periodLabel: periodLabel({ periodStart: period.start, periodEnd: period.end, timezone }),
+      periodLabel: periodLabel({
+        periodStart: period.start,
+        periodEnd: period.end,
+        timezone,
+      }),
       closesAt: period.closesAt,
     },
     messageCap: cap,
@@ -86,7 +136,11 @@ const nextGazette = async ({ link, now = new Date() }) => {
 };
 
 const listGazettes = async ({ link, page, limit, skip }) => {
-  const match = { residentId: toObjectId(link.residentId), organizationId: toObjectId(link.organizationId), status: FamilyGazetteItemStatus.PRINTED };
+  const match = {
+    residentId: toObjectId(link.residentId),
+    organizationId: toObjectId(link.organizationId),
+    status: FamilyGazetteItemStatus.PRINTED,
+  };
 
   const { result, data, meta } = await paginateWithFacet({
     model: FamilyGazetteItem,
@@ -96,11 +150,26 @@ const listGazettes = async ({ link, page, limit, skip }) => {
     skip,
     sort: { printedAt: -1, _id: -1 },
     extraFacets: {
-      newest: [{ $match: match }, { $sort: { printedAt: -1, _id: -1 } }, { $limit: 1 }, { $project: { _id: 1 } }],
+      newest: [
+        { $match: match },
+        { $sort: { printedAt: -1, _id: -1 } },
+        { $limit: 1 },
+        { $project: { _id: 1 } },
+      ],
     },
     extraDataStages: [
-      ...joinOne({ from: FamilyGazetteIssue, localField: "issueId", as: "issue", optional: true }),
-      ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
+      ...joinOne({
+        from: FamilyGazetteIssue,
+        localField: "issueId",
+        as: "issue",
+        optional: true,
+      }),
+      ...joinOne({
+        from: Resident,
+        localField: "residentId",
+        as: "resident",
+        optional: true,
+      }),
       {
         $project: {
           _id: 0,
@@ -119,14 +188,23 @@ const listGazettes = async ({ link, page, limit, skip }) => {
   });
 
   const newest = result.newest?.[0]?._id;
-  const [branch] = await Branch.aggregate([{ $match: { _id: toObjectId(link.branchId) } }, { $project: { timezone: 1 } }]);
+  const [branch] = await Branch.aggregate([
+    { $match: { _id: toObjectId(link.branchId) } },
+    { $project: { timezone: 1 } },
+  ]);
   const timezone = branch?.timezone || "Europe/London";
 
   return {
     data: data.map((row) => ({
       ...row,
       title: gazetteTitle(row.residentName),
-      periodLabel: row.periodStart ? periodLabel({ periodStart: row.periodStart, periodEnd: row.periodEnd, timezone }) : "",
+      periodLabel: row.periodStart
+        ? periodLabel({
+            periodStart: row.periodStart,
+            periodEnd: row.periodEnd,
+            timezone,
+          })
+        : "",
       latest: String(row.gazetteId) === String(newest),
     })),
     meta,
@@ -136,14 +214,21 @@ const listGazettes = async ({ link, page, limit, skip }) => {
 const loadVisible = async ({ links, gazetteId }) => {
   if (!isValidObjectId(gazetteId)) throw new AppError("gazette_not_found", 404);
 
-  const [item] = await FamilyGazetteItem.aggregate([{ $match: { _id: toObjectId(gazetteId), status: FamilyGazetteItemStatus.PRINTED } }]);
+  const [item] = await FamilyGazetteItem.aggregate([
+    {
+      $match: {
+        _id: toObjectId(gazetteId),
+        status: FamilyGazetteItemStatus.PRINTED,
+      },
+    },
+  ]);
   const visible =
     item &&
     links.some(
       (link) =>
         String(link.residentId) === String(item.residentId) &&
         String(link.organizationId) === String(item.organizationId) &&
-        String(link.branchId) === String(item.branchId)
+        String(link.branchId) === String(item.branchId),
     );
   if (!visible) throw new AppError("gazette_not_found", 404);
   return item;
@@ -154,12 +239,28 @@ const getGazette = async ({ links, gazetteId }) => {
   const item = await loadVisible({ links, gazetteId });
   const { gazette } = await adminGazettes.loadInput({ item });
 
-  const mediaIds = [...gazette.messages.flatMap((message) => message.mediaIds), ...gazette.life.map((entry) => entry.mediaId)].filter(Boolean);
-  const media = mediaIds.length ? await FamilyMedia.aggregate([{ $match: { _id: { $in: mediaIds.map(toObjectId) } } }, { $project: { url: 1, blurredUrl: 1 } }]) : [];
-  const urlOf = new Map(media.map((entry) => [String(entry._id), entry.blurredUrl || entry.url]));
+  const mediaIds = [
+    ...gazette.messages.flatMap((message) => message.mediaIds),
+    ...gazette.life.map((entry) => entry.mediaId),
+  ].filter(Boolean);
+  const media = mediaIds.length
+    ? await FamilyMedia.aggregate([
+        { $match: { _id: { $in: mediaIds.map(toObjectId) } } },
+        { $project: { url: 1, blurredUrl: 1 } },
+      ])
+    : [];
+  const urlOf = new Map(
+    media.map((entry) => [String(entry._id), entry.blurredUrl || entry.url]),
+  );
   const photoUrl = (id) => (id ? urlOf.get(String(id)) || "" : "");
 
-  const coverMessage = gazette.coverMediaId ? gazette.messages.find((message) => message.mediaIds.some((id) => String(id) === String(gazette.coverMediaId))) : null;
+  const coverMessage = gazette.coverMediaId
+    ? gazette.messages.find((message) =>
+        message.mediaIds.some(
+          (id) => String(id) === String(gazette.coverMediaId),
+        ),
+      )
+    : null;
 
   return {
     gazetteId: item._id,
@@ -176,7 +277,12 @@ const getGazette = async ({ links, gazetteId }) => {
     cover: coverMessage
       ? {
           photoUrl: photoUrl(gazette.coverMediaId),
-          headline: cut(String(coverMessage.message || "").trim().split(/(?<=[.!?])\s/)[0] || "", HEADLINE_LENGTH),
+          headline: cut(
+            String(coverMessage.message || "")
+              .trim()
+              .split(/(?<=[.!?])\s/)[0] || "",
+            HEADLINE_LENGTH,
+          ),
           message: coverMessage.message,
           authorName: coverMessage.authorName,
           relationshipLabel: coverMessage.relationshipLabel,
@@ -186,10 +292,17 @@ const getGazette = async ({ links, gazetteId }) => {
       authorName: message.authorName,
       relationshipLabel: message.relationshipLabel,
       message: message.message,
-      photos: message.mediaIds.map((id) => ({ url: photoUrl(id) })).filter((photo) => photo.url),
+      photos: message.mediaIds
+        .map((id) => ({ url: photoUrl(id) }))
+        .filter((photo) => photo.url),
       sentAt: message.createdAt,
     })),
-    life: gazette.life.map((entry) => ({ title: entry.title, text: entry.text, photoUrl: photoUrl(entry.mediaId), postedAt: entry.postedAt })),
+    life: gazette.life.map((entry) => ({
+      title: entry.title,
+      text: entry.text,
+      photoUrl: photoUrl(entry.mediaId),
+      postedAt: entry.postedAt,
+    })),
   };
 };
 

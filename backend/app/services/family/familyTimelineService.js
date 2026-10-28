@@ -14,15 +14,36 @@ const TimelineItemType = { UPLOAD: "upload", WALL_POST: "wallPost" };
 
 /** Only the blurred copy is shown once a manager made one; wall photos never have one. */
 const photoUrl = {
-  $cond: [{ $ne: ["$$media.blurredUrl", ""] }, "$$media.blurredUrl", "$$media.url"],
+  $cond: [
+    { $ne: ["$$media.blurredUrl", ""] },
+    "$$media.blurredUrl",
+    "$$media.url",
+  ],
 };
 
 const isUpload = { $eq: ["$kind", TimelineItemType.UPLOAD] };
 
 const itemStages = ({ residentId, userId }) => [
-  { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },
-  ...joinOne({ from: User, localField: "authorId", as: "author", optional: true }),
-  ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+  {
+    $lookup: {
+      from: FamilyMedia.collection.name,
+      localField: "mediaIds",
+      foreignField: "_id",
+      as: "media",
+    },
+  },
+  ...joinOne({
+    from: User,
+    localField: "authorId",
+    as: "author",
+    optional: true,
+  }),
+  ...joinOne({
+    from: Branch,
+    localField: "branchId",
+    as: "branch",
+    optional: true,
+  }),
   {
     $lookup: {
       from: FamilyMember.collection.name,
@@ -48,9 +69,15 @@ const itemStages = ({ residentId, userId }) => [
   {
     $addFields: {
       photos: {
-        $map: { input: "$media", as: "media", in: { mediaId: "$$media._id", url: photoUrl } },
+        $map: {
+          input: "$media",
+          as: "media",
+          in: { mediaId: "$$media._id", url: photoUrl },
+        },
       },
-      authorRelationship: { $ifNull: [{ $arrayElemAt: ["$authorLink.relationship", 0] }, ""] },
+      authorRelationship: {
+        $ifNull: [{ $arrayElemAt: ["$authorLink.relationship", 0] }, ""],
+      },
     },
   },
   {
@@ -129,7 +156,10 @@ const listTimeline = async ({ link, userId, page, limit, skip }) => {
     },
   ]);
 
-  return { data: result.data, meta: generateMeta(page, limit, facetCount(result.totalCount)) };
+  return {
+    data: result.data,
+    meta: generateMeta(page, limit, facetCount(result.totalCount)),
+  };
 };
 
 module.exports = { listTimeline };

@@ -10,7 +10,7 @@ router.get("/", familyInvitationController.listMyInvitations);
 router.get("/:invitationId", familyInvitationController.getMyInvitation);
 router.post(
   "/:invitationId/accept",
-  familyInvitationController.acceptMyInvitation
+  familyInvitationController.acceptMyInvitation,
 );
 
 module.exports = router;

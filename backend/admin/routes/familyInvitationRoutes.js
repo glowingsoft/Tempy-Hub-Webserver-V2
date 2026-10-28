@@ -20,11 +20,25 @@ router.use(
   auth,
   requireMembership(),
   requireFamilyModule,
-  requireRoles(FAMILY_STAFF_ROLES)
+  requireRoles(FAMILY_STAFF_ROLES),
 );
 
-router.post("/", inviteLimiter, requirePermission(FAMILY_MANAGE), familyInvitationController.inviteFamilyMember);
-router.put("/:invitationId", inviteLimiter, requirePermission(FAMILY_MANAGE), familyInvitationController.updateInvitation);
-router.delete("/:invitationId", requirePermission(FAMILY_MANAGE), familyInvitationController.deleteInvitation);
+router.post(
+  "/",
+  inviteLimiter,
+  requirePermission(FAMILY_MANAGE),
+  familyInvitationController.inviteFamilyMember,
+);
+router.put(
+  "/:invitationId",
+  inviteLimiter,
+  requirePermission(FAMILY_MANAGE),
+  familyInvitationController.updateInvitation,
+);
+router.delete(
+  "/:invitationId",
+  requirePermission(FAMILY_MANAGE),
+  familyInvitationController.deleteInvitation,
+);
 
 module.exports = router;

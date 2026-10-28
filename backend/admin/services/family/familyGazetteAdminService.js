@@ -514,7 +514,6 @@ const stateOf = (item) => {
   return item.status === Status.READY ? "ready" : "building";
 };
 
-
 const rendering = new Set();
 
 const renderIssue = async ({ issueId, now = new Date() }) => {
@@ -529,8 +528,16 @@ const renderIssue = async ({ issueId, now = new Date() }) => {
     const counts = { ready: 0, failed: 0, noContent: 0 };
     for (let i = 0; i < waiting.length; i += MAX_CONCURRENT_RENDERS) {
       const batch = waiting.slice(i, i + MAX_CONCURRENT_RENDERS);
-      await FamilyGazetteItem.updateMany({ _id: { $in: batch.map((item) => item._id) }, status: Status.BUILDING }, { $set: { renderClaimedAt: now } });
-      const results = await Promise.all(batch.map((item) => renderItem({ itemId: item._id, now })));
+      await FamilyGazetteItem.updateMany(
+        {
+          _id: { $in: batch.map((item) => item._id) },
+          status: Status.BUILDING,
+        },
+        { $set: { renderClaimedAt: now } },
+      );
+      const results = await Promise.all(
+        batch.map((item) => renderItem({ itemId: item._id, now })),
+      );
       results.forEach((result) => {
         if (result.status === Status.READY) counts.ready += 1;
         else if (result.status === Status.FAILED) counts.failed += 1;
@@ -553,7 +560,10 @@ const renderIssue = async ({ issueId, now = new Date() }) => {
 };
 
 // A claim takes each stuck gazette over, so two servers never draw the same one.
-const recoverStuckGazettes = async ({ now = new Date(), limit = RECOVER_PER_RUN } = {}) => {
+const recoverStuckGazettes = async ({
+  now = new Date(),
+  limit = RECOVER_PER_RUN,
+} = {}) => {
   const cutoff = new Date(now.getTime() - STUCK_AFTER_MS);
   const touched = new Set();
   const counts = { recovered: 0, ready: 0, failed: 0, noContent: 0 };
@@ -566,7 +576,7 @@ const recoverStuckGazettes = async ({ now = new Date(), limit = RECOVER_PER_RUN 
         $or: [{ renderClaimedAt: null }, { renderClaimedAt: { $lt: cutoff } }],
       },
       { $set: { renderClaimedAt: now } },
-      { sort: { generatedAt: 1, _id: 1 }, new: true, lean: true }
+      { sort: { generatedAt: 1, _id: 1 }, new: true, lean: true },
     );
     if (!claimed) break;
 
@@ -579,8 +589,15 @@ const recoverStuckGazettes = async ({ now = new Date(), limit = RECOVER_PER_RUN 
   }
 
   for (const issueId of touched) {
-    const [stillBuilding] = await FamilyGazetteItem.aggregate([{ $match: { issueId: toObjectId(issueId), status: Status.BUILDING } }, { $count: "count" }]);
-    if (!stillBuilding?.count) await FamilyGazetteIssue.updateOne({ _id: toObjectId(issueId) }, { $set: { status: FamilyGazetteIssueStatus.READY } });
+    const [stillBuilding] = await FamilyGazetteItem.aggregate([
+      { $match: { issueId: toObjectId(issueId), status: Status.BUILDING } },
+      { $count: "count" },
+    ]);
+    if (!stillBuilding?.count)
+      await FamilyGazetteIssue.updateOne(
+        { _id: toObjectId(issueId) },
+        { $set: { status: FamilyGazetteIssueStatus.READY } },
+      );
   }
   return counts;
 };
@@ -639,7 +656,10 @@ const generateForSite = async ({
 
 const currentIssueForStaff = async ({ actor, organizationId, branchId }) => {
   const site = await resolveSite({ actor, organizationId, branchId });
-  const [issue] = await currentIssues({ organizationId, branchId: site.branchId });
+  const [issue] = await currentIssues({
+    organizationId,
+    branchId: site.branchId,
+  });
   if (!issue) throw new AppError("gazette_issue_not_found", 404);
   return issue;
 };
@@ -667,12 +687,17 @@ const printAll = async ({
     filter._id = { $in: itemIds.map(toObjectId) };
   }
   // Moved one at a time so only the families of gazettes that really changed are told.
-  const candidates = await FamilyGazetteItem.aggregate([{ $match: filter }, { $project: { _id: 1 } }]);
+  const candidates = await FamilyGazetteItem.aggregate([
+    { $match: filter },
+    { $project: { _id: 1 } },
+  ]);
   let printed = 0;
   for (const candidate of candidates) {
     const done = await FamilyGazetteItem.findOneAndUpdate(
       { _id: candidate._id, status: Status.READY, pdfKey: { $ne: "" } },
-      { $set: { status: Status.PRINTED, printedBy: actor._id, printedAt: now } },
+      {
+        $set: { status: Status.PRINTED, printedBy: actor._id, printedAt: now },
+      },
       { new: true, lean: true },
     );
     if (!done) continue;
@@ -797,7 +822,6 @@ const markGiven = async ({
   );
   return getGazette({ organizationId, itemId });
 };
-
 
 const getPdf = async ({ organizationId, itemId }) => {
   await loadItemInOrganization({ organizationId, itemId });

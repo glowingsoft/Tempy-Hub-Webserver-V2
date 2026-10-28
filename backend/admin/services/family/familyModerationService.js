@@ -9,10 +9,19 @@ const { FamilyUploadStatus } = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
-const { actorStanding, assertMayAccessResidents } = require("@adminServices/residents/residentAccess");
+const {
+  actorStanding,
+  assertMayAccessResidents,
+} = require("@adminServices/residents/residentAccess");
 const { blurAreas, validateAreas } = require("@appServices/family/familyImage");
-const { rejectedDeleteAfter } = require("@appServices/family/familyUploadService");
-const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
+const {
+  rejectedDeleteAfter,
+} = require("@appServices/family/familyUploadService");
+const {
+  toObjectId,
+  isValidObjectId,
+  joinOne,
+} = require("@appServices/family/familyPipeline");
 const { searchClause } = require("./familySearch");
 
 const MAX_REASON_LENGTH = 500;
@@ -20,18 +29,45 @@ const MAX_REASON_LENGTH = 500;
 const ALL = "all";
 
 const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(Object.values(FamilyUploadStatus).map((status) => [status, 0]));
+  const counts = Object.fromEntries(
+    Object.values(FamilyUploadStatus).map((status) => [status, 0]),
+  );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
-  return { total: Object.values(counts).reduce((sum, n) => sum + n, 0), ...counts };
+  return {
+    total: Object.values(counts).reduce((sum, n) => sum + n, 0),
+    ...counts,
+  };
 };
 
 const queueStages = [
-  { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },
-  ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
-  ...joinOne({ from: User, localField: "authorId", as: "author", optional: true }),
-  ...joinOne({ from: User, localField: "decidedBy", as: "decider", optional: true }),
+  {
+    $lookup: {
+      from: FamilyMedia.collection.name,
+      localField: "mediaIds",
+      foreignField: "_id",
+      as: "media",
+    },
+  },
+  ...joinOne({
+    from: Resident,
+    localField: "residentId",
+    as: "resident",
+    optional: true,
+  }),
+  ...joinOne({
+    from: User,
+    localField: "authorId",
+    as: "author",
+    optional: true,
+  }),
+  ...joinOne({
+    from: User,
+    localField: "decidedBy",
+    as: "decider",
+    optional: true,
+  }),
   {
     $lookup: {
       from: FamilyMember.collection.name,
@@ -39,7 +75,12 @@ const queueStages = [
       pipeline: [
         {
           $match: {
-            $expr: { $and: [{ $eq: ["$userId", "$$authorId"] }, { $eq: ["$residentId", "$$residentId"] }] },
+            $expr: {
+              $and: [
+                { $eq: ["$userId", "$$authorId"] },
+                { $eq: ["$residentId", "$$residentId"] },
+              ],
+            },
           },
         },
         { $limit: 1 },
@@ -78,7 +119,9 @@ const queueStages = [
       authorName: { $ifNull: ["$author.name", ""] },
       authorEmail: { $ifNull: ["$author.email", ""] },
       authorPhotoUrl: { $ifNull: ["$author.profileIcon", ""] },
-      authorRelationship: { $ifNull: [{ $arrayElemAt: ["$authorLink.relationship", 0] }, ""] },
+      authorRelationship: {
+        $ifNull: [{ $arrayElemAt: ["$authorLink.relationship", 0] }, ""],
+      },
       message: 1,
       photos: 1,
       includeInGazette: 1,
@@ -92,9 +135,19 @@ const queueStages = [
 ];
 
 /** Every status by default, newest first; status=waiting lists the queue oldest first. meta.counts (with a total) ignores the status filter; meta.oldestWaitingAt feeds the "oldest" age. */
-const listUploads = async ({ organizationId, branchId, residentId, status, keyword, page, limit, skip }) => {
+const listUploads = async ({
+  organizationId,
+  branchId,
+  residentId,
+  status,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
   const wanted = status || ALL;
-  if (wanted !== ALL && !Object.values(FamilyUploadStatus).includes(wanted)) throw new AppError("invalid_status_filter", 400);
+  if (wanted !== ALL && !Object.values(FamilyUploadStatus).includes(wanted))
+    throw new AppError("invalid_status_filter", 400);
 
   const base = { organizationId: toObjectId(organizationId) };
   if (branchId) base.branchId = toObjectId(branchId);
@@ -118,7 +171,10 @@ const listUploads = async ({ organizationId, branchId, residentId, status, keywo
     skip,
     sort: { createdAt: wanted === FamilyUploadStatus.WAITING ? 1 : -1 },
     extraFacets: {
-      statusCounts: [{ $match: base }, { $group: { _id: "$status", count: { $sum: 1 } } }],
+      statusCounts: [
+        { $match: base },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ],
       oldestWaiting: [
         { $match: { ...base, status: FamilyUploadStatus.WAITING } },
         { $group: { _id: null, createdAt: { $min: "$createdAt" } } },
@@ -142,15 +198,33 @@ const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
   if (!isValidObjectId(uploadId)) throw new AppError("upload_not_found", 404);
 
   const [upload] = await FamilyUpload.aggregate([
-    { $match: { _id: toObjectId(uploadId), organizationId: toObjectId(organizationId) } },
-    { $project: { branchId: 1, residentId: 1, authorId: 1, status: 1, mediaIds: 1 } },
+    {
+      $match: {
+        _id: toObjectId(uploadId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
+    {
+      $project: {
+        branchId: 1,
+        residentId: 1,
+        authorId: 1,
+        status: 1,
+        mediaIds: 1,
+      },
+    },
   ]);
   if (!upload) throw new AppError("upload_not_found", 404);
 
-  assertMayAccessResidents(await actorStanding(actor, organizationId), upload.branchId);
+  assertMayAccessResidents(
+    await actorStanding(actor, organizationId),
+    upload.branchId,
+  );
 
   if (upload.status !== FamilyUploadStatus.WAITING) {
-    throw new AppError("upload_already_decided", 409, { status: upload.status });
+    throw new AppError("upload_already_decided", 409, {
+      status: upload.status,
+    });
   }
   return upload;
 };
@@ -159,7 +233,7 @@ const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
 const settle = async ({ upload, actor, set }) => {
   const result = await FamilyUpload.updateOne(
     { _id: upload._id, status: FamilyUploadStatus.WAITING },
-    { $set: { decidedBy: actor._id, decidedAt: new Date(), ...set } }
+    { $set: { decidedBy: actor._id, decidedAt: new Date(), ...set } },
   );
   if (!result.modifiedCount) throw new AppError("upload_already_decided", 409);
 };
@@ -184,7 +258,8 @@ const notifyAuthor = async ({ upload, actor, type, title, body }) => {
 const saveBlurredCopies = async ({ upload, areas }) => {
   const mediaIds = new Set(upload.mediaIds.map(String));
   const entries = Object.entries(areas || {});
-  if (areas && (typeof areas !== "object" || Array.isArray(areas))) throw new AppError("invalid_blur_areas", 400);
+  if (areas && (typeof areas !== "object" || Array.isArray(areas)))
+    throw new AppError("invalid_blur_areas", 400);
 
   entries.forEach(([mediaId, rectangles]) => {
     if (!mediaIds.has(mediaId)) throw new AppError("invalid_blur_areas", 400);
@@ -203,7 +278,10 @@ const saveBlurredCopies = async ({ upload, areas }) => {
       body: blurred.buffer,
       contentType: blurred.mimeType,
     });
-    await FamilyMedia.updateOne({ _id: media._id }, { $set: { blurredKey: key, blurredUrl: url } });
+    await FamilyMedia.updateOne(
+      { _id: media._id },
+      { $set: { blurredKey: key, blurredUrl: url } },
+    );
   }
 };
 
@@ -214,7 +292,11 @@ const approveUpload = async ({ actor, organizationId, uploadId, blur }) => {
   await settle({
     upload,
     actor,
-    set: { status: FamilyUploadStatus.APPROVED, rejectionReason: "", deleteAfter: null },
+    set: {
+      status: FamilyUploadStatus.APPROVED,
+      rejectionReason: "",
+      deleteAfter: null,
+    },
   });
 
   await notifyAuthor({
@@ -230,13 +312,18 @@ const approveUpload = async ({ actor, organizationId, uploadId, blur }) => {
 const rejectUpload = async ({ actor, organizationId, uploadId, reason }) => {
   const text = String(reason ?? "").trim();
   if (!text) throw new AppError("reason_required", 400);
-  if (text.length > MAX_REASON_LENGTH) throw new AppError("reason_too_long", 400);
+  if (text.length > MAX_REASON_LENGTH)
+    throw new AppError("reason_too_long", 400);
 
   const upload = await loadWaitingUpload({ actor, organizationId, uploadId });
   await settle({
     upload,
     actor,
-    set: { status: FamilyUploadStatus.REJECTED, rejectionReason: text, deleteAfter: rejectedDeleteAfter() },
+    set: {
+      status: FamilyUploadStatus.REJECTED,
+      rejectionReason: text,
+      deleteAfter: rejectedDeleteAfter(),
+    },
   });
 
   await notifyAuthor({

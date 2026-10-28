@@ -22,10 +22,34 @@ const isDuplicateKey = (error) => error?.code === 11000;
  * but never reveals another family's resident.
  */
 const wallPostStages = ({ userId, linkedResidentIds }) => [
-  { $lookup: { from: FamilyMedia.collection.name, localField: "mediaIds", foreignField: "_id", as: "media" } },
-  { $lookup: { from: Resident.collection.name, localField: "taggedResidentIds", foreignField: "_id", as: "tagged" } },
-  ...joinOne({ from: User, localField: "authorId", as: "author", optional: true }),
-  ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+  {
+    $lookup: {
+      from: FamilyMedia.collection.name,
+      localField: "mediaIds",
+      foreignField: "_id",
+      as: "media",
+    },
+  },
+  {
+    $lookup: {
+      from: Resident.collection.name,
+      localField: "taggedResidentIds",
+      foreignField: "_id",
+      as: "tagged",
+    },
+  },
+  ...joinOne({
+    from: User,
+    localField: "authorId",
+    as: "author",
+    optional: true,
+  }),
+  ...joinOne({
+    from: Branch,
+    localField: "branchId",
+    as: "branch",
+    optional: true,
+  }),
   ...reactionStats(userId),
   {
     $addFields: {
@@ -36,7 +60,9 @@ const wallPostStages = ({ userId, linkedResidentIds }) => [
             $filter: {
               input: "$tagged",
               as: "resident",
-              cond: { $in: ["$$resident._id", linkedResidentIds.map(toObjectId)] },
+              cond: {
+                $in: ["$$resident._id", linkedResidentIds.map(toObjectId)],
+              },
             },
           },
           as: "resident",
@@ -74,7 +100,10 @@ const listWall = ({ link, userId, links, page, limit, skip }) =>
     limit,
     skip,
     sort: { isPinned: -1, createdAt: -1, _id: -1 },
-    extraDataStages: wallPostStages({ userId, linkedResidentIds: links.map((l) => l.residentId) }),
+    extraDataStages: wallPostStages({
+      userId,
+      linkedResidentIds: links.map((l) => l.residentId),
+    }),
   });
 
 const reactionSummary = async ({ postId, userId }) => {
@@ -84,11 +113,17 @@ const reactionSummary = async ({ postId, userId }) => {
       $group: {
         _id: null,
         count: { $sum: 1 },
-        mine: { $sum: { $cond: [{ $eq: ["$userId", toObjectId(userId)] }, 1, 0] } },
+        mine: {
+          $sum: { $cond: [{ $eq: ["$userId", toObjectId(userId)] }, 1, 0] },
+        },
       },
     },
   ]);
-  return { postId, reactionCount: stats?.count ?? 0, reactedByMe: (stats?.mine ?? 0) > 0 };
+  return {
+    postId,
+    reactionCount: stats?.count ?? 0,
+    reactedByMe: (stats?.mine ?? 0) > 0,
+  };
 };
 
 const assertPostVisible = async ({ postId, links }) => {
@@ -108,8 +143,13 @@ const addReaction = async ({ userId, links, postId }) => {
   try {
     await FamilyReaction.updateOne(
       { postId: toObjectId(postId), userId: toObjectId(userId) },
-      { $setOnInsert: { postId: toObjectId(postId), userId: toObjectId(userId) } },
-      { upsert: true }
+      {
+        $setOnInsert: {
+          postId: toObjectId(postId),
+          userId: toObjectId(userId),
+        },
+      },
+      { upsert: true },
     );
   } catch (error) {
     if (!isDuplicateKey(error)) throw error;
@@ -119,21 +159,30 @@ const addReaction = async ({ userId, links, postId }) => {
 
 const removeReaction = async ({ userId, links, postId }) => {
   await assertPostVisible({ postId, links });
-  await FamilyReaction.deleteOne({ postId: toObjectId(postId), userId: toObjectId(userId) });
+  await FamilyReaction.deleteOne({
+    postId: toObjectId(postId),
+    userId: toObjectId(userId),
+  });
   return reactionSummary({ postId, userId });
 };
 
 const sameHome = (link, post) =>
-  String(link.organizationId) === String(post.organizationId) && String(link.branchId) === String(post.branchId);
+  String(link.organizationId) === String(post.organizationId) &&
+  String(link.branchId) === String(post.branchId);
 
 /** The posts the app showed on screen. Only posts the caller may see count, and sending one twice changes nothing. */
 const markSeen = async ({ userId, links, postIds }) => {
-  if (!Array.isArray(postIds) || !postIds.length) throw new AppError("post_ids_required", 400);
+  if (!Array.isArray(postIds) || !postIds.length)
+    throw new AppError("post_ids_required", 400);
   const ids = [...new Set(postIds.map(String))];
   if (ids.length > MAX_SEEN_BATCH) throw new AppError("too_many_posts", 400);
   if (!ids.every(isValidObjectId)) throw new AppError("post_not_found", 404);
 
-  const homes = [...new Map(links.map((link) => [`${link.organizationId}:${link.branchId}`, link])).values()];
+  const homes = [
+    ...new Map(
+      links.map((link) => [`${link.organizationId}:${link.branchId}`, link]),
+    ).values(),
+  ];
   if (!homes.length) return { seen: 0 };
 
   const posts = await FamilyPost.aggregate([
@@ -152,13 +201,24 @@ const markSeen = async ({ userId, links, postIds }) => {
       updateOne: {
         filter: { postId: post._id, userId: toObjectId(userId) },
         update: {
-          $setOnInsert: { postId: post._id, userId: toObjectId(userId), organizationId: post.organizationId, branchId: post.branchId },
-          $addToSet: { residentIds: { $each: links.filter((link) => sameHome(link, post)).map((link) => toObjectId(link.residentId)) } },
+          $setOnInsert: {
+            postId: post._id,
+            userId: toObjectId(userId),
+            organizationId: post.organizationId,
+            branchId: post.branchId,
+          },
+          $addToSet: {
+            residentIds: {
+              $each: links
+                .filter((link) => sameHome(link, post))
+                .map((link) => toObjectId(link.residentId)),
+            },
+          },
         },
         upsert: true,
       },
     })),
-    { ordered: false }
+    { ordered: false },
   );
   return { seen: posts.length };
 };
@@ -167,9 +227,11 @@ const markSeen = async ({ userId, links, postIds }) => {
 const reportPost = async ({ userId, links, postId, reason }) => {
   const post = await assertPostVisible({ postId, links });
 
-  if (reason !== undefined && reason !== null && typeof reason !== "string") throw new AppError("report_reason_invalid", 400);
+  if (reason !== undefined && reason !== null && typeof reason !== "string")
+    throw new AppError("report_reason_invalid", 400);
   const text = String(reason ?? "").trim();
-  if (text.length > MAX_REPORT_REASON) throw new AppError("report_reason_too_long", 400);
+  if (text.length > MAX_REPORT_REASON)
+    throw new AppError("report_reason_too_long", 400);
 
   try {
     await FamilyPostReport.updateOne(
@@ -183,7 +245,7 @@ const reportPost = async ({ userId, links, postId, reason }) => {
           reason: text,
         },
       },
-      { upsert: true }
+      { upsert: true },
     );
   } catch (error) {
     if (!isDuplicateKey(error)) throw error;
@@ -191,4 +253,10 @@ const reportPost = async ({ userId, links, postId, reason }) => {
   return { postId, reported: true };
 };
 
-module.exports = { listWall, addReaction, removeReaction, markSeen, reportPost };
+module.exports = {
+  listWall,
+  addReaction,
+  removeReaction,
+  markSeen,
+  reportPost,
+};

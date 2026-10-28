@@ -107,6 +107,7 @@ const family = folder("Family", "The family app: what a family member and the ne
   )),
   folder("Gazette", "The gazette being collected, the printed ones and the reader.", appPlace("next gazette", "printed gazettes", "read gazette", "download gazette pdf")),
   folder("Timeline", "Everything shared about the resident.", appPlace("timeline")),
+  folder("Gallery", "The resident's photos: All, This Month and From Me.", appPlace("gallery")),
   folder("Newsletters", "Current and past newsletters of the home: list, read and PDF.", appPlace("newsletters of my home", "read newsletter", "download newsletter pdf")),
   folder("Community Wall", "The home's wall: read it and react.", appPlace("community wall", "react to post", "remove reaction", "mark posts seen", "report post")),
 ]);

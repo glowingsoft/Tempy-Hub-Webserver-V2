@@ -43,7 +43,7 @@ const familyCodeSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyCodeSchema.index({ codeHash: 1 }, { unique: true });
@@ -53,7 +53,7 @@ familyCodeSchema.index(
   {
     unique: true,
     partialFilterExpression: { status: FamilyCodeStatus.ACTIVE },
-  }
+  },
 );
 
 const FamilyCode =

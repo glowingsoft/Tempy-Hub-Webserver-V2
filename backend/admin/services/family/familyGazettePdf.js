@@ -1,5 +1,11 @@
 const moment = require("moment-timezone");
-const { printable, showable, fitFontSize, photoUris, renderTemplate } = require("./familyPdfKit");
+const {
+  printable,
+  showable,
+  fitFontSize,
+  photoUris,
+  renderTemplate,
+} = require("./familyPdfKit");
 const { htmlToPdf } = require("./familyPdfRenderer");
 
 const CONTENT_WIDTH = 595.28 - 45 * 2;
@@ -13,13 +19,17 @@ const firstWord = (name) => printable(name).trim().split(/\s+/)[0] || "";
 /** "The Hughes Family Gazette"; a resident known by one name gets "Margaret's Gazette". */
 const gazetteTitle = (residentName) => {
   const parts = printable(residentName).trim().split(/\s+/).filter(Boolean);
-  return parts.length > 1 ? `The ${parts[parts.length - 1]} Family Gazette` : `${parts[0] || "Your"}'s Gazette`;
+  return parts.length > 1
+    ? `The ${parts[parts.length - 1]} Family Gazette`
+    : `${parts[0] || "Your"}'s Gazette`;
 };
 
 const periodLabel = ({ periodStart, periodEnd, timezone }) => {
   const start = moment.tz(periodStart, timezone);
   const end = moment.tz(periodEnd, timezone);
-  return start.year() === end.year() ? `${start.format("D MMM")} – ${end.format("D MMM YYYY")}` : `${start.format("D MMM YYYY")} – ${end.format("D MMM YYYY")}`;
+  return start.year() === end.year()
+    ? `${start.format("D MMM")} – ${end.format("D MMM YYYY")}`
+    : `${start.format("D MMM YYYY")} – ${end.format("D MMM YYYY")}`;
 };
 
 const viewOf = ({ gazette, images }) => {
@@ -28,21 +38,36 @@ const viewOf = ({ gazette, images }) => {
 
   return {
     title: serif(title),
-    titleSize: fitFontSize({ style: "Serif-Bold", text: title, width: CONTENT_WIDTH, max: MAX_TITLE_SIZE, min: MIN_TITLE_SIZE }),
+    titleSize: fitFontSize({
+      style: "Serif-Bold",
+      text: title,
+      width: CONTENT_WIDTH,
+      max: MAX_TITLE_SIZE,
+      min: MIN_TITLE_SIZE,
+    }),
     homeName: sans(gazette.homeName),
     residentName: sans(gazette.residentName),
     firstName: serif(firstWord(gazette.residentName)),
     issueNumber: gazette.issueNumber,
     periodLabel: periodLabel(gazette),
-    place: [gazette.homeName, gazette.roomNumber].filter(Boolean).map(sans).join(" · "),
+    place: [gazette.homeName, gazette.roomNumber]
+      .filter(Boolean)
+      .map(sans)
+      .join(" · "),
     hasCover: Boolean(gazette.coverMediaId),
     cover: gazette.coverMediaId ? photoOf(gazette.coverMediaId) : null,
-    senders: gazette.senders.map(firstWord).filter(Boolean).map(sans).join(", "),
+    senders: gazette.senders
+      .map(firstWord)
+      .filter(Boolean)
+      .map(sans)
+      .join(", "),
     messages: gazette.messages.map((message) => ({
       photos: message.mediaIds.map(photoOf),
       text: sans(message.message),
       author: sans(firstWord(message.authorName) || message.authorName),
-      relationship: message.relationshipLabel ? ` (${sans(message.relationshipLabel)})` : "",
+      relationship: message.relationshipLabel
+        ? ` (${sans(message.relationshipLabel)})`
+        : "",
       date: moment.tz(message.createdAt, gazette.timezone).format("D MMM"),
     })),
     lifeHeading: serif(`Life at ${gazette.homeName}`),
@@ -51,9 +76,13 @@ const viewOf = ({ gazette, images }) => {
       photo: item.mediaId ? photoOf(item.mediaId) : null,
       title: sans(item.title),
       text: item.text && item.text !== item.title ? sans(item.text) : "",
-      date: item.postedAt ? moment.tz(item.postedAt, gazette.timezone).format("D MMM") : "",
+      date: item.postedAt
+        ? moment.tz(item.postedAt, gazette.timezone).format("D MMM")
+        : "",
     })),
-    closesOn: gazette.nextClosesAt ? moment.tz(gazette.nextClosesAt, gazette.timezone).format("D MMM") : "",
+    closesOn: gazette.nextClosesAt
+      ? moment.tz(gazette.nextClosesAt, gazette.timezone).format("D MMM")
+      : "",
   };
 };
 

@@ -9,6 +9,7 @@ const NotificationTypes = {
   FAMILY_NEWSLETTER: "familyNewsletter",
   FAMILY_GAZETTE: "familyGazette",
   FAMILY_GAZETTE_REMINDER: "familyGazetteReminder",
+  FAMILY_VISIT: "familyVisit",
   SYSTEM: "system",
   REMINDER: "reminder",
   DOCUMENTS_UPDATE: "documentsUpdate",

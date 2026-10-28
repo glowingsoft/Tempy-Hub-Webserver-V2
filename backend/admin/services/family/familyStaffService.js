@@ -673,6 +673,7 @@ const createCode = async ({ actor, organizationId, residentId }) => {
 };
 
 module.exports = {
+  listScope,
   listMembers,
   listAllMembers,
   getMember,

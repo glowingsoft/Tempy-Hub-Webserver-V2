@@ -10,6 +10,8 @@ const familyInviteService = require("@appServices/family/familyInviteService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const familyTimelineService = require("@appServices/family/familyTimelineService");
 const familyGalleryService = require("@appServices/family/familyGalleryService");
+const familyVisitService = require("@appServices/family/familyVisitService");
+const familyVisitPassService = require("@appServices/family/familyVisitPassService");
 const familyWallService = require("@appServices/family/familyWallService");
 const familyNewsletterService = require("@appServices/family/familyNewsletterService");
 const familyGazetteService = require("@appServices/family/familyGazetteService");
@@ -265,6 +267,84 @@ const listGallery = respond(
   { paged: true },
 );
 
+const VISITS_PAGE_SIZE = 20;
+const VISITS_MAX_PAGE_SIZE = 50;
+
+const listVisits = respond(
+  (req) => {
+    const { page } = parsePaginationParams(req);
+    const requested = parseInt(req.query.limit, 10);
+    const limit =
+      requested >= 1
+        ? Math.min(requested, VISITS_MAX_PAGE_SIZE)
+        : VISITS_PAGE_SIZE;
+    return familyVisitService.listVisits({
+      link: req.familyLink,
+      userId: req.user._id,
+      tab: queryText(req.query.tab) || undefined,
+      page,
+      limit,
+      skip: (page - 1) * limit,
+    });
+  },
+  { paged: true },
+);
+
+const getNextVisit = respond((req) =>
+  familyVisitService.getNextVisit({
+    link: req.familyLink,
+    userId: req.user._id,
+  }),
+);
+
+const getVisitOptions = respond((req) =>
+  familyVisitService.getOptions({ link: req.familyLink }),
+);
+
+const requestVisit = respond(
+  (req) =>
+    familyVisitService.requestVisit({
+      link: req.familyLink,
+      user: req.user,
+      body: req.body,
+    }),
+  { statusCode: 201, translationKey: "visit_requested" },
+);
+
+const answerVisit = (translationKey) => ({
+  run: (req) =>
+    familyVisitService.updateVisit({
+      links: req.familyLinks,
+      user: req.user,
+      visitId: req.params.id,
+      action: req.body.action,
+    }),
+  translationKey,
+});
+
+const updateVisit = respondByAction({
+  [familyVisitService.VisitAction.CANCEL]: answerVisit("visit_cancelled"),
+  [familyVisitService.VisitAction.GOING]: answerVisit("visit_reply_saved"),
+  [familyVisitService.VisitAction.CANT_MAKE_IT]: answerVisit("visit_reply_saved"),
+});
+
+const getVisitPass = respond((req) =>
+  familyVisitPassService.getPass({
+    link: req.familyLink,
+    userId: req.user._id,
+  }),
+);
+
+const updateVisitPass = respond(
+  (req) =>
+    familyVisitPassService.updatePass({
+      link: req.familyLink,
+      userId: req.user._id,
+      body: req.body,
+    }),
+  { translationKey: "visit_pass_saved" },
+);
+
 const listTimeline = respond(
   (req) => {
     const { page } = parsePaginationParams(req);
@@ -463,6 +543,13 @@ module.exports = {
   updateUpload,
   listTimeline,
   listGallery,
+  listVisits,
+  getNextVisit,
+  getVisitOptions,
+  requestVisit,
+  updateVisit,
+  getVisitPass,
+  updateVisitPass,
   listWall,
   addReaction,
   removeReaction,

@@ -96,6 +96,29 @@ router.put("/handover/:id", familyController.updateHandover);
 router.get("/timeline", residentInQuery, familyController.listTimeline);
 router.get("/gallery", residentInQuery, familyController.listGallery);
 
+router.get("/visits/next", residentInQuery, familyController.getNextVisit);
+router.get("/visits/options", residentInQuery, familyController.getVisitOptions);
+router.get("/visits", residentInQuery, familyController.listVisits);
+router.post(
+  "/visits",
+  writeLimiter,
+  residentInBody,
+  familyController.requestVisit,
+);
+router.put(
+  "/visits/:id",
+  writeLimiter,
+  requireFamilyAccess(),
+  familyController.updateVisit,
+);
+router.get("/visit-pass", residentInQuery, familyController.getVisitPass);
+router.put(
+  "/visit-pass",
+  writeLimiter,
+  residentInBody,
+  familyController.updateVisitPass,
+);
+
 router.get("/gazettes/next", residentInQuery, familyController.getNextGazette);
 router.get("/gazettes", residentInQuery, familyController.listGazettes);
 router.get(

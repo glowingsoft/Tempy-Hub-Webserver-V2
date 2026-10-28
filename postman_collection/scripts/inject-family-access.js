@@ -531,6 +531,127 @@ requests.push(
   })
 );
 
+// ---------------------------------------------------------------- Visits (family app)
+requests.push(
+  req("my visits", "GET", ["app", "family", "visits"], {
+    query: "residentId={{residentId}}&tab=upcoming&page=1&limit=20",
+    tests: [
+      'pm.test("Visits fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("upcoming", "past");',
+      '    pm.expect(json.meta.visiting).to.have.all.keys("paused", "reason", "since");',
+      '    if (json.data.length) { pm.collectionVariables.set("visitId", json.data[0].id); }',
+      "});",
+    ],
+    description:
+      "My Visits. Query: residentId (required), tab (upcoming or past; 400 invalid_visit_tab for anything else), page, limit (default 20, max 50). Upcoming is soonest first, past is newest first and includes declined and cancelled ones. A row is either my own request or an invitation From The Home (fromTheHome true): id, source (family or home), status (requested, confirmed, declined, cancelled; for an invitation invited until I answer, then going or cantMakeIt), startAt, endAt, place, partySize, note, decisionNote (the home's reply to a request), canCancel (my request, not yet over), canReply (an invitation I can still answer) and hasPass (Visit Pass available). meta.counts has the two tab totals; meta.visiting.paused, reason and since drive the Visiting is paused notice. A request is only visible to the person who made it; invitations from the home are visible to the whole family of the resident.",
+  }),
+  req("next visit", "GET", ["app", "family", "visits", "next"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Next visit fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.have.all.keys("visit", "visiting");',
+      "});",
+    ],
+    description:
+      "Home Family Tab, Your Next Visit: the soonest visit that is confirmed, or an invitation I said I would attend. visit is null when there is none. visiting is the same paused notice as My Visits.",
+  }),
+  req("visit options", "GET", ["app", "family", "visits", "options"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Visit options fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("days", "slots", "places", "maxPartySize", "visiting");',
+      "    if (data.days.length && data.slots.length) {",
+      '        pm.collectionVariables.set("visitDate", data.days[Math.min(1, data.days.length - 1)].date);',
+      '        pm.collectionVariables.set("visitSlot", data.slots[0].id);',
+      '        pm.collectionVariables.set("visitPlace", data.places[0]);',
+      "    }",
+      "});",
+    ],
+    description:
+      "Book A Visit: what the home offers. days (the next few days, date and weekday; today is left out once no slot remains), slots (id such as 10:00-12:00, start, end), places (for example Garden Lounge), maxPartySize, timezone and the visiting notice. Slots that fall in a protected time are left out. The home sets these per site; until it does, the defaults are three slots, two places, 14 days ahead and up to 6 people. Sets visitDate, visitSlot and visitPlace for the request below.",
+  }),
+  withBody(
+    req("request a visit", "POST", ["app", "family", "visits"], {
+      tests: [
+        'pm.test("Visit requested", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("requested");',
+        '    pm.collectionVariables.set("visitId", data.id);',
+        "});",
+      ],
+      description:
+        "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), slot (a slot id), place (one of the places), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). It is a request until the home confirms it. Errors: 403 visiting_paused, 400 for a slot, place, date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 409 visit_slot_full when the place has no room left for that many people at that time (waiting requests hold their seats), 400 visit_protected_time for a closed time, 429 once five requests are waiting.",
+    }),
+    {
+      residentId: "{{residentId}}",
+      date: "{{visitDate}}",
+      slot: "{{visitSlot}}",
+      place: "{{visitPlace}}",
+      totalPeople: 2,
+      note: "Birthday tea",
+    }
+  ),
+  withBody(
+    req("cancel my visit", "PUT", ["app", "family", "visits", "{{visitId}}"], {
+      tests: [
+        'pm.test("Visit cancelled", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("cancelled");',
+        "});",
+      ],
+      description:
+        "PUT with body {\"action\":\"cancel\"}. My Visits, Cancel Request: cancels my own request while it is waiting or confirmed and not over; a confirmed visit also stops its kiosk code working. 409 visit_not_cancellable otherwise, 404 for anyone else's visit.",
+    }),
+    { action: "cancel" }
+  ),
+  withBody(
+    req("reply to visit invitation", "PUT", ["app", "family", "visits", "{{visitId}}"], {
+      tests: [
+        'pm.test("Answer saved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(["going", "cantMakeIt"]).to.include(pm.response.json().data.status);',
+        "});",
+      ],
+      description:
+        "PUT with body {\"action\":\"going\"} (I'll Be There) or {\"action\":\"cantMakeIt\"} (Can't Make It). Answers an invitation From The Home for myself only; each family member answers separately and may change their mind until the visit is over. Going gives me my own kiosk code for the Visit Pass; Can't Make It withdraws it. 409 visit_not_replyable once the visit is over or cancelled, 404 for a request or another family's visit.",
+    }),
+    { action: "going" }
+  ),
+  req("visit pass", "GET", ["app", "family", "visit-pass"], {
+    query: "residentId={{residentId}}",
+    tests: [
+      'pm.test("Visit pass fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("visit", "code", "guests", "carRegistration", "visiting");',
+      "});",
+    ],
+    description:
+      "Visit Pass. visit is my next confirmed visit (or an invitation I said I would attend) and code is its kiosk code, the same 6-digit invitation code the kiosk already accepts: show it as the QR code. Both are null when there is no such visit. guests are the people without the app and carRegistration the car, as saved below. The code does not refresh by itself yet: a code that changes every few seconds needs the kiosk to check it.",
+  }),
+  withBody(
+    req("update visit pass", "PUT", ["app", "family", "visit-pass"], {
+      tests: [
+        'pm.test("Visit pass saved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.guests).to.be.an("array");',
+        "});",
+      ],
+      description:
+        "Saves the guests without the app and the car registration for this resident. Body: residentId, guests (up to 10 names, each up to 60 characters), carRegistration (up to 12 letters, digits, spaces or hyphens; send an empty string to clear it). Anything left out stays as it was. Returns the pass.",
+    }),
+    { residentId: "{{residentId}}", guests: ["Tom Hughes"], carRegistration: "AB12 CDE" }
+  )
+);
+
 // ---------------------------------------------------------------- Community wall (family app)
 requests.push(
   req("newsletters of my home", "GET", ["app", "family", "newsletters"], {
@@ -766,7 +887,7 @@ const staffRequests = [
   req("gazettes", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes"], {
     query: "page=1&limit=10",
     optional: {
-      status: ["ready", "Tab: ready, noContent, overCap, printed, noFamily, failed or building"],
+      status: ["ready", "Tab: ready, notReady, failed, printed or building (all by default)"],
       branchId: ["{{branchId}}", "One site (the page shows each site's current issue)"],
       keyword: ["margaret", "Search resident, room or status"],
     },
@@ -775,12 +896,12 @@ const staffRequests = [
       "    pm.response.to.have.status(200);",
       "    const body = pm.response.json();",
       '    pm.expect(body.data).to.be.an("array");',
-      '    pm.expect(body.meta.counts).to.include.keys("total", "ready", "noContent", "overCap", "printed", "noFamily", "needReview");',
+      '    pm.expect(body.meta.counts).to.include.keys("total", "ready", "notReady", "failed", "printed", "building", "overCap");',
       '    if (body.data.length) { pm.collectionVariables.set("gazetteItemId", body.data[0].itemId); }',
       "});",
     ],
     description:
-      "The Gazettes page: one row per resident for the issue each site is on now. Optional query: branchId (one site), status (the tab: all, ready, noContent, overCap, printed, noFamily, failed or building), keyword (resident, room or status), page, limit. Each row has itemId, residentName, photoUrl, roomNumber, familyCount (Family column), messageCount (Messages column; it can be over the cap, like 31), state and statusLabel (Ready, No content, Over 30 messages, Printed, No family linked, Failed or Building), hasPdf, generatedAt, printedAt and givenAt. meta.counts feeds the cards and tabs: total (Residents in this issue), ready (Ready to print), noContent, overCap, printed, noFamily, failed, building and needReview (the Need review card: no content, failed or over the cap); it ignores the tab chosen. The page shows nothing about the issue itself, so none is returned; the Over 30 messages label already carries the cap. Needs familyEngagement.view.",
+      "The Gazettes page: one row per resident for the issue each site is on now. Optional query: branchId (one site), status (the tab: all, ready, notReady, failed, printed or building; anything else is 400 invalid_status_filter), keyword (resident, room or status), page, limit. Each row has itemId, residentName, photoUrl, roomNumber, familyCount (Family column), messageCount (Messages column; it can be over the cap, like 31), status (ready, notReady, failed, printed or building), reason (noContent or noFamily when the status is notReady, otherwise empty) and statusLabel (Ready, Over 30 messages, No content, No family linked, Printed, Failed or Building), hasPdf, generatedAt, printedAt and givenAt. meta.counts feeds the cards and tabs: total (Residents in this issue), ready (Ready to print, including ones over the cap), notReady (no content or no family linked), failed, printed, building and overCap (how many ready ones are over the cap); it ignores the tab chosen. The page shows nothing about the issue itself, so none is returned; the Over 30 messages label already carries the cap. Needs familyEngagement.view.",
   }),
   req("gazette detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes", "{{gazetteItemId}}"], {
     tests: [
@@ -790,7 +911,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "One resident's gazette to check and fix: the issue, the resident, state and statusLabel, familyCount, messageCount, includedCount, overCap, hasPdf and the print dates. messages lists every message sent for it with uploadId, authorName, relationshipLabel, message, photos (the blurred copy, which is what is printed), sentAt and placement: included, movedToNext (over the cap, waiting for the next issue) or removed (taken out by staff). life lists the wall posts for Life at the home. Needs familyEngagement.view.",
+      "One resident's gazette to check and fix: the issue, the resident, status, reason, statusLabel, familyCount, messageCount, includedCount, overCap, hasPdf and the print dates. messages lists every message sent for it with uploadId, authorName, relationshipLabel, message, photos (the blurred copy, which is what is printed), sentAt and placement: included, movedToNext (over the cap, waiting for the next issue) or removed (taken out by staff). life lists the wall posts for Life at the home. Needs familyEngagement.view.",
   }),
   req("gazette pdf", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes", "{{gazetteItemId}}", "pdf"], {
     optional: { format: ["url", "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file"] },
@@ -813,6 +934,22 @@ const staffRequests = [
     ],
     description:
       "The Download all PDFs button: a zip of every drawn gazette (ready or printed) of the issue each site is on, one PDF per resident named like margaret-hughes-gazette-issue-14.pdf; with several sites each has a folder. Optional query: branchId. 404 gazette_nothing_to_download when nothing has been drawn yet, 400 for more than 100 gazettes (choose a site). Rate limited. Needs familyEngagement.view.",
+  }),
+  req("post authors", "GET", ["admin", "organizations", "{{organizationId}}", "family-post-authors"], {
+    optional: {
+      branchId: ["{{branchId}}", "One site"],
+      keyword: ["claire", "Search the author's name"],
+    },
+    tests: [
+      'pm.test("Post authors fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.be.an("array");',
+      '    if (data.length) { pm.collectionVariables.set("authorId", data[0].authorId); }',
+      "});",
+    ],
+    description:
+      "The Author filter list on the Community Wall: everyone who has posted in the organization, one row per person with authorId, name, photoUrl, role (such as Site Manager) and postsCount, sorted by name. Optional query: branchId (only people who posted at that site) and keyword (part of the name). Send the chosen authorId as authorId in wall posts. Sets authorId. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("wall posts", "GET", ["admin", "organizations", "{{organizationId}}", "family-posts"], {
     query: "page=1&limit=10",
@@ -1399,6 +1536,108 @@ const newsletterRequests = [
   staffRequests.push(request);
 });
 
+// ---------------------------------------------------------------- Visits (staff side)
+staffRequests.push(
+  req("family visits", "GET", ["admin", "organizations", "{{organizationId}}", "family-visits"], {
+    query: "page=1&limit=10",
+    optional: {
+      status: ["requested", "requested, confirmed, declined, cancelled or invited"],
+      source: ["family", "family (a request) or home (an invitation)"],
+      range: ["upcoming", "upcoming or past"],
+      branchId: ["{{branchId}}", "One site"],
+      residentId: ["{{residentId}}", "One resident"],
+    },
+    tests: [
+      'pm.test("Family visits fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    if (json.data.length) { pm.collectionVariables.set("familyVisitId", json.data[0].id); }',
+      "});",
+    ],
+    description:
+      "Visit requests and invitations for the organization in the path, soonest first. Optional query: status, source, range, branchId, residentId, page, limit. A site or line manager sees their own site. Each row has the resident, source, status, startAt, endAt, place, partySize, note, decisionNote, requestedBy (name, photo and email for a request) and answers {going, cantMakeIt} for an invitation. Needs familyEngagement.view; 404 when the module is off.",
+  }),
+  withBody(
+    staff("invite family to a visit", "POST", ["admin", "family", "visits"], {
+      tests: [
+        'pm.test("Family invited", function () {',
+        "    pm.response.to.have.status(201);",
+        '    pm.expect(pm.response.json().data.status).to.eql("invited");',
+        '    pm.collectionVariables.set("familyVisitId", pm.response.json().data.id);',
+        "});",
+      ],
+      description:
+        "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional place (up to 60 characters) and note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage.",
+    }),
+    { residentId: "{{residentId}}", date: "{{visitDate}}", startTime: "14:00", endTime: "16:00", place: "Garden Lounge", note: "Afternoon tea with the residents" }
+  ),
+  withBody(
+    staff("confirm visit request", "PUT", ["admin", "family", "visits", "{{familyVisitId}}"], {
+      tests: [
+        'pm.test("Visit confirmed", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("confirmed");',
+        "});",
+      ],
+      description:
+        "PUT with body {\"action\":\"confirm\"} and an optional note (up to 200 characters). Confirms a family's request and creates the ordinary visitor invitation the kiosk already understands, so the visitor checks in with that code. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve.",
+    }),
+    { action: "confirm", note: "See you then" }
+  ),
+  withBody(
+    staff("decline visit request", "PUT", ["admin", "family", "visits", "{{familyVisitId}}"], {
+      tests: [
+        'pm.test("Visit declined", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("declined");',
+        "});",
+      ],
+      description:
+        "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve.",
+    }),
+    { action: "decline", note: "Sorry, that afternoon is fully booked" }
+  ),
+  withBody(
+    staff("cancel family visit", "PUT", ["admin", "family", "visits", "{{familyVisitId}}"], {
+      tests: [
+        'pm.test("Visit cancelled", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("cancelled");',
+        "});",
+      ],
+      description:
+        "PUT with body {\"action\":\"cancel\"}. Cancels a request, a confirmed visit or an invitation that has not happened yet, and withdraws every kiosk code issued for it. 409 visit_not_cancellable otherwise. Needs familyEngagement.approve.",
+    }),
+    { action: "cancel" }
+  ),
+  staff("visit settings", "GET", ["admin", "family", "visit-settings"], {
+    query: "branchId={{branchId}}",
+    tests: [
+      'pm.test("Visit settings fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("slots", "places", "daysAhead", "maxPartySize", "paused");',
+      "});",
+    ],
+    description:
+      "What a site offers on Book A Visit and whether visiting is paused: slots, places (name and capacity), protectedTimes, daysAhead, maxPartySize, paused, pausedReason and pausedAt, plus the site's timezone. Until the site saves its own, the defaults apply. A site or line manager uses their own site. Needs familyEngagement.view.",
+  }),
+  withBody(
+    staff("update visit settings", "PUT", ["admin", "family", "visit-settings"], {
+      tests: [
+        'pm.test("Visit settings saved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data).to.have.property("paused");',
+        "});",
+      ],
+      description:
+        "Saves what the site offers, and pauses or resumes visiting. Body: branchId, then any of slots [{start, end}] (HH:mm, up to 12, no repeats), places (up to 20, each a name or {name, capacity}: capacity is the most people at once for one time slot, empty for no limit), protectedTimes [{start, end, label}] (up to 6 daily windows nobody can book, such as a mealtime; a slot that overlaps one is not offered), daysAhead (1 to 60), maxPartySize (1 to 20) and paused (true or false) with an optional pausedReason (up to 200 characters). Pausing stops new requests at once (403 visiting_paused), cancels every visit still to come at the site, withdraws their kiosk codes and notifies the families; the response has cancelled, the number of visits cancelled. Anything left out stays as it was. Needs familyEngagement.manage.",
+    }),
+    { branchId: "{{branchId}}", paused: true, pausedReason: "Visiting is paused on Maple floor while we deal with a flu outbreak" }
+  )
+);
+
 let staffFolder = adminFolder.item.find((i) => i.name === "Family Management");
 if (!staffFolder) {
   staffFolder = { name: "Family Management", item: [] };
@@ -1410,6 +1649,108 @@ for (const request of staffRequests) {
   const idx = staffFolder.item.findIndex((r) => r.name === request.name);
   if (idx >= 0) staffFolder.item[idx] = request;
   else staffFolder.item.push(request);
+}
+
+// ---------------------------------------------------------------- Visit Requests (site manager and line manager app)
+const managerRequests = [
+  staff("app visit requests", "GET", ["app", "family-visits"], {
+    query: "page=1&limit=20",
+    optional: {
+      branchId: ["{{branchId}}", "The site. A site or line manager uses their own; an owner picks one"],
+      status: ["requested", "requested (default), confirmed, declined, cancelled or invited"],
+      range: ["upcoming", "upcoming (default) or past"],
+      residentId: ["{{residentId}}", "One resident"],
+    },
+    tests: [
+      'pm.test("Visit requests fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta).to.have.property("visiting");',
+      '    if (json.data.length) { pm.collectionVariables.set("familyVisitId", json.data[0].id); }',
+      "});",
+    ],
+    description:
+      "Visit Requests screen of the site manager and line manager apps: the requests waiting for an answer, soonest first. meta.totalRecords is the Requests (2) count and meta.visiting {paused, reason, since} drives the Pause Visiting card. Each row has the resident (residentName), requestedBy {name, photoUrl, email}, startAt, endAt, place, partySize and note: 'Sarah Hughes for Margaret Hughes, 3 people, Bringing a birthday cake'. A site or line manager sees their own site. Send the x-org-id header.",
+  }),
+  staff("app visit capacity", "GET", ["app", "family-visits", "capacity"], {
+    query: "date=2026-10-26",
+    optional: { branchId: ["{{branchId}}", "The site (an owner picks one)"] },
+    tests: [
+      'pm.test("Visit capacity fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("date", "spaces", "protectedTimes");',
+      "});",
+    ],
+    description:
+      "The capacity card (Lounge On Sun 26 Oct). Query: date (YYYY-MM-DD, today when left out). spaces has one entry for each place with a limit: place, capacity and slots with start, end, booked, capacity and full (14:00 3/4, 15:00 4/4). Waiting requests hold their seats as well as confirmed visits. protectedTimes lists the closed windows with a ready note: 'Protected mealtime 12:00 - 13:30 isn't bookable.'",
+  }),
+  withBody(
+    staff("app approve visit request", "PUT", ["app", "family-visits", "{{familyVisitId}}"], {
+      tests: [
+        'pm.test("Visit approved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("confirmed");',
+        "});",
+      ],
+      description:
+        'PUT with body {"action":"approve"} and an optional note (up to 200 characters). The Approve button: confirms the request and creates the kiosk code the family shows on their Visit Pass. 409 visit_not_pending when it was already answered or has passed.',
+    }),
+    { action: "approve", note: "See you then" }
+  ),
+  withBody(
+    staff("app decline visit request", "PUT", ["app", "family-visits", "{{familyVisitId}}"], {
+      tests: [
+        'pm.test("Visit declined", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.status).to.eql("declined");',
+        "});",
+      ],
+      description:
+        'PUT with body {"action":"decline"} and an optional note (up to 200 characters) the family reads in My Visits. The Decline button. The seats the request held are free again.',
+    }),
+    { action: "decline", note: "Sorry, that time is fully booked" }
+  ),
+  withBody(
+    staff("app pause visiting", "PUT", ["app", "family-visits", "visiting"], {
+      tests: [
+        'pm.test("Visiting paused", function () {',
+        "    pm.response.to.have.status(200);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.paused).to.eql(true);',
+        '    pm.expect(data).to.have.property("cancelled");',
+        "});",
+      ],
+      description:
+        'PUT with body {"action":"pause","branchId":"...","reason":"..."}. The Pause Visiting button: stops new requests at once, cancels every visit still to come at the site, withdraws the kiosk codes issued for them and notifies the families affected. cancelled is how many visits were cancelled. Sending it again cancels nothing more. branchId is needed for an owner; a site or line manager uses their own site. reason is optional (up to 200 characters) and is shown to the families.',
+    }),
+    { action: "pause", branchId: "{{branchId}}", reason: "Visiting is paused while we deal with a flu outbreak" }
+  ),
+  withBody(
+    staff("app resume visiting", "PUT", ["app", "family-visits", "visiting"], {
+      tests: [
+        'pm.test("Visiting resumed", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.paused).to.eql(false);',
+        "});",
+      ],
+      description:
+        'PUT with body {"action":"resume","branchId":"..."}. Families can book again. Visits cancelled by the pause are not brought back.',
+    }),
+    { action: "resume", branchId: "{{branchId}}" }
+  ),
+];
+
+let managerFolder = appFolder.item.find((i) => i.name === "Visit Requests (Site and Line Manager)");
+if (!managerFolder) {
+  managerFolder = { name: "Visit Requests (Site and Line Manager)", item: [] };
+  appFolder.item.push(managerFolder);
+}
+for (const request of managerRequests) {
+  const idx = managerFolder.item.findIndex((r) => r.name === request.name);
+  if (idx >= 0) managerFolder.item[idx] = request;
+  else managerFolder.item.push(request);
 }
 
 let folder = appFolder.item.find((i) => i.name === "Family");
@@ -1534,7 +1875,7 @@ const retire = (item) => {
 retire(collection);
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

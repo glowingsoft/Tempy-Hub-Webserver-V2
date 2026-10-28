@@ -1,6 +1,6 @@
 const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
-const { queryText, queryId } = require("@utils/familyQuery");
+const { queryText, queryId, searchText } = require("@utils/familyQuery");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { sendPdf } = require("@utils/familyPdfResponse");
 const familyStaffService = require("@adminServices/family/familyStaffService");
@@ -267,6 +267,8 @@ const listPosts = respond(
       to: queryText(req.query.to),
       sort: queryText(req.query.sort),
       keyword: queryText(req.query.keyword),
+      days: queryText(req.query.days),
+      audience: queryText(req.query.audience),
       page,
       limit,
       skip,
@@ -327,6 +329,14 @@ const updatePostReports = respondByAction({
     translationKey: "post_reports_dismissed",
   },
 });
+
+const listPostAuthors = respond((req) =>
+  familyPostService.listAuthors({
+    organizationId: req.orgId,
+    branchId: queryId(req.query.branchId, "branchId"),
+    keyword: searchText(req.query.keyword),
+  }),
+);
 
 const listTaggableResidents = respond((req) =>
   familyPostService.listTaggableResidents({
@@ -636,6 +646,7 @@ module.exports = {
   downloadNewsletterPdf,
   removeNewsletter,
   listTaggableResidents,
+  listPostAuthors,
   uploadPostPhoto,
   uploadPostPhotos,
   createPost,

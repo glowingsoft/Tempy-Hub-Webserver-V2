@@ -10073,6 +10073,374 @@
               ]
             },
             {
+              "name": "Visits",
+              "description": "My Visits, Book A Visit and the Visit Pass.",
+              "item": [
+                {
+                  "name": "my visits",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visits fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const json = pm.response.json();",
+                          "    pm.expect(json.data).to.be.an(\"array\");",
+                          "    pm.expect(json.meta.counts).to.have.all.keys(\"upcoming\", \"past\");",
+                          "    pm.expect(json.meta.visiting).to.have.all.keys(\"paused\", \"reason\", \"since\");",
+                          "    if (json.data.length) { pm.collectionVariables.set(\"visitId\", json.data[0].id); }",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visits?residentId={{residentId}}&tab=upcoming&page=1&limit=20",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visits"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        },
+                        {
+                          "key": "tab",
+                          "value": "upcoming"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "20"
+                        }
+                      ]
+                    },
+                    "description": "My Visits. Query: residentId (required), tab (upcoming or past; 400 invalid_visit_tab for anything else), page, limit (default 20, max 50). Upcoming is soonest first, past is newest first and includes declined and cancelled ones. A row is either my own request or an invitation From The Home (fromTheHome true): id, source (family or home), status (requested, confirmed, declined, cancelled; for an invitation invited until I answer, then going or cantMakeIt), startAt, endAt, place, partySize, note, decisionNote (the home's reply to a request), canCancel (my request, not yet over), canReply (an invitation I can still answer) and hasPass (Visit Pass available). meta.counts has the two tab totals; meta.visiting.paused, reason and since drive the Visiting is paused notice. A request is only visible to the person who made it; invitations from the home are visible to the whole family of the resident."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "next visit",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Next visit fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.have.all.keys(\"visit\", \"visiting\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visits/next?residentId={{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visits",
+                        "next"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        }
+                      ]
+                    },
+                    "description": "Home Family Tab, Your Next Visit: the soonest visit that is confirmed, or an invitation I said I would attend. visit is null when there is none. visiting is the same paused notice as My Visits."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "visit options",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit options fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.include.keys(\"days\", \"slots\", \"places\", \"maxPartySize\", \"visiting\");",
+                          "    if (data.days.length && data.slots.length) {",
+                          "        pm.collectionVariables.set(\"visitDate\", data.days[Math.min(1, data.days.length - 1)].date);",
+                          "        pm.collectionVariables.set(\"visitSlot\", data.slots[0].id);",
+                          "        pm.collectionVariables.set(\"visitPlace\", data.places[0]);",
+                          "    }",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visits/options?residentId={{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visits",
+                        "options"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        }
+                      ]
+                    },
+                    "description": "Book A Visit: what the home offers. days (the next few days, date and weekday; today is left out once no slot remains), slots (id such as 10:00-12:00, start, end), places (for example Garden Lounge), maxPartySize, timezone and the visiting notice. Slots that fall in a protected time are left out. The home sets these per site; until it does, the defaults are three slots, two places, 14 days ahead and up to 6 people. Sets visitDate, visitSlot and visitPlace for the request below."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "request a visit",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit requested\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data.status).to.eql(\"requested\");",
+                          "    pm.collectionVariables.set(\"visitId\", data.id);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visits",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visits"
+                      ]
+                    },
+                    "description": "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), slot (a slot id), place (one of the places), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). It is a request until the home confirms it. Errors: 403 visiting_paused, 400 for a slot, place, date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 409 visit_slot_full when the place has no room left for that many people at that time (waiting requests hold their seats), 400 visit_protected_time for a closed time, 429 once five requests are waiting.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"slot\": \"{{visitSlot}}\",\n  \"place\": \"{{visitPlace}}\",\n  \"totalPeople\": 2,\n  \"note\": \"Birthday tea\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "cancel my visit",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit cancelled\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data.status).to.eql(\"cancelled\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visits/{{visitId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visits",
+                        "{{visitId}}"
+                      ]
+                    },
+                    "description": "PUT with body {\"action\":\"cancel\"}. My Visits, Cancel Request: cancels my own request while it is waiting or confirmed and not over; a confirmed visit also stops its kiosk code working. 409 visit_not_cancellable otherwise, 404 for anyone else's visit.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"cancel\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "reply to visit invitation",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Answer saved\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect([\"going\", \"cantMakeIt\"]).to.include(pm.response.json().data.status);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visits/{{visitId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visits",
+                        "{{visitId}}"
+                      ]
+                    },
+                    "description": "PUT with body {\"action\":\"going\"} (I'll Be There) or {\"action\":\"cantMakeIt\"} (Can't Make It). Answers an invitation From The Home for myself only; each family member answers separately and may change their mind until the visit is over. Going gives me my own kiosk code for the Visit Pass; Can't Make It withdraws it. 409 visit_not_replyable once the visit is over or cancelled, 404 for a request or another family's visit.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"going\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "visit pass",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit pass fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.include.keys(\"visit\", \"code\", \"guests\", \"carRegistration\", \"visiting\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visit-pass?residentId={{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visit-pass"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        }
+                      ]
+                    },
+                    "description": "Visit Pass. visit is my next confirmed visit (or an invitation I said I would attend) and code is its kiosk code, the same 6-digit invitation code the kiosk already accepts: show it as the QR code. Both are null when there is no such visit. guests are the people without the app and carRegistration the car, as saved below. The code does not refresh by itself yet: a code that changes every few seconds needs the kiosk to check it."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "update visit pass",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit pass saved\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data.guests).to.be.an(\"array\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/visit-pass",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "visit-pass"
+                      ]
+                    },
+                    "description": "Saves the guests without the app and the car registration for this resident. Body: residentId, guests (up to 10 names, each up to 60 characters), carRegistration (up to 12 letters, digits, spaces or hyphens; send an empty string to clear it). Anything left out stays as it was. Returns the pass.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"guests\": [\n    \"Tom Hughes\"\n  ],\n  \"carRegistration\": \"AB12 CDE\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
               "name": "Newsletters",
               "description": "Current and past newsletters of the home: list, read and PDF.",
               "item": [
@@ -10434,6 +10802,344 @@
                   "response": []
                 }
               ]
+            }
+          ]
+        },
+        {
+          "name": "Visit Requests (Site and Line Manager)",
+          "item": [
+            {
+              "name": "app visit requests",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit requests fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an(\"array\");",
+                      "    pm.expect(json.meta).to.have.property(\"visiting\");",
+                      "    if (json.data.length) { pm.collectionVariables.set(\"familyVisitId\", json.data[0].id); }",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits?page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "The site. A site or line manager uses their own; an owner picks one",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "requested",
+                      "description": "requested (default), confirmed, declined, cancelled or invited",
+                      "disabled": true
+                    },
+                    {
+                      "key": "range",
+                      "value": "upcoming",
+                      "description": "upcoming (default) or past",
+                      "disabled": true
+                    },
+                    {
+                      "key": "residentId",
+                      "value": "{{residentId}}",
+                      "description": "One resident",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Visit Requests screen of the site manager and line manager apps: the requests waiting for an answer, soonest first. meta.totalRecords is the Requests (2) count and meta.visiting {paused, reason, since} drives the Pause Visiting card. Each row has the resident (residentName), requestedBy {name, photoUrl, email}, startAt, endAt, place, partySize and note: 'Sarah Hughes for Margaret Hughes, 3 people, Bringing a birthday cake'. A site or line manager sees their own site. Send the x-org-id header. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+              },
+              "response": []
+            },
+            {
+              "name": "app visit capacity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit capacity fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"date\", \"spaces\", \"protectedTimes\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/capacity?date=2026-10-26",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "capacity"
+                  ],
+                  "query": [
+                    {
+                      "key": "date",
+                      "value": "2026-10-26"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "The site (an owner picks one)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The capacity card (Lounge On Sun 26 Oct). Query: date (YYYY-MM-DD, today when left out). spaces has one entry for each place with a limit: place, capacity and slots with start, end, booked, capacity and full (14:00 3/4, 15:00 4/4). Waiting requests hold their seats as well as confirmed visits. protectedTimes lists the closed windows with a ready note: 'Protected mealtime 12:00 - 13:30 isn't bookable.' Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+              },
+              "response": []
+            },
+            {
+              "name": "app approve visit request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit approved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"confirmed\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/{{familyVisitId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "{{familyVisitId}}"
+                  ]
+                },
+                "description": "PUT with body {\"action\":\"approve\"} and an optional note (up to 200 characters). The Approve button: confirms the request and creates the kiosk code the family shows on their Visit Pass. 409 visit_not_pending when it was already answered or has passed. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"See you then\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "app decline visit request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit declined\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.status).to.eql(\"declined\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/{{familyVisitId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "{{familyVisitId}}"
+                  ]
+                },
+                "description": "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. The Decline button. The seats the request held are free again. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"decline\",\n  \"note\": \"Sorry, that time is fully booked\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "app pause visiting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visiting paused\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data.paused).to.eql(true);",
+                      "    pm.expect(data).to.have.property(\"cancelled\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/visiting",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "visiting"
+                  ]
+                },
+                "description": "PUT with body {\"action\":\"pause\",\"branchId\":\"...\",\"reason\":\"...\"}. The Pause Visiting button: stops new requests at once, cancels every visit still to come at the site, withdraws the kiosk codes issued for them and notifies the families affected. cancelled is how many visits were cancelled. Sending it again cancels nothing more. branchId is needed for an owner; a site or line manager uses their own site. reason is optional (up to 200 characters) and is shown to the families. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"pause\",\n  \"branchId\": \"{{branchId}}\",\n  \"reason\": \"Visiting is paused while we deal with a flu outbreak\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "app resume visiting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visiting resumed\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.paused).to.eql(false);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/visiting",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "visiting"
+                  ]
+                },
+                "description": "PUT with body {\"action\":\"resume\",\"branchId\":\"...\"}. Families can book again. Visits cancelled by the pause are not brought back. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"resume\",\n  \"branchId\": \"{{branchId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
             }
           ]
         }
@@ -21272,6 +21978,57 @@
                   "response": []
                 },
                 {
+                  "name": "post authors",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Post authors fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.be.an(\"array\");",
+                          "    if (data.length) { pm.collectionVariables.set(\"authorId\", data[0].authorId); }",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/admin/organizations/{{organizationId}}/family-post-authors",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "organizations",
+                        "{{organizationId}}",
+                        "family-post-authors"
+                      ],
+                      "query": [
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "claire",
+                          "description": "Search the author's name",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "The Author filter list on the Community Wall: everyone who has posted in the organization, one row per person with authorId, name, photoUrl, role (such as Site Manager) and postsCount, sorted by name. Optional query: branchId (only people who posted at that site) and keyword (part of the name). Send the chosen authorId as authorId in wall posts. Sets authorId. Needs familyEngagement.view; 404 when the module is off."
+                  },
+                  "response": []
+                },
+                {
                   "name": "dismiss post reports",
                   "event": [
                     {
@@ -22109,7 +22866,7 @@
                           "    pm.response.to.have.status(200);",
                           "    const body = pm.response.json();",
                           "    pm.expect(body.data).to.be.an(\"array\");",
-                          "    pm.expect(body.meta.counts).to.include.keys(\"total\", \"ready\", \"noContent\", \"overCap\", \"printed\", \"noFamily\", \"needReview\");",
+                          "    pm.expect(body.meta.counts).to.include.keys(\"total\", \"ready\", \"notReady\", \"failed\", \"printed\", \"building\", \"overCap\");",
                           "    if (body.data.length) { pm.collectionVariables.set(\"gazetteItemId\", body.data[0].itemId); }",
                           "});"
                         ]
@@ -22142,7 +22899,7 @@
                         {
                           "key": "status",
                           "value": "ready",
-                          "description": "Tab: ready, noContent, overCap, printed, noFamily, failed or building",
+                          "description": "Tab: ready, notReady, failed, printed or building (all by default)",
                           "disabled": true
                         },
                         {
@@ -22159,7 +22916,7 @@
                         }
                       ]
                     },
-                    "description": "The Gazettes page: one row per resident for the issue each site is on now. Optional query: branchId (one site), status (the tab: all, ready, noContent, overCap, printed, noFamily, failed or building), keyword (resident, room or status), page, limit. Each row has itemId, residentName, photoUrl, roomNumber, familyCount (Family column), messageCount (Messages column; it can be over the cap, like 31), state and statusLabel (Ready, No content, Over 30 messages, Printed, No family linked, Failed or Building), hasPdf, generatedAt, printedAt and givenAt. meta.counts feeds the cards and tabs: total (Residents in this issue), ready (Ready to print), noContent, overCap, printed, noFamily, failed, building and needReview (the Need review card: no content, failed or over the cap); it ignores the tab chosen. The page shows nothing about the issue itself, so none is returned; the Over 30 messages label already carries the cap. Needs familyEngagement.view."
+                    "description": "The Gazettes page: one row per resident for the issue each site is on now. Optional query: branchId (one site), status (the tab: all, ready, notReady, failed, printed or building; anything else is 400 invalid_status_filter), keyword (resident, room or status), page, limit. Each row has itemId, residentName, photoUrl, roomNumber, familyCount (Family column), messageCount (Messages column; it can be over the cap, like 31), status (ready, notReady, failed, printed or building), reason (noContent or noFamily when the status is notReady, otherwise empty) and statusLabel (Ready, Over 30 messages, No content, No family linked, Printed, Failed or Building), hasPdf, generatedAt, printedAt and givenAt. meta.counts feeds the cards and tabs: total (Residents in this issue), ready (Ready to print, including ones over the cap), notReady (no content or no family linked), failed, printed, building and overCap (how many ready ones are over the cap); it ignores the tab chosen. The page shows nothing about the issue itself, so none is returned; the Over 30 messages label already carries the cap. Needs familyEngagement.view."
                   },
                   "response": []
                 },
@@ -22195,7 +22952,7 @@
                         "{{gazetteItemId}}"
                       ]
                     },
-                    "description": "One resident's gazette to check and fix: the issue, the resident, state and statusLabel, familyCount, messageCount, includedCount, overCap, hasPdf and the print dates. messages lists every message sent for it with uploadId, authorName, relationshipLabel, message, photos (the blurred copy, which is what is printed), sentAt and placement: included, movedToNext (over the cap, waiting for the next issue) or removed (taken out by staff). life lists the wall posts for Life at the home. Needs familyEngagement.view."
+                    "description": "One resident's gazette to check and fix: the issue, the resident, status, reason, statusLabel, familyCount, messageCount, includedCount, overCap, hasPdf and the print dates. messages lists every message sent for it with uploadId, authorName, relationshipLabel, message, photos (the blurred copy, which is what is printed), sentAt and placement: included, movedToNext (over the cap, waiting for the next issue) or removed (taken out by staff). life lists the wall posts for Life at the home. Needs familyEngagement.view."
                   },
                   "response": []
                 },
@@ -22672,6 +23429,391 @@
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"gazette\": {\n    \"anchorDate\": \"2026-10-01\",\n    \"issueEveryDays\": 14,\n    \"messageCap\": 30\n  }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Visits",
+              "description": "Visit requests and invitations, and what a site offers on Book A Visit.",
+              "item": [
+                {
+                  "name": "family visits",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Family visits fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const json = pm.response.json();",
+                          "    pm.expect(json.data).to.be.an(\"array\");",
+                          "    if (json.data.length) { pm.collectionVariables.set(\"familyVisitId\", json.data[0].id); }",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/admin/organizations/{{organizationId}}/family-visits?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "organizations",
+                        "{{organizationId}}",
+                        "family-visits"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        },
+                        {
+                          "key": "status",
+                          "value": "requested",
+                          "description": "requested, confirmed, declined, cancelled or invited",
+                          "disabled": true
+                        },
+                        {
+                          "key": "source",
+                          "value": "family",
+                          "description": "family (a request) or home (an invitation)",
+                          "disabled": true
+                        },
+                        {
+                          "key": "range",
+                          "value": "upcoming",
+                          "description": "upcoming or past",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site",
+                          "disabled": true
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "description": "One resident",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Visit requests and invitations for the organization in the path, soonest first. Optional query: status, source, range, branchId, residentId, page, limit. A site or line manager sees their own site. Each row has the resident, source, status, startAt, endAt, place, partySize, note, decisionNote, requestedBy (name, photo and email for a request) and answers {going, cantMakeIt} for an invitation. Needs familyEngagement.view; 404 when the module is off."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "invite family to a visit",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Family invited\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "    pm.expect(pm.response.json().data.status).to.eql(\"invited\");",
+                          "    pm.collectionVariables.set(\"familyVisitId\", pm.response.json().data.id);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}",
+                        "description": "Organization scope for admin routes.",
+                        "type": "text"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/family/visits",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "family",
+                        "visits"
+                      ]
+                    },
+                    "description": "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional place (up to 60 characters) and note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"startTime\": \"14:00\",\n  \"endTime\": \"16:00\",\n  \"place\": \"Garden Lounge\",\n  \"note\": \"Afternoon tea with the residents\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "confirm visit request",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit confirmed\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data.status).to.eql(\"confirmed\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}",
+                        "description": "Organization scope for admin routes.",
+                        "type": "text"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/family/visits/{{familyVisitId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "family",
+                        "visits",
+                        "{{familyVisitId}}"
+                      ]
+                    },
+                    "description": "PUT with body {\"action\":\"confirm\"} and an optional note (up to 200 characters). Confirms a family's request and creates the ordinary visitor invitation the kiosk already understands, so the visitor checks in with that code. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"confirm\",\n  \"note\": \"See you then\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "decline visit request",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit declined\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data.status).to.eql(\"declined\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}",
+                        "description": "Organization scope for admin routes.",
+                        "type": "text"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/family/visits/{{familyVisitId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "family",
+                        "visits",
+                        "{{familyVisitId}}"
+                      ]
+                    },
+                    "description": "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"decline\",\n  \"note\": \"Sorry, that afternoon is fully booked\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "cancel family visit",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit cancelled\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data.status).to.eql(\"cancelled\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}",
+                        "description": "Organization scope for admin routes.",
+                        "type": "text"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/family/visits/{{familyVisitId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "family",
+                        "visits",
+                        "{{familyVisitId}}"
+                      ]
+                    },
+                    "description": "PUT with body {\"action\":\"cancel\"}. Cancels a request, a confirmed visit or an invitation that has not happened yet, and withdraws every kiosk code issued for it. 409 visit_not_cancellable otherwise. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"cancel\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "visit settings",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit settings fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.include.keys(\"slots\", \"places\", \"daysAhead\", \"maxPartySize\", \"paused\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}",
+                        "description": "Organization scope for admin routes.",
+                        "type": "text"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/family/visit-settings?branchId={{branchId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "family",
+                        "visit-settings"
+                      ],
+                      "query": [
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}"
+                        }
+                      ]
+                    },
+                    "description": "What a site offers on Book A Visit and whether visiting is paused: slots, places (name and capacity), protectedTimes, daysAhead, maxPartySize, paused, pausedReason and pausedAt, plus the site's timezone. Until the site saves its own, the defaults apply. A site or line manager uses their own site. Needs familyEngagement.view. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "update visit settings",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Visit settings saved\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.have.property(\"paused\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}",
+                        "description": "Organization scope for admin routes.",
+                        "type": "text"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/family/visit-settings",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "family",
+                        "visit-settings"
+                      ]
+                    },
+                    "description": "Saves what the site offers, and pauses or resumes visiting. Body: branchId, then any of slots [{start, end}] (HH:mm, up to 12, no repeats), places (up to 20, each a name or {name, capacity}: capacity is the most people at once for one time slot, empty for no limit), protectedTimes [{start, end, label}] (up to 6 daily windows nobody can book, such as a mealtime; a slot that overlaps one is not offered), daysAhead (1 to 60), maxPartySize (1 to 20) and paused (true or false) with an optional pausedReason (up to 200 characters). Pausing stops new requests at once (403 visiting_paused), cancels every visit still to come at the site, withdraws their kiosk codes and notifies the families; the response has cancelled, the number of visits cancelled. Anything left out stays as it was. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"paused\": true,\n  \"pausedReason\": \"Visiting is paused on Maple floor while we deal with a flu outbreak\"\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -24152,6 +25294,31 @@
     },
     {
       "key": "newsletterId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitSlot",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitPlace",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "familyVisitId",
       "value": "",
       "type": "string"
     }

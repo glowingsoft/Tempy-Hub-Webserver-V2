@@ -100,6 +100,18 @@ const FamilyUploadStatus = {
   REJECTED: "rejected",
 };
 
+const FamilyVisitStatus = {
+  REQUESTED: "requested",
+  CONFIRMED: "confirmed",
+  DECLINED: "declined",
+  CANCELLED: "cancelled",
+  INVITED: "invited",
+};
+
+const FamilyVisitSource = { FAMILY: "family", HOME: "home" };
+
+const FamilyVisitReply = { GOING: "going", CANT_MAKE_IT: "cantMakeIt" };
+
 const FamilyPostStatus = {
   PUBLISHED: "published",
   DRAFT: "draft",
@@ -443,6 +455,9 @@ module.exports = {
   FamilyJoinSource,
   FamilyHandoverStatus,
   FamilyUploadStatus,
+  FamilyVisitStatus,
+  FamilyVisitSource,
+  FamilyVisitReply,
   FamilyPostStatus,
   FamilyPostReportStatus,
   FamilyPostAudience,

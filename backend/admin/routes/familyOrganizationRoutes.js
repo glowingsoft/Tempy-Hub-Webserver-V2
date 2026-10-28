@@ -14,6 +14,7 @@ const {
 const familyInvitationController = require("../controllers/familyInvitationController");
 const createRateLimiter = require("@utils/rateLimiter");
 const familyStaffController = require("../controllers/familyStaffController");
+const familyVisitStaffController = require("../controllers/familyVisitStaffController");
 
 const router = express.Router({ mergeParams: true });
 
@@ -34,6 +35,11 @@ router.get(
   familyInvitationController.listInvitations,
 );
 router.get("/family-posts", canViewFamily, familyStaffController.listPosts);
+router.get(
+  "/family-post-authors",
+  canViewFamily,
+  familyStaffController.listPostAuthors,
+);
 router.get(
   "/family-gazettes",
   canViewFamily,
@@ -73,6 +79,11 @@ router.get(
   familyStaffController.downloadNewsletterPdf,
 );
 router.get("/family-uploads", canViewFamily, familyStaffController.listUploads);
+router.get(
+  "/family-visits",
+  canViewFamily,
+  familyVisitStaffController.listVisits,
+);
 router.get(
   "/family-groups",
   canViewFamily,

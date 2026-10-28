@@ -472,6 +472,35 @@ const listTaggableResidents = async ({ actor, organizationId, branchId }) => {
   ]);
 };
 
+/** Who has posted on the wall, for the Author filter: one row per person, with their role and number of posts. */
+const listAuthors = async ({ organizationId, branchId, keyword }) => {
+  const match = { organizationId: toObjectId(organizationId) };
+  if (branchId) match.branchId = toObjectId(branchId);
+
+  const rows = await FamilyPost.aggregate([
+    { $match: match },
+    { $group: { _id: "$authorId", postsCount: { $sum: 1 } } },
+    { $addFields: { authorId: "$_id", organizationId: match.organizationId } },
+    ...joinOne({ from: User, localField: "authorId", as: "author" }),
+    ...authorRoleStages(),
+    {
+      $project: {
+        _id: 0,
+        authorId: 1,
+        name: { $ifNull: ["$author.name", ""] },
+        photoUrl: { $ifNull: ["$author.profileIcon", ""] },
+        role: "$authorRole",
+        postsCount: 1,
+      },
+    },
+    ...(keyword
+      ? [{ $match: { name: { $regex: keyword, $options: "i" } } }]
+      : []),
+    { $sort: { name: 1, authorId: 1 } },
+  ]);
+  return rows;
+};
+
 const notifyFamilies = async ({ post, actorId, homeName }) => {
   try {
     const reach = {
@@ -819,6 +848,7 @@ module.exports = {
   publishDuePosts,
   listPosts,
   listTaggableResidents,
+  listAuthors,
   createPost,
   updatePost,
   removePost,

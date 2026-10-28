@@ -61,6 +61,13 @@ const generateQrToken = async () => {
   throw new AppError("resident_qr_generation_failed", 500);
 };
 
+/** Photo sharing is a yes or no; anything else is refused rather than guessed. */
+const parsePhotographyConsent = (value) => {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new AppError("invalid_photography_consent", 400);
+};
+
 const branchSummary = (branch) =>
   branch
     ? { _id: branch._id, name: branch.name, code: branch.code }
@@ -268,6 +275,7 @@ const createResident = async ({
   careLevel,
   admissionStatus,
   visitorPasscode,
+  photographyConsent,
 }) => {
   const { branch } = await loadBranch({
     actor,
@@ -295,6 +303,8 @@ const createResident = async ({
     admissionStatus: status,
     admittedAt: status === AdmissionStatus.ADMITTED ? new Date() : null,
     qrToken: await generateQrToken(),
+    photographyConsent: photographyConsent === undefined ? false : parsePhotographyConsent(photographyConsent),
+    photographyConsentCheckedAt: photographyConsent === undefined ? null : new Date(),
   };
 
   const level = parseCareLevel(careLevel);
@@ -321,6 +331,7 @@ const updateResident = async ({
   careLevel,
   admissionStatus,
   branchId,
+  photographyConsent,
 }) => {
   const { resident } = await requireResidentInOrg({
     actor,
@@ -345,6 +356,10 @@ const updateResident = async ({
     const level = parseCareLevel(careLevel);
     if (!level) throw new AppError("invalid_care_level", 400);
     update.careLevel = level;
+  }
+  if (photographyConsent !== undefined) {
+    update.photographyConsent = parsePhotographyConsent(photographyConsent);
+    update.photographyConsentCheckedAt = new Date();
   }
   if (admissionStatus !== undefined) {
     update.admissionStatus = parseAdmissionStatus(admissionStatus);

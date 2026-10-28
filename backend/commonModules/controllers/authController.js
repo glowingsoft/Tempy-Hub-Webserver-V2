@@ -5,6 +5,7 @@ const { AuthAudience } = require("@models/domainEnums");
 const { ALL_SURFACES, normalizeSurface } = require("@commonServices/auth/surfaceAccess");
 
 const membershipService = require("@adminServices/organizations/membershipService");
+const familyService = require("@adminServices/family/familyService");
 
 /**
  * Public but token-gated: an administrator issued the invitation, so this is
@@ -27,6 +28,40 @@ const previewInvitation = async (req, res) => {
 const acceptInvitation = async (req, res) => {
   try {
     const data = await membershipService.acceptInvitation({
+      token: req.params.token,
+      name: req.body.name,
+      password: req.body.password,
+      timezone: req.body.timezone,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "invitation_accepted_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const previewFamilyInvitation = async (req, res) => {
+  try {
+    const data = await familyService.previewInvitation(req.params.token);
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const acceptFamilyInvitation = async (req, res) => {
+  try {
+    const data = await familyService.acceptInvitation({
       token: req.params.token,
       name: req.body.name,
       password: req.body.password,
@@ -120,6 +155,7 @@ const login = async (req, res) => {
         AuthAudience.STAFF,
         AuthAudience.VISITOR,
         AuthAudience.RESIDENT,
+        AuthAudience.FAMILY,
       ],
       ...(surface ? { surface: ALL_SURFACES } : {}),
     },
@@ -372,4 +408,6 @@ module.exports = {
   socialAuth,
   previewInvitation,
   acceptInvitation,
+  previewFamilyInvitation,
+  acceptFamilyInvitation,
 };

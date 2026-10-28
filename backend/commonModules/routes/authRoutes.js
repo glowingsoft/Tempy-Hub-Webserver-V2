@@ -12,6 +12,8 @@ const {
   deleteAccount,
   previewInvitation,
   acceptInvitation,
+  previewFamilyInvitation,
+  acceptFamilyInvitation,
 } = require("../controllers/authController");
 const createRateLimiter = require("@utils/rateLimiter");
 
@@ -62,6 +64,18 @@ router.post(
 const invitationRateLimiter = createRateLimiter("invitation", 15, 15);
 router.get("/invitations/:token", invitationRateLimiter, previewInvitation);
 router.post("/invitations/:token/accept", invitationRateLimiter, acceptInvitation);
+
+// Same token-gated pattern for relatives invited by a care home to see a resident.
+router.get(
+  "/family-invitations/:token",
+  invitationRateLimiter,
+  previewFamilyInvitation
+);
+router.post(
+  "/family-invitations/:token/accept",
+  invitationRateLimiter,
+  acceptFamilyInvitation
+);
 
 router.post("/logout", auth, logout);
 router.delete("/delete-account", auth, deleteAccount);

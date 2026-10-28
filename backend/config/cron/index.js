@@ -3,6 +3,15 @@ const { acquireLock, releaseLock } = require("../redis/redisCache");
 const { isRedisUp } = require("../redis/redisConfig");
 const { runHeartbeatCron } = require("./jobs/heartbeat.cron");
 const { runAutoCheckoutCron } = require("./jobs/autoCheckout.cron");
+const { runEventReminderCron } = require("./events/eventReminder.cron");
+const {
+  runFamilyScheduledPostsCron,
+  runFamilyScheduledNewslettersCron,
+} = require("./family/familyPosts.cron");
+const {
+  runFamilyGazetteRecoveryCron,
+  runFamilyGazetteSchedulerCron,
+} = require("./family/familyGazettes.cron");
 
 const envFlag = (key, fallback = true) => {
   const raw = process.env[key];
@@ -57,6 +66,46 @@ const startCrons = () => {
     ttlSec: 600,
     enabled: envFlag("CRON_AUTO_CHECKOUT", true),
     run: runAutoCheckoutCron,
+  });
+
+  registerJob({
+    name: "event-reminder",
+    schedule: process.env.CRON_EVENT_REMINDER_SCHEDULE || "* * * * *",
+    ttlSec: 50,
+    enabled: envFlag("CRON_EVENT_REMINDER", true),
+    run: runEventReminderCron,
+  });
+
+  registerJob({
+    name: "family-scheduled-posts",
+    schedule: "* * * * *",
+    ttlSec: 50,
+    enabled: true,
+    run: runFamilyScheduledPostsCron,
+  });
+
+  registerJob({
+    name: "family-scheduled-newsletters",
+    schedule: "* * * * *",
+    ttlSec: 50,
+    enabled: true,
+    run: runFamilyScheduledNewslettersCron,
+  });
+
+  registerJob({
+    name: "family-gazette-scheduler",
+    schedule: "*/15 * * * *",
+    ttlSec: 800,
+    enabled: true,
+    run: runFamilyGazetteSchedulerCron,
+  });
+
+  registerJob({
+    name: "family-gazette-recovery",
+    schedule: "*/5 * * * *",
+    ttlSec: 280,
+    enabled: true,
+    run: runFamilyGazetteRecoveryCron,
   });
 };
 

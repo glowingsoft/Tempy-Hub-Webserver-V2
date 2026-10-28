@@ -18,11 +18,15 @@ const invitationRoutes = require("./invitationRoutes");
 const evacuationRoutes = require("./evacuationRoutes");
 const supervisionRoutes = require("./supervisionRoutes");
 const appraisalRoutes = require("./appraisalRoutes");
+const familyInvitationRoutes = require("./familyInvitationRoutes");
+const familyRoutes = require("./familyRoutes");
 
 
 router.use("/support", supportRoutes);
 router.use("/kiosk", kioskRoutes);
 router.use("/invitations", invitationRoutes);
+router.use("/family-invitations", familyInvitationRoutes);
+router.use("/family", familyRoutes);
 router.use("/shifts", shiftRoutes);
 router.use("/shift-claims", shiftClaimRoutes);
 router.use("/attendance", attendanceRoutes);

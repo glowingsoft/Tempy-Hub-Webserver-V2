@@ -31,6 +31,7 @@ const SURFACE_RULES = {
   },
   [AppSurface.RESIDENT_APP]: { audience: AuthAudience.RESIDENT },
   [AppSurface.VISITOR_APP]: { audience: AuthAudience.VISITOR },
+  [AppSurface.FAMILY_APP]: { audience: AuthAudience.FAMILY },
 };
 
 const ALL_SURFACES = Object.values(AppSurface);

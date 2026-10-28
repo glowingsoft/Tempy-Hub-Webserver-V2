@@ -32,6 +32,7 @@ const AppSurface = {
   PLATFORM_ADMIN: "platformAdmin",
   RESIDENT_APP: "residentApp",
   VISITOR_APP: "visitorApp",
+  FAMILY_APP: "familyApp",
 };
 
 /** Which client surface a JWT was issued for; route groups validate this. */
@@ -39,6 +40,7 @@ const AuthAudience = {
   STAFF: "staff",
   VISITOR: "visitor",
   RESIDENT: "resident",
+  FAMILY: "family",
   KIOSK: "kiosk",
 };
 
@@ -47,6 +49,103 @@ const StaffInvitationStatus = {
   ACCEPTED: "accepted",
   REVOKED: "revoked",
   EXPIRED: "expired",
+};
+
+const FamilyInvitationStatus = { ...StaffInvitationStatus };
+
+const FamilyRelationship = {
+  SPOUSE: "spouse",
+  PARTNER: "partner",
+  SON: "son",
+  DAUGHTER: "daughter",
+  GRANDSON: "grandson",
+  GRANDDAUGHTER: "granddaughter",
+  BROTHER: "brother",
+  SISTER: "sister",
+  NEPHEW: "nephew",
+  NIECE: "niece",
+  FRIEND: "friend",
+  LEGAL_GUARDIAN: "legalGuardian",
+  OTHER: "other",
+};
+
+/**
+ * pending: asked to join, waiting for approval. rejected / cancelled: the request ended.
+ * removed: access taken away.
+ */
+const FamilyMemberStatus = {
+  PENDING: "pending",
+  ACTIVE: "active",
+  INACTIVE: "inactive",
+  REJECTED: "rejected",
+  CANCELLED: "cancelled",
+  REMOVED: "removed",
+};
+
+const FamilyCodeStatus = {
+  ACTIVE: "active",
+  VOIDED: "voided",
+};
+
+const FamilyHandoverStatus = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  DECLINED: "declined",
+  CANCELLED: "cancelled",
+};
+
+const FamilyUploadStatus = {
+  WAITING: "waiting",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
+const FamilyPostStatus = {
+  PUBLISHED: "published",
+  DRAFT: "draft",
+  SCHEDULED: "scheduled",
+  REMOVED: "removed",
+};
+
+/** Who can see a wall post. A post with none saved is a branch post. */
+const FamilyPostAudience = {
+  ALL: "all",
+  BRANCH: "branch",
+  TAGGED: "tagged",
+};
+
+const FamilyPostReportStatus = {
+  OPEN: "open",
+  DISMISSED: "dismissed",
+  ACTIONED: "actioned",
+};
+
+const FamilyNewsletterStatus = {
+  DRAFT: "draft",
+  SCHEDULED: "scheduled",
+  SENDING: "sending",
+  SENT: "sent",
+};
+
+/** An issue is the whole round for a site; its items are the residents' own gazettes. */
+const FamilyGazetteIssueStatus = {
+  BUILDING: "building",
+  READY: "ready",
+};
+
+const FamilyGazetteItemStatus = {
+  BUILDING: "building",
+  READY: "ready",
+  NO_CONTENT: "noContent",
+  NO_FAMILY: "noFamily",
+  FAILED: "failed",
+  PRINTED: "printed",
+};
+
+const FamilyJoinSource = {
+  INVITATION: "invitation",
+  CODE: "code",
+  HOME: "home",
 };
 
 const ModuleSlug = {
@@ -406,6 +505,19 @@ module.exports = {
   MembershipRoleRank,
   AppSurface,
   StaffInvitationStatus,
+  FamilyInvitationStatus,
+  FamilyRelationship,
+  FamilyMemberStatus,
+  FamilyJoinSource,
+  FamilyHandoverStatus,
+  FamilyUploadStatus,
+  FamilyPostStatus,
+  FamilyPostReportStatus,
+  FamilyPostAudience,
+  FamilyNewsletterStatus,
+  FamilyGazetteIssueStatus,
+  FamilyGazetteItemStatus,
+  FamilyCodeStatus,
   AuthAudience,
   ModuleSlug,
   OrganizationStatus,

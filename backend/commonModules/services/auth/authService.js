@@ -15,6 +15,11 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
+const {
+  isStaffAccount,
+  resolveFamilyResidents,
+  resolveAccessState,
+} = require("@appServices/family/familyAccessService");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const {
   effectivePermissions,
@@ -243,6 +248,19 @@ const resolveStaffAccess = async (user) => {
   };
 };
 
+const resolveFamilyAccess = async (user) => {
+  const residents = await resolveFamilyResidents(user._id);
+  return {
+    isPlatformAdmin: false,
+    memberships: [],
+    highestRole: null,
+    defaultSurface: "familyApp",
+    ...emptyStaffAccessFields(),
+    residents,
+    accessState: await resolveAccessState(user._id, residents.length),
+  };
+};
+
 const emptyStaffAccessFields = () => ({
   moduleMenu: {},
   moduleAccess: {},
@@ -293,6 +311,14 @@ const assertAudienceAccess = async (user, audience) => {
       defaultSurface: "visitorApp",
       ...emptyStaffAccessFields(),
     };
+  }
+
+  if (audience === AuthAudience.FAMILY) {
+    // a new member has no link yet but must be able to sign in to ask to join; staff accounts are excluded
+    if (await isStaffAccount(user)) {
+      throw new AppError("family_profile_not_found", 403);
+    }
+    return resolveFamilyAccess(user);
   }
 
   throw new AppError("wrong_token_audience", 400);
@@ -658,6 +684,14 @@ const me = async ({ userId, audience = AuthAudience.STAFF }) => {
   }
 
   const profile = formatUserResponse(user, null, [], ["resetToken"]);
+
+  if (audience === AuthAudience.FAMILY) {
+    return {
+      user: profile,
+      audience,
+      access: await resolveFamilyAccess(user),
+    };
+  }
 
   if (audience !== AuthAudience.STAFF) {
     return {

@@ -28,6 +28,7 @@ const createResident = async (req, res) => {
       careLevel: req.body.careLevel,
       admissionStatus: req.body.admissionStatus ?? req.body.status,
       visitorPasscode: req.body.visitorPasscode,
+      photographyConsent: req.body.photographyConsent,
     });
 
     return sendResponse({
@@ -100,6 +101,7 @@ const updateResident = async (req, res) => {
       careLevel: req.body.careLevel,
       admissionStatus: req.body.admissionStatus ?? req.body.status,
       branchId: req.body.branchId,
+      photographyConsent: req.body.photographyConsent,
     });
 
     return sendResponse({

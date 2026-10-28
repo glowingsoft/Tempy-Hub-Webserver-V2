@@ -6,7 +6,6 @@ const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyReaction } = require("@models/FamilyReaction");
 const { FamilyPostView } = require("@models/FamilyPostView");
 const { FamilyPostReport } = require("@models/FamilyPostReport");
-const { FamilyPostStatus } = require("@models/domainEnums");
 const { visibleToLink, visibleToAny } = require("@utils/familyPostVisibility");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");

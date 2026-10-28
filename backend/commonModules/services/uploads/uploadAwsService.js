@@ -6,6 +6,7 @@ const {
   PutObjectCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const getBucket = () => process.env.S3_BUCKET_NAME;
 
@@ -68,6 +69,23 @@ const getObject = async (key) => {
   return Buffer.from(await Body.transformToByteArray());
 };
 
+const SIGNED_URL_SECONDS = 300;
+
+// A link S3 itself stops honouring after a few minutes, so access lasts no longer than the check that issued it.
+const signedPdfUrl = async ({ key, filename, attachment = true, expiresIn = SIGNED_URL_SECONDS }) => {
+  const url = await getSignedUrl(
+    getClient(),
+    new GetObjectCommand({
+      Bucket: requireBucket(),
+      Key: key,
+      ResponseContentType: "application/pdf",
+      ResponseContentDisposition: `${attachment ? "attachment" : "inline"}; filename="${filename}"`,
+    }),
+    { expiresIn }
+  );
+  return { url, expiresAt: new Date(Date.now() + expiresIn * 1000) };
+};
+
 const deleteFiles = async (fileKey) => {
   await getClient().send(new DeleteObjectCommand({
     Bucket: requireBucket(),
@@ -85,4 +103,5 @@ module.exports = {
   deleteFiles,
   putObject,
   getObject,
+  signedPdfUrl,
 };

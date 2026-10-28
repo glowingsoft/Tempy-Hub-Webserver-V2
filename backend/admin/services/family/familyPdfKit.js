@@ -1,9 +1,10 @@
+const fs = require("fs");
+const path = require("path");
+const ejs = require("ejs");
 const sharp = require("sharp");
 const fontkit = require("fontkit");
 
-/** What the family PDFs (newsletter and gazette) share: A4, the brand colours, embedded fonts and photo handling. */
-const PAGE = { width: 595.28, height: 841.89 };
-
+/** What the family PDFs (newsletter and gazette) share: the brand colours, embedded fonts, photo handling and templates. */
 const COLORS = {
   navy: "#1f3a5f",
   ink: "#1a1a1a",
@@ -17,6 +18,7 @@ const COLORS = {
 
 const PHOTO_WIDTH = 900;
 const PHOTO_QUALITY = 80;
+const TEMPLATE_DIR = path.join(__dirname, "../../../assets/pdf/family");
 
 /**
  * Arimo and Tinos are the fonts the templates are set in (the same letter shapes and widths as Arial and
@@ -24,40 +26,29 @@ const PHOTO_QUALITY = 80;
  * (including Polish, Czech, Welsh and Vietnamese), Greek, Cyrillic and Hebrew letters.
  */
 const FONT_FILES = {
-  Sans: "@expo-google-fonts/arimo/400Regular/Arimo_400Regular.ttf",
-  "Sans-Bold": "@expo-google-fonts/arimo/700Bold/Arimo_700Bold.ttf",
-  "Serif-Bold": "@expo-google-fonts/tinos/700Bold/Tinos_700Bold.ttf",
+  Sans: { family: "Arimo", weight: 400, file: "@expo-google-fonts/arimo/400Regular/Arimo_400Regular.ttf" },
+  "Sans-Bold": { family: "Arimo", weight: 700, file: "@expo-google-fonts/arimo/700Bold/Arimo_700Bold.ttf" },
+  "Serif-Bold": { family: "Tinos", weight: 700, file: "@expo-google-fonts/tinos/700Bold/Tinos_700Bold.ttf" },
 };
 
 const fonts = new Map();
 const fontOf = (style) => {
-  if (!fonts.has(style)) fonts.set(style, fontkit.openSync(require.resolve(FONT_FILES[style])));
+  if (!fonts.has(style)) fonts.set(style, fontkit.openSync(require.resolve(FONT_FILES[style].file)));
   return fonts.get(style);
 };
 
-const isLetter = (char) => !/\s/u.test(char);
-
-/** A letter the font does not have (an emoji, Arabic or Chinese) is shown as ? instead of an empty box. */
-const showable = (style, value) => {
-  const font = fontOf(style);
-  return [...String(value ?? "")].map((char) => (isLetter(char) && !font.hasGlyphForCodePoint(char.codePointAt(0)) ? "?" : char)).join("");
-};
-
-const registerFonts = (doc) => {
-  Object.entries(FONT_FILES).forEach(([style, file]) => doc.registerFont(style, require.resolve(file)));
-
-  let style = "Sans";
-  const setFont = doc.font.bind(doc);
-  const drawText = doc.text.bind(doc);
-  const measure = doc.heightOfString.bind(doc);
-
-  doc.font = (name, ...rest) => {
-    if (FONT_FILES[name]) style = name;
-    return setFont(name, ...rest);
-  };
-  doc.text = (value, ...rest) => drawText(showable(style, value), ...rest);
-  doc.heightOfString = (value, ...rest) => measure(showable(style, value), ...rest);
-  setFont(style);
+// Fonts travel inside the page as data, so the renderer never needs to load anything from disk or the network.
+let cachedFontCss;
+const fontCss = () => {
+  if (!cachedFontCss) {
+    cachedFontCss = Object.values(FONT_FILES)
+      .map(({ family, weight, file }) => {
+        const data = fs.readFileSync(require.resolve(file)).toString("base64");
+        return `@font-face { font-family: "${family}"; font-weight: ${weight}; src: url(data:font/ttf;base64,${data}) format("truetype"); }`;
+      })
+      .join("\n");
+  }
+  return cachedFontCss;
 };
 
 const printable = (value) =>
@@ -65,7 +56,27 @@ const printable = (value) =>
     .replace(/\r\n?/g, "\n")
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
 
-/** Photos come from our own storage; a photo that cannot be read leaves a plain box rather than a failed PDF. */
+/** A letter the font does not have (an emoji, Arabic or Chinese) is shown as ? instead of an empty box. */
+const showable = (style, value) => {
+  const font = fontOf(style);
+  return [...printable(value)].map((char) => (/\s/u.test(char) || font.hasGlyphForCodePoint(char.codePointAt(0)) ? char : "?")).join("");
+};
+
+/** The largest font size, from max down to min, at which the text fits one line of the given width in points. */
+const fitFontSize = ({ style, text, width, max, min }) => {
+  const font = fontOf(style);
+  const unitsWide = font.layout(showable(style, text)).advanceWidth / font.unitsPerEm;
+  return Math.max(min, Math.min(max, Math.floor(width / (unitsWide || 1))));
+};
+
+/** A value placed inside a CSS string in a stylesheet: quotes, backslashes, line breaks and "<" cannot break out of it. */
+const cssString = (value) =>
+  `"${String(value ?? "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[\\"]/g, "\\$&")
+    .replace(/</g, "\\3c ")}"`;
+
+// A photo that cannot be read leaves a plain box rather than a failed PDF.
 const prepareImage = async (buffer) => {
   try {
     return await sharp(buffer, { limitInputPixels: 40_000_000 })
@@ -78,28 +89,25 @@ const prepareImage = async (buffer) => {
   }
 };
 
-/** The text cut to fit a number of lines, ending in an ellipsis when it had to be shortened. */
-const fitText = (doc, text, width, maxLines, size) => {
-  doc.fontSize(size);
-  const lineHeight = doc.currentLineHeight(true);
-  const maxHeight = lineHeight * maxLines;
-  if (doc.heightOfString(text, { width }) <= maxHeight) return text;
-
-  let cut = text;
-  while (cut.length > 1 && doc.heightOfString(`${cut}…`, { width }) > maxHeight) cut = cut.slice(0, -1);
-  return `${cut.trimEnd()}…`;
+const photoUris = async (photos) => {
+  const uris = new Map();
+  await Promise.all(
+    [...photos.entries()].map(async ([id, bytes]) => {
+      const image = await prepareImage(bytes);
+      uris.set(String(id), image ? `data:image/jpeg;base64,${image.toString("base64")}` : null);
+    })
+  );
+  return uris;
 };
 
-/** A photo cropped to fill its box with rounded corners; a plain box when the photo could not be read. */
-const drawPhoto = (doc, image, x, y, { width, height }, radius = 8) => {
-  doc.save();
-  doc.roundedRect(x, y, width, height, radius).clip();
-  if (image) {
-    doc.image(image, x, y, { cover: [width, height], align: "center", valign: "center" });
-  } else {
-    doc.rect(x, y, width, height).fill(COLORS.placeholder);
+const templates = new Map();
+/** Fills a template from assets/pdf/family. Everything printed with <%= %> is HTML-escaped. */
+const renderTemplate = (name, data) => {
+  if (!templates.has(name)) {
+    const filename = path.join(TEMPLATE_DIR, `${name}.ejs`);
+    templates.set(name, ejs.compile(fs.readFileSync(filename, "utf8"), { filename }));
   }
-  doc.restore();
+  return templates.get(name)({ colors: COLORS, fontCss: fontCss(), cssString, ...data });
 };
 
-module.exports = { PAGE, COLORS, registerFonts, printable, prepareImage, fitText, drawPhoto };
+module.exports = { COLORS, printable, showable, fitFontSize, cssString, prepareImage, photoUris, renderTemplate };

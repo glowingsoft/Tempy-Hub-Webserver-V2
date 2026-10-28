@@ -9941,6 +9941,12 @@
                         {
                           "key": "download",
                           "value": "true"
+                        },
+                        {
+                          "key": "format",
+                          "value": "url",
+                          "description": "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file",
+                          "disabled": true
                         }
                       ]
                     },
@@ -10129,6 +10135,12 @@
                         {
                           "key": "download",
                           "value": "true"
+                        },
+                        {
+                          "key": "format",
+                          "value": "url",
+                          "description": "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file",
+                          "disabled": true
                         }
                       ]
                     },
@@ -21708,6 +21720,12 @@
                         {
                           "key": "download",
                           "value": "false"
+                        },
+                        {
+                          "key": "format",
+                          "value": "url",
+                          "description": "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file",
+                          "disabled": true
                         }
                       ]
                     },
@@ -22157,6 +22175,12 @@
                         {
                           "key": "download",
                           "value": "false"
+                        },
+                        {
+                          "key": "format",
+                          "value": "url",
+                          "description": "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file",
+                          "disabled": true
                         }
                       ]
                     },

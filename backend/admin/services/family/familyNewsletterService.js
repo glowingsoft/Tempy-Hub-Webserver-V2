@@ -10,8 +10,7 @@ const { FamilyNewsletter } = require("@models/FamilyNewsletter");
 const {
   AdmissionStatus,
   FamilyMemberStatus,
-  FamilyNewsletterStatus,
-  FamilyPostStatus,
+  FamilyNewsletterStatus,
   MembershipRole,
 } = require("@models/domainEnums");
 const { paginateWithFacet, keywordOr } = require("@utils/paginate");
@@ -715,7 +714,7 @@ const getPdf = async ({ organizationId, newsletterId }) => {
 
   if (newsletter.status === FamilyNewsletterStatus.SENT && newsletter.pdfKey) {
     try {
-      return { buffer: await uploadAwsService.getObject(newsletter.pdfKey), filename: pdfFilename(newsletter) };
+      return { buffer: await uploadAwsService.getObject(newsletter.pdfKey), filename: pdfFilename(newsletter), key: newsletter.pdfKey };
     } catch (error) {
       console.error("family newsletter stored pdf unreadable", error.message);
     }

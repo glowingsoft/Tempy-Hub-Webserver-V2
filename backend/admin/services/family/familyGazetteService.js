@@ -209,7 +209,7 @@ const getItemPdf = async ({ itemId }) => {
   if (item.pdfKey && [FamilyGazetteItemStatus.READY, FamilyGazetteItemStatus.PRINTED].includes(item.status)) {
     try {
       const input = await loadInput({ item });
-      return { buffer: await uploadAwsService.getObject(item.pdfKey), filename: fileNameOf(input.gazette) };
+      return { buffer: await uploadAwsService.getObject(item.pdfKey), filename: fileNameOf(input.gazette), key: item.pdfKey };
     } catch (error) {
       console.error("family gazette stored pdf unreadable", error.message);
     }

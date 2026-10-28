@@ -10,7 +10,6 @@ const DEFAULT_TIMEZONE = "Europe/London";
  */
 const startOfDay = (value, timezone) => moment.tz(value, timezone || DEFAULT_TIMEZONE).startOf("day");
 
-/** The nth issue (0 is the first), as the dates it covers and when it closes. */
 const periodByIndex = ({ anchorDate, issueEveryDays, timezone, index }) => {
   const start = startOfDay(anchorDate, timezone).add(index * issueEveryDays, "days");
   const end = start.clone().add(issueEveryDays, "days").subtract(1, "millisecond");
@@ -24,10 +23,8 @@ const indexAt = ({ anchorDate, issueEveryDays, timezone, at = new Date() }) => {
   return Math.max(0, Math.floor(days / issueEveryDays));
 };
 
-/** The issue that is open now: its messages are still being collected. */
 const currentPeriod = (options) => periodByIndex({ ...options, index: indexAt(options) });
 
-/** The issue that has just closed and is due to be built; null while the first issue is still open. */
 const lastClosedPeriod = (options) => {
   const index = indexAt(options) - 1;
   const now = options.at || new Date();

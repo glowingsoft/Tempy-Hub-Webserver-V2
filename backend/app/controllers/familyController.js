@@ -13,6 +13,7 @@ const familyWallService = require("@appServices/family/familyWallService");
 const familyNewsletterService = require("@appServices/family/familyNewsletterService");
 const familyGazetteService = require("@appServices/family/familyGazetteService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { sendPdf } = require("@utils/familyPdfResponse");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const listRelationships = respond(() => familyAccessService.listRelationships());
@@ -226,15 +227,8 @@ const getGazette = respond((req) => familyGazetteService.getGazette({ links: req
 
 const downloadGazettePdf = async (req, res) => {
   try {
-    const { buffer, filename } = await familyGazetteService.getPdf({ links: req.familyLinks, gazetteId: req.params.gazetteId });
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Length": buffer.length,
-      "Content-Disposition": `${req.query.download === "false" ? "inline" : "attachment"}; filename="${filename}"`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-    });
-    return res.status(200).send(buffer);
+    const pdf = await familyGazetteService.getPdf({ links: req.familyLinks, gazetteId: req.params.gazetteId });
+    return await sendPdf({ req, res, pdf, attachment: req.query.download !== "false" });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");
   }
@@ -254,15 +248,8 @@ const getNewsletter = respond((req) =>
 
 const downloadNewsletterPdf = async (req, res) => {
   try {
-    const { buffer, filename } = await familyNewsletterService.getPdf({ links: req.familyLinks, newsletterId: req.params.newsletterId });
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Length": buffer.length,
-      "Content-Disposition": `${req.query.download === "false" ? "inline" : "attachment"}; filename="${filename}"`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-    });
-    return res.status(200).send(buffer);
+    const pdf = await familyNewsletterService.getPdf({ links: req.familyLinks, newsletterId: req.params.newsletterId });
+    return await sendPdf({ req, res, pdf, attachment: req.query.download !== "false" });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");
   }

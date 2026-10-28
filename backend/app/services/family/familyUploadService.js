@@ -90,7 +90,6 @@ const normaliseMediaIds = (mediaIds) => {
   return unique;
 };
 
-/** Photos can only be shared for a resident with photo sharing on; a message alone is always allowed. */
 const assertPhotosAllowed = async ({ organizationId, residentId }) => {
   const [resident] = await Resident.aggregate([
     { $match: { _id: toObjectId(residentId), organizationId: toObjectId(organizationId) } },
@@ -120,7 +119,6 @@ const effectiveUrl = (field) => ({
   $cond: [{ $ne: [`$$media.blurredUrl`, ""] }, `$$media.blurredUrl`, `$$media.${field}`],
 });
 
-/** What the author sees: photos show the blurred copy once one exists. */
 const TITLE_LENGTH = 60;
 
 const STATUS_LABELS = {
@@ -129,7 +127,6 @@ const STATUS_LABELS = {
   [FamilyUploadStatus.REJECTED]: "Not Approved",
 };
 
-/** The card heading: the message's first line, cut to fit. */
 const firstLine = { $trim: { input: { $arrayElemAt: [{ $split: ["$message", "\n"] }, 0] } } };
 const cardTitle = {
   $cond: [

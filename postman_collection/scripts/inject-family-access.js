@@ -454,6 +454,7 @@ requests.push(
       "Read gazette: the printed gazette for the reader. gazetteId comes from printed gazettes. title, issueNumber, periodLabel (No. 14 · 1–14 Oct 2026), residentName (for Margaret), homeName, pageCount, printedAt and givenAt. cover is the best photo of the issue (the newest photo) with its message, headline, authorName and relationshipLabel, or null when there is no photo. messages are the family's messages oldest first: authorName, relationshipLabel (Daughter), message, photos and sentAt. life is Life at the home: title, text, photoUrl and postedAt. Photos are the blurred copy wherever one exists. Anything no longer allowed is left out on every read: a resident whose photo sharing is off has no photos, and a wall post that was removed is gone. 404 gazette_not_found for a gazette that is not printed, belongs to another resident, or is not yours.",
   }),
   req("download gazette pdf", "GET", ["app", "family", "gazettes", "{{gazetteId}}", "pdf"], {
+    optional: { format: ["url", "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file"] },
     query: "download=true",
     tests: [
       'pm.test("PDF returned", function () {',
@@ -538,6 +539,7 @@ requests.push(
       "Newsletter screen: the whole issue for reading: title, homeName, periodLabel, issueNumber, sentAt, editedAt (the 'edited 1 Oct' line), the welcome note with signature, highlights (title, text, photoUrl, postedAt), coming up (date, time, title, description, category), notices, new residents, gallery and the footer. Only the sections the home switched on are returned. Posts removed, and residents whose photo sharing is now off, are left out on every read (BR-06). 404 newsletter_not_found for a draft, a scheduled one, one not sent into the app, or another home's. Send the family token; any of your linked homes works.",
   }),
   req("download newsletter pdf", "GET", ["app", "family", "newsletters", "{{newsletterId}}", "pdf"], {
+    optional: { format: ["url", "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file"] },
     query: "download=true",
     tests: [
       'pm.test("PDF returned", function () {',
@@ -721,6 +723,7 @@ const staffRequests = [
       "Content Sections and Preview: title, month, issue number, status, the six sections with their switches, welcome, highlights with photos, coming up, notices, new residents, gallery, footer, and recipients (families and people who would receive it). Needs familyEngagement.view.",
   }),
   req("newsletter pdf", "GET", ["admin", "organizations", "{{organizationId}}", "family-newsletters", "{{newsletterId}}", "pdf"], {
+    optional: { format: ["url", "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file"] },
     query: "download=false",
     tests: [
       'pm.test("PDF returned", function () {',
@@ -773,6 +776,7 @@ const staffRequests = [
       "One resident's gazette to check and fix: the issue, the resident, state and statusLabel, familyCount, messageCount, includedCount, overCap, hasPdf and the print dates. messages lists every message sent for it with uploadId, authorName, relationshipLabel, message, photos (the blurred copy, which is what is printed), sentAt and placement: included, movedToNext (over the cap, waiting for the next issue) or removed (taken out by staff). life lists the wall posts for Life at the home. Needs familyEngagement.view.",
   }),
   req("gazette pdf", "GET", ["admin", "organizations", "{{organizationId}}", "family-gazettes", "{{gazetteItemId}}", "pdf"], {
+    optional: { format: ["url", "url returns a signed link to the stored PDF (valid 5 minutes) as { url, expiresAt, filename } instead of the file; a PDF that is drawn on demand is still returned as the file"] },
     query: "download=false",
     tests: [
       'pm.test("PDF returned", function () {',

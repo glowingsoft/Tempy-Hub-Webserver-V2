@@ -360,6 +360,46 @@ const familyInvitationEmailTemplate = ({
   </html>
 `;
 
+const visitorAccountInvitationEmailTemplate = ({
+  name,
+  organizationName,
+  branchName,
+  personType,
+  acceptUrl,
+  expiresInDays,
+}) => `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        .email-container { font-family: Arial, sans-serif; line-height: 1.5; color: #333; }
+        .email-header { background-color: #118A01; color: white; text-align: center; padding: 10px 0; }
+        .email-body { margin: 20px; }
+        .cta { display: inline-block; background: #118A01; color: white; padding: 10px 16px; text-decoration: none; }
+        .footer { text-align: center; margin-top: 20px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="email-header">
+          <h2>Your ${APP_NAME} ${personType} account</h2>
+        </div>
+        <div class="email-body">
+          <p>Hello${name ? ` ${name}` : ""},</p>
+          <p>
+            <strong>${organizationName}</strong> invited you to sign in to the
+            visitor and contractor app${branchName ? ` for <strong>${branchName}</strong>` : ""}.
+          </p>
+          <p><a class="cta" href="${acceptUrl}">Set your password</a></p>
+          <p>Or paste this link into your browser: ${acceptUrl}</p>
+          <p>This invitation expires in ${expiresInDays} days.</p>
+        </div>
+        <div class="footer">&copy; ${currentYear} ${APP_NAME}. All rights reserved.</div>
+      </div>
+    </body>
+  </html>
+`;
+
 const visitorInvitationEmailTemplate = ({
   visitorName,
   organizationName,
@@ -410,4 +450,5 @@ module.exports = {
   staffInvitationEmailTemplate,
   familyInvitationEmailTemplate,
   visitorInvitationEmailTemplate,
+  visitorAccountInvitationEmailTemplate,
 };

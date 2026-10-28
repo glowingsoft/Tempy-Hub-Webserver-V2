@@ -22,7 +22,17 @@ const kioskPairingSessionSchema = new mongoose.Schema(
     staffId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "StaffProfile",
-      required: true,
+      default: null,
+    },
+    externalPersonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ExternalPerson",
+      default: null,
+    },
+    invitationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Invitation",
+      default: null,
     },
     scanToken: { type: String, required: true },
     status: {
@@ -35,6 +45,18 @@ const kioskPairingSessionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+kioskPairingSessionSchema.pre("validate", function (next) {
+  const hasStaff = Boolean(this.staffId);
+  const hasContractor = Boolean(this.externalPersonId);
+  if (hasStaff === hasContractor) {
+    return next(new Error("pairing_subject_required"));
+  }
+  if (hasContractor && !this.invitationId) {
+    return next(new Error("pairing_invitation_required"));
+  }
+  next();
+});
 
 kioskPairingSessionSchema.index({ kioskId: 1, status: 1, expiresAt: -1 });
 

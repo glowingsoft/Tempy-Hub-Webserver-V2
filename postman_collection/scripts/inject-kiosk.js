@@ -1,6 +1,7 @@
 const fs = require("fs");
 
-const FILE = "./postman_collection/Tempy Hub API_13_10_2026.postman_collection.json";
+const { collectionFile } = require("./collectionFile");
+const FILE = collectionFile();
 const collection = JSON.parse(fs.readFileSync(FILE, "utf8"));
 
 const appFolder = collection.item.find((i) => i.name === "App");
@@ -156,6 +157,11 @@ const qrRequests = [
     test: savePairingFromScan,
     body: { scanToken: "{{kioskScanToken}}" },
   }),
+  req("scan kiosk as contractor", "POST", ["app", "kiosk", "contractor", "scan"], {
+    header: [{ key: "Authorization", value: "Bearer {{token}}" }],
+    test: savePairingFromScan,
+    body: { scanToken: "{{kioskScanToken}}" },
+  }),
   req("kiosk pairing pending", "GET", ["app", "kiosk", "pairing", "pending"], {
     header: kioskHeader,
     test: savePairingPending,
@@ -240,9 +246,13 @@ const visitRequests = [
     header: kioskHeader,
     query: "keyword=John&page=1&limit=10",
   }),
-  req("3 visit policies", "GET", ["app", "kiosk", "visits", "policies"], {
+  req("3 visit policies visitor", "GET", ["app", "kiosk", "visits", "policies"], {
     header: kioskHeader,
-    query: "type=contractor",
+    query: "personType=visitor",
+  }),
+  req("3b visit policies contractor", "GET", ["app", "kiosk", "visits", "policies"], {
+    header: kioskHeader,
+    query: "personType=contractor",
   }),
   req("4 visit invite verify", "POST", ["app", "kiosk", "visits", "invite", "verify"], {
     header: kioskHeader,
@@ -271,7 +281,14 @@ const visitRequests = [
       phone: "+447700900001",
       purposeOfVisit: "Family visit",
       hostName: "Reception",
+      categoryId: "{{personCategoryId}}",
       image: "{{imageUrl}}",
+      signatures: [
+        {
+          documentId: "{{documentId}}",
+          signatureUrl: "https://placehold.co/400x150.png?text=Signature",
+        },
+      ],
     },
   }),
   req("8 check-in walk-in recurring", "POST", ["app", "kiosk", "visits", "check-in"], {
@@ -298,7 +315,7 @@ const visitRequests = [
   }),
   req("10 visits on-site", "GET", ["app", "kiosk", "visits", "on-site"], {
     header: kioskHeader,
-    query: "page=1&limit=10",
+    query: "keyword=&page=1&limit=10",
   }),
   req("11 visit check-out", "POST", ["app", "kiosk", "visits", "check-out"], {
     header: kioskHeader,
@@ -439,6 +456,8 @@ for (const key of [
   "visitorInvitationId",
   "visitSessionId",
   "externalPersonId",
+  "personCategoryId",
+  "documentId",
   "imageUrl",
 ]) {
   if (!vars.find((v) => v.key === key)) {

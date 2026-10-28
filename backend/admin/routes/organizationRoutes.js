@@ -32,6 +32,7 @@ const visitSessionController = require("../controllers/visitSessionController");
 const siteLiveController = require("../../app/controllers/siteLiveController");
 const teamLiveController = require("../../app/controllers/teamLiveController");
 const visitorInvitationController = require("../controllers/visitorInvitationController");
+const visitorAccountInvitationController = require("../controllers/visitorAccountInvitationController");
 const residentMediaController = require("../controllers/residentMediaController");
 const floorPlanController = require("../controllers/floorPlanController");
 const peepRecordController = require("../controllers/peepRecordController");
@@ -376,6 +377,12 @@ scoped.get(
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   requirementController.listRequirements
 );
+scoped.get(
+  "/requirements/:requirementId",
+  requireRoles(TEAM_APPROVER_ROLES),
+  requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
+  requirementController.getRequirement
+);
 scoped.post(
   "/requirements",
   requireRoles(MANAGERS),
@@ -580,6 +587,13 @@ scoped.post(
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
   visitorInvitationController.createVisitorInvitation
+);
+scoped.post(
+  "/visitor-account-invitations",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  visitorAccountInvitationController.createVisitorAccountInvitation
 );
 scoped.get(
   "/visitor-invitations",

@@ -1,16 +1,12 @@
 const fs = require("fs");
 
-const FILE = "./postman_collection/Tempy Hub API_13_10_2026.postman_collection.json";
+const { collectionFile } = require("./collectionFile");
+const FILE = collectionFile();
 const collection = JSON.parse(fs.readFileSync(FILE, "utf8"));
 
 const adminPanel = collection.item.find((i) => i.name === "Admin Panel");
 const appFolder = collection.item.find((i) => i.name === "App");
 if (!adminPanel || !appFolder) throw new Error("Admin Panel or App folder not found");
-
-if (adminPanel.item.some((i) => i.name === "Appraisal")) {
-  console.log("Appraisal folder already exists — skipping");
-  process.exit(0);
-}
 
 const upsertVar = (key) => {
   if (!collection.variable) collection.variable = [];
@@ -33,7 +29,7 @@ const saveCreated = {
   script: {
     type: "text/javascript",
     exec: [
-      'pm.test("Created", () => pm.response.to.have.status(201));',
+      'pm.test("OK", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));',
       "const json = pm.response.json();",
       'if (json.data && json.data._id) pm.collectionVariables.set("appraisalId", json.data._id);',
       "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
@@ -42,14 +38,17 @@ const saveCreated = {
   },
 };
 
-const orgHeader = [{ key: "x-org-id", value: "{{organizationId}}" }];
+const orgHeader = [
+  { key: "x-org-id", value: "{{organizationId}}" },
+  { key: "Authorization", value: "Bearer {{token}}" },
+];
 
 const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
   name,
   event: [test || testOk],
   request: {
     method,
-    header: header || [],
+    header: header || orgHeader,
     body: body
       ? {
           mode: "raw",
@@ -58,14 +57,14 @@ const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
         }
       : undefined,
     url: {
-      raw: `{{url}}${pathParts.join("/")}${query ? `?${query}` : ""}`,
+      raw: `{{url}}/${pathParts.join("/")}${query ? `?${query}` : ""}`,
       host: ["{{url}}"],
       path: pathParts,
       ...(query
         ? {
             query: query.split("&").map((pair) => {
               const [key, value] = pair.split("=");
-              return { key, value };
+              return { key, value: value ?? "" };
             }),
           }
         : {}),
@@ -74,78 +73,94 @@ const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
   response: [],
 });
 
+const upsertFolder = (parent, folderName, requests) => {
+  let folder = parent.item.find((i) => i.name === folderName);
+  if (!folder) {
+    folder = { name: folderName, item: [] };
+    parent.item.push(folder);
+  }
+  folder.item = requests;
+  return folder;
+};
+
 const orgPath = ["admin", "organizations", "{{organizationId}}"];
 
-adminPanel.item.push({
-  name: "Appraisal",
-  item: [
-    req("update org appraisal interval", "PATCH", orgPath, {
-      body: { settings: { defaultAppraisalIntervalMonths: 12 } },
-    }),
-    req(
-      "update staff appraisal settings",
-      "PATCH",
-      [...orgPath, "staff-profiles", "{{staffProfileId}}", "appraisal-settings"],
-      { body: { appraisalIntervalMonths: 12 } }
-    ),
-    req("list team appraisals", "GET", [...orgPath, "appraisals"], {
-      query: "branchId={{branchId}}&staffId={{staffProfileId}}",
-    }),
-    req("org compliance history", "GET", [...orgPath, "compliance-history"], {
-      query:
-        "branchId={{branchId}}&staffId={{staffProfileId}}&type=supervision&page=1&limit=10",
-    }),
-    req("book appraisal", "POST", [...orgPath, "appraisals"], {
-      body: {
-        staffId: "{{staffProfileId}}",
-        kind: "annual",
-        status: "scheduled",
-        scheduledAt: "2026-11-16T09:00:00",
-        periodLabel: "Annual Review 2026",
-      },
-      test: saveCreated,
-    }),
-    req("save completed appraisal", "PUT", [...orgPath, "appraisals", "{{appraisalId}}"], {
-      body: {
-        status: "completed",
-        managerComments: "Meeting held",
-        goals: "Complete NVQ",
-        trainingNeeds: "Medication refresher",
-        actionPoints: ["Book the next review"],
-      },
-    }),
-    req(
-      "sign off appraisal action point",
-      "POST",
-      [
-        ...orgPath,
-        "appraisals",
-        "{{appraisalId}}",
-        "action-points",
-        "{{appraisalActionPointId}}",
-        "sign-off",
-      ]
-    ),
-    req("manager sign appraisal", "POST", [
-      ...orgPath,
-      "appraisals",
-      "{{appraisalId}}",
-      "manager-sign",
-    ]),
-  ],
-});
+upsertFolder(adminPanel, "Appraisal", [
+  req("PATCH org appraisal interval", "PATCH", orgPath, {
+    body: { settings: { defaultAppraisalIntervalMonths: 12 } },
+  }),
+  req(
+    "PATCH staff appraisal settings",
+    "PATCH",
+    [...orgPath, "staff-profiles", "{{staffProfileId}}", "appraisal-settings"],
+    { body: { appraisalIntervalMonths: 12 } }
+  ),
+  req(
+    "PATCH staff compliance settings",
+    "PATCH",
+    [...orgPath, "staff-profiles", "{{staffProfileId}}", "compliance-settings"],
+    { body: { supervisionIntervalMonths: 3, appraisalIntervalMonths: 12 } }
+  ),
+  req("GET team appraisals", "GET", [...orgPath, "appraisals"], {
+    query: "branchId={{branchId}}&staffId={{staffProfileId}}&page=1&limit=10",
+  }),
+  req("GET compliance history", "GET", [...orgPath, "compliance-history"], {
+    query:
+      "branchId={{branchId}}&staffId={{staffProfileId}}&type=supervision&page=1&limit=10",
+  }),
+  req("POST book appraisal", "POST", [...orgPath, "appraisals"], {
+    body: {
+      staffId: "{{staffProfileId}}",
+      kind: "annual",
+      status: "scheduled",
+      scheduledAt: "2026-11-16T09:00:00",
+      periodLabel: "Annual Review 2026",
+    },
+    test: saveCreated,
+  }),
+  req("GET appraisal", "GET", [...orgPath, "appraisals", "{{appraisalId}}"]),
+  req("PUT complete appraisal", "PUT", [...orgPath, "appraisals", "{{appraisalId}}"], {
+    body: {
+      status: "completed",
+      managerComments: "Meeting held",
+      goals: "Complete NVQ",
+      trainingNeeds: "Medication refresher",
+      actionPoints: ["Book the next review"],
+    },
+    test: saveCreated,
+  }),
+  req("POST sign off action points", "POST", [
+    ...orgPath,
+    "appraisals",
+    "{{appraisalId}}",
+    "action-points",
+    "sign-off",
+  ]),
+  req("POST sign off one action point", "POST", [
+    ...orgPath,
+    "appraisals",
+    "{{appraisalId}}",
+    "action-points",
+    "{{appraisalActionPointId}}",
+    "sign-off",
+  ]),
+  req("POST manager sign appraisal", "POST", [
+    ...orgPath,
+    "appraisals",
+    "{{appraisalId}}",
+    "manager-sign",
+  ]),
+]);
 
-if (!appFolder.item.some((i) => i.name === "Appraisal")) {
-  appFolder.item.push({
-    name: "Appraisal",
-    item: [
-      req("my appraisal", "GET", ["app", "appraisal"], { header: orgHeader }),
-      req("acknowledge appraisal", "POST", ["app", "appraisal", "{{appraisalId}}", "acknowledge"], {
-        header: orgHeader,
-      }),
-    ],
-  });
-}
+upsertFolder(appFolder, "Appraisal", [
+  req("GET my appraisal", "GET", ["app", "appraisal"]),
+  req("POST acknowledge appraisal", "POST", [
+    "app",
+    "appraisal",
+    "{{appraisalId}}",
+    "acknowledge",
+  ]),
+]);
 
-fs.writeFileSync(FILE, JSON.stringify(collection, null, 2));
-console.log("postman appraisal folder injected");
+fs.writeFileSync(FILE, `${JSON.stringify(collection, null, 2)}\n`);
+console.log("postman: Appraisal restored");

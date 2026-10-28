@@ -31,6 +31,26 @@ const listRequirements = async (req, res) => {
   }
 };
 
+const getRequirement = async (req, res) => {
+  if (!validateParams(req, res, { objectIdFields: ["requirementId"] })) return;
+  try {
+    const data = await requirementService.getRequirement({
+      actor: req.user,
+      organizationId: req.orgId,
+      requirementId: req.params.requirementId,
+      branchId: req.query.branchId,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const createRequirement = async (req, res) => {
   if (!validateParams(req, res, { formFields: ["name", "type"] })) return;
   try {
@@ -269,6 +289,7 @@ const listTrainingRecords = async (req, res) => {
 
 module.exports = {
   listRequirements,
+  getRequirement,
   createRequirement,
   updateRequirement,
   listAssignments,

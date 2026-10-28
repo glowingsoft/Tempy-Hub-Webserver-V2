@@ -5,6 +5,7 @@ const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const { Invitation } = require("@models/Invitation");
 const { paginateWithFacet } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
   VisitMethod,
@@ -24,6 +25,7 @@ const {
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { Branch } = require("@models/Branch");
+const { Kiosk } = require("@models/Kiosk");
 const moment = require("moment-timezone");
 const { versionFile } = require("@adminServices/documents/documentService");
 const {
@@ -285,7 +287,7 @@ const applySignatures = async ({
   );
 
   return policies.map((policy) => ({
-    type: policy.category,
+    type: policy.category || policy.title,
     signedAt: now,
     signatureUrl: byDoc.get(String(policy._id))?.signatureUrl || "",
   }));
@@ -363,6 +365,57 @@ const checkInByInvitation = async ({
     visitSessionId: session._id,
   });
 
+  return shapeVisit({ session, person, kiosk, invitation });
+};
+
+const confirmContractorQrCheckIn = async ({
+  organizationId,
+  branchId,
+  kioskId,
+  externalPersonId,
+  invitationId,
+  photoUrl,
+}) => {
+  let person = await ExternalPerson.findOne({
+    _id: externalPersonId,
+    branchId,
+    type: ExternalPersonType.CONTRACTOR,
+  }).lean();
+  if (!person) throw new AppError("contractor_not_at_kiosk_branch", 403);
+  person = await applyPersonPhoto(person, photoUrl);
+
+  const invitation = await Invitation.findOne({
+    _id: invitationId,
+    branchId,
+    badgeType: BadgeType.CONTRACTOR,
+    status: { $in: visitorInvitationService.OPEN_INVITE_STATUSES },
+  });
+  if (!invitation) throw new AppError("contractor_invitation_required", 403);
+  if (invitation.visitingUntil && invitation.visitingUntil.getTime() < Date.now()) {
+    invitation.status = InvitationStatus.EXPIRED;
+    await invitation.save();
+    throw new AppError("invitation_expired", 400);
+  }
+
+  const session = await visitSessionService.createVisitSession({
+    organizationId,
+    branchId,
+    externalPersonId: person._id,
+    personType: person.type,
+    method: VisitMethod.INVITATION,
+    hostStaffId: invitation.hostStaffId,
+    hostName: "",
+    kioskId,
+    invitationId: invitation._id,
+    status: VisitSessionStatus.ON_SITE,
+  });
+
+  await visitorInvitationService.markInvitationCheckedIn({
+    invitation,
+    visitSessionId: session._id,
+  });
+
+  const kiosk = await Kiosk.findById(kioskId).select("locationLabel").lean();
   return shapeVisit({ session, person, kiosk, invitation });
 };
 
@@ -521,14 +574,29 @@ const checkOutAtKiosk = async ({
   return session.toObject();
 };
 
-const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
-  paginateWithFacet({
-    model: VisitSession,
-    match: {
+const listOnSiteVisits = async ({ branchId, keyword, page, limit, skip }) => {
+  const match = {
+    branchId,
+    status: VisitSessionStatus.ON_SITE,
+    checkOutAt: null,
+  };
+
+  const term = String(keyword || "").trim();
+  if (term) {
+    const regex = { $regex: escapeRegex(term), $options: "i" };
+    const personIds = await ExternalPerson.find({
       branchId,
-      status: VisitSessionStatus.ON_SITE,
-      checkOutAt: null,
-    },
+      $or: [{ name: regex }, { email: regex }],
+    }).distinct("_id");
+    if (!personIds.length) {
+      return { data: [], meta: generateMeta(page, limit, 0) };
+    }
+    match.externalPersonId = { $in: personIds };
+  }
+
+  return paginateWithFacet({
+    model: VisitSession,
+    match,
     page,
     limit,
     skip,
@@ -536,7 +604,7 @@ const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
     extraDataStages: [
       {
         $lookup: {
-          from: "externalpeople",
+          from: ExternalPerson.collection.name,
           localField: "externalPersonId",
           foreignField: "_id",
           as: "person",
@@ -545,6 +613,7 @@ const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
       { $unwind: { path: "$person", preserveNullAndEmptyArrays: true } },
       {
         $addFields: {
+          sessionId: "$_id",
           person: {
             _id: "$person._id",
             name: { $ifNull: ["$person.name", ""] },
@@ -555,6 +624,7 @@ const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
       },
     ],
   });
+};
 
 module.exports = {
   listVisitCategories,
@@ -563,6 +633,7 @@ module.exports = {
   verifyInvite,
   resendInvite,
   checkInAtKiosk,
+  confirmContractorQrCheckIn,
   checkOutAtKiosk,
   listOnSiteVisits,
 };

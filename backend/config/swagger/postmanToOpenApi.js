@@ -19,9 +19,11 @@ const newestCollectionPath = () => {
     })
     .sort((a, b) => b.mtime - a.mtime);
 
-  const preferred = files.find((file) =>
-    path.basename(file.filePath).toLowerCase().includes("tempyhubapi")
-  );
+  const preferred =
+    files.find((file) => /latest/i.test(path.basename(file.filePath))) ||
+    files.find((file) =>
+      path.basename(file.filePath).toLowerCase().includes("tempyhubapi")
+    );
   return (preferred || files[0])?.filePath || null;
 };
 

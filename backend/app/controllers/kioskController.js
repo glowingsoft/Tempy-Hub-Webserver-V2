@@ -295,6 +295,15 @@ const confirmPairing = async (req, res) => {
 
 
 
+    if (data?.kind === "contractor") {
+      return sendResponse({
+        res,
+        statusCode: 201,
+        translationKey: "visit_checked_in_successfully",
+        data: data.visit,
+      });
+    }
+
     return sendResponse({
 
       res,
@@ -352,6 +361,23 @@ const cancelPairing = async (req, res) => {
 };
 
 
+
+const scanFromContractor = async (req, res) => {
+  try {
+    const data = await kioskService.scanContractorFromPhone({
+      scanToken: req.body.scanToken,
+      userId: req.user._id,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "kiosk_scan_successful",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
 
 const scanFromPhone = async (req, res) => {
 
@@ -734,6 +760,8 @@ module.exports = {
   cancelPairing,
 
   scanFromPhone,
+
+  scanFromContractor,
 
   register,
 

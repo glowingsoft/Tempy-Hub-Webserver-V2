@@ -32,6 +32,7 @@ router.post(
   requireMembership(),
   kioskController.scanFromPhone
 );
+router.post("/contractor/scan", auth, kioskController.scanFromContractor);
 
 // Fire drill / evacuation — gated on fireDrillEvacuation (Figma Screen 85–86).
 router.get(

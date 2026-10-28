@@ -14,6 +14,8 @@ const {
   acceptInvitation,
   previewFamilyInvitation,
   acceptFamilyInvitation,
+  previewVisitorAccountInvitation,
+  acceptVisitorAccountInvitation,
 } = require("../controllers/authController");
 const createRateLimiter = require("@utils/rateLimiter");
 
@@ -75,6 +77,17 @@ router.post(
   "/family-invitations/:token/accept",
   invitationRateLimiter,
   acceptFamilyInvitation
+);
+
+router.get(
+  "/visitor-account-invitations/:token",
+  invitationRateLimiter,
+  previewVisitorAccountInvitation
+);
+router.post(
+  "/visitor-account-invitations/:token/accept",
+  invitationRateLimiter,
+  acceptVisitorAccountInvitation
 );
 
 router.post("/logout", auth, logout);

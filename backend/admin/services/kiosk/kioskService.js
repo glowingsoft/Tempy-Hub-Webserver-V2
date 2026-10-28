@@ -20,11 +20,13 @@ const { JobTitle } = require("@models/JobTitle");
 const { Department } = require("@models/Department");
 const { VisitSession } = require("@models/VisitSession");
 const { ExternalPerson } = require("@models/ExternalPerson");
+const { Invitation } = require("@models/Invitation");
 const { EvacuationEvent } = require("@models/EvacuationEvent");
 const { AppError } = require("@services/_errors/AppError");
 const { signKioskToken } = require("@middlewares/kioskMiddleware");
 const { verifyActivationCode, issueActivationCode } = require("@adminServices/organizations/branchService");
 const attendanceService = require("@adminServices/attendance/attendanceService");
+const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
 const { getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
 const communicationService = require("@commonServices/communication/communicationService");
 const { kioskCheckInOtpEmailTemplate } = require("@utils/emailTemplates");
@@ -41,6 +43,8 @@ const {
   CheckInMethod,
   VisitSessionStatus,
   EvacuationStatus,
+  ExternalPersonType,
+  BadgeType,
 } = require("@models/domainEnums");
 
 const MIN_SEARCH_LENGTH = 2;
@@ -632,6 +636,91 @@ const scanKioskFromPhone = async ({
   };
 };
 
+const scanContractorFromPhone = async ({ scanToken, userId }) => {
+  const kiosk = await Kiosk.findOne({
+    scanToken: String(scanToken || "").trim(),
+    scanTokenExpiresAt: { $gt: new Date() },
+    setupStatus: KioskSetupStatus.REGISTERED,
+  }).lean();
+
+  if (!kiosk) throw new AppError("kiosk_scan_token_invalid", 400);
+  if (kiosk.kioskMode === KioskMode.LOCKED) throw new AppError("kiosk_locked", 403);
+
+  const branch = await Branch.findById(kiosk.branchId)
+    .select("organizationId status")
+    .lean();
+  if (!branch || branch.status !== BranchStatus.ACTIVE) {
+    throw new AppError("branch_not_active", 403);
+  }
+
+  const person = await ExternalPerson.findOne({
+    userId,
+    branchId: kiosk.branchId,
+    type: ExternalPersonType.CONTRACTOR,
+  }).lean();
+  if (!person) throw new AppError("contractor_not_at_kiosk_branch", 403);
+
+  const email = String(person.email || "").trim().toLowerCase();
+  const invitation = email
+    ? await Invitation.findOne({
+        branchId: kiosk.branchId,
+        visitorEmail: email,
+        badgeType: BadgeType.CONTRACTOR,
+        status: { $in: visitorInvitationService.OPEN_INVITE_STATUSES },
+        visitingUntil: { $gte: new Date() },
+      })
+        .sort({ arrivalAt: 1 })
+        .lean()
+    : null;
+  if (!invitation) throw new AppError("contractor_invitation_required", 403);
+
+  const openVisit = await VisitSession.exists({
+    branchId: kiosk.branchId,
+    externalPersonId: person._id,
+    status: {
+      $in: [VisitSessionStatus.ON_SITE, VisitSessionStatus.AWAITING_APPROVAL],
+    },
+    checkOutAt: null,
+  });
+  if (openVisit) throw new AppError("visit_already_on_site", 409);
+
+  await expireStalePairingSessions(kiosk._id);
+  await KioskPairingSession.updateMany(
+    {
+      kioskId: kiosk._id,
+      status: KioskPairingStatus.PENDING_CONFIRMATION,
+    },
+    { $set: { status: KioskPairingStatus.CANCELLED } }
+  );
+
+  const session = await KioskPairingSession.create({
+    kioskId: kiosk._id,
+    branchId: kiosk.branchId,
+    organizationId: branch.organizationId,
+    externalPersonId: person._id,
+    invitationId: invitation._id,
+    scanToken: kiosk.scanToken,
+    status: KioskPairingStatus.PENDING_CONFIRMATION,
+    expiresAt: new Date(Date.now() + PAIRING_SESSION_TTL_MS),
+  });
+
+  emitKioskPairingReady({ kioskId: kiosk._id, session });
+
+  return {
+    sessionId: session._id,
+    kind: "contractor",
+    kioskId: kiosk._id,
+    branchId: kiosk.branchId,
+    expiresAt: session.expiresAt,
+    contractor: {
+      externalPersonId: person._id,
+      name: person.name,
+      photoUrl: person.photoUrl || "",
+    },
+    invitationId: invitation._id,
+  };
+};
+
 const getPendingPairing = async ({ kioskId }) => {
   await expireStalePairingSessions(kioskId);
 
@@ -643,21 +732,79 @@ const getPendingPairing = async ({ kioskId }) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  if (!session) return { session: null, staff: null };
+  if (!session) return { session: null, staff: null, contractor: null };
+
+  const pending = {
+    sessionId: session._id,
+    status: session.status,
+    expiresAt: session.expiresAt,
+    kind: session.externalPersonId ? "contractor" : "staff",
+  };
+
+  if (session.externalPersonId) {
+    const [person, invitation] = await Promise.all([
+      ExternalPerson.findById(session.externalPersonId)
+        .select("name photoUrl email phone type branchId")
+        .lean(),
+      Invitation.findById(session.invitationId)
+        .select(
+          "visitorName visitorEmail badgeType arrivalAt visitingUntil hostStaffId instructions status branchId"
+        )
+        .lean(),
+    ]);
+    if (!person) return { session: null, staff: null, contractor: null };
+
+    let hostName = "";
+    if (invitation?.hostStaffId) {
+      const host = await StaffProfile.findById(invitation.hostStaffId)
+        .select("userId")
+        .lean();
+      if (host?.userId) {
+        const hostUser = await User.findById(host.userId).select("name").lean();
+        hostName = hostUser?.name || "";
+      }
+    }
+
+    return {
+      session: pending,
+      staff: null,
+      contractor: {
+        externalPersonId: person._id,
+        name: person.name,
+        email: person.email || "",
+        phone: person.phone || "",
+        photoUrl: person.photoUrl || "",
+        type: person.type,
+        branchId: person.branchId,
+        invitation: invitation
+          ? {
+              invitationId: invitation._id,
+              visitorName: invitation.visitorName,
+              visitorEmail: invitation.visitorEmail,
+              badgeType: invitation.badgeType,
+              status: invitation.status,
+              arrivalAt: invitation.arrivalAt,
+              visitingUntil: invitation.visitingUntil,
+              instructions: invitation.instructions || "",
+              hostStaffId: invitation.hostStaffId || null,
+              hostName,
+              branchId: invitation.branchId,
+            }
+          : null,
+      },
+    };
+  }
 
   const profile = await StaffProfile.findById(session.staffId)
     .select("+pinHash")
     .lean();
-  if (!profile) return { session: null, staff: null };
+  if (!profile) return { session: null, staff: null, contractor: null };
 
   const staff = await shapeStaffPreview(profile);
   return {
-    session: {
-      sessionId: session._id,
-      status: session.status,
-      expiresAt: session.expiresAt,
-    },
+    session: pending,
     staff,
+    contractor: null,
   };
 };
 
@@ -678,6 +825,29 @@ const confirmPairingAndClockIn = async ({
   }).lean();
 
   if (!session) throw new AppError("kiosk_pairing_not_found", 404);
+
+  if (session.externalPersonId) {
+    const kioskVisitService = require("@adminServices/kiosk/kioskVisitService");
+    const visit = await kioskVisitService.confirmContractorQrCheckIn({
+      organizationId,
+      branchId,
+      kioskId,
+      externalPersonId: session.externalPersonId,
+      invitationId: session.invitationId,
+      photoUrl: image,
+    });
+    await KioskPairingSession.updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          status: KioskPairingStatus.CONFIRMED,
+          confirmedAt: new Date(),
+        },
+      }
+    );
+    touchLastCheckIn(kioskId);
+    return { kind: "contractor", visit };
+  }
 
   const profile = await assertStaffAtKioskBranch({
     staffId: session.staffId,
@@ -1707,6 +1877,7 @@ module.exports = {
   verifyKioskCheckInOtp,
   getKioskQr,
   scanKioskFromPhone,
+  scanContractorFromPhone,
   getPendingPairing,
   confirmPairingAndClockIn,
   cancelPairing,

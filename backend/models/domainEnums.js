@@ -53,6 +53,8 @@ const StaffInvitationStatus = {
 
 const FamilyInvitationStatus = { ...StaffInvitationStatus };
 
+const VisitorAccountInvitationStatus = { ...StaffInvitationStatus };
+
 const FamilyRelationship = {
   SPOUSE: "spouse",
   PARTNER: "partner",
@@ -506,6 +508,7 @@ module.exports = {
   AppSurface,
   StaffInvitationStatus,
   FamilyInvitationStatus,
+  VisitorAccountInvitationStatus,
   FamilyRelationship,
   FamilyMemberStatus,
   FamilyJoinSource,

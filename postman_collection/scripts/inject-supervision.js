@@ -1,16 +1,12 @@
 const fs = require("fs");
 
-const FILE = "./postman_collection/Tempy Hub API_13_10_2026.postman_collection.json";
+const { collectionFile } = require("./collectionFile");
+const FILE = collectionFile();
 const collection = JSON.parse(fs.readFileSync(FILE, "utf8"));
 
 const adminPanel = collection.item.find((i) => i.name === "Admin Panel");
 const appFolder = collection.item.find((i) => i.name === "App");
 if (!adminPanel || !appFolder) throw new Error("Admin Panel or App folder not found");
-
-if (adminPanel.item.some((i) => i.name === "Supervision")) {
-  console.log("Supervision folder already exists — skipping");
-  process.exit(0);
-}
 
 const upsertVar = (key) => {
   if (!collection.variable) collection.variable = [];
@@ -33,7 +29,7 @@ const saveCreated = {
   script: {
     type: "text/javascript",
     exec: [
-      'pm.test("Created", () => pm.response.to.have.status(201));',
+      'pm.test("OK", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));',
       "const json = pm.response.json();",
       'if (json.data && json.data._id) pm.collectionVariables.set("supervisionId", json.data._id);',
       "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
@@ -42,14 +38,17 @@ const saveCreated = {
   },
 };
 
-const orgHeader = [{ key: "x-org-id", value: "{{organizationId}}" }];
+const orgHeader = [
+  { key: "x-org-id", value: "{{organizationId}}" },
+  { key: "Authorization", value: "Bearer {{token}}" },
+];
 
 const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
   name,
   event: [test || testOk],
   request: {
     method,
-    header: header || [],
+    header: header || orgHeader,
     body: body
       ? {
           mode: "raw",
@@ -58,14 +57,14 @@ const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
         }
       : undefined,
     url: {
-      raw: `{{url}}${pathParts.join("/")}${query ? `?${query}` : ""}`,
+      raw: `{{url}}/${pathParts.join("/")}${query ? `?${query}` : ""}`,
       host: ["{{url}}"],
       path: pathParts,
       ...(query
         ? {
             query: query.split("&").map((pair) => {
               const [key, value] = pair.split("=");
-              return { key, value };
+              return { key, value: value ?? "" };
             }),
           }
         : {}),
@@ -74,68 +73,75 @@ const req = (name, method, pathParts, { body, query, test, header } = {}) => ({
   response: [],
 });
 
+const upsertFolder = (parent, folderName, requests) => {
+  let folder = parent.item.find((i) => i.name === folderName);
+  if (!folder) {
+    folder = { name: folderName, item: [] };
+    parent.item.push(folder);
+  }
+  folder.item = requests;
+  return folder;
+};
+
 const orgPath = ["admin", "organizations", "{{organizationId}}"];
 
-adminPanel.item.push({
-  name: "Supervision",
-  item: [
-    req("update org supervision interval", "PATCH", orgPath, {
-      body: { settings: { defaultSupervisionIntervalMonths: 3 } },
-    }),
-    req(
-      "update staff supervision settings",
-      "PATCH",
-      [...orgPath, "staff-profiles", "{{staffProfileId}}", "supervision-settings"],
-      {
-        body: {
-          supervisorStaffId: "{{supervisorStaffId}}",
-          supervisionIntervalMonths: 3,
-        },
-      }
-    ),
-    req("list team supervision", "GET", [...orgPath, "supervision"], {
-      query: "branchId={{branchId}}&staffId={{staffProfileId}}",
-    }),
-    req("book supervision", "POST", [...orgPath, "supervision"], {
+upsertFolder(adminPanel, "Supervision", [
+  req("PATCH org supervision interval", "PATCH", orgPath, {
+    body: { settings: { defaultSupervisionIntervalMonths: 3 } },
+  }),
+  req(
+    "PATCH staff supervision settings",
+    "PATCH",
+    [...orgPath, "staff-profiles", "{{staffProfileId}}", "supervision-settings"],
+    {
       body: {
-        staffId: "{{staffProfileId}}",
-        status: "scheduled",
-        scheduledAt: "2026-11-16T09:00:00",
-        locationLabel: "Office",
+        supervisorStaffId: "{{supervisorStaffId}}",
+        supervisionIntervalMonths: 3,
       },
-      test: saveCreated,
-    }),
-    req("save completed supervision", "PUT", [...orgPath, "supervision", "{{supervisionId}}"], {
-      body: {
-        status: "completed",
-        topics: ["Wellbeing", "Training"],
-        notes: "Meeting held",
-        actionPoints: ["Book the next review"],
-      },
-    }),
-    req(
-      "sign off action point",
-      "POST",
-      [
-        ...orgPath,
-        "supervision",
-        "{{supervisionId}}",
-        "action-points",
-        "{{actionPointId}}",
-        "sign-off",
-      ]
-    ),
-  ],
-});
+    }
+  ),
+  req("GET team supervision", "GET", [...orgPath, "supervision"], {
+    query: "branchId={{branchId}}&staffId={{staffProfileId}}&page=1&limit=10",
+  }),
+  req("POST book supervision", "POST", [...orgPath, "supervision"], {
+    body: {
+      staffId: "{{staffProfileId}}",
+      status: "scheduled",
+      scheduledAt: "2026-11-16T09:00:00",
+      locationLabel: "Office",
+    },
+    test: saveCreated,
+  }),
+  req("GET supervision", "GET", [...orgPath, "supervision", "{{supervisionId}}"]),
+  req("PUT complete supervision", "PUT", [...orgPath, "supervision", "{{supervisionId}}"], {
+    body: {
+      status: "completed",
+      topics: ["Wellbeing", "Training"],
+      notes: "Meeting held",
+      actionPoints: ["Book the next review"],
+    },
+    test: saveCreated,
+  }),
+  req("POST sign off action points", "POST", [
+    ...orgPath,
+    "supervision",
+    "{{supervisionId}}",
+    "action-points",
+    "sign-off",
+  ]),
+  req("POST sign off one action point", "POST", [
+    ...orgPath,
+    "supervision",
+    "{{supervisionId}}",
+    "action-points",
+    "{{actionPointId}}",
+    "sign-off",
+  ]),
+]);
 
-if (!appFolder.item.some((i) => i.name === "Supervision")) {
-  appFolder.item.push({
-    name: "Supervision",
-    item: [
-      req("my supervision", "GET", ["app", "supervision"], { header: orgHeader }),
-    ],
-  });
-}
+upsertFolder(appFolder, "Supervision", [
+  req("GET my supervision", "GET", ["app", "supervision"]),
+]);
 
-fs.writeFileSync(FILE, JSON.stringify(collection, null, 2));
-console.log("postman supervision folder injected");
+fs.writeFileSync(FILE, `${JSON.stringify(collection, null, 2)}\n`);
+console.log("postman: Supervision restored");

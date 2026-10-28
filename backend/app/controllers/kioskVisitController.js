@@ -151,6 +151,7 @@ const listOnSite = async (req, res) => {
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await kioskVisitService.listOnSiteVisits({
       branchId: req.branchId,
+      keyword: req.query.keyword || req.query.search,
       page,
       limit,
       skip,

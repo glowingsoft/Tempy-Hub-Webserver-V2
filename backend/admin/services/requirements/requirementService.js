@@ -5,6 +5,7 @@ const { RequirementRecord } = require("@models/RequirementRecord");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Organization } = require("@models/Organization");
 const { JobTitle } = require("@models/JobTitle");
+const { Department } = require("@models/Department");
 const { User } = require("@models/UserModel");
 const { AppError } = require("@services/_errors/AppError");
 const { paginateWithFacet } = require("@utils/paginate");
@@ -230,22 +231,116 @@ const listRequirements = async ({
     organizationId: orgOid,
     ...requirementBranchFilter(standing, optionalOid(branchId, "invalid_branch_id")),
   };
-  if (type) {
-    if (!TYPES.has(type)) throw new AppError("invalid_requirement_type", 400);
-    match.type = type;
-  }
   const term = String(keyword || "").trim();
   if (term) match.name = { $regex: term, $options: "i" };
 
-  const { data, meta } = await paginateWithFacet({
-    model: Requirement,
-    match,
-    page,
-    limit,
-    skip,
-    sort: { name: 1 },
+  const listMatch = { ...match };
+  if (type) {
+    if (!TYPES.has(type)) throw new AppError("invalid_requirement_type", 400);
+    listMatch.type = type;
+  }
+
+  const [result] = await Requirement.aggregate([
+    {
+      $facet: {
+        data: [
+          { $match: listMatch },
+          { $sort: { name: 1 } },
+          { $skip: skip },
+          { $limit: limit },
+          ...appliesToLookups,
+        ],
+        totalCount: [{ $match: listMatch }, { $count: "count" }],
+        typeCounts: [
+          { $match: match },
+          { $group: { _id: "$type", count: { $sum: 1 } } },
+        ],
+      },
+    },
+  ]);
+
+  const typeCounts = Object.values(RequirementType).reduce((counts, value) => {
+    counts[value] = 0;
+    return counts;
+  }, {});
+  for (const row of result?.typeCounts || []) {
+    if (row._id) typeCounts[row._id] = row.count;
+  }
+
+  return {
+    data: result?.data || [],
+    meta: {
+      ...generateMeta(page, limit, result?.totalCount?.[0]?.count ?? 0),
+      typeCounts,
+    },
+  };
+};
+
+const appliesToLookups = [
+  {
+    $lookup: {
+      from: JobTitle.collection.name,
+      localField: "appliesTo.jobTitleIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { _id: 1, name: 1, branchId: 1, active: 1 } }],
+      as: "jobTitles",
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "appliesTo.departmentIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { _id: 1, name: 1, branchId: 1, active: 1 } }],
+      as: "departments",
+    },
+  },
+];
+
+const getRequirement = async ({ actor, organizationId, requirementId, branchId }) => {
+  const orgOid = toOid(organizationId, "invalid_organization_id");
+  const reqOid = toOid(requirementId, "invalid_requirement_id");
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranch = optionalOid(branchId, "invalid_branch_id");
+
+  const [requirement] = await Requirement.aggregate([
+    {
+      $match: {
+        _id: reqOid,
+        organizationId: orgOid,
+        ...requirementBranchFilter(standing, scopedBranch),
+      },
+    },
+    ...appliesToLookups,
+    { $limit: 1 },
+  ]);
+  if (!requirement) throw new AppError("requirement_not_found", 404);
+
+  const staffIds = await resolveScopedSuperviseeIds({
+    standing,
+    actor,
+    organizationId,
+    branchId: scopedBranch,
   });
-  return { data, meta };
+
+  let assignments = [];
+  if (staffIds.length) {
+    const match = {
+      organizationId: orgOid,
+      requirementId: reqOid,
+      staffId: { $in: staffIds },
+    };
+    if (scopedBranch) match.branchId = scopedBranch;
+    const rows = await RequirementAssignment.aggregate([
+      { $match: match },
+      { $sort: { assignedAt: -1 } },
+      ...assignmentLookups,
+    ]);
+    const amberDays = await orgAmberDays(orgOid);
+    assignments = rows.map((row) => shapeAssignmentRow(row, amberDays));
+  }
+
+  return { ...requirement, assignments };
 };
 
 const createRequirement = async ({
@@ -947,6 +1042,7 @@ const listAssignments = async ({
   page,
   limit,
   skip,
+  applyLimit = true,
 }) => {
   const orgOid = toOid(organizationId, "invalid_organization_id");
   const standing = await actorStanding(actor, organizationId);
@@ -1016,6 +1112,7 @@ const listAssignments = async ({
     limit,
     skip,
     sort: { assignedAt: -1 },
+    applyLimit,
     extraDataStages: assignmentLookups,
   });
   const amberDays = await orgAmberDays(orgOid);
@@ -1043,7 +1140,7 @@ const listTrainingRecords = async ({
     throw new AppError("invalid_training_status", 400);
   }
 
-  const { data, meta } = await listAssignments({
+  const { data } = await listAssignments({
     actor,
     organizationId,
     branchId,
@@ -1054,19 +1151,27 @@ const listTrainingRecords = async ({
     page,
     limit,
     skip,
+    applyLimit: false,
   });
 
-  const rows = status ? data.filter((row) => row.status === status) : data;
-  if (!status) return { data, meta };
+  const statusCounts = Object.fromEntries([...LIST_STATUSES].map((value) => [value, 0]));
+  for (const row of data) {
+    if (statusCounts[row.status] != null) statusCounts[row.status] += 1;
+  }
 
+  const filtered = status ? data.filter((row) => row.status === status) : data;
   return {
-    data: rows,
-    meta: generateMeta(page, limit, rows.length),
+    data: filtered.slice(skip, skip + limit),
+    meta: {
+      ...generateMeta(page, limit, filtered.length),
+      statusCounts,
+    },
   };
 };
 
 module.exports = {
   listRequirements,
+  getRequirement,
   createRequirement,
   updateRequirement,
   createAssignments,

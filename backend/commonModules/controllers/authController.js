@@ -6,6 +6,7 @@ const { ALL_SURFACES, normalizeSurface } = require("@commonServices/auth/surface
 
 const membershipService = require("@adminServices/organizations/membershipService");
 const familyService = require("@adminServices/family/familyService");
+const visitorAccountInvitationService = require("@adminServices/visitors/visitorAccountInvitationService");
 
 /**
  * Public but token-gated: an administrator issued the invitation, so this is
@@ -34,6 +35,41 @@ const acceptInvitation = async (req, res) => {
       timezone: req.body.timezone,
     });
 
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "invitation_accepted_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const previewVisitorAccountInvitation = async (req, res) => {
+  try {
+    const data = await visitorAccountInvitationService.previewVisitorAccountInvitation({
+      token: req.params.token,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const acceptVisitorAccountInvitation = async (req, res) => {
+  try {
+    const data = await visitorAccountInvitationService.acceptVisitorAccountInvitation({
+      token: req.params.token,
+      name: req.body.name,
+      password: req.body.password,
+      timezone: req.body.timezone,
+    });
     return sendResponse({
       res,
       statusCode: 200,
@@ -410,4 +446,6 @@ module.exports = {
   acceptInvitation,
   previewFamilyInvitation,
   acceptFamilyInvitation,
+  previewVisitorAccountInvitation,
+  acceptVisitorAccountInvitation,
 };

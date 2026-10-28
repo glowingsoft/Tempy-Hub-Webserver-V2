@@ -156,13 +156,9 @@ const openApiSpec = buildOpenApi({
 
 app.get("/api/v1/openapi.json", (_req, res) => res.json(openApiSpec));
 app.get("/api/v1/postman", (_req, res) => {
-  const collectionPath = path.join(
-    __dirname,
-    "..",
-    "postman_collection",
-    "Tempy Hub API_13_10_2026.postman_collection.json"
-  );
-  if (!fs.existsSync(collectionPath)) {
+  const { newestCollectionPath } = require("./config/swagger/postmanToOpenApi");
+  const collectionPath = newestCollectionPath();
+  if (!collectionPath || !fs.existsSync(collectionPath)) {
     return res.status(404).json({ message: "Postman collection not found" });
   }
   res.setHeader("Content-Type", "application/json; charset=utf-8");

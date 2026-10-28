@@ -42,7 +42,7 @@ const documentSchema = new mongoose.Schema(
       default: [DocumentAudience.STAFF],
     },
     /**
-     * False for read-only material such as newsletters, which would otherwise
+     * False for read-only material such as newsletters, which would 
      * sit in a reader's action list forever waiting on a signature.
      */
     requiresSignature: { type: Boolean, default: true, index: true },

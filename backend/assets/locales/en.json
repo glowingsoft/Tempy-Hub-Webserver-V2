@@ -605,5 +605,14 @@
   "invalid_peep_level": "PEEP level must be low, medium, or high",
   "invalid_peep_consent_status": "Consent status is not valid",
   "peep_record_created_successfully": "PEEP record created successfully",
-  "peep_record_updated_successfully": "PEEP record updated successfully"
+  "peep_record_updated_successfully": "PEEP record updated successfully",
+  "invalid_message_text": "Write a message of up to {max} characters",
+  "invalid_message_audience": "Choose all next of kin, or one to {max} residents",
+  "message_no_recipients": "None of these residents has a next of kin to message",
+  "message_sent": "Message sent",
+  "message_not_found": "Message not found",
+  "conversation_not_found": "Conversation not found",
+  "invalid_chat_tab": "Chat tab must be inbox, favorite or archived",
+  "invalid_chat_action": "Chat action must be default, favorite or archived",
+  "chat_updated": "Chat updated"
 }

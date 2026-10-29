@@ -1654,6 +1654,131 @@ staffRequests.push(
   )
 );
 
+// ---------------------------------------------------------------- Chat: messages from the home (one-way)
+// These live under /chats, not under family, app or admin. Earlier runs put them in those folders, so clear them first.
+const OLD_CHAT_FOLDERS = ["Messages", "Messages (Site and Line Manager)"];
+const OLD_CHAT_REQUESTS = [
+  "send family message", "sent family messages", "sent family message detail",
+  "app send family message", "app sent family messages", "app sent family message detail",
+  "my chats", "chat messages", "update chat",
+  "send chat message", "sent chat messages", "sent chat message detail",
+];
+const dropOldChat = (node, inFamily = false) => {
+  if (!node.item) return;
+  node.item = node.item.filter((i) => !(i.item && inFamily && OLD_CHAT_FOLDERS.includes(i.name)));
+  node.item = node.item.filter((i) => !(i.item && i.name === "Messages (Site and Line Manager)"));
+  node.item = node.item.filter((i) => !(i.request && inFamily && OLD_CHAT_REQUESTS.includes(i.name)));
+  node.item.forEach((i) => dropOldChat(i, inFamily || /^(Family|Family Engagement|App|Admin Panel)$/.test(i.name)));
+};
+dropOldChat(collection);
+
+const chatRequests = [
+  // ---- family app (Login Family)
+  req("my chats", "GET", ["chats"], {
+    query: "page=1&limit=20",
+    optional: { chatState: ["inbox", "inbox (default), favorite or archived; 400 invalid_chat_tab for anything else"] },
+    tests: [
+      'pm.test("Chats fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta).to.have.property("unread");',
+      '    if (json.data.length) { pm.collectionVariables.set("conversationId", json.data[0].conversationId); }',
+      "});",
+    ],
+    description:
+      "FAMILY token (Login Family). Messages from the home, one thread per home, newest first. Only active next of kin see anything; anyone else gets an empty list. Each row has conversationId, chatName (the home's name), chatState, unreadCount, canMessage (always false: families cannot reply, so hide the composer) and lastMessage (messageContent, senderName, createdAt). meta.unread is the unread total for the badge. Live updates: connect to the /chat socket with auth {token} (the same login token) and listen for receiveMessage; the room is taken from the token, and the socket cannot send anything. Sets conversationId.",
+  }),
+  req("chat messages", "GET", ["chats", "messages"], {
+    query: "conversationId={{conversationId}}&page=1&limit=20",
+    tests: [
+      'pm.test("Chat messages fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      "    pm.expect(json.meta.conversation.canMessage).to.eql(false);",
+      "});",
+    ],
+    description:
+      "FAMILY token. The messages in one thread, newest first: _id, senderName, messageContent, createdAt and isRead (as it was when the thread was opened). Opening the first page marks the whole thread read and clears unreadCount, which the home sees in its sent list. 404 conversation_not_found for anyone else's thread, or once the person is no longer next of kin.",
+  }),
+  withBody(
+    req("update chat", "PUT", ["chats", "{{conversationId}}", "action"], {
+      tests: [
+        'pm.test("Chat updated", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data).to.have.property("chatState");',
+        "});",
+      ],
+      description:
+        'FAMILY token. PUT with body {"action":"favorite"}: action is default (back to the inbox), favorite or archived; 400 invalid_chat_action for anything else. It only changes how this person sees the thread.',
+    }),
+    { action: "favorite" }
+  ),
+  // ---- the home: site manager, line manager, owner (Login Staff)
+  withBody(
+    staff("send chat message", "POST", ["chats", "message"], {
+      tests: [
+        'pm.test("Message sent", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        "    pm.expect(data.recipients).to.be.above(0);",
+        '    pm.collectionVariables.set("broadcastId", data.broadcastId);',
+        "});",
+      ],
+      description:
+        "STAFF token (Login Staff or Login line Manager). A message from the home to next of kin; they read it in the app and cannot reply. Body: audience (all: every active next of kin at the site; selected: the next of kin of residentIds, one to 100 residents of that site), message (plain text, up to 2000 characters) and branchId (a site or line manager uses their own site; an owner or super admin must send it, or get 400 branch_required). Only active next of kin are reached, each person once even when they are next of kin of several chosen residents; carers and family members who are not next of kin are not. Each person has one thread per home, gets an in-app notification and a live push. Returns broadcastId, sentAt, recipients and residentsWithoutNextOfKin; 400 message_no_recipients when nobody could be reached, 404 resident_not_found for a resident of another site, 403 outside_managed_branch for another site. Sets broadcastId. Needs familyEngagement.manage; rate limited.",
+    }),
+    {
+      audience: "selected",
+      residentIds: ["{{residentId}}"],
+      message: "The garden party is on Friday at 2pm. Everyone is welcome.",
+      branchId: "{{branchId}}",
+    }
+  ),
+  staff("sent chat messages", "GET", ["chats", "sent"], {
+    query: "page=1&limit=20",
+    optional: { branchId: ["{{branchId}}", "One site (an owner picks one)"], keyword: ["garden", "Part of the message text"] },
+    tests: [
+      'pm.test("Sent messages fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    if (json.data.length) { pm.collectionVariables.set("broadcastId", json.data[0].broadcastId); }',
+      "});",
+    ],
+    description:
+      "STAFF token. What the home has sent, newest first: one row per message however many people got it. Each row has broadcastId, message, homeName, sentByName and sentByPhotoUrl, sentAt, recipients and readCount. Optional query: branchId, keyword (part of the text, taken literally), page, limit. A site or line manager sees their own site. Sets broadcastId. Needs familyEngagement.view.",
+  }),
+  staff("sent chat message detail", "GET", ["chats", "sent", "{{broadcastId}}"], {
+    query: "page=1&limit=20",
+    tests: [
+      'pm.test("Sent message fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().meta.message).to.include.keys("message", "recipients", "readCount");',
+      "});",
+    ],
+    description:
+      "STAFF token. One sent message and who got it: meta.message has the summary (message, homeName, sentBy, sentAt, recipients, readCount) and data has each recipient with name, email and readAt (null until they open it), paged. 404 message_not_found for an unknown message or one at another site. Needs familyEngagement.view.",
+  }),
+];
+
+collection.item = collection.item.filter((i) => i.name !== "Chat");
+let chatFolder = collection.item.find((i) => i.name === "Chat");
+if (!chatFolder) {
+  chatFolder = {
+    name: "Chat",
+    description: "Messages from the home to next of kin, one way. Use a family token to read them and a staff token (site manager, line manager, owner) to send.",
+    item: [],
+  };
+  collection.item.push(chatFolder);
+}
+for (const request of chatRequests) {
+  const idx = chatFolder.item.findIndex((r) => r.name === request.name);
+  if (idx >= 0) chatFolder.item[idx] = request;
+  else chatFolder.item.push(request);
+}
+
 let staffFolder = adminFolder.item.find((i) => i.name === "Family Management");
 if (!staffFolder) {
   staffFolder = { name: "Family Management", item: [] };
@@ -1891,7 +2016,7 @@ const retire = (item) => {
 retire(collection);
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

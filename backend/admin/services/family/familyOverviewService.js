@@ -29,8 +29,6 @@ const DEFAULT_DAYS = 7;
 const MAX_DAYS = 365;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const ItemStatus = FamilyGazetteItemStatus;
-
 const activityOf = async ({ scope, since }) => {
   const [uploads, [posts], [reactions]] = await Promise.all([
     FamilyUpload.aggregate([
@@ -113,7 +111,6 @@ const nextNewsletterOf = async ({ scope }) => {
   return newsletter ?? null;
 };
 
-// What the latest gazette round looks like for the checklist: how many are still to build, print and hand out.
 const gazetteProgressOf = async ({ scope }) => {
   const issues = await FamilyGazetteIssue.aggregate([
     { $match: scope },
@@ -130,23 +127,23 @@ const gazetteProgressOf = async ({ scope }) => {
         _id: null,
         total: { $sum: 1 },
         building: {
-          $sum: { $cond: [{ $eq: ["$status", ItemStatus.BUILDING] }, 1, 0] },
+          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.BUILDING] }, 1, 0] },
         },
         failed: {
-          $sum: { $cond: [{ $eq: ["$status", ItemStatus.FAILED] }, 1, 0] },
+          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.FAILED] }, 1, 0] },
         },
         ready: {
-          $sum: { $cond: [{ $eq: ["$status", ItemStatus.READY] }, 1, 0] },
+          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.READY] }, 1, 0] },
         },
         printed: {
-          $sum: { $cond: [{ $eq: ["$status", ItemStatus.PRINTED] }, 1, 0] },
+          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.PRINTED] }, 1, 0] },
         },
         toGive: {
           $sum: {
             $cond: [
               {
                 $and: [
-                  { $eq: ["$status", ItemStatus.PRINTED] },
+                  { $eq: ["$status", FamilyGazetteItemStatus.PRINTED] },
                   { $eq: ["$givenAt", null] },
                 ],
               },
@@ -189,7 +186,6 @@ const checklistOf = ({ attention, gazette, progress }) => {
   ];
 };
 
-/** The Family overview for one site, or for every site the caller may see: a site or line manager always gets their own. */
 const getOverview = async ({ actor, organizationId, branchId, days }) => {
   const span = days === undefined ? DEFAULT_DAYS : Number(days);
   if (!Number.isInteger(span) || span < 1 || span > MAX_DAYS)

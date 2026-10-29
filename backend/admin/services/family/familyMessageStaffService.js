@@ -26,23 +26,65 @@ const {
 const { resolveSite } = require("./familySite");
 const { listScope } = require("./familyStaffService");
 
-const AUDIENCES = { ALL: "all", SELECTED: "selected" };
+const AUDIENCES = { ALL: "all", SELECTED: "selected", PEOPLE: "people" };
 const MAX_RESIDENTS = 100;
+const MAX_PEOPLE = 200;
+const CONTACT_ROLE = "Next of kin";
 
-const cleanResidentIds = (value) => {
+const cleanIds = (value, max) => {
   const ids = Array.isArray(value) ? value : [];
   const unique = [...new Set(ids.map(String))];
   if (
     !unique.length ||
-    unique.length > MAX_RESIDENTS ||
+    unique.length > max ||
     !unique.every((id) => typeof id === "string" && isValidObjectId(id))
   )
-    throw new AppError("invalid_message_audience", 400, { max: MAX_RESIDENTS });
+    throw new AppError("invalid_message_audience", 400, { max });
   return unique.map(toObjectId);
 };
 
-/** The people a message is for, each once: everyone's next of kin at the site, or the next of kin of chosen residents. */
-const recipientsOf = async ({ organizationId, branchId, audience, residentIds }) => {
+/** Keyed "userId|branchId". */
+const residentsByPerson = async (people) => {
+  const userIds = [...new Set(people.map((p) => String(p.userId)))].map(toObjectId);
+  const branchIds = [...new Set(people.map((p) => String(p.branchId)))].map(toObjectId);
+  if (!userIds.length) return new Map();
+  const links = await FamilyMember.aggregate([
+    {
+      $match: {
+        userId: { $in: userIds },
+        branchId: { $in: branchIds },
+        status: FamilyMemberStatus.ACTIVE,
+        isNextOfKin: true,
+      },
+    },
+    ...joinOne({ from: Resident, localField: "residentId", as: "resident", optional: true }),
+    {
+      $project: {
+        userId: 1,
+        branchId: 1,
+        residentId: 1,
+        name: { $ifNull: ["$resident.name", ""] },
+        roomNumber: { $ifNull: ["$resident.roomNumber", ""] },
+        phone: { $ifNull: ["$resident.phone", ""] },
+        email: { $ifNull: ["$resident.email", ""] },
+      },
+    },
+  ]);
+  const byPerson = new Map();
+  links.forEach(({ userId, branchId, ...resident }) => {
+    const key = `${userId}|${branchId}`;
+    byPerson.set(key, [...(byPerson.get(key) ?? []), resident]);
+  });
+  return byPerson;
+};
+
+const recipientsOf = async ({
+  organizationId,
+  branchId,
+  audience,
+  residentIds,
+  recipientIds,
+}) => {
   const match = {
     organizationId: toObjectId(organizationId),
     branchId: toObjectId(branchId),
@@ -65,17 +107,23 @@ const recipientsOf = async ({ organizationId, branchId, audience, residentIds })
       throw new AppError("resident_not_found", 404);
     match.residentId = { $in: residentIds };
   }
+  if (audience === AUDIENCES.PEOPLE) match.userId = { $in: recipientIds };
 
   const rows = await FamilyMember.aggregate([
     { $match: match },
     { $group: { _id: "$userId", residents: { $addToSet: "$residentId" } } },
   ]);
+  const reached = new Set(rows.map((row) => String(row._id)));
   const covered = new Set(rows.flatMap((row) => row.residents.map(String)));
   return {
     userIds: rows.map((row) => row._id),
     withoutNextOfKin:
       audience === AUDIENCES.SELECTED
         ? residentIds.filter((id) => !covered.has(String(id)))
+        : [],
+    notReached:
+      audience === AUDIENCES.PEOPLE
+        ? recipientIds.filter((id) => !reached.has(String(id)))
         : [],
   };
 };
@@ -118,31 +166,69 @@ const saveMessages = async ({
   return messages;
 };
 
-/**
- * A message from the home to next of kin: everyone at the site (audience all) or those of chosen residents
- * (audience selected). Each person gets it in their own thread and cannot reply.
- */
+const contactInScope = async ({ actor, organizationId, conversationId }) => {
+  const id = idText(conversationId);
+  if (!id || !isValidObjectId(id))
+    throw new AppError("conversation_not_found", 404);
+  const scope = await listScope({ actor, organizationId });
+  const [contact] = await Conversation.aggregate([
+    { $match: { ...scope, _id: toObjectId(id) } },
+    ...joinOne({ from: User, localField: "recipientId", as: "user", optional: true }),
+    ...joinOne({ from: Branch, localField: "branchId", as: "home", optional: true }),
+    {
+      $project: {
+        organizationId: 1,
+        branchId: 1,
+        recipientId: 1,
+        homeName: { $ifNull: ["$home.name", ""] },
+        ...personFields("user"),
+        email: { $ifNull: ["$user.email", ""] },
+        phone: { $ifNull: ["$user.phoneNumber", ""] },
+      },
+    },
+  ]);
+  if (!contact) throw new AppError("conversation_not_found", 404);
+  return contact;
+};
+
+/** audience is all, selected (residentIds) or people (recipientIds); conversationId sends to one contact. */
 const sendMessage = async ({
   actor,
   organizationId,
   branchId,
   audience,
   residentIds,
+  recipientIds,
+  conversationId,
   message,
   now = new Date(),
 }) => {
   const text = cleanMessageText(message);
-  if (!Object.values(AUDIENCES).includes(audience))
-    throw new AppError("invalid_message_audience", 400, { max: MAX_RESIDENTS });
-  const chosen =
-    audience === AUDIENCES.SELECTED ? cleanResidentIds(residentIds) : [];
 
-  const site = await resolveSite({ actor, organizationId, branchId });
-  const { userIds, withoutNextOfKin } = await recipientsOf({
+  let site;
+  let kind = audience;
+  let people = [];
+  let residents = [];
+  if (conversationId !== undefined) {
+    const contact = await contactInScope({ actor, organizationId, conversationId });
+    site = { branchId: contact.branchId };
+    kind = AUDIENCES.PEOPLE;
+    people = [contact.recipientId];
+  } else {
+    if (!Object.values(AUDIENCES).includes(audience))
+      throw new AppError("invalid_message_audience", 400, { max: MAX_RESIDENTS });
+    if (audience === AUDIENCES.SELECTED)
+      residents = cleanIds(residentIds, MAX_RESIDENTS);
+    if (audience === AUDIENCES.PEOPLE) people = cleanIds(recipientIds, MAX_PEOPLE);
+    site = await resolveSite({ actor, organizationId, branchId });
+  }
+
+  const { userIds, withoutNextOfKin, notReached } = await recipientsOf({
     organizationId,
     branchId: site.branchId,
-    audience,
-    residentIds: chosen,
+    audience: kind,
+    residentIds: residents,
+    recipientIds: people,
   });
   if (!userIds.length) throw new AppError("message_no_recipients", 400);
 
@@ -187,11 +273,218 @@ const sendMessage = async ({
     broadcastId,
     sentAt: now,
     recipients: userIds.length,
+    conversationId: messages.length === 1 ? messages[0].conversationId : null,
     residentsWithoutNextOfKin: withoutNextOfKin,
+    recipientsNotReached: notReached,
   };
 };
 
-/** What the home has sent: one row per message however many people it went to, newest first, with how many have read it. */
+/** notRead stays true until the contact opens the latest message. */
+const listContacts = async ({
+  actor,
+  organizationId,
+  branchId,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
+  const base = {
+    ...(await listScope({ actor, organizationId, branchId })),
+    lastMessage: { $ne: null },
+  };
+
+  const text = searchText(keyword);
+  if (text) {
+    const named = await Conversation.aggregate([
+      { $match: base },
+      { $group: { _id: "$recipientId" } },
+      ...joinOne({ from: User, localField: "_id", as: "user" }),
+      { $match: { "user.name": { $regex: text, $options: "i" } } },
+      { $project: { _id: 1 } },
+    ]);
+    base.recipientId = { $in: named.map((row) => row._id) };
+  }
+
+  const { data, meta } = await paginateWithFacet({
+    model: Conversation,
+    match: base,
+    page,
+    limit,
+    skip,
+    sort: { lastMessageAt: -1, _id: -1 },
+    extraDataStages: [
+      ...joinOne({ from: User, localField: "recipientId", as: "user", optional: true }),
+      ...joinOne({ from: Branch, localField: "branchId", as: "home", optional: true }),
+      ...joinOne({ from: Message, localField: "lastMessage", as: "last", optional: true }),
+      ...joinOne({ from: User, localField: "last.senderId", as: "sender", optional: true }),
+      {
+        $project: {
+          _id: 0,
+          conversationId: "$_id",
+          branchId: 1,
+          homeName: { $ifNull: ["$home.name", ""] },
+          recipientId: 1,
+          ...personFields("user"),
+          email: { $ifNull: ["$user.email", ""] },
+          unreadCount: 1,
+          lastId: "$last._id",
+          lastContent: "$last.messageContent",
+          lastAt: "$last.createdAt",
+          lastReadAt: "$last.readAt",
+          lastSenderName: { $ifNull: ["$sender.name", ""] },
+        },
+      },
+    ],
+  });
+
+  const residents = await residentsByPerson(
+    data.map((row) => ({ userId: row.recipientId, branchId: row.branchId })),
+  );
+  return {
+    data: data.map(
+      ({ lastId, lastContent, lastAt, lastReadAt, lastSenderName, ...row }) => ({
+        ...row,
+        roleLabel: CONTACT_ROLE,
+        notRead: !lastReadAt,
+        lastMessage: {
+          _id: lastId,
+          messageContent: lastContent,
+          senderName: lastSenderName,
+          createdAt: lastAt,
+          readAt: lastReadAt ?? null,
+        },
+        residents: residents.get(`${row.recipientId}|${row.branchId}`) ?? [],
+      }),
+    ),
+    meta,
+  };
+};
+
+const getContact = async ({
+  actor,
+  organizationId,
+  conversationId,
+  page,
+  limit,
+  skip,
+}) => {
+  const contact = await contactInScope({ actor, organizationId, conversationId });
+
+  const { data, meta } = await paginateWithFacet({
+    model: Message,
+    match: { conversationId: contact._id },
+    page,
+    limit,
+    skip,
+    sort: { createdAt: -1, _id: -1 },
+    extraDataStages: [
+      ...joinOne({ from: User, localField: "senderId", as: "sender", optional: true }),
+      {
+        $project: {
+          _id: 1,
+          conversationId: 1,
+          senderId: 1,
+          senderName: { $ifNull: ["$sender.name", ""] },
+          messageType: 1,
+          messageContent: 1,
+          createdAt: 1,
+          readAt: 1,
+          isRead: { $ne: ["$readAt", null] },
+        },
+      },
+    ],
+  });
+
+  const residents = await residentsByPerson([
+    { userId: contact.recipientId, branchId: contact.branchId },
+  ]);
+  return {
+    data,
+    meta: {
+      ...meta,
+      contact: {
+        conversationId: contact._id,
+        recipientId: contact.recipientId,
+        name: contact.name,
+        photoUrl: contact.photoUrl,
+        roleLabel: CONTACT_ROLE,
+        email: contact.email,
+        phone: contact.phone,
+        branchId: contact.branchId,
+        homeName: contact.homeName,
+        residents:
+          residents.get(`${contact.recipientId}|${contact.branchId}`) ?? [],
+      },
+    },
+  };
+};
+
+const listRecipients = async ({
+  actor,
+  organizationId,
+  branchId,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
+  const base = {
+    ...(await listScope({ actor, organizationId, branchId })),
+    status: FamilyMemberStatus.ACTIVE,
+    isNextOfKin: true,
+  };
+
+  const text = searchText(keyword);
+  if (text) {
+    const named = await FamilyMember.aggregate([
+      { $match: base },
+      { $group: { _id: "$userId" } },
+      ...joinOne({ from: User, localField: "_id", as: "user" }),
+      { $match: { "user.name": { $regex: text, $options: "i" } } },
+      { $project: { _id: 1 } },
+    ]);
+    base.userId = { $in: named.map((row) => row._id) };
+  }
+
+  const [result] = await FamilyMember.aggregate([
+    { $match: base },
+    { $group: { _id: { userId: "$userId", branchId: "$branchId" } } },
+    ...joinOne({ from: User, localField: "_id.userId", as: "user", optional: true }),
+    {
+      $facet: {
+        data: [
+          { $sort: { "user.name": 1, "_id.userId": 1 } },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 0,
+              recipientId: "$_id.userId",
+              branchId: "$_id.branchId",
+              ...personFields("user"),
+              email: { $ifNull: ["$user.email", ""] },
+            },
+          },
+        ],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ]);
+
+  const residents = await residentsByPerson(
+    result.data.map((row) => ({ userId: row.recipientId, branchId: row.branchId })),
+  );
+  return {
+    data: result.data.map((row) => ({
+      ...row,
+      roleLabel: CONTACT_ROLE,
+      residents: residents.get(`${row.recipientId}|${row.branchId}`) ?? [],
+    })),
+    meta: generateMeta(page, limit, facetCount(result.totalCount)),
+  };
+};
+
 const listSent = async ({
   actor,
   organizationId,
@@ -252,7 +545,6 @@ const listSent = async ({
   };
 };
 
-/** One sent message and who got it, with when each person read it; the people are paged. */
 const getSent = async ({ actor, organizationId, broadcastId, page, limit, skip }) => {
   const id = idText(broadcastId);
   if (!id || !isValidObjectId(id)) throw new AppError("message_not_found", 404);
@@ -302,6 +594,7 @@ const getSent = async ({ actor, organizationId, broadcastId, page, limit, skip }
           $project: {
             _id: 0,
             recipientId: 1,
+            conversationId: 1,
             ...personFields(),
             email: { $ifNull: ["$user.email", ""] },
             readAt: 1,
@@ -315,4 +608,11 @@ const getSent = async ({ actor, organizationId, broadcastId, page, limit, skip }
   return { data, meta: { ...meta, message: summary } };
 };
 
-module.exports = { sendMessage, listSent, getSent, AUDIENCES };
+module.exports = {
+  sendMessage,
+  listContacts,
+  getContact,
+  listRecipients,
+  listSent,
+  getSent,
+};

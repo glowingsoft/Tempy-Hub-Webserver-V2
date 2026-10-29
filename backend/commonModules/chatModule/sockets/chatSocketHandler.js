@@ -6,10 +6,7 @@ const { getUserRoom } = require("./chatSocketRooms");
 const ALLOWED_AUDIENCES = [AuthAudience.FAMILY, AuthAudience.STAFF];
 const BLOCKED_STATUSES = ["restricted", "suspended"];
 
-/**
- * Chat sockets only push: a client proves who it is with its login token, joins its own room and listens. It
- * can send nothing, and the room comes from the token, never from anything the client claims.
- */
+/** Push only: the room comes from the verified token, and clients cannot send events. */
 const chatSocketHandler = (io) => {
   io.on("connection", async (socket) => {
     const auth = socket.handshake.auth || {};

@@ -26,10 +26,8 @@ const readLimiter = createRateLimiter("chat-reads", 10, 120);
 const actionLimiter = createRateLimiter("chat-actions", 10, 60);
 const sendLimiter = createRateLimiter("chat-sends", 15, 20);
 
-/** A next of kin reading what their home sent. There is no route for them to send, reply or delete. */
 const asFamily = requireAudience([AuthAudience.FAMILY]);
 
-/** A site manager, line manager or owner of the home, with the x-org-id header. */
 const asStaff = [
   requireAudience([AuthAudience.STAFF]),
   requireMembership(),
@@ -43,6 +41,9 @@ router.get("/messages", readLimiter, asFamily, messageController.listChatMessage
 router.put("/:conversationId/action", actionLimiter, asFamily, messageController.updateChat);
 
 router.post("/message", sendLimiter, ...asStaff, requirePermission(FAMILY_MANAGE), messageController.sendMessage);
+router.get("/contacts", readLimiter, ...asStaff, requirePermission(FAMILY_VIEW), messageController.listContacts);
+router.get("/contacts/:conversationId", readLimiter, ...asStaff, requirePermission(FAMILY_VIEW), messageController.getContact);
+router.get("/recipients", readLimiter, ...asStaff, requirePermission(FAMILY_VIEW), messageController.listRecipients);
 router.get("/sent", readLimiter, ...asStaff, requirePermission(FAMILY_VIEW), messageController.listSentMessages);
 router.get("/sent/:broadcastId", readLimiter, ...asStaff, requirePermission(FAMILY_VIEW), messageController.getSentMessage);
 

@@ -24,7 +24,6 @@ const cleanMessageText = (value) => {
 
 const idText = (value) => (typeof value === "string" ? value : undefined);
 
-/** One thread per person per home: found or made. Returns a Map of user id to thread id. */
 const ensureThreads = async ({ organizationId, branchId, recipientIds }) => {
   const threads = new Map();
   for (const chunk of chunksOf(recipientIds)) {
@@ -47,10 +46,7 @@ const ensureThreads = async ({ organizationId, branchId, recipientIds }) => {
   return threads;
 };
 
-/**
- * Tells people about messages that were saved: an in-app notification and a live push to each one's own socket
- * room. items are { receiverId, conversationId, messageId }. A failure here never undoes a saved message.
- */
+/** A failure here never undoes a message that was saved. */
 const deliver = async ({
   items,
   subjectId,

@@ -2,10 +2,7 @@ const mongoose = require("mongoose");
 
 const MAX_MESSAGE_LENGTH = 2000;
 
-/**
- * One message from a home to one next of kin. A message sent to several people is one row each, tied together by
- * broadcastId, so each person has their own read time and nobody sees who else received it.
- */
+/** One row per recipient; a message sent to several people shares a broadcastId. */
 const messageSchema = new mongoose.Schema(
   {
     conversationId: {

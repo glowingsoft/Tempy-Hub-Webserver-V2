@@ -50,9 +50,58 @@ const sendMessage = respond(
       branchId: queryId(req.body?.branchId, "branchId"),
       audience: req.body?.audience,
       residentIds: req.body?.residentIds,
+      recipientIds: req.body?.recipientIds,
+      conversationId: req.body?.conversationId,
       message: req.body?.message,
     }),
   { statusCode: 201, translationKey: "message_sent" },
+);
+
+const listContacts = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyMessageStaffService.listContacts({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: queryId(req.query.branchId, "branchId"),
+      keyword: queryText(req.query.keyword),
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true },
+);
+
+const getContact = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyMessageStaffService.getContact({
+      actor: req.user,
+      organizationId: req.orgId,
+      conversationId: req.params.conversationId,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true },
+);
+
+const listRecipients = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyMessageStaffService.listRecipients({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: queryId(req.query.branchId, "branchId"),
+      keyword: queryText(req.query.keyword),
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true },
 );
 
 const listSentMessages = respond(
@@ -91,6 +140,9 @@ module.exports = {
   listChatMessages,
   updateChat,
   sendMessage,
+  listContacts,
+  getContact,
+  listRecipients,
   listSentMessages,
   getSentMessage,
 };

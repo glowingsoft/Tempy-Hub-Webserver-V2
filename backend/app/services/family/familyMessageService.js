@@ -17,7 +17,7 @@ const TABS = {
   archived: [ChatState.ARCHIVED],
 };
 
-/** Messages from a home are for its next of kin; read live, so losing that role ends access at once. */
+/** Read live, so losing next-of-kin status ends access at once. */
 const homesOf = async (userId) => {
   const rows = await FamilyMember.aggregate([
     {
@@ -52,7 +52,6 @@ const ownThread = async ({ userId, conversationId }) => {
   return thread;
 };
 
-/** The last message is projected flat and gathered here. */
 const lastMessageOf = ({
   lastId,
   lastType,
@@ -73,7 +72,6 @@ const lastMessageOf = ({
   },
 });
 
-/** One thread per home, newest first; meta.unread is the badge across every tab. */
 const listThreads = async ({ userId, tab = "inbox", page, limit, skip }) => {
   if (!Object.prototype.hasOwnProperty.call(TABS, tab))
     throw new AppError("invalid_chat_tab", 400);
@@ -130,7 +128,6 @@ const listThreads = async ({ userId, tab = "inbox", page, limit, skip }) => {
   };
 };
 
-/** Newest first. Opening the first page marks the whole thread read. */
 const listMessages = async ({
   userId,
   conversationId,
@@ -196,7 +193,6 @@ const listMessages = async ({
   };
 };
 
-/** Favorite, archive or move a thread back to the inbox; it only changes how this person sees it. */
 const updateThread = async ({ userId, conversationId, action }) => {
   if (!Object.values(ChatState).includes(action))
     throw new AppError("invalid_chat_action", 400);

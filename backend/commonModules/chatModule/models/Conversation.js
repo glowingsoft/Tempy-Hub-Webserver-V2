@@ -6,10 +6,7 @@ const ChatState = {
   ARCHIVED: "archived",
 };
 
-/**
- * The thread a family member has with one home. Messages come from the home and the member cannot reply, so a
- * thread has exactly one recipient; who sent each message is on the message.
- */
+/** One thread per next of kin per home: the home writes, the member only reads. */
 const conversationSchema = new mongoose.Schema(
   {
     organizationId: {

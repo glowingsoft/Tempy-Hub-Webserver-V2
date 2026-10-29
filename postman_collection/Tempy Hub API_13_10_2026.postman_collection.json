@@ -25098,11 +25098,11 @@
       ]
     },
     {
-      "name": "Chat",
+      "name": "Conversation/Messages",
       "description": "Messages from the home to next of kin, one way. Use a family token to read them and a staff token (site manager, line manager, owner) to send.",
       "item": [
         {
-          "name": "my chats",
+          "name": "chats",
           "event": [
             {
               "listen": "test",
@@ -25153,7 +25153,7 @@
           "response": []
         },
         {
-          "name": "chat messages",
+          "name": "messages",
           "event": [
             {
               "listen": "test",
@@ -25202,7 +25202,7 @@
           "response": []
         },
         {
-          "name": "update chat",
+          "name": "chats action",
           "event": [
             {
               "listen": "test",
@@ -25245,7 +25245,7 @@
           "response": []
         },
         {
-          "name": "send chat message",
+          "name": "sendMessage",
           "event": [
             {
               "listen": "test",
@@ -25282,10 +25282,10 @@
                 "message"
               ]
             },
-            "description": "STAFF token (Login Staff or Login line Manager). A message from the home to next of kin; they read it in the app and cannot reply. Body: audience (all: every active next of kin at the site; selected: the next of kin of residentIds, one to 100 residents of that site), message (plain text, up to 2000 characters) and branchId (a site or line manager uses their own site; an owner or super admin must send it, or get 400 branch_required). Only active next of kin are reached, each person once even when they are next of kin of several chosen residents; carers and family members who are not next of kin are not. Each person has one thread per home, gets an in-app notification and a live push. Returns broadcastId, sentAt, recipients and residentsWithoutNextOfKin; 400 message_no_recipients when nobody could be reached, 404 resident_not_found for a resident of another site, 403 outside_managed_branch for another site. Sets broadcastId. Needs familyEngagement.manage; rate limited. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+            "description": "STAFF token (Login Staff or Login line Manager). A message from the home to next of kin; they read it in the app and cannot reply. Body: audience (all: every active next of kin at the site; selected: the next of kin of residentIds, one to 100 residents of that site; people: the next of kin in recipientIds, one to 200 people from recipients), message (plain text, up to 2000 characters) and branchId (a site or line manager uses their own site; an owner or super admin must send it, or get 400 branch_required). Only active next of kin are reached, each person once even when they are next of kin of several chosen residents; carers and family members who are not next of kin are not. Each person has one thread per home, gets an in-app notification and a live push. Returns broadcastId, sentAt, recipients, conversationId (set when exactly one person got it), residentsWithoutNextOfKin and recipientsNotReached (people who are not next of kin at this site); 400 message_no_recipients when nobody could be reached, 404 resident_not_found for a resident of another site, 403 outside_managed_branch for another site. Sets broadcastId. Needs familyEngagement.manage; rate limited. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"audience\": \"selected\",\n  \"residentIds\": [\n    \"{{residentId}}\"\n  ],\n  \"message\": \"The garden party is on Friday at 2pm. Everyone is welcome.\",\n  \"branchId\": \"{{branchId}}\"\n}",
+              "raw": "{\n  // audience: send ONE of these three. Change the value below, the other fields for it are already filled in.\n  //   \"all\"      every active next of kin at the site. No other field is needed.\n  //   \"selected\" the next of kin of the residents in residentIds (1 to 100 residents of the site).\n  //   \"people\"   the next of kin in recipientIds (1 to 200 ids, from the \"recipients\" request).\n  \"audience\": \"selected\",\n\n  // used only when audience is \"selected\"\n  \"residentIds\": [\"{{residentId}}\"],\n\n  // used only when audience is \"people\"\n  \"recipientIds\": [\"{{recipientId}}\"],\n\n  // plain text, up to 2000 characters\n  \"message\": \"The garden party is on Friday at 2pm. Everyone is welcome.\",\n\n  // an owner or super admin must send it; a site or line manager uses their own site\n  \"branchId\": \"{{branchId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -25296,7 +25296,286 @@
           "response": []
         },
         {
-          "name": "sent chat messages",
+          "name": "contacts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Contacts fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    if (json.data.length) { pm.collectionVariables.set(\"conversationId\", json.data[0].conversationId); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}",
+                "description": "Organization scope for admin routes.",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/chats/contacts?page=1&limit=20",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "contacts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "description": "One site (an owner picks one; a site or line manager always gets their own)",
+                  "disabled": true
+                },
+                {
+                  "key": "keyword",
+                  "value": "ann",
+                  "description": "Search contacts: part of the name, taken literally",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "STAFF token. The left panel of the web Messages page: one row per next of kin the home has messaged, newest message first. Each row has conversationId, recipientId, name, photoUrl, email, roleLabel (Next of kin), residents (name, roomNumber, phone, email of the residents they are next of kin of), homeName, unreadCount, notRead (true while they have not opened the latest message: the dot) and lastMessage (messageContent, senderName, createdAt, readAt). Optional query: branchId, keyword (Search contacts), page, limit. Sets conversationId. Needs familyEngagement.view. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+          },
+          "response": []
+        },
+        {
+          "name": "messages by contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Contact thread fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    pm.expect(json.meta.contact).to.include.keys(\"name\", \"roleLabel\", \"email\", \"phone\", \"residents\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}",
+                "description": "Organization scope for admin routes.",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/chats/contacts/{{conversationId}}?page=1&limit=20",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "contacts",
+                "{{conversationId}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "STAFF token. The middle and right panels for one contact. data is everything the home has sent them, newest first: _id, messageContent, senderName (which manager sent it), createdAt, readAt and isRead. The thread is read-only: the contact cannot reply, so there are no incoming messages, and opening it changes nothing for the contact. meta.contact is the right panel: name, photoUrl, roleLabel, email, phone, homeName and residents (name, roomNumber, phone, email). 404 conversation_not_found for another site's contact. Needs familyEngagement.view. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+          },
+          "response": []
+        },
+        {
+          "name": "recipients",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Recipients fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    if (json.data.length) { pm.collectionVariables.set(\"recipientId\", json.data[0].recipientId); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}",
+                "description": "Organization scope for admin routes.",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/chats/recipients?page=1&limit=20",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "recipients"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}",
+                  "description": "One site (an owner picks one; a site or line manager always gets their own)",
+                  "disabled": true
+                },
+                {
+                  "key": "keyword",
+                  "value": "bob",
+                  "description": "Part of the name, taken literally",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "STAFF token. The To: Recipients picker: the active next of kin the home can message, one row per person, by name: recipientId, name, photoUrl, email, roleLabel and residents (name, roomNumber). Carers and other family members are not listed. Optional query: branchId, keyword, page, limit. Send the chosen recipientIds to sendMessage people. Sets recipientId. Needs familyEngagement.view. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+          },
+          "response": []
+        },
+        {
+          "name": "sendMessage people",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Message sent\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().data.recipients).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}",
+                "description": "Organization scope for admin routes.",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/chats/message",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "message"
+              ]
+            },
+            "description": "STAFF token. The To: Recipients field with chosen people. Body: audience people, recipientIds (one to 200 ids from recipients), message (up to 2000 characters) and branchId (an owner or super admin must send it; a site or line manager uses their own site). Only active next of kin at that site are reached; anyone else is returned in recipientsNotReached. 400 message_no_recipients when nobody could be reached, 400 invalid_message_audience for a bad list. Needs familyEngagement.manage; rate limited. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audience\": \"people\",\n  \"recipientIds\": [\n    \"{{recipientId}}\"\n  ],\n  \"message\": \"Just a reminder that visiting is open this weekend.\",\n  \"branchId\": \"{{branchId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "sendMessage with conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Message sent\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().data).to.have.property(\"conversationId\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}",
+                "description": "Organization scope for admin routes.",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/chats/message",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "message"
+              ]
+            },
+            "description": "STAFF token. The Type a message box inside a thread: another message to the same contact. Body: conversationId (from contacts) and message (up to 2000 characters). The site comes from the conversation. 404 conversation_not_found for another site's contact, 400 message_no_recipients when they are no longer next of kin. Needs familyEngagement.manage; rate limited. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"message\": \"Thank you for your patience. We will confirm the date soon.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "sent",
           "event": [
             {
               "listen": "test",
@@ -25360,7 +25639,7 @@
           "response": []
         },
         {
-          "name": "sent chat message detail",
+          "name": "sent by broadcastId",
           "event": [
             {
               "listen": "test",
@@ -25701,6 +25980,11 @@
     },
     {
       "key": "broadcastId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recipientId",
       "value": "",
       "type": "string"
     }

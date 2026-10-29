@@ -1672,9 +1672,35 @@ const dropOldChat = (node, inFamily = false) => {
 };
 dropOldChat(collection);
 
+// Postman accepts // comments in a JSON body and removes them when the request is sent.
+const withRawBody = (request, rawJson) => {
+  request.request.body = { mode: "raw", raw: rawJson, options: { raw: { language: "json" } } };
+  return request;
+};
+
+const SEND_RAW_BODY = `{
+  // audience: send ONE of these three. Change the value below, the other fields for it are already filled in.
+  //   "all"      every active next of kin at the site. No other field is needed.
+  //   "selected" the next of kin of the residents in residentIds (1 to 100 residents of the site).
+  //   "people"   the next of kin in recipientIds (1 to 200 ids, from the "recipients" request).
+  "audience": "selected",
+
+  // used only when audience is "selected"
+  "residentIds": ["{{residentId}}"],
+
+  // used only when audience is "people"
+  "recipientIds": ["{{recipientId}}"],
+
+  // plain text, up to 2000 characters
+  "message": "The garden party is on Friday at 2pm. Everyone is welcome.",
+
+  // an owner or super admin must send it; a site or line manager uses their own site
+  "branchId": "{{branchId}}"
+}`;
+
 const chatRequests = [
   // ---- family app (Login Family)
-  req("my chats", "GET", ["chats"], {
+  req("chats", "GET", ["chats"], {
     query: "page=1&limit=20",
     optional: { chatState: ["inbox", "inbox (default), favorite or archived; 400 invalid_chat_tab for anything else"] },
     tests: [
@@ -1689,7 +1715,7 @@ const chatRequests = [
     description:
       "FAMILY token (Login Family). Messages from the home, one thread per home, newest first. Only active next of kin see anything; anyone else gets an empty list. Each row has conversationId, chatName (the home's name), chatState, unreadCount, canMessage (always false: families cannot reply, so hide the composer) and lastMessage (messageContent, senderName, createdAt). meta.unread is the unread total for the badge. Live updates: connect to the /chat socket with auth {token} (the same login token) and listen for receiveMessage; the room is taken from the token, and the socket cannot send anything. Sets conversationId.",
   }),
-  req("chat messages", "GET", ["chats", "messages"], {
+  req("messages", "GET", ["chats", "messages"], {
     query: "conversationId={{conversationId}}&page=1&limit=20",
     tests: [
       'pm.test("Chat messages fetched", function () {',
@@ -1703,7 +1729,7 @@ const chatRequests = [
       "FAMILY token. The messages in one thread, newest first: _id, senderName, messageContent, createdAt and isRead (as it was when the thread was opened). Opening the first page marks the whole thread read and clears unreadCount, which the home sees in its sent list. 404 conversation_not_found for anyone else's thread, or once the person is no longer next of kin.",
   }),
   withBody(
-    req("update chat", "PUT", ["chats", "{{conversationId}}", "action"], {
+    req("chats action", "PUT", ["chats", "{{conversationId}}", "action"], {
       tests: [
         'pm.test("Chat updated", function () {',
         "    pm.response.to.have.status(200);",
@@ -1716,8 +1742,8 @@ const chatRequests = [
     { action: "favorite" }
   ),
   // ---- the home: site manager, line manager, owner (Login Staff)
-  withBody(
-    staff("send chat message", "POST", ["chats", "message"], {
+  withRawBody(
+    staff("sendMessage", "POST", ["chats", "message"], {
       tests: [
         'pm.test("Message sent", function () {',
         "    pm.response.to.have.status(201);",
@@ -1727,16 +1753,84 @@ const chatRequests = [
         "});",
       ],
       description:
-        "STAFF token (Login Staff or Login line Manager). A message from the home to next of kin; they read it in the app and cannot reply. Body: audience (all: every active next of kin at the site; selected: the next of kin of residentIds, one to 100 residents of that site), message (plain text, up to 2000 characters) and branchId (a site or line manager uses their own site; an owner or super admin must send it, or get 400 branch_required). Only active next of kin are reached, each person once even when they are next of kin of several chosen residents; carers and family members who are not next of kin are not. Each person has one thread per home, gets an in-app notification and a live push. Returns broadcastId, sentAt, recipients and residentsWithoutNextOfKin; 400 message_no_recipients when nobody could be reached, 404 resident_not_found for a resident of another site, 403 outside_managed_branch for another site. Sets broadcastId. Needs familyEngagement.manage; rate limited.",
+        "STAFF token (Login Staff or Login line Manager). A message from the home to next of kin; they read it in the app and cannot reply. Body: audience (all: every active next of kin at the site; selected: the next of kin of residentIds, one to 100 residents of that site; people: the next of kin in recipientIds, one to 200 people from recipients), message (plain text, up to 2000 characters) and branchId (a site or line manager uses their own site; an owner or super admin must send it, or get 400 branch_required). Only active next of kin are reached, each person once even when they are next of kin of several chosen residents; carers and family members who are not next of kin are not. Each person has one thread per home, gets an in-app notification and a live push. Returns broadcastId, sentAt, recipients, conversationId (set when exactly one person got it), residentsWithoutNextOfKin and recipientsNotReached (people who are not next of kin at this site); 400 message_no_recipients when nobody could be reached, 404 resident_not_found for a resident of another site, 403 outside_managed_branch for another site. Sets broadcastId. Needs familyEngagement.manage; rate limited.",
     }),
-    {
-      audience: "selected",
-      residentIds: ["{{residentId}}"],
-      message: "The garden party is on Friday at 2pm. Everyone is welcome.",
-      branchId: "{{branchId}}",
-    }
+    SEND_RAW_BODY
   ),
-  staff("sent chat messages", "GET", ["chats", "sent"], {
+  staff("contacts", "GET", ["chats", "contacts"], {
+    query: "page=1&limit=20",
+    optional: {
+      branchId: ["{{branchId}}", "One site (an owner picks one; a site or line manager always gets their own)"],
+      keyword: ["ann", "Search contacts: part of the name, taken literally"],
+    },
+    tests: [
+      'pm.test("Contacts fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    if (json.data.length) { pm.collectionVariables.set("conversationId", json.data[0].conversationId); }',
+      "});",
+    ],
+    description:
+      "STAFF token. The left panel of the web Messages page: one row per next of kin the home has messaged, newest message first. Each row has conversationId, recipientId, name, photoUrl, email, roleLabel (Next of kin), residents (name, roomNumber, phone, email of the residents they are next of kin of), homeName, unreadCount, notRead (true while they have not opened the latest message: the dot) and lastMessage (messageContent, senderName, createdAt, readAt). Optional query: branchId, keyword (Search contacts), page, limit. Sets conversationId. Needs familyEngagement.view.",
+  }),
+  staff("messages by contact", "GET", ["chats", "contacts", "{{conversationId}}"], {
+    query: "page=1&limit=20",
+    tests: [
+      'pm.test("Contact thread fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.contact).to.include.keys("name", "roleLabel", "email", "phone", "residents");',
+      "});",
+    ],
+    description:
+      "STAFF token. The middle and right panels for one contact. data is everything the home has sent them, newest first: _id, messageContent, senderName (which manager sent it), createdAt, readAt and isRead. The thread is read-only: the contact cannot reply, so there are no incoming messages, and opening it changes nothing for the contact. meta.contact is the right panel: name, photoUrl, roleLabel, email, phone, homeName and residents (name, roomNumber, phone, email). 404 conversation_not_found for another site's contact. Needs familyEngagement.view.",
+  }),
+  staff("recipients", "GET", ["chats", "recipients"], {
+    query: "page=1&limit=20",
+    optional: {
+      branchId: ["{{branchId}}", "One site (an owner picks one; a site or line manager always gets their own)"],
+      keyword: ["bob", "Part of the name, taken literally"],
+    },
+    tests: [
+      'pm.test("Recipients fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    if (json.data.length) { pm.collectionVariables.set("recipientId", json.data[0].recipientId); }',
+      "});",
+    ],
+    description:
+      "STAFF token. The To: Recipients picker: the active next of kin the home can message, one row per person, by name: recipientId, name, photoUrl, email, roleLabel and residents (name, roomNumber). Carers and other family members are not listed. Optional query: branchId, keyword, page, limit. Send the chosen recipientIds to sendMessage people. Sets recipientId. Needs familyEngagement.view.",
+  }),
+  withBody(
+    staff("sendMessage people", "POST", ["chats", "message"], {
+      tests: [
+        'pm.test("Message sent", function () {',
+        "    pm.response.to.have.status(201);",
+        "    pm.expect(pm.response.json().data.recipients).to.be.above(0);",
+        "});",
+      ],
+      description:
+        "STAFF token. The To: Recipients field with chosen people. Body: audience people, recipientIds (one to 200 ids from recipients), message (up to 2000 characters) and branchId (an owner or super admin must send it; a site or line manager uses their own site). Only active next of kin at that site are reached; anyone else is returned in recipientsNotReached. 400 message_no_recipients when nobody could be reached, 400 invalid_message_audience for a bad list. Needs familyEngagement.manage; rate limited.",
+    }),
+    { audience: "people", recipientIds: ["{{recipientId}}"], message: "Just a reminder that visiting is open this weekend.", branchId: "{{branchId}}" }
+  ),
+  withBody(
+    staff("sendMessage with conversation", "POST", ["chats", "message"], {
+      tests: [
+        'pm.test("Message sent", function () {',
+        "    pm.response.to.have.status(201);",
+        '    pm.expect(pm.response.json().data).to.have.property("conversationId");',
+        "});",
+      ],
+      description:
+        "STAFF token. The Type a message box inside a thread: another message to the same contact. Body: conversationId (from contacts) and message (up to 2000 characters). The site comes from the conversation. 404 conversation_not_found for another site's contact, 400 message_no_recipients when they are no longer next of kin. Needs familyEngagement.manage; rate limited.",
+    }),
+    { conversationId: "{{conversationId}}", message: "Thank you for your patience. We will confirm the date soon." }
+  ),
+  staff("sent", "GET", ["chats", "sent"], {
     query: "page=1&limit=20",
     optional: { branchId: ["{{branchId}}", "One site (an owner picks one)"], keyword: ["garden", "Part of the message text"] },
     tests: [
@@ -1750,7 +1844,7 @@ const chatRequests = [
     description:
       "STAFF token. What the home has sent, newest first: one row per message however many people got it. Each row has broadcastId, message, homeName, sentByName and sentByPhotoUrl, sentAt, recipients and readCount. Optional query: branchId, keyword (part of the text, taken literally), page, limit. A site or line manager sees their own site. Sets broadcastId. Needs familyEngagement.view.",
   }),
-  staff("sent chat message detail", "GET", ["chats", "sent", "{{broadcastId}}"], {
+  staff("sent by broadcastId", "GET", ["chats", "sent", "{{broadcastId}}"], {
     query: "page=1&limit=20",
     tests: [
       'pm.test("Sent message fetched", function () {',
@@ -1763,11 +1857,11 @@ const chatRequests = [
   }),
 ];
 
-collection.item = collection.item.filter((i) => i.name !== "Chat");
-let chatFolder = collection.item.find((i) => i.name === "Chat");
+collection.item = collection.item.filter((i) => i.name !== "Chat" && i.name !== "Conversation/Messages");
+let chatFolder = collection.item.find((i) => i.name === "Conversation/Messages");
 if (!chatFolder) {
   chatFolder = {
-    name: "Chat",
+    name: "Conversation/Messages",
     description: "Messages from the home to next of kin, one way. Use a family token to read them and a staff token (site manager, line manager, owner) to send.",
     item: [],
   };
@@ -2016,7 +2110,7 @@ const retire = (item) => {
 retire(collection);
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId", "recipientId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

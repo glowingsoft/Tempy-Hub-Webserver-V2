@@ -21619,6 +21619,63 @@
           "description": "Staff side of the family module, one folder per screen.",
           "item": [
             {
+              "name": "Overview",
+              "description": "The Family overview screen: cards, family activity and the checklist before the issue closes.",
+              "item": [
+                {
+                  "name": "family overview",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Family overview fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    const data = pm.response.json().data;",
+                          "    pm.expect(data).to.have.all.keys(\"site\", \"stats\", \"gazette\", \"activity\", \"checklist\");",
+                          "    pm.expect(data.checklist).to.have.lengthOf(4);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/admin/organizations/{{organizationId}}/family-overview",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "organizations",
+                        "{{organizationId}}",
+                        "family-overview"
+                      ],
+                      "query": [
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "description": "One site; a site or line manager always gets their own",
+                          "disabled": true
+                        },
+                        {
+                          "key": "days",
+                          "value": "7",
+                          "description": "Family activity window, 1 to 365 (default 7)",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "The Family overview screen of owners, site managers and line managers, in one call. site is the home shown under the title (null when an owner looks at every site). stats are the four cards: uploadsWaiting, reportedPosts, residentsWithFamily and residentsWithNoContent. gazette is the Issue card: number, closesAt, closesInDays and state (collecting or notStarted), or scheduled false when gazettes are not set up. activity is Family activity: uploads (total, approved, waiting, notApproved), wallPosts, reactions over the last days, and nextNewsletter (title, status, dueAt, homeName; null when none is open). checklist is Checklist before the issue closes, in order: moderation, noContent, generate, printAndGive, each with count and done. The Go to moderation and New wall post buttons use the moderation and wall endpoints. Optional query: branchId, days. A site or line manager is always held to their own site. Needs familyEngagement.view; 404 when the module is off."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
               "name": "Moderation",
               "description": "Uploads families send, waiting for a manager to approve, blur or reject.",
               "item": [

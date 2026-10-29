@@ -47,6 +47,9 @@ const adminUsed = new Set();
 const adminPlace = (...names) => place(adminRequests, names, adminUsed);
 
 const familyEngagement = folder(adminRoot, "Staff side of the family module, one folder per screen.", [
+  folder("Overview", "The Family overview screen: cards, family activity and the checklist before the issue closes.", adminPlace(
+    "family overview"
+  )),
   folder("Moderation", "Uploads families send, waiting for a manager to approve, blur or reject.", adminPlace(
     "upload queue", "approve upload", "approve upload with blur", "reject upload"
   )),

@@ -935,6 +935,22 @@ const staffRequests = [
     description:
       "The Download all PDFs button: a zip of every drawn gazette (ready or printed) of the issue each site is on, one PDF per resident named like margaret-hughes-gazette-issue-14.pdf; with several sites each has a folder. Optional query: branchId. 404 gazette_nothing_to_download when nothing has been drawn yet, 400 for more than 100 gazettes (choose a site). Rate limited. Needs familyEngagement.view.",
   }),
+  req("family overview", "GET", ["admin", "organizations", "{{organizationId}}", "family-overview"], {
+    optional: {
+      branchId: ["{{branchId}}", "One site; a site or line manager always gets their own"],
+      days: ["7", "Family activity window, 1 to 365 (default 7)"],
+    },
+    tests: [
+      'pm.test("Family overview fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.have.all.keys("site", "stats", "gazette", "activity", "checklist");',
+      '    pm.expect(data.checklist).to.have.lengthOf(4);',
+      "});",
+    ],
+    description:
+      "The Family overview screen of owners, site managers and line managers, in one call. site is the home shown under the title (null when an owner looks at every site). stats are the four cards: uploadsWaiting, reportedPosts, residentsWithFamily and residentsWithNoContent. gazette is the Issue card: number, closesAt, closesInDays and state (collecting or notStarted), or scheduled false when gazettes are not set up. activity is Family activity: uploads (total, approved, waiting, notApproved), wallPosts, reactions over the last days, and nextNewsletter (title, status, dueAt, homeName; null when none is open). checklist is Checklist before the issue closes, in order: moderation, noContent, generate, printAndGive, each with count and done. The Go to moderation and New wall post buttons use the moderation and wall endpoints. Optional query: branchId, days. A site or line manager is always held to their own site. Needs familyEngagement.view; 404 when the module is off.",
+  }),
   req("post authors", "GET", ["admin", "organizations", "{{organizationId}}", "family-post-authors"], {
     optional: {
       branchId: ["{{branchId}}", "One site"],

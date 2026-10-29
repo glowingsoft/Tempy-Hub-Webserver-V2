@@ -11,6 +11,7 @@ const familyWallActivityService = require("@adminServices/family/familyWallActiv
 const familyNewsletterService = require("@adminServices/family/familyNewsletterService");
 const familySettingsService = require("@adminServices/family/familySettingsService");
 const familyGazetteAdminService = require("@adminServices/family/familyGazetteAdminService");
+const familyOverviewService = require("@adminServices/family/familyOverviewService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const familyAccessService = require("@appServices/family/familyAccessService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
@@ -138,6 +139,15 @@ const updateGazette = respondByAction({
     translationKey: "gazette_given_saved",
   },
 });
+
+const getOverview = respond((req) =>
+  familyOverviewService.getOverview({
+    actor: req.user,
+    organizationId: req.orgId,
+    branchId: queryId(req.query.branchId, "branchId"),
+    days: queryText(req.query.days),
+  }),
+);
 
 const getSettings = respond((req) =>
   familySettingsService.getSettings({ organizationId: req.orgId }),
@@ -617,6 +627,7 @@ const createCode = respond(
 );
 
 module.exports = {
+  getOverview,
   listGazettes,
   getGazette,
   downloadGazettePdf,

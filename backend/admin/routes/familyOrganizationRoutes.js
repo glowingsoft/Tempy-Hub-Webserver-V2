@@ -30,6 +30,11 @@ const canViewFamily = [
 ];
 
 router.get(
+  "/family-overview",
+  canViewFamily,
+  familyStaffController.getOverview,
+);
+router.get(
   "/family-invitations",
   canViewFamily,
   familyInvitationController.listInvitations,

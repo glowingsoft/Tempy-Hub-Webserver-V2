@@ -1081,7 +1081,7 @@ const listStaffProfiles = async ({
 
   const roleFilter = listRole ? [{ $match: { "membership.role": listRole } }] : [];
 
-  const [result] = await StaffProfile.aggregate([
+  const pipeline = [
     { $match: match },
     joinStaffMembership(match.organizationId),
     { $unwind: "$membership" },
@@ -1098,7 +1098,11 @@ const listStaffProfiles = async ({
         ],
       },
     },
-  ]);
+  ];
+
+  const [result] = await StaffProfile.aggregate(pipeline);
+
+  console.log(JSON.stringify(pipeline, null, 2));
 
   return {
     data: result?.data || [],

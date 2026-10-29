@@ -403,13 +403,13 @@ scoped.post(
 );
 scoped.get(
   "/competency-matrix",
-  requireRoles(TEAM_APPROVER_ROLES),
+  requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   requirementController.competencyMatrix
 );
 scoped.get(
   "/training-records",
-  requireRoles(TEAM_APPROVER_ROLES),
+  requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   requirementController.listTrainingRecords
 );

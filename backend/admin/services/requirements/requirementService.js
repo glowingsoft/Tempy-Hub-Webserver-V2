@@ -3,6 +3,7 @@ const { Requirement } = require("@models/Requirement");
 const { RequirementAssignment } = require("@models/RequirementAssignment");
 const { RequirementRecord } = require("@models/RequirementRecord");
 const { StaffProfile } = require("@models/StaffProfile");
+const { Membership } = require("@models/Membership");
 const { Organization } = require("@models/Organization");
 const { JobTitle } = require("@models/JobTitle");
 const { Department } = require("@models/Department");
@@ -17,6 +18,7 @@ const {
   RequirementCellStatus,
   StaffProfileStatus,
   MembershipRole,
+  ActiveInactiveStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -30,7 +32,6 @@ const {
 const {
   addDays,
   addMonths,
-  requirementApplies,
   assignmentSourceFor,
   cellFromDates,
   trainingListStatus,
@@ -152,6 +153,58 @@ const loadRequirement = async (requirementId, organizationId) => {
   }).lean();
   if (!requirement) throw new AppError("requirement_not_found", 404);
   return requirement;
+};
+
+const actorStaffProfileId = async (actor, organizationId) => {
+  const profile = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId,
+  })
+    .select("_id")
+    .lean();
+  return profile?._id || null;
+};
+
+/** Staff only see their own profile. A staffId query must match that profile. */
+const staffIdsForRequirementList = async ({
+  standing,
+  actor,
+  organizationId,
+  staffId,
+  branchId,
+}) => {
+  let scopedStaffId = staffId;
+  if (standing.role === MembershipRole.STAFF) {
+    const mine = await actorStaffProfileId(actor, organizationId);
+    if (!mine) return [];
+    if (staffId && String(staffId) !== String(mine)) return [];
+    scopedStaffId = mine;
+  }
+  return resolveScopedSuperviseeIds({
+    standing,
+    actor,
+    organizationId,
+    staffId: scopedStaffId,
+    branchId,
+  });
+};
+
+const withActiveMembership = async (organizationId, staffIds) => {
+  if (!staffIds.length) return [];
+  const profiles = await StaffProfile.find({
+    _id: { $in: staffIds },
+    organizationId,
+  })
+    .select("_id userId")
+    .lean();
+  if (!profiles.length) return [];
+  const activeUserIds = await Membership.find({
+    organizationId,
+    userId: { $in: profiles.map((row) => row.userId) },
+    status: ActiveInactiveStatus.ACTIVE,
+  }).distinct("userId");
+  const active = new Set(activeUserIds.map(String));
+  return profiles.filter((row) => active.has(String(row.userId))).map((row) => row._id);
 };
 
 const matchingStaff = async ({ organizationId, branchId, requirement }) => {
@@ -316,12 +369,15 @@ const getRequirement = async ({ actor, organizationId, requirementId, branchId }
   ]);
   if (!requirement) throw new AppError("requirement_not_found", 404);
 
-  const staffIds = await resolveScopedSuperviseeIds({
-    standing,
-    actor,
-    organizationId,
-    branchId: scopedBranch,
-  });
+  const staffIds = await withActiveMembership(
+    orgOid,
+    await resolveScopedSuperviseeIds({
+      standing,
+      actor,
+      organizationId,
+      branchId: scopedBranch,
+    })
+  );
 
   let assignments = [];
   if (staffIds.length) {
@@ -537,35 +593,57 @@ const loadAssignment = async (assignmentId, organizationId) => {
 
 const getAssignment = async ({ actor, organizationId, assignmentId }) => {
   const orgOid = toOid(organizationId, "invalid_organization_id");
-  const assignment = await loadAssignment(
-    toOid(assignmentId, "invalid_assignment_id"),
-    orgOid
-  );
-  const staff = await StaffProfile.findById(assignment.staffId)
-    .select("branchId")
-    .lean();
-  await assertCanAccessStaff({ actor, organizationId, staff });
-
-  const [requirement, records] = await Promise.all([
-    Requirement.findById(assignment.requirementId).lean(),
-    RequirementRecord.find({ assignmentId: assignment._id })
-      .sort({ completedAt: -1 })
-      .lean(),
+  const assignmentOid = toOid(assignmentId, "invalid_assignment_id");
+  const [assignment] = await RequirementAssignment.aggregate([
+    { $match: { _id: assignmentOid, organizationId: orgOid } },
+    {
+      $lookup: {
+        from: Requirement.collection.name,
+        localField: "requirementId",
+        foreignField: "_id",
+        as: "requirement",
+      },
+    },
+    { $unwind: { path: "$requirement", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: StaffProfile.collection.name,
+        localField: "staffId",
+        foreignField: "_id",
+        pipeline: staffLookups,
+        as: "staff",
+      },
+    },
+    { $unwind: { path: "$staff", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: RequirementRecord.collection.name,
+        localField: "_id",
+        foreignField: "assignmentId",
+        pipeline: [{ $sort: { completedAt: -1 } }],
+        as: "records",
+      },
+    },
   ]);
+  if (!assignment) throw new AppError("assignment_not_found", 404);
+  await assertCanAccessStaff({ actor, organizationId, staff: assignment.staff });
+
   const amberDays = await orgAmberDays(orgOid);
-  const latest = records[0] || null;
+  const { staff, records, ...rest } = assignment;
   const cell = cellFromDates({
-    applies: true,
     assignment,
-    latest,
-    requirement,
+    latest: records?.[0] || null,
+    requirement: assignment.requirement,
     orgAmberDays: amberDays,
   });
 
   return {
-    ...assignment,
-    requirement,
-    records: records.map((row) => ({ ...row, documents: shapeFiles(row.documents) })),
+    ...rest,
+    staff: staff ? shapeStaff(staff) : null,
+    records: (records || []).map((row) => ({
+      ...row,
+      documents: shapeFiles(row.documents),
+    })),
     status: cell.status,
     dueDate: cell.dueDate,
     completedAt: cell.completedAt,
@@ -781,7 +859,6 @@ const assignmentLookups = [
 
 const shapeAssignmentRow = (row, amberDays) => {
   const cell = cellFromDates({
-    applies: true,
     assignment: row,
     latest: row.latest || null,
     requirement: row.requirement,
@@ -838,13 +915,16 @@ const competencyMatrix = async ({
 }) => {
   const orgOid = toOid(organizationId, "invalid_organization_id");
   const standing = await actorStanding(actor, organizationId);
-  const ids = await resolveScopedSuperviseeIds({
-    standing,
-    actor,
-    organizationId,
-    staffId: optionalOid(staffId, "invalid_staff_profile_id"),
-    branchId,
-  });
+  const ids = await withActiveMembership(
+    orgOid,
+    await staffIdsForRequirementList({
+      standing,
+      actor,
+      organizationId,
+      staffId: optionalOid(staffId, "invalid_staff_profile_id"),
+      branchId,
+    })
+  );
   if (!ids.length) {
     return {
       data: [],
@@ -920,7 +1000,6 @@ const competencyMatrix = async ({
     const cells = requirements.map((requirement) => {
       const assignment = assignmentMap.get(assignmentKey(staff._id, requirement._id));
       return cellFromDates({
-        applies: requirementApplies(staff, requirement),
         assignment,
         latest: assignment ? latest.get(String(assignment._id)) : null,
         requirement,
@@ -964,7 +1043,6 @@ const competencyMatrix = async ({
     for (const staff of statsStaff) {
       const assignment = allMap.get(assignmentKey(staff._id, requirement._id));
       const cell = cellFromDates({
-        applies: requirementApplies(staff, requirement),
         assignment,
         latest: assignment ? allLatest.get(String(assignment._id)) : null,
         requirement,
@@ -990,7 +1068,6 @@ const competencyMatrix = async ({
     for (const requirement of requirements) {
       const assignment = allMap.get(assignmentKey(staff._id, requirement._id));
       const cell = cellFromDates({
-        applies: requirementApplies(staff, requirement),
         assignment,
         latest: assignment ? allLatest.get(String(assignment._id)) : null,
         requirement,
@@ -1046,13 +1123,16 @@ const listAssignments = async ({
 }) => {
   const orgOid = toOid(organizationId, "invalid_organization_id");
   const standing = await actorStanding(actor, organizationId);
-  const ids = await resolveScopedSuperviseeIds({
-    standing,
-    actor,
-    organizationId,
-    staffId: optionalOid(staffId, "invalid_staff_profile_id"),
-    branchId,
-  });
+  const ids = await withActiveMembership(
+    orgOid,
+    await staffIdsForRequirementList({
+      standing,
+      actor,
+      organizationId,
+      staffId: optionalOid(staffId, "invalid_staff_profile_id"),
+      branchId,
+    })
+  );
   if (!ids.length) {
     return { data: [], meta: generateMeta(page, limit, 0) };
   }

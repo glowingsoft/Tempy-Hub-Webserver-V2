@@ -50,16 +50,18 @@ const resolveAmberDays = (requirement, orgAmberDays) => {
 };
 
 const cellFromDates = ({
-  applies,
   assignment,
   latest,
   requirement,
   orgAmberDays,
   today = new Date(),
 }) => {
-  if (!assignment && !applies) {
+  const assignmentId = assignment?._id || null;
+
+  if (!assignment) {
     return {
       requirementId: requirement._id,
+      assignmentId: null,
       status: RequirementCellStatus.NA,
       dueDate: null,
       completedAt: null,
@@ -95,6 +97,7 @@ const cellFromDates = ({
 
   return {
     requirementId: requirement._id,
+    assignmentId,
     status,
     dueDate,
     completedAt,

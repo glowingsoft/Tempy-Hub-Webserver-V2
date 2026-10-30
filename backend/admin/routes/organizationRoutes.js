@@ -112,7 +112,7 @@ scoped.get(
 
 scoped.get("/", organizationController.getOrganization);
 
-scoped.patch(
+scoped.put(
   "/",
   requireRoles(OWNER_OR_SA),
   organizationController.updateOrganization,

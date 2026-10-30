@@ -10,7 +10,6 @@ const about = (link) => ({
   objectType: "familyMember",
 });
 
-/** Someone asked to join a resident's family: their next of kin and the site's managers can decide it. */
 const notifyJoinRequested = ({ link, requesterName }) =>
   quietly(async () => {
     const { resident, home } = await namesOf(link);

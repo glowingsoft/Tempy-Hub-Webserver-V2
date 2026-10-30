@@ -2155,53 +2155,28 @@ const billingRequests = [
       '    pm.expect(json.meta.summary).to.include.keys("activeOrganizations", "totalUsedGb", "quotaPercent", "images", "files", "billing");',
       "});",
     ],
-    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. A platform admin (Admin Login) needs no x-org-id header and sees every active organization; everyone else sends x-org-id and sees only their own organization. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization: organizationId, name, owner {name, email}, usedGb, planLimitGb (null when none is set), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), measuredAt, measuring, unmeasured and canEdit (true for a platform admin only). meta.summary is the four cards for everything in scope, ignoring the filter and search: activeOrganizations, totalUsedGb with quotaPercent (used against the plan limits that are set), images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket nightly and on Recalculate, so measuredAt says how fresh it is.",
+    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. Who sees what: a Super Admin (platform admin, Admin Login, no x-org-id) gets one row per active organization. An owner (or an organization's super admin) sends x-org-id and gets one row per branch of their organization, with their organization itself in meta.organization. A site manager, line manager or staff member sends x-org-id and gets only their own branch. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email for a platform admin; branch name or manager name or email for the others), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization for a platform admin: organizationId, name, owner {name, email}, usedGb, planLimitGb (the same for every organization; null until the platform admin sets it), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit when no limit is set) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), emergencyNotifyOffsite, measuredAt, measuring, unmeasured and canEdit. A branch row (owner, site manager, line manager, staff) has branchId, organizationId, name, manager {name, email}, usedGb, planLimitGb (the organization's limit, shared by its branches), usagePercent (the branch's share of that limit) with status and statusLabel, images, files, measuredAt, unmeasured and canEdit (always false). The pencil opens Edit Organization: show it on an organization row when canEdit is true (a platform admin, an owner or a super admin) and fill the dialog from the row (name, owner name and email, which cannot be changed, and emergencyNotifyOffsite); Save Changes is update organization (PUT /admin/organizations/:organizationId with name and settings.emergencyNotifyOffsite). meta.summary is the four cards for everything in scope, ignoring the search (all organizations for a platform admin, the organization for an owner, the one branch for a site manager, line manager or staff member): activeOrganizations, totalUsedGb with quotaPercent (used against planLimitGb for each organization, which is totalPlanGb), planLimitGb, images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket every night, so measuredAt says how fresh it is.",
   }),
   withBody(
-    req("update plan limit", "PUT", ["admin", "billing", "organizations", "{{organizationId}}"], {
+    req("update billing settings", "PUT", ["admin", "billing", "settings"], {
       header: billingHeader,
       tests: [
-        'pm.test("Plan limit saved", function () {',
+        'pm.test("Settings saved", function () {',
         "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data).to.have.property("planLimitGb");',
+        '    pm.expect(pm.response.json().data).to.have.keys("planLimitGb", "baseTierGbp", "overageGbpPerGb");',
         "});",
       ],
       description:
-        "The pencil on a row: set the storage an organization's plan includes. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb, a number above 0 up to 1000000 (400 invalid_plan_limit otherwise), or null to clear it. Returns the updated row.",
+        "The billing settings for the whole platform: one plan limit that every organization shares, and the prices on the Billing Readiness card. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb (the storage in GB every organization's plan includes: a number above 0 up to 1000000, or null to clear it; 400 invalid_plan_limit otherwise), baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default; each a number from 0 to 100000, 400 invalid_billing_price otherwise). Send any of the three; none at all is 400 invalid_billing_settings. Returns all three. The limit stays empty (No limit set on every row) until it is set here.",
     }),
-    { planLimitGb: 750 }
-  ),
-  req("recalculate usage", "POST", ["admin", "billing", "organizations", "{{organizationId}}", "recalculate"], {
-    header: billingHeader,
-    tests: [
-      'pm.test("Recalculation started", function () {',
-      "    pm.response.to.have.status(202);",
-      '    pm.expect(pm.response.json().data.started).to.eql(true);',
-      "});",
-    ],
-    description:
-      "Measure an organization's storage now. Platform admin only. Answers 202 at once and measures in the background; the row's measuring is true until it finishes, then usedGb and measuredAt update. 409 usage_recalculating when one is already running. The same measurement runs for every active organization every night at 02:30.",
-  }),
-  withBody(
-    req("update billing prices", "PUT", ["admin", "billing", "settings"], {
-      header: billingHeader,
-      tests: [
-        'pm.test("Prices saved", function () {',
-        "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data).to.have.keys("baseTierGbp", "overageGbpPerGb");',
-        "});",
-      ],
-      description:
-        "The prices on the Billing Readiness card. Platform admin only. Body: baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default); send either or both, each a number from 0 to 100000 (400 invalid_billing_price otherwise). Returns both prices.",
-    }),
-    { baseTierGbp: 380, overageGbpPerGb: 0.15 }
+    { planLimitGb: 750, baseTierGbp: 380, overageGbpPerGb: 0.15 }
   ),
 ];
 
 adminFolder.item = adminFolder.item.filter((i) => i.name !== "Billing & Usage");
 adminFolder.item.push({
   name: "Billing & Usage",
-  description: "Storage used by each organization against its plan. Everyone sees the screen (a platform admin sees every organization, others their own); only a platform admin edits.",
+  description: "Storage used by each organization against one shared plan limit. Everyone sees the screen: a platform admin every organization, an owner their organization and its branches, a site manager, line manager or staff member their own branch. The pencil edits the organization (update organization, in the Organizations folder); only a platform admin changes the billing settings.",
   item: billingRequests,
 });
 

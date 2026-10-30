@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-/** What one organization stores, as of its last measurement. */
 const organizationUsageSchema = new mongoose.Schema(
   {
     organizationId: {

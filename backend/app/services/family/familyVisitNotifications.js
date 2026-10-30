@@ -25,7 +25,6 @@ const about = (visit) => ({
   objectType: "familyVisit",
 });
 
-/** A family asks to visit: the site's managers decide it. */
 const notifyVisitRequested = ({ visit, requesterName }) =>
   quietly(async () => {
     const { resident, when, place } = await detailsOf(visit);
@@ -39,7 +38,6 @@ const notifyVisitRequested = ({ visit, requesterName }) =>
     });
   });
 
-/** The home invites a resident's family to a visit. */
 const notifyVisitInvited = ({ visit }) =>
   quietly(async () => {
     const { resident, home, when, place } = await detailsOf(visit);
@@ -86,7 +84,6 @@ const notifyVisitDecision = ({ visit, decision, actorId }) =>
     });
   });
 
-/** A family member answered the home's invitation; the site's managers see who is coming. */
 const notifyVisitReply = ({ visitId, user, response }) =>
   quietly(async () => {
     const [visit] = await FamilyVisit.aggregate([
@@ -117,7 +114,6 @@ const notifyVisitReply = ({ visitId, user, response }) =>
     });
   });
 
-/** A family member cancelled their own visit. */
 const notifyVisitCancelledByFamily = ({ visit, user }) =>
   quietly(async () => {
     const { resident, when } = await detailsOf(visit);

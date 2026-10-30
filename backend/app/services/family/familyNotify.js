@@ -14,7 +14,6 @@ const { toObjectId } = require("./familyPipeline");
 const CHUNK = 500;
 const ANSWERING_ROLES = [MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER];
 
-/** The site's active site and line managers: the people who act on what families ask for. */
 const managersOf = async ({ organizationId, branchId }) => {
   const rows = await Membership.aggregate([
     {

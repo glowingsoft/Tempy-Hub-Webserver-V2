@@ -2,10 +2,11 @@ const mongoose = require("mongoose");
 
 const SETTINGS_KEY = "default";
 
-/** The platform's prices, one document for everyone. */
 const platformBillingSchema = new mongoose.Schema(
   {
     key: { type: String, default: SETTINGS_KEY, unique: true },
+    /** Storage every organization's plan includes, in GB; empty until the platform operator sets it. */
+    planLimitGb: { type: Number, default: null, min: 0 },
     baseTierGbp: { type: Number, default: 380, min: 0 },
     overageGbpPerGb: { type: Number, default: 0.15, min: 0 },
   },

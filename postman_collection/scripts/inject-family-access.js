@@ -531,6 +531,23 @@ requests.push(
   })
 );
 
+// ---------------------------------------------------------------- Home (family app)
+requests.push(
+  req("home", "GET", ["app", "family", "home"], {
+    optional: { residentId: ["{{residentId}}", "The resident being viewed; the first one when left out"] },
+    tests: [
+      'pm.test("Home fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("greeting", "homeName", "resident", "residents", "nextVisit", "visiting", "gazette", "notices", "unread");',
+      '    pm.expect(data.notices).to.be.an("array");',
+      "});",
+    ],
+    description:
+      "The Home Family tab in one call. Optional query: residentId (the resident being viewed; the first one when left out; 400 invalid_resident_id, 404 resident_not_found for one that is not mine). Returns greeting (Good morning, Sarah: by the time of day at the resident's home), homeName, resident (the one shown), residents (the header dropdown, with isActive), nextVisit (the Your Next Visit card, null when there is none), visiting {paused, reason, since}, gazette (the Gazette Due card: scheduled, issue, remaining), notices (banners: visitingPaused when the home has paused visiting; joinRequests, with a count, for a next of kin who has requests to review) and unread {notifications, messages} for the badges. The pieces are the same as resident, visits/next and gazettes/next, so the app can still call those on their own. Family token.",
+  })
+);
+
 // ---------------------------------------------------------------- Visits (family app)
 requests.push(
   req("my visits", "GET", ["app", "family", "visits"], {

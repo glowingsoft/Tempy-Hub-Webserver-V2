@@ -110,6 +110,7 @@ const family = folder("Family", "The family app: what a family member and the ne
     "upload photo", "upload photos", "send upload for approval", "my uploads", "edit and resend upload"
   )),
   folder("Gazette", "The gazette being collected, the printed ones and the reader.", appPlace("next gazette", "printed gazettes", "read gazette", "download gazette pdf")),
+  folder("Home", "The Home Family tab in one call: greeting, next visit, gazette due, notices and unread counts.", appPlace("home")),
   folder("Timeline", "Everything shared about the resident.", appPlace("timeline")),
   folder("Gallery", "The resident's photos: All, This Month and From Me.", appPlace("gallery")),
   folder("Visits", "My Visits, Book A Visit and the Visit Pass.", appPlace("my visits", "next visit", "visit options", "request a visit", "cancel my visit", "reply to visit invitation", "visit pass", "update visit pass")),

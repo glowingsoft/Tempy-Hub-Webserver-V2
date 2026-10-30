@@ -26,6 +26,7 @@ const residentInQuery = requireFamilyAccess({
   param: "residentId",
   from: "query",
 });
+const anyResident = requireFamilyAccess();
 const residentInBody = requireFamilyAccess({
   param: "residentId",
   from: "body",
@@ -35,6 +36,7 @@ router.use(auth, requireAudience([AuthAudience.FAMILY]));
 
 router.get("/relationships", familyController.listRelationships);
 router.get("/residents", familyController.listMyResidents);
+router.get("/home", anyResident, familyController.getHome);
 
 router.get(
   "/codes/current",

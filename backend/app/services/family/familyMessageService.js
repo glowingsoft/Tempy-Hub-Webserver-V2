@@ -128,6 +128,20 @@ const listThreads = async ({ userId, tab = "inbox", page, limit, skip }) => {
   };
 };
 
+const unreadTotal = async (userId) => {
+  const [row] = await Conversation.aggregate([
+    {
+      $match: {
+        recipientId: toObjectId(userId),
+        branchId: { $in: await homesOf(userId) },
+        lastMessage: { $ne: null },
+      },
+    },
+    { $group: { _id: null, count: { $sum: "$unreadCount" } } },
+  ]);
+  return row?.count ?? 0;
+};
+
 const listMessages = async ({
   userId,
   conversationId,
@@ -204,4 +218,4 @@ const updateThread = async ({ userId, conversationId, action }) => {
   return { conversationId: thread._id, chatState: action };
 };
 
-module.exports = { listThreads, listMessages, updateThread };
+module.exports = { listThreads, listMessages, updateThread, unreadTotal };

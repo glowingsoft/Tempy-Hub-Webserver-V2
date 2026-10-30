@@ -11,6 +11,7 @@ const familyUploadService = require("@appServices/family/familyUploadService");
 const familyTimelineService = require("@appServices/family/familyTimelineService");
 const familyGalleryService = require("@appServices/family/familyGalleryService");
 const familyVisitService = require("@appServices/family/familyVisitService");
+const familyHomeService = require("@appServices/family/familyHomeService");
 const familyVisitPassService = require("@appServices/family/familyVisitPassService");
 const familyWallService = require("@appServices/family/familyWallService");
 const familyNewsletterService = require("@appServices/family/familyNewsletterService");
@@ -21,6 +22,13 @@ const { FamilyMemberStatus } = require("@models/domainEnums");
 
 const listRelationships = respond(() =>
   familyAccessService.listRelationships(),
+);
+
+const getHome = respond((req) =>
+  familyHomeService.getHome({
+    user: req.user,
+    residentId: queryText(req.query.residentId),
+  }),
 );
 
 const listMyResidents = respond((req) =>
@@ -520,6 +528,7 @@ module.exports = {
   getNewsletter,
   downloadNewsletterPdf,
   listMyResidents,
+  getHome,
   getCurrentFamilyCode,
   createFamilyCode,
   previewJoinCode,

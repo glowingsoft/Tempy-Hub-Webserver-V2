@@ -4,6 +4,7 @@ const { acquireLock, releaseLock } = require("../redis/redisCache");
 const { runEventReminderCron } = require("./events/eventReminder.cron");
 const { runFamilyScheduledPostsCron, runFamilyScheduledNewslettersCron } = require("./family/familyPosts.cron");
 const { runFamilyGazetteRecoveryCron, runFamilyGazetteSchedulerCron } = require("./family/familyGazettes.cron");
+const { runStorageUsageCron } = require("./billing/storageUsage.cron");
 const startCrons = () => {
 
 
@@ -81,6 +82,21 @@ const startCrons = () => {
       await runFamilyGazetteRecoveryCron();
     } catch (err) {
       console.error("Family gazette recovery cron error:", err);
+    } finally {
+      await releaseLock(lockKey, lock);
+    }
+  });
+
+  cron.schedule("30 2 * * *", async () => {
+    const lockKey = "cron:storage-usage";
+    const lock = await acquireLock(lockKey, 3 * 60 * 60);
+
+    if (!lock) return;
+
+    try {
+      await runStorageUsageCron();
+    } catch (err) {
+      console.error("Storage usage cron error:", err);
     } finally {
       await releaseLock(lockKey, lock);
     }

@@ -2,8 +2,6 @@ const express = require("express");
 
 const router = express.Router();
 
-
-
 const auth = require("@middlewares/authMiddleware");
 
 const bulkInsertRoutes = require("./dbRoutes.js");
@@ -11,6 +9,7 @@ const bulkInsertRoutes = require("./dbRoutes.js");
 const adminSettingsRoutes = require("./settingsRoutes.js");
 
 const organizationRoutes = require("./organizationRoutes.js");
+const billingRoutes = require("./billingRoutes.js");
 
 const branchRoutes = require("./branchRoutes.js");
 
@@ -41,12 +40,8 @@ const floorPlanRoutes = require("./floorPlanRoutes.js");
 const peepRecordRoutes = require("./peepRecordRoutes.js");
 
 const {
-
   listModuleDefinitions,
-
 } = require("../controllers/organizationController");
-
-
 
 router.use("/settings", adminSettingsRoutes);
 
@@ -54,7 +49,7 @@ router.use("/settings", adminSettingsRoutes);
 
 router.use("/util", bulkInsertRoutes);
 
-
+router.use("/billing", billingRoutes);
 
 router.use("/organizations", organizationRoutes);
 
@@ -88,7 +83,4 @@ router.use("/peep-records", peepRecordRoutes);
 
 router.get("/module-definitions", auth, listModuleDefinitions);
 
-
-
 module.exports = router;
-

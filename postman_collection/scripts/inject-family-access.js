@@ -2126,6 +2126,75 @@ const retire = (item) => {
 };
 retire(collection);
 
+// ---------------------------------------------------------------- Billing & Usage
+const billingHeader = orgHeader;
+const billingRequests = [
+  req("usage", "GET", ["admin", "billing", "usage"], {
+    query: "page=1&limit=10",
+    optional: {
+      organizationId: ["{{organizationId}}", "Platform admin only: one organization (the Filter by Organization dropdown)"],
+      keyword: ["bluebell", "Organization name, owner name or owner email"],
+      sort: ["usedDesc", "usedDesc (default), usedAsc, percentDesc or name"],
+    },
+    header: billingHeader,
+    tests: [
+      'pm.test("Usage fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    pm.expect(json.meta.summary).to.include.keys("activeOrganizations", "totalUsedGb", "quotaPercent", "images", "files", "billing");',
+      "});",
+    ],
+    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. A platform admin (Admin Login) needs no x-org-id header and sees every active organization; everyone else sends x-org-id and sees only their own organization. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization: organizationId, name, owner {name, email}, usedGb, planLimitGb (null when none is set), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), measuredAt, measuring, unmeasured and canEdit (true for a platform admin only). meta.summary is the four cards for everything in scope, ignoring the filter and search: activeOrganizations, totalUsedGb with quotaPercent (used against the plan limits that are set), images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket nightly and on Recalculate, so measuredAt says how fresh it is.",
+  }),
+  withBody(
+    req("update plan limit", "PUT", ["admin", "billing", "organizations", "{{organizationId}}"], {
+      header: billingHeader,
+      tests: [
+        'pm.test("Plan limit saved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data).to.have.property("planLimitGb");',
+        "});",
+      ],
+      description:
+        "The pencil on a row: set the storage an organization's plan includes. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb, a number above 0 up to 1000000 (400 invalid_plan_limit otherwise), or null to clear it. Returns the updated row.",
+    }),
+    { planLimitGb: 750 }
+  ),
+  req("recalculate usage", "POST", ["admin", "billing", "organizations", "{{organizationId}}", "recalculate"], {
+    header: billingHeader,
+    tests: [
+      'pm.test("Recalculation started", function () {',
+      "    pm.response.to.have.status(202);",
+      '    pm.expect(pm.response.json().data.started).to.eql(true);',
+      "});",
+    ],
+    description:
+      "Measure an organization's storage now. Platform admin only. Answers 202 at once and measures in the background; the row's measuring is true until it finishes, then usedGb and measuredAt update. 409 usage_recalculating when one is already running. The same measurement runs for every active organization every night at 02:30.",
+  }),
+  withBody(
+    req("update billing prices", "PUT", ["admin", "billing", "settings"], {
+      header: billingHeader,
+      tests: [
+        'pm.test("Prices saved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data).to.have.keys("baseTierGbp", "overageGbpPerGb");',
+        "});",
+      ],
+      description:
+        "The prices on the Billing Readiness card. Platform admin only. Body: baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default); send either or both, each a number from 0 to 100000 (400 invalid_billing_price otherwise). Returns both prices.",
+    }),
+    { baseTierGbp: 380, overageGbpPerGb: 0.15 }
+  ),
+];
+
+adminFolder.item = adminFolder.item.filter((i) => i.name !== "Billing & Usage");
+adminFolder.item.push({
+  name: "Billing & Usage",
+  description: "Storage used by each organization against its plan. Everyone sees the screen (a platform admin sees every organization, others their own); only a platform admin edits.",
+  item: billingRequests,
+});
+
 // Which call sends which in-app notification (read them with GET /notifications).
 const NOTIFIES = {
   "send join request": "New join request goes to the resident's next of kin and the site's site and line managers.",

@@ -3,6 +3,7 @@ const { randomUUID } = require("crypto");
 const {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } = require("@aws-sdk/client-s3");
@@ -10,15 +11,17 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const getBucket = () => process.env.S3_BUCKET_NAME;
 
-const getClient = () => new S3Client({
-  region: process.env.AWS_S3_REGION,
-  credentials: process.env.AWS_S3_ACCESS_KEY_ID && process.env.AWS_S3_SECRET_ACCESS_KEY
-    ? {
-        accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY,
-      }
-    : undefined,
-});
+const getClient = () =>
+  new S3Client({
+    region: process.env.AWS_S3_REGION,
+    credentials:
+      process.env.AWS_S3_ACCESS_KEY_ID && process.env.AWS_S3_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY,
+          }
+        : undefined,
+  });
 
 const requireBucket = () => {
   const bucket = getBucket();
@@ -33,23 +36,27 @@ const uploadFiles = async (files) => {
   const client = getClient();
   console.log("client", client);
 
-  return Promise.all(files.map(async (file) => {
-    const key = `${randomUUID()}${path.extname(file.originalname)}`;
-    await client.send(new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    }));
+  return Promise.all(
+    files.map(async (file) => {
+      const key = `${randomUUID()}${path.extname(file.originalname)}`;
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
 
-    return {
-      key,
-      filename: file.originalname,
-      contentType: file.mimetype,
-      size: file.size,
-      url: `https://${bucket}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(key)}`,
-    };
-  }));
+      return {
+        key,
+        filename: file.originalname,
+        contentType: file.mimetype,
+        size: file.size,
+        url: `https://${bucket}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(key)}`,
+      };
+    }),
+  );
 };
 
 const publicUrl = (key) =>
@@ -57,14 +64,19 @@ const publicUrl = (key) =>
 
 const putObject = async ({ key, body, contentType }) => {
   await getClient().send(
-    new PutObjectCommand({ Bucket: requireBucket(), Key: key, Body: body, ContentType: contentType })
+    new PutObjectCommand({
+      Bucket: requireBucket(),
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
   );
   return { key, url: publicUrl(key) };
 };
 
 const getObject = async (key) => {
   const { Body } = await getClient().send(
-    new GetObjectCommand({ Bucket: requireBucket(), Key: key })
+    new GetObjectCommand({ Bucket: requireBucket(), Key: key }),
   );
   return Buffer.from(await Body.transformToByteArray());
 };
@@ -72,7 +84,12 @@ const getObject = async (key) => {
 const SIGNED_URL_SECONDS = 300;
 
 // A link S3 itself stops honouring after a few minutes, so access lasts no longer than the check that issued it.
-const signedPdfUrl = async ({ key, filename, attachment = true, expiresIn = SIGNED_URL_SECONDS }) => {
+const signedPdfUrl = async ({
+  key,
+  filename,
+  attachment = true,
+  expiresIn = SIGNED_URL_SECONDS,
+}) => {
   const url = await getSignedUrl(
     getClient(),
     new GetObjectCommand({
@@ -81,16 +98,35 @@ const signedPdfUrl = async ({ key, filename, attachment = true, expiresIn = SIGN
       ResponseContentType: "application/pdf",
       ResponseContentDisposition: `${attachment ? "attachment" : "inline"}; filename="${filename}"`,
     }),
-    { expiresIn }
+    { expiresIn },
   );
   return { url, expiresAt: new Date(Date.now() + expiresIn * 1000) };
 };
 
+/** A file's size and type without downloading it; null when it is not in the bucket. */
+const headObject = async (key) => {
+  try {
+    const found = await getClient().send(
+      new HeadObjectCommand({ Bucket: requireBucket(), Key: key }),
+    );
+    return {
+      size: found.ContentLength ?? 0,
+      contentType: found.ContentType || "",
+    };
+  } catch (error) {
+    if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404)
+      return null;
+    throw error;
+  }
+};
+
 const deleteFiles = async (fileKey) => {
-  await getClient().send(new DeleteObjectCommand({
-    Bucket: requireBucket(),
-    Key: fileKey,
-  }));
+  await getClient().send(
+    new DeleteObjectCommand({
+      Bucket: requireBucket(),
+      Key: fileKey,
+    }),
+  );
 
   return {
     translationKey: "file_deleted",
@@ -103,5 +139,6 @@ module.exports = {
   deleteFiles,
   putObject,
   getObject,
+  headObject,
   signedPdfUrl,
 };

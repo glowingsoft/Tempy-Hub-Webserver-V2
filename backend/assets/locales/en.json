@@ -614,5 +614,12 @@
   "conversation_not_found": "Conversation not found",
   "invalid_chat_tab": "Chat tab must be inbox, favorite or archived",
   "invalid_chat_action": "Chat action must be default, favorite or archived",
-  "chat_updated": "Chat updated"
+  "chat_updated": "Chat updated",
+  "invalid_usage_sort": "Sort must be usedDesc, usedAsc, percentDesc or name",
+  "invalid_plan_limit": "The plan limit must be a number above 0 (up to {max} GB), or empty for none",
+  "invalid_billing_price": "Prices must be numbers from 0 to {max}",
+  "billing_plan_saved": "Plan limit saved",
+  "billing_prices_saved": "Prices saved",
+  "usage_recalculating": "Usage is already being recalculated. Try again in a few minutes",
+  "usage_recalculation_started": "Recalculating usage. Refresh in a few minutes"
 }

@@ -13,6 +13,7 @@ const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { prepareUpload } = require("./familyImage");
 const { inTransaction } = require("./familyLinkActions");
+const { notifyUploadWaiting } = require("./familyUploadNotifications");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
 
 const MAX_PHOTOS = 10;
@@ -448,6 +449,7 @@ const createUpload = async ({
     throw error;
   }
 
+  await notifyUploadWaiting({ upload: created });
   return getMyUpload({ userId, uploadId: created._id });
 };
 
@@ -470,6 +472,7 @@ const updateUpload = async ({
     {
       $project: {
         organizationId: 1,
+        branchId: 1,
         residentId: 1,
         message: 1,
         mediaIds: 1,
@@ -543,6 +546,15 @@ const updateUpload = async ({
     }
   });
 
+  if (current.status === FamilyUploadStatus.REJECTED)
+    await notifyUploadWaiting({
+      upload: {
+        ...current,
+        authorId: userId,
+        message: text,
+        mediaIds: ids,
+      },
+    });
   return getMyUpload({ userId, uploadId });
 };
 

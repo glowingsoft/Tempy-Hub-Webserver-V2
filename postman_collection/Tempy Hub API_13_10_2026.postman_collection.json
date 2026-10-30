@@ -1524,86 +1524,6 @@
           "name": "Settings",
           "item": [
             {
-              "name": "Notifications",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{url}}/app/notifications?page=1&limit=10",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "app",
-                    "notifications"
-                  ],
-                  "query": [
-                    {
-                      "key": "page",
-                      "value": "1"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "10"
-                    }
-                  ]
-                }
-              },
-              "response": [
-                {
-                  "name": "termsAndConditions",
-                  "originalRequest": {
-                    "method": "GET",
-                    "header": [],
-                    "url": {
-                      "raw": "{{url}}settings/termsAndConditions",
-                      "host": [
-                        "{{url}}settings"
-                      ],
-                      "path": [
-                        "termsAndConditions"
-                      ]
-                    }
-                  },
-                  "status": "OK",
-                  "code": 200,
-                  "_postman_previewlanguage": "json",
-                  "header": [
-                    {
-                      "key": "X-Powered-By",
-                      "value": "Express"
-                    },
-                    {
-                      "key": "Content-Type",
-                      "value": "application/json; charset=utf-8"
-                    },
-                    {
-                      "key": "Content-Length",
-                      "value": "160"
-                    },
-                    {
-                      "key": "ETag",
-                      "value": "W/\"a0-Wv67qOoegoP0fOYvOunGPXEUDlw\""
-                    },
-                    {
-                      "key": "Date",
-                      "value": "Sat, 07 Sep 2024 07:03:24 GMT"
-                    },
-                    {
-                      "key": "Connection",
-                      "value": "keep-alive"
-                    },
-                    {
-                      "key": "Keep-Alive",
-                      "value": "timeout=5"
-                    }
-                  ],
-                  "cookie": [],
-                  "body": "{\n    \"message\": \"Terms and Conditions fetched successfully\",\n    \"data\": {\n        \"_id\": \"66d58d5172e16ac86d740e6c\",\n        \"terms_and_conditions\": \"Your terms and conditions text here.1\"\n    }\n}"
-                }
-              ]
-            },
-            {
               "name": "termsAndConditions",
               "request": {
                 "method": "GET",
@@ -8766,7 +8686,7 @@
                             "{{memberId}}"
                           ]
                         },
-                        "description": "Removes an active member; their access ends on their next request. Only the resident's next of kin. 409 for the next of kin (hand over first) or for someone who hasn't been approved (reject the request instead); 404 for anyone else's member. Figma screen: My Family (Remove)."
+                        "description": "Removes an active member; their access ends on their next request. Only the resident's next of kin. 409 for the next of kin (hand over first) or for someone who hasn't been approved (reject the request instead); 404 for anyone else's member. Figma screen: My Family (Remove). Notification: Removed from family goes to that member; nothing is sent when they remove themselves."
                       },
                       "response": []
                     },
@@ -8980,7 +8900,7 @@
                             "join"
                           ]
                         },
-                        "description": "Send Join Request: body code and relationship (one of the values from relationship options). Creates a pending request for the next of kin or the home to approve. Errors: 400 invalid_relationship, 404/410/429 for the code, 409 join_request_pending (one at a time), 409 family_link_exists, 409 email_used_by_staff. Figma screen: Join A Family.",
+                        "description": "Send Join Request: body code and relationship (one of the values from relationship options). Creates a pending request for the next of kin or the home to approve. Errors: 400 invalid_relationship, 404/410/429 for the code, 409 join_request_pending (one at a time), 409 family_link_exists, 409 email_used_by_staff. Figma screen: Join A Family. Notification: New join request goes to the resident's next of kin and the site's site and line managers.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"code\": \"{{familyCode}}\",\n  \"relationship\": \"grandson\"\n}",
@@ -9157,7 +9077,7 @@
                             "{{joinRequestId}}"
                           ]
                         },
-                        "description": "PUT with body {\"action\":\"approve\"}. Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review).",
+                        "description": "PUT with body {\"action\":\"approve\"}. Approves a pending request: the person becomes an active member and sees the resident from their next call. Only the resident's next of kin; 404 for anyone else (so other families' requests stay hidden), 409 if the request was already decided. Figma screen: My Family (Review). Notification: Request approved goes to the person who asked.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"action\": \"approve\"\n}",
@@ -9201,7 +9121,7 @@
                             "{{joinRequestId}}"
                           ]
                         },
-                        "description": "PUT with body {\"action\":\"reject\"}. Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review).",
+                        "description": "PUT with body {\"action\":\"reject\"}. Rejects a pending request. The person can send a new request later. Only the resident's next of kin; 404 for anyone else, 409 if already decided. Figma screen: My Family (Review). Notification: Request declined goes to the person who asked.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"action\": \"reject\"\n}",
@@ -9659,7 +9579,7 @@
                         "uploads"
                       ]
                     },
-                    "description": "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as waiting; nobody but you sees it until a manager approves.",
+                    "description": "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as waiting; nobody but you sees it until a manager approves. Notification: New upload to review goes to the site's site and line managers.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"message\": \"Lily scored twice at her first football match!\",\n  \"mediaIds\": [\n    \"{{mediaId}}\"\n  ],\n  \"includeInGazette\": true,\n  \"clientId\": \"postman-upload-1\"\n}",
@@ -9761,7 +9681,7 @@
                         "{{uploadId}}"
                       ]
                     },
-                    "description": "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
+                    "description": "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family. Notification: New upload to review goes to the site's site and line managers when a Not Approved upload is sent again.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"message\": \"Lily scored twice at her first football match, Gran!\",\n  \"includeInGazette\": true\n}",
@@ -10253,7 +10173,7 @@
                         "visits"
                       ]
                     },
-                    "description": "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), slot (a slot id), place (one of the places), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). It is a request until the home confirms it. Errors: 403 visiting_paused, 400 for a slot, place, date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 409 visit_slot_full when the place has no room left for that many people at that time (waiting requests hold their seats), 400 visit_protected_time for a closed time, 429 once five requests are waiting.",
+                    "description": "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), slot (a slot id), place (one of the places), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). It is a request until the home confirms it. Errors: 403 visiting_paused, 400 for a slot, place, date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 409 visit_slot_full when the place has no room left for that many people at that time (waiting requests hold their seats), 400 visit_protected_time for a closed time, 429 once five requests are waiting. Notification: New visit request goes to the site's site and line managers.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"slot\": \"{{visitSlot}}\",\n  \"place\": \"{{visitPlace}}\",\n  \"totalPeople\": 2,\n  \"note\": \"Birthday tea\"\n}",
@@ -10297,7 +10217,7 @@
                         "{{visitId}}"
                       ]
                     },
-                    "description": "PUT with body {\"action\":\"cancel\"}. My Visits, Cancel Request: cancels my own request while it is waiting or confirmed and not over; a confirmed visit also stops its kiosk code working. 409 visit_not_cancellable otherwise, 404 for anyone else's visit.",
+                    "description": "PUT with body {\"action\":\"cancel\"}. My Visits, Cancel Request: cancels my own request while it is waiting or confirmed and not over; a confirmed visit also stops its kiosk code working. 409 visit_not_cancellable otherwise, 404 for anyone else's visit. Notification: Visit cancelled by family goes to the site's site and line managers.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"cancel\"\n}",
@@ -10341,7 +10261,7 @@
                         "{{visitId}}"
                       ]
                     },
-                    "description": "PUT with body {\"action\":\"going\"} (I'll Be There) or {\"action\":\"cantMakeIt\"} (Can't Make It). Answers an invitation From The Home for myself only; each family member answers separately and may change their mind until the visit is over. Going gives me my own kiosk code for the Visit Pass; Can't Make It withdraws it. 409 visit_not_replyable once the visit is over or cancelled, 404 for a request or another family's visit.",
+                    "description": "PUT with body {\"action\":\"going\"} (I'll Be There) or {\"action\":\"cantMakeIt\"} (Can't Make It). Answers an invitation From The Home for myself only; each family member answers separately and may change their mind until the visit is over. Going gives me my own kiosk code for the Visit Pass; Can't Make It withdraws it. 409 visit_not_replyable once the visit is over or cancelled, 404 for a request or another family's visit. Notification: Invitation accepted or Can't make the visit goes to the site's site and line managers when the answer changes; repeating the same answer notifies nobody.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"going\"\n}",
@@ -10976,7 +10896,7 @@
                     "{{familyVisitId}}"
                   ]
                 },
-                "description": "PUT with body {\"action\":\"approve\"} and an optional note (up to 200 characters). The Approve button: confirms the request and creates the kiosk code the family shows on their Visit Pass. 409 visit_not_pending when it was already answered or has passed. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "description": "PUT with body {\"action\":\"approve\"} and an optional note (up to 200 characters). The Approve button: confirms the request and creates the kiosk code the family shows on their Visit Pass. 409 visit_not_pending when it was already answered or has passed. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit confirmed goes to the person who asked.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"See you then\"\n}",
@@ -11026,7 +10946,7 @@
                     "{{familyVisitId}}"
                   ]
                 },
-                "description": "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. The Decline button. The seats the request held are free again. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "description": "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. The Decline button. The seats the request held are free again. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit declined goes to the person who asked.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"action\": \"decline\",\n  \"note\": \"Sorry, that time is fully booked\"\n}",
@@ -23616,7 +23536,7 @@
                         "visits"
                       ]
                     },
-                    "description": "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional place (up to 60 characters) and note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional place (up to 60 characters) and note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit invitation goes to the resident's active family.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"startTime\": \"14:00\",\n  \"endTime\": \"16:00\",\n  \"place\": \"Garden Lounge\",\n  \"note\": \"Afternoon tea with the residents\"\n}",
@@ -23667,7 +23587,7 @@
                         "{{familyVisitId}}"
                       ]
                     },
-                    "description": "PUT with body {\"action\":\"confirm\"} and an optional note (up to 200 characters). Confirms a family's request and creates the ordinary visitor invitation the kiosk already understands, so the visitor checks in with that code. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "PUT with body {\"action\":\"confirm\"} and an optional note (up to 200 characters). Confirms a family's request and creates the ordinary visitor invitation the kiosk already understands, so the visitor checks in with that code. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit confirmed goes to the person who asked.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"confirm\",\n  \"note\": \"See you then\"\n}",
@@ -23718,7 +23638,7 @@
                         "{{familyVisitId}}"
                       ]
                     },
-                    "description": "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "PUT with body {\"action\":\"decline\"} and an optional note (up to 200 characters) the family reads in My Visits. 409 visit_not_pending when it was already answered or has passed. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit declined goes to the person who asked.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"decline\",\n  \"note\": \"Sorry, that afternoon is fully booked\"\n}",
@@ -23769,7 +23689,7 @@
                         "{{familyVisitId}}"
                       ]
                     },
-                    "description": "PUT with body {\"action\":\"cancel\"}. Cancels a request, a confirmed visit or an invitation that has not happened yet, and withdraws every kiosk code issued for it. 409 visit_not_cancellable otherwise. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "PUT with body {\"action\":\"cancel\"}. Cancels a request, a confirmed visit or an invitation that has not happened yet, and withdraws every kiosk code issued for it. 409 visit_not_cancellable otherwise. Needs familyEngagement.approve. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit cancelled goes to the person who asked, or to the resident's family for a visit the home invited them to.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"cancel\"\n}",
@@ -24637,7 +24557,7 @@
                             "access"
                           ]
                         },
-                        "description": "Members: pause someone's access without removing them (they show as Inactive). The next of kin cannot be deactivated (409 next_of_kin_cannot_be_deactivated): set a new next of kin first. A handover that involved them is cancelled. Their login then reports accessState inactive. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                        "description": "Members: pause someone's access without removing them (they show as Inactive). The next of kin cannot be deactivated (409 next_of_kin_cannot_be_deactivated): set a new next of kin first. A handover that involved them is cancelled. Their login then reports accessState inactive. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Access paused goes to that member.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"action\": \"deactivate\"\n}",
@@ -24785,7 +24705,7 @@
                             "{{memberId}}"
                           ]
                         },
-                        "description": "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+                        "description": "Removes an active member; their access ends on their next request. Unlike the family app, staff may remove the next of kin too, which leaves the resident without one. Any handover involving the person is cancelled. 409 for someone who is not approved yet (reject instead). Feeds: My Family. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Removed from family goes to that member; nothing is sent when they remove themselves."
                       },
                       "response": []
                     },
@@ -24970,7 +24890,7 @@
                             "{{joinRequestId}}"
                           ]
                         },
-                        "description": "PUT with body {\"action\":\"approve\"}. The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                        "description": "PUT with body {\"action\":\"approve\"}. The home approves a request when the next of kin has not. 409 if already decided, 403 for another site, 404 for another organization's request. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Request approved goes to the person who asked.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"action\": \"approve\"\n}",
@@ -25021,7 +24941,7 @@
                             "{{joinRequestId}}"
                           ]
                         },
-                        "description": "PUT with body {\"action\":\"reject\"}. The home declines a request. The person can ask again later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                        "description": "PUT with body {\"action\":\"reject\"}. The home declines a request. The person can ask again later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Request declined goes to the person who asked.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"action\": \"reject\"\n}",
@@ -25690,6 +25610,90 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Notifications",
+      "description": "The notification list and marking a notification as read. Works with a family token or a staff token.",
+      "item": [
+        {
+          "name": "notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Notifications fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    if (json.data.length) { pm.collectionVariables.set(\"notificationId\", json.data[0]._id); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/notifications?page=1&limit=10",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "The signed-in user's notifications, newest first (a family token or a staff token). Query: page, limit. Each row has _id, type, title, body, objectType and objectId (what to open when it is tapped), subject (who caused it), isRead and timeSince. Family types: newMessage (objectId is the conversationId), familyNewPost, familyUploadApproved, familyUploadRejected, familyUploadPending, familyNewsletter, familyGazette, familyGazetteReminder, familyVisit (objectId is the visit), familyJoinRequest and familyAccess. In-app only: nothing is sent to the phone's notification tray. Sets notificationId."
+          },
+          "response": []
+        },
+        {
+          "name": "notifications read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Notification marked read\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.isRead).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/notifications/{{notificationId}}/read",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            },
+            "description": "Marks one notification as read; no body. Use the notificationId saved by notifications. 404 notification_not_found for an unknown id."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "auth": {
@@ -25985,6 +25989,11 @@
     },
     {
       "key": "recipientId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notificationId",
       "value": "",
       "type": "string"
     }

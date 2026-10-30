@@ -33,6 +33,10 @@ const {
   DATE,
 } = require("@appServices/family/familyVisitRules");
 const { seatsInRange } = require("@appServices/family/familyVisitCapacity");
+const {
+  notifyVisitInvited,
+  notifyVisitDecision,
+} = require("@appServices/family/familyVisitNotifications");
 const { cancelUpcomingVisits } = require("./familyVisitPause");
 const {
   issueInvitation,
@@ -207,6 +211,7 @@ const inviteFamily = async ({
     note: cleanText(note, { field: "note", max: MAX_NOTE_LENGTH }),
     status: FamilyVisitStatus.INVITED,
   });
+  await notifyVisitInvited({ visit });
   return { id: visit._id, status: visit.status };
 };
 
@@ -333,6 +338,7 @@ const decideVisit = async ({
     decision === VisitDecision.CANCEL
       ? await withdraw({ actor, visit, now })
       : await settle({ actor, visit, decision, note, now });
+  await notifyVisitDecision({ visit: result, decision, actorId: actor._id });
   return { id: result._id, status: result.status, decidedAt: result.decidedAt };
 };
 

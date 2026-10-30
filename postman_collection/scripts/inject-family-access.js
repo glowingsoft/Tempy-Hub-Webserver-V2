@@ -2109,8 +2109,77 @@ const retire = (item) => {
 };
 retire(collection);
 
+// Which call sends which in-app notification (read them with GET /notifications).
+const NOTIFIES = {
+  "send join request": "New join request goes to the resident's next of kin and the site's site and line managers.",
+  "approve join request": "Request approved goes to the person who asked.",
+  "reject join request": "Request declined goes to the person who asked.",
+  "request a visit": "New visit request goes to the site's site and line managers.",
+  "invite family to a visit": "Visit invitation goes to the resident's active family.",
+  "confirm visit request": "Visit confirmed goes to the person who asked.",
+  "app approve visit request": "Visit confirmed goes to the person who asked.",
+  "decline visit request": "Visit declined goes to the person who asked.",
+  "app decline visit request": "Visit declined goes to the person who asked.",
+  "cancel family visit": "Visit cancelled goes to the person who asked, or to the resident's family for a visit the home invited them to.",
+  "cancel my visit": "Visit cancelled by family goes to the site's site and line managers.",
+  "reply to visit invitation": "Invitation accepted or Can't make the visit goes to the site's site and line managers when the answer changes; repeating the same answer notifies nobody.",
+  "send upload for approval": "New upload to review goes to the site's site and line managers.",
+  "edit and resend upload": "New upload to review goes to the site's site and line managers when a Not Approved upload is sent again.",
+  "deactivate family member": "Access paused goes to that member.",
+  "remove family member": "Removed from family goes to that member; nothing is sent when they remove themselves.",
+};
+const noteNotifications = (item) => {
+  if (item.item) return item.item.forEach(noteNotifications);
+  const note = NOTIFIES[item.name];
+  if (note && item.request && !(item.request.description || "").includes("Notification:"))
+    item.request.description = `${item.request.description || ""} Notification: ${note}`;
+};
+noteNotifications(collection);
+
+// ---------------------------------------------------------------- Notifications
+// One top-level folder for both notification calls. The single request that used to sit under App > Settings moves here.
+const dropOldNotifications = (node) => {
+  if (!node.item) return;
+  node.item = node.item.filter((i) => !(i.request && /\/(app\/)?notifications(\?|\/|$)/.test(i.request.url.raw || "")));
+  node.item.forEach(dropOldNotifications);
+};
+collection.item.filter((i) => i.name !== "Notifications").forEach(dropOldNotifications);
+
+const notificationRequests = [
+  req("notifications", "GET", ["notifications"], {
+    query: "page=1&limit=10",
+    tests: [
+      'pm.test("Notifications fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const json = pm.response.json();",
+      '    pm.expect(json.data).to.be.an("array");',
+      '    if (json.data.length) { pm.collectionVariables.set("notificationId", json.data[0]._id); }',
+      "});",
+    ],
+    description:
+      "The signed-in user's notifications, newest first (a family token or a staff token). Query: page, limit. Each row has _id, type, title, body, objectType and objectId (what to open when it is tapped), subject (who caused it), isRead and timeSince. Family types: newMessage (objectId is the conversationId), familyNewPost, familyUploadApproved, familyUploadRejected, familyUploadPending, familyNewsletter, familyGazette, familyGazetteReminder, familyVisit (objectId is the visit), familyJoinRequest and familyAccess. In-app only: nothing is sent to the phone's notification tray. Sets notificationId.",
+  }),
+  req("notifications read", "PUT", ["notifications", "{{notificationId}}", "read"], {
+    tests: [
+      'pm.test("Notification marked read", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data.isRead).to.eql(true);',
+      "});",
+    ],
+    description:
+      "Marks one notification as read; no body. Use the notificationId saved by notifications. 404 notification_not_found for an unknown id.",
+  }),
+];
+
+collection.item = collection.item.filter((i) => i.name !== "Notifications");
+collection.item.push({
+  name: "Notifications",
+  description: "The notification list and marking a notification as read. Works with a family token or a staff token.",
+  item: notificationRequests,
+});
+
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId", "recipientId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId", "recipientId", "notificationId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

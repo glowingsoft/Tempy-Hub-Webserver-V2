@@ -19,6 +19,7 @@ const {
 } = require("./familyAccessService");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
 const { hashCode, normaliseCode } = require("./familyCodeCrypto");
+const { notifyJoinRequested } = require("./familyJoinNotifications");
 
 const MAX_FAILED_TRIES = 5;
 const LOCK_MS = FAMILY_CODE_LOCK_MINUTES * 60 * 1000;
@@ -206,6 +207,7 @@ const requestToJoin = async ({ user, code: typedCode, relationship }) => {
   });
 
   await FamilyCodeFailure.deleteMany({ userId: user._id });
+  await notifyJoinRequested({ link: row, requesterName: user.name });
   return shapeRequest(row, homeName);
 };
 

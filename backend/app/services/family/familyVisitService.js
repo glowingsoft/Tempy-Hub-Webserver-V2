@@ -26,6 +26,11 @@ const {
   cancelInvitation,
 } = require("./familyVisitInvitation");
 const { seatsHeld } = require("./familyVisitCapacity");
+const {
+  notifyVisitRequested,
+  notifyVisitReply,
+  notifyVisitCancelledByFamily,
+} = require("./familyVisitNotifications");
 
 const VisitTab = { UPCOMING: "upcoming", PAST: "past" };
 const VisitAction = {
@@ -353,6 +358,8 @@ const requestVisit = async ({ link, user, body = {}, now = new Date() }) => {
     throw new AppError("visit_slot_full", 409, { place: place.name });
   }
 
+  await notifyVisitRequested({ visit, requesterName: user.name });
+
   return requireItem({
     link,
     userId: user._id,
@@ -374,7 +381,18 @@ const cancelMine = async ({ link, user, visitId, now }) => {
       endAt: { $gt: now },
     },
     { $set: { status: FamilyVisitStatus.CANCELLED } },
-    { new: false, projection: { invitationId: 1 } },
+    {
+      new: false,
+      projection: {
+        invitationId: 1,
+        organizationId: 1,
+        branchId: 1,
+        residentId: 1,
+        startAt: 1,
+        endAt: 1,
+        place: 1,
+      },
+    },
   ).lean();
   if (!claimed) throw new AppError("visit_not_cancellable", 409);
 
@@ -383,6 +401,7 @@ const cancelMine = async ({ link, user, visitId, now }) => {
     userId: user._id,
     now,
   });
+  await notifyVisitCancelledByFamily({ visit: claimed, user });
 };
 
 const saveReply = async ({ visitId, userId, response, now }) => {
@@ -425,8 +444,12 @@ const replyToInvitation = async ({ link, user, visitId, response, now }) => {
     .lean();
   if (!visit) throw new AppError("visit_not_found", 404);
 
+  const previous = (visit.replies || []).find(
+    (entry) => String(entry.userId) === String(user._id),
+  )?.response;
   if (!(await saveReply({ visitId, userId: user._id, response, now })))
     throw new AppError("visit_not_replyable", 409);
+  if (previous !== response) await notifyVisitReply({ visitId, user, response });
 
   const reply = (
     await FamilyVisit.findById(visitId).select("replies").lean()

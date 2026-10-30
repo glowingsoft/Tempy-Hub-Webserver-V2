@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const { FamilyMember } = require("@models/FamilyMember");
 const { FamilyHandover } = require("@models/FamilyHandover");
 const { AppError } = require("@services/_errors/AppError");
+const { notifyJoinDecided } = require("./familyJoinNotifications");
+const { notifyAccessChanged } = require("./familyMemberNotifications");
 const {
   FamilyHandoverStatus,
   FamilyMemberStatus,
@@ -24,6 +26,7 @@ const decidePendingRequest = async ({ linkId, decision, actorId }) => {
   );
   if (!result.modifiedCount)
     throw new AppError("join_request_not_pending", 409);
+  await notifyJoinDecided({ linkId, decision, actorId });
 };
 
 const cancelHandoversOf = (link, session) =>
@@ -56,6 +59,7 @@ const deactivateActiveLink = async ({ link, actorId }) => {
 
     await cancelHandoversOf(link, session);
   });
+  await notifyAccessChanged({ linkId: link._id, change: "paused", actorId });
 };
 
 const reactivateLink = async ({ link }) => {
@@ -93,6 +97,7 @@ const removeActiveLink = async ({ link, actorId }) => {
 
     await cancelHandoversOf(link, session);
   });
+  await notifyAccessChanged({ linkId: link._id, change: "removed", actorId });
 };
 
 /**

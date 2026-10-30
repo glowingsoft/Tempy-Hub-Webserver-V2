@@ -1,7 +1,11 @@
 const mongoose = require("mongoose");
 const { FamilyGazetteItemStatus } = require("./domainEnums");
 
-const objectId = (ref, extra = {}) => ({ type: mongoose.Schema.Types.ObjectId, ref, ...extra });
+const objectId = (ref, extra = {}) => ({
+  type: mongoose.Schema.Types.ObjectId,
+  ref,
+  ...extra,
+});
 
 /**
  * One resident's gazette in one issue. The content is chosen and stored before the PDF is drawn, so a
@@ -43,7 +47,7 @@ const familyGazetteItemSchema = new mongoose.Schema(
     /** The day the home gave the printed copy to the resident. */
     givenAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyGazetteItemSchema.index({ issueId: 1, residentId: 1 }, { unique: true });
@@ -51,6 +55,7 @@ familyGazetteItemSchema.index({ issueId: 1, status: 1 });
 familyGazetteItemSchema.index({ residentId: 1, createdAt: -1 });
 
 const FamilyGazetteItem =
-  mongoose.models.FamilyGazetteItem || mongoose.model("FamilyGazetteItem", familyGazetteItemSchema);
+  mongoose.models.FamilyGazetteItem ||
+  mongoose.model("FamilyGazetteItem", familyGazetteItemSchema);
 
 module.exports = { FamilyGazetteItem };

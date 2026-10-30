@@ -7,8 +7,16 @@ const { FamilyGazetteIssueStatus } = require("./domainEnums");
  */
 const familyGazetteIssueSchema = new mongoose.Schema(
   {
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
-    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", required: true },
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+    },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
     /** Counts up per site: Issue 14. */
     number: { type: Number, required: true },
     periodStart: { type: Date, required: true },
@@ -22,17 +30,25 @@ const familyGazetteIssueSchema = new mongoose.Schema(
     },
     messageCap: { type: Number, required: true },
     /** Who asked for it; null when the schedule did. */
-    generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    generatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     generatedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyGazetteIssueSchema.index({ branchId: 1, number: 1 }, { unique: true });
-familyGazetteIssueSchema.index({ branchId: 1, periodStart: 1 }, { unique: true });
+familyGazetteIssueSchema.index(
+  { branchId: 1, periodStart: 1 },
+  { unique: true },
+);
 familyGazetteIssueSchema.index({ organizationId: 1, createdAt: -1 });
 
 const FamilyGazetteIssue =
-  mongoose.models.FamilyGazetteIssue || mongoose.model("FamilyGazetteIssue", familyGazetteIssueSchema);
+  mongoose.models.FamilyGazetteIssue ||
+  mongoose.model("FamilyGazetteIssue", familyGazetteIssueSchema);
 
 module.exports = { FamilyGazetteIssue };

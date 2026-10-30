@@ -5,8 +5,16 @@ const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 const { isFamilyModuleActive } = require("./familyAccessService");
-const { decidePendingRequest, removeActiveLink } = require("./familyLinkActions");
-const { toObjectId, isValidObjectId, joinOne, personFields } = require("./familyPipeline");
+const {
+  decidePendingRequest,
+  removeActiveLink,
+} = require("./familyLinkActions");
+const {
+  toObjectId,
+  isValidObjectId,
+  joinOne,
+  personFields,
+} = require("./familyPipeline");
 
 const joinUser = joinOne({ from: User, localField: "userId", as: "user" });
 
@@ -45,7 +53,11 @@ const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
         as: "family",
       },
     },
-    ...joinOne({ from: Organization, localField: "organizationId", as: "organization" }),
+    ...joinOne({
+      from: Organization,
+      localField: "organizationId",
+      as: "organization",
+    }),
     {
       $project: {
         residentId: 1,
@@ -58,7 +70,8 @@ const loadForNextOfKin = async ({ userId, linkId, notFoundKey }) => {
     },
   ]);
 
-  const allowed = row && row.callerIsNextOfKin && isFamilyModuleActive(row.organization);
+  const allowed =
+    row && row.callerIsNextOfKin && isFamilyModuleActive(row.organization);
   if (!allowed) throw new AppError(notFoundKey, 404);
   return row;
 };
@@ -84,7 +97,9 @@ const memberOrderStages = [
 const withActions = (member, canManage) => ({
   ...member,
   canRemove:
-    canManage && member.status === FamilyMemberStatus.ACTIVE && !member.isNextOfKin,
+    canManage &&
+    member.status === FamilyMemberStatus.ACTIVE &&
+    !member.isNextOfKin,
   canReview: canManage && member.status === FamilyMemberStatus.PENDING,
 });
 

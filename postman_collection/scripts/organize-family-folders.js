@@ -48,11 +48,14 @@ const adminUsed = new Set();
 const adminPlace = (...names) => place(adminRequests, names, adminUsed);
 
 const familyEngagement = folder(adminRoot, "Staff side of the family module, one folder per screen.", [
+  folder("Overview", "The Family overview screen: cards, family activity and the checklist before the issue closes.", adminPlace(
+    "family overview"
+  )),
   folder("Moderation", "Uploads families send, waiting for a manager to approve, blur or reject.", adminPlace(
     "upload queue", "approve upload", "approve upload with blur", "reject upload"
   )),
   folder("Community Wall", "Staff wall posts, with photos and tagged residents.", adminPlace(
-    "wall posts", "dismiss post reports", "taggable residents", "upload post photo", "upload post photos", "create post", "update post", "remove post"
+    "wall posts", "post authors", "dismiss post reports", "taggable residents", "upload post photo", "upload post photos", "create post", "update post", "remove post"
   )),
   folder("Newsletters", "Monthly newsletters for a site: build the draft, edit every section, send.", adminPlace(
     "newsletters", "newsletter detail", "newsletter pdf", "create newsletter", "update newsletter", "send newsletter", "schedule newsletter", "cancel newsletter schedule", "remove newsletter"
@@ -62,6 +65,7 @@ const familyEngagement = folder(adminRoot, "Staff side of the family module, one
     "mark gazette printed", "mark gazette given", "mark all gazettes printed", "retry failed gazettes"
   )),
   folder("Settings", "How often gazettes are built and how many messages one holds.", adminPlace("family settings", "update family settings")),
+  folder("Visits", "Visit requests and invitations, and what a site offers on Book A Visit.", adminPlace("family visits", "invite family to a visit", "confirm visit request", "decline visit request", "cancel family visit", "visit settings", "update visit settings")),
   folder("Family Groups", "One row per resident with their family.", adminPlace("family groups", "family group detail")),
   folder("Family Membership", "Who is in each family, and how they get in.", [
     folder("Family Invitations", "Invite a family member, and follow the invitations.", adminPlace(
@@ -104,10 +108,13 @@ const family = folder("Family", "The family app: what a family member and the ne
     )),
   ]),
   folder("Moderation", "A family member's own uploads, from photo to approval.", appPlace(
-    "upload photo", "upload photos", "send upload for approval", "my uploads", "edit and resend upload"
+    "upload photo", "upload photos", "send upload for approval", "my uploads", "edit and resend upload", "delete my upload"
   )),
   folder("Gazette", "The gazette being collected, the printed ones and the reader.", appPlace("next gazette", "printed gazettes", "read gazette", "download gazette pdf")),
+  folder("Home", "The Home Family tab in one call: greeting, next visit, gazette due, notices and unread counts.", appPlace("home")),
   folder("Timeline", "Everything shared about the resident.", appPlace("timeline")),
+  folder("Gallery", "The resident's photos: All, This Month and From Me.", appPlace("gallery")),
+  folder("Visits", "My Visits, Book A Visit and the Visit Pass.", appPlace("my visits", "next visit", "visit options", "request a visit", "cancel my visit", "reply to visit invitation", "visit pass", "update visit pass")),
   folder("Newsletters", "Current and past newsletters of the home: list, read and PDF.", appPlace("newsletters of my home", "read newsletter", "download newsletter pdf")),
   folder("Community Wall", "The home's wall: read it and react.", appPlace("community wall", "react to post", "remove reaction", "mark posts seen", "report post")),
 ]);

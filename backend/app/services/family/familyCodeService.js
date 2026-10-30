@@ -8,7 +8,8 @@ const { FamilyCodeStatus } = require("@models/domainEnums");
 const { toObjectId, joinOne } = require("./familyPipeline");
 const { hashCode, encryptCode, decryptCode } = require("./familyCodeCrypto");
 
-const CODE_TTL_MS = Number(process.env.FAMILY_CODE_TTL_DAYS || 14) * 24 * 60 * 60 * 1000;
+const CODE_TTL_MS =
+  Number(process.env.FAMILY_CODE_TTL_DAYS || 14) * 24 * 60 * 60 * 1000;
 const MAX_CREATE_ATTEMPTS = 5;
 const MAX_GENERATE_ATTEMPTS = 50;
 
@@ -26,16 +27,22 @@ const codePrefix = (name) => {
 };
 
 const randomChars = (length) =>
-  Array.from({ length }, () => ALPHABET[crypto.randomInt(ALPHABET.length)]).join("");
+  Array.from(
+    { length },
+    () => ALPHABET[crypto.randomInt(ALPHABET.length)],
+  ).join("");
 
 /** A code never contains the resident's room number, so it never gives away where they live. */
 const generateCode = ({ prefix, roomNumber }) => {
-  const room = String(roomNumber || "").replace(/\s+/g, "").toUpperCase();
+  const room = String(roomNumber || "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
 
   for (let attempt = 0; attempt < MAX_GENERATE_ATTEMPTS; attempt += 1) {
     const middle = String(crypto.randomInt(10, 100));
     const tail = randomChars(4);
-    if (!room || !`${middle}${tail}`.includes(room)) return `${prefix}-${middle}-${tail}`;
+    if (!room || !`${middle}${tail}`.includes(room))
+      return `${prefix}-${middle}-${tail}`;
   }
 
   throw new AppError("family_code_generation_failed", 500);
@@ -48,7 +55,12 @@ const shapeCode = (doc, code) => ({
   createdAt: doc.createdAt,
 });
 
-const noCode = (residentId) => ({ residentId, code: null, expiresAt: null, createdAt: null });
+const noCode = (residentId) => ({
+  residentId,
+  code: null,
+  expiresAt: null,
+  createdAt: null,
+});
 
 const getCurrentCode = async ({ link }) => {
   const [doc] = await FamilyCode.aggregate([
@@ -78,7 +90,12 @@ const getCurrentCode = async ({ link }) => {
 const codeInputsFor = async (link) => {
   const [info] = await Resident.aggregate([
     { $match: { _id: toObjectId(link.residentId) } },
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
     { $project: { _id: 0, roomNumber: 1, branchName: "$branch.name" } },
   ]);
 
@@ -103,7 +120,7 @@ const replaceActiveCode = async ({ link, userId, code }) => {
             voidedBy: userId,
           },
         },
-        { session }
+        { session },
       );
 
       [created] = await FamilyCode.create(
@@ -118,7 +135,7 @@ const replaceActiveCode = async ({ link, userId, code }) => {
             createdBy: userId,
           },
         ],
-        { session }
+        { session },
       );
     });
 

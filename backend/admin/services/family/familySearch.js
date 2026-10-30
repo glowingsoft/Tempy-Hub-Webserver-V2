@@ -16,12 +16,22 @@ const residentIdsMatching = async ({ organizationId, branchId, text }) => {
   };
   if (branchId) match.branchId = toObjectId(branchId);
 
-  const rows = await Resident.aggregate([{ $match: match }, { $limit: MAX_MATCHES }, { $project: { _id: 1 } }]);
+  const rows = await Resident.aggregate([
+    { $match: match },
+    { $limit: MAX_MATCHES },
+    { $project: { _id: 1 } },
+  ]);
   return rows.map((row) => row._id);
 };
 
 /** People named in a collection (authors, members) whose name or email matches the text. */
-const userIdsMatching = async ({ model, field, organizationId, branchId, text }) => {
+const userIdsMatching = async ({
+  model,
+  field,
+  organizationId,
+  branchId,
+  text,
+}) => {
   const scope = { organizationId: toObjectId(organizationId) };
   if (branchId) scope.branchId = toObjectId(branchId);
 
@@ -29,9 +39,20 @@ const userIdsMatching = async ({ model, field, organizationId, branchId, text })
     { $match: scope },
     { $group: { _id: `$${field}` } },
     { $limit: MAX_POOL },
-    { $lookup: { from: User.collection.name, localField: "_id", foreignField: "_id", as: "user" } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "_id",
+        foreignField: "_id",
+        as: "user",
+      },
+    },
     { $unwind: "$user" },
-    { $match: { $or: [{ "user.name": regexOn(text) }, { "user.email": regexOn(text) }] } },
+    {
+      $match: {
+        $or: [{ "user.name": regexOn(text) }, { "user.email": regexOn(text) }],
+      },
+    },
     { $limit: MAX_MATCHES },
     { $project: { _id: 1 } },
   ]);
@@ -44,7 +65,14 @@ const userIdsMatching = async ({ model, field, organizationId, branchId, text })
  * literally. Returns the $or to add to the list's filter, or null when nothing was typed;
  * a search that finds nothing returns an $or that matches nothing.
  */
-const searchClause = async ({ keyword, organizationId, branchId, fields = [], resident, person }) => {
+const searchClause = async ({
+  keyword,
+  organizationId,
+  branchId,
+  fields = [],
+  resident,
+  person,
+}) => {
   const text = searchText(keyword);
   if (!text || !text.trim()) return null;
 
@@ -55,7 +83,12 @@ const searchClause = async ({ keyword, organizationId, branchId, fields = [], re
     if (ids.length) clauses.push({ [resident]: { $in: ids } });
   }
   if (person) {
-    const ids = await userIdsMatching({ ...person, organizationId, branchId, text });
+    const ids = await userIdsMatching({
+      ...person,
+      organizationId,
+      branchId,
+      text,
+    });
     if (ids.length) clauses.push({ [person.path]: { $in: ids } });
   }
 

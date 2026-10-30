@@ -119,11 +119,21 @@ const decoratePosts = async ({ rows, organizationId }) => {
       return [String(row._id), { count: row.count, items }];
     }),
   );
-  const residentsAt = new Map(audience.map((row) => [String(row._id), new Set(row.residents.map(String))]));
-  const everyone = new Set(audience.flatMap((row) => row.residents.map(String)));
+  const residentsAt = new Map(
+    audience.map((row) => [
+      String(row._id),
+      new Set(row.residents.map(String)),
+    ]),
+  );
+  const everyone = new Set(
+    audience.flatMap((row) => row.residents.map(String)),
+  );
   const familiesFor = (row) => {
     if (row.audience === "all") return everyone.size;
-    if (row.audience === "tagged") return (row.taggedResidents ?? []).filter((resident) => everyone.has(String(resident.residentId))).length;
+    if (row.audience === "tagged")
+      return (row.taggedResidents ?? []).filter((resident) =>
+        everyone.has(String(resident.residentId)),
+      ).length;
     return residentsAt.get(String(row.branchId))?.size ?? 0;
   };
   const reactorsOf = new Map(

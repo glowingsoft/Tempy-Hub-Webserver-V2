@@ -9,7 +9,10 @@ const { toObjectId } = require("@appServices/family/familyPipeline");
 
 const NOTIFY_CHUNK = 1000;
 
-const firstName = (name) => String(name || "").trim().split(/\s+/)[0] || "";
+const firstName = (name) =>
+  String(name || "")
+    .trim()
+    .split(/\s+/)[0] || "";
 
 /** Everyone actively linked to a resident, or to anyone at a site, each person once. */
 const recipientsOf = async (match) => {
@@ -23,8 +26,10 @@ const recipientsOf = async (match) => {
 const deliver = async ({ receivers, build }) => {
   for (let i = 0; i < receivers.length; i += NOTIFY_CHUNK) {
     await NotificationExp.insertMany(
-      receivers.slice(i, i + NOTIFY_CHUNK).map((receiverId) => ({ ...build(receiverId), receiverId })),
-      { ordered: false }
+      receivers
+        .slice(i, i + NOTIFY_CHUNK)
+        .map((receiverId) => ({ ...build(receiverId), receiverId })),
+      { ordered: false },
     );
   }
   return receivers.length;
@@ -37,11 +42,23 @@ const deliver = async ({ receivers, build }) => {
  */
 const notifyPrinted = async ({ item, actorId = null }) => {
   try {
-    const [issue] = await FamilyGazetteIssue.aggregate([{ $match: { _id: item.issueId } }, { $project: { number: 1 } }]);
-    const [resident] = await Resident.aggregate([{ $match: { _id: item.residentId } }, { $project: { name: 1 } }]);
-    const [branch] = await Branch.aggregate([{ $match: { _id: item.branchId } }, { $project: { name: 1 } }]);
+    const [issue] = await FamilyGazetteIssue.aggregate([
+      { $match: { _id: item.issueId } },
+      { $project: { number: 1 } },
+    ]);
+    const [resident] = await Resident.aggregate([
+      { $match: { _id: item.residentId } },
+      { $project: { name: 1 } },
+    ]);
+    const [branch] = await Branch.aggregate([
+      { $match: { _id: item.branchId } },
+      { $project: { name: 1 } },
+    ]);
 
-    const receivers = await recipientsOf({ organizationId: toObjectId(item.organizationId), residentId: toObjectId(item.residentId) });
+    const receivers = await recipientsOf({
+      organizationId: toObjectId(item.organizationId),
+      residentId: toObjectId(item.residentId),
+    });
     const who = firstName(resident?.name);
     return await deliver({
       receivers,
@@ -50,7 +67,9 @@ const notifyPrinted = async ({ item, actorId = null }) => {
         subjectId: actorId,
         objectId: item._id,
         objectType: "familyGazette",
-        title: issue ? `Gazette no. ${issue.number} is ready` : "Your gazette is ready",
+        title: issue
+          ? `Gazette no. ${issue.number} is ready`
+          : "Your gazette is ready",
         body: `${who ? `${who}'s` : "The"} gazette from ${branch?.name || "the home"} has been printed. You can read it in the app.`,
       }),
     });
@@ -61,7 +80,12 @@ const notifyPrinted = async ({ item, actorId = null }) => {
 };
 
 /** "Gazette closes on 28 Oct": everyone linked to a resident at the site is asked for a photo or message. */
-const notifyClosingSoon = async ({ receivers, closesAt, timezone, issueKey }) => {
+const notifyClosingSoon = async ({
+  receivers,
+  closesAt,
+  timezone,
+  issueKey,
+}) => {
   const when = moment.tz(closesAt, timezone).format("D MMM");
   return deliver({
     receivers,

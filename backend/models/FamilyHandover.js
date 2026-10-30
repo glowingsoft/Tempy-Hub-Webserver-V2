@@ -42,7 +42,7 @@ const familyHandoverSchema = new mongoose.Schema(
     requestedAt: { type: Date, default: Date.now },
     decidedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyHandoverSchema.index({ toUserId: 1, status: 1 });
@@ -54,7 +54,7 @@ familyHandoverSchema.index(
   {
     unique: true,
     partialFilterExpression: { status: FamilyHandoverStatus.PENDING },
-  }
+  },
 );
 
 const FamilyHandover =

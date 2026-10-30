@@ -67,7 +67,7 @@ const familyMemberSchema = new mongoose.Schema(
     },
     inactiveAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyMemberSchema.index({ userId: 1, residentId: 1 }, { unique: true });
@@ -84,7 +84,7 @@ familyMemberSchema.index(
       isNextOfKin: true,
       status: FamilyMemberStatus.ACTIVE,
     },
-  }
+  },
 );
 
 const FamilyMember =

@@ -1,9 +1,6 @@
 const mongoose = require("mongoose");
 const validator = require("validator");
-const {
-  FamilyInvitationStatus,
-  FamilyRelationship,
-} = require("./domainEnums");
+const { FamilyInvitationStatus, FamilyRelationship } = require("./domainEnums");
 
 /** An invitation for a relative to get a family-app login linked to one resident. */
 const familyInvitationSchema = new mongoose.Schema(
@@ -71,7 +68,7 @@ const familyInvitationSchema = new mongoose.Schema(
     lastSentAt: { type: Date, default: null },
     sendCount: { type: Number, default: 1 },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyInvitationSchema.index(
@@ -79,7 +76,7 @@ familyInvitationSchema.index(
   {
     unique: true,
     partialFilterExpression: { status: FamilyInvitationStatus.PENDING },
-  }
+  },
 );
 
 const FamilyInvitation =

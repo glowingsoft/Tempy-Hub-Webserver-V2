@@ -34,10 +34,12 @@ const listRelationships = () =>
 
 const isFamilyModuleActive = (organization, now = new Date()) => {
   const entry = (organization?.moduleAccess || []).find(
-    (m) => m.moduleSlug === ModuleSlug.FAMILY_ENGAGEMENT
+    (m) => m.moduleSlug === ModuleSlug.FAMILY_ENGAGEMENT,
   );
   return Boolean(
-    entry && entry.enabled && (!entry.expiresAt || new Date(entry.expiresAt) > now)
+    entry &&
+    entry.enabled &&
+    (!entry.expiresAt || new Date(entry.expiresAt) > now),
   );
 };
 
@@ -69,7 +71,11 @@ const familyModuleOrganizationIds = async (organizationIds) => {
 
 const activeLinkStages = (userId, now = new Date()) => [
   { $match: { userId: toObjectId(userId), status: FamilyMemberStatus.ACTIVE } },
-  ...joinOne({ from: Organization, localField: "organizationId", as: "organization" }),
+  ...joinOne({
+    from: Organization,
+    localField: "organizationId",
+    as: "organization",
+  }),
   moduleActiveStage(now),
   { $sort: { createdAt: 1 } },
 ];
@@ -101,7 +107,12 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   const rows = await FamilyMember.aggregate([
     ...activeLinkStages(userId),
     ...joinOne({ from: Resident, localField: "residentId", as: "resident" }),
-    ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
     {
       $project: {
         _id: 0,
@@ -120,7 +131,10 @@ const resolveFamilyResidents = async (userId, { activeResidentId } = {}) => {
   if (!rows.length) return [];
 
   const activeId = pickActiveResidentId(rows, activeResidentId);
-  return rows.map((row) => ({ ...row, isActive: String(row.residentId) === activeId }));
+  return rows.map((row) => ({
+    ...row,
+    isActive: String(row.residentId) === activeId,
+  }));
 };
 
 /**

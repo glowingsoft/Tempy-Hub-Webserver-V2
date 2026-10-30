@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title><%= title %></title>
+<style>
+<%- fontCss %>
+@page { size: A4; margin: 45pt; }
+html { background: #fff; color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arimo, Arial, sans-serif; font-size: 12pt; color: <%= colors.ink %>; -webkit-print-color-adjust: exact; }
+.serif { font-family: Tinos, "Times New Roman", serif; font-weight: 700; }
+.keep { break-inside: avoid; }
+.section { margin-top: 24pt; }
+.heading { font-size: 17pt; color: <%= colors.navy %>; margin-bottom: 11pt; }
+.photo { display: block; object-fit: cover; border-radius: 8pt; background: <%= colors.placeholder %>; }
+
+.header { background: <%= colors.navy %>; color: #fff; border-radius: 10pt; height: 120pt; padding: 28pt; }
+.header .home { font-size: 10pt; letter-spacing: 1.5pt; text-transform: uppercase; color: #c9d3e2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header .title { font-size: 30pt; line-height: 1.15; margin-top: 8pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header .period { font-size: 11pt; color: #c9d3e2; margin-top: 8pt; }
+
+.welcome { background: <%= colors.soft %>; border-radius: 8pt; padding: 20pt 24pt; }
+.welcome .text { white-space: pre-line; line-height: 1.4; }
+.welcome .by { font-weight: 700; color: <%= colors.navy %>; margin-top: 10pt; }
+
+.item { display: flex; gap: 20pt; margin-bottom: 16pt; break-inside: avoid; }
+.item .photo { width: 212pt; height: 155pt; flex: none; }
+.item .body { flex: 1; min-width: 0; padding-top: 2pt; }
+.item .name { font-weight: 700; font-size: 13pt; white-space: pre-line; margin-bottom: 4pt; }
+.item .text { font-size: 10.5pt; line-height: 1.35; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 6pt; }
+.item .date { font-size: 9pt; color: <%= colors.muted %>; }
+
+.columns { display: flex; gap: 20pt; align-items: flex-start; }
+.columns > div { flex: 1; min-width: 0; }
+.coming { display: flex; gap: 6pt; padding-bottom: 8pt; margin-bottom: 8pt; border-bottom: 0.8pt solid <%= colors.line %>; break-inside: avoid; }
+.coming .when { width: 86pt; flex: none; }
+.coming .day { font-weight: 700; font-size: 11pt; color: <%= colors.accent %>; }
+.coming .time { font-size: 9pt; color: <%= colors.muted %>; margin-top: 2pt; }
+.coming .what { font-weight: 700; font-size: 11pt; white-space: pre-line; }
+.coming .more { font-size: 9pt; color: <%= colors.muted %>; margin-top: 2pt; }
+.card { border: 0.8pt solid <%= colors.line %>; border-radius: 8pt; padding: 14pt 16pt; margin-bottom: 12pt; break-inside: avoid; }
+.card .name { font-weight: 700; font-size: 11.5pt; white-space: pre-line; }
+.card .text { font-size: 10pt; line-height: 1.35; white-space: pre-line; margin-top: 6pt; }
+.newcomers { background: <%= colors.soft %>; border-radius: 8pt; padding: 14pt 16pt; font-size: 10.5pt; line-height: 1.35; break-inside: avoid; }
+
+.gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16pt; }
+.gallery .photo { width: 100%; height: 113pt; }
+.gallery .caption { font-size: 10pt; color: <%= colors.muted %>; margin-top: 6pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gallery > div { break-inside: avoid; }
+
+.footer { margin-top: 24pt; border-top: 2pt solid <%= colors.navy %>; padding-top: 14pt; display: flex; justify-content: space-between; gap: 20pt; break-inside: avoid; }
+.footer .home { font-weight: 700; font-size: 10.5pt; }
+.footer .small { font-size: 9.5pt; color: <%= colors.muted %>; margin-top: 4pt; white-space: pre-line; }
+.footer .right { text-align: right; font-size: 9.5pt; color: <%= colors.muted %>; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="home"><%= homeName %></div>
+  <div class="title serif"><%= title %></div>
+  <div class="period"><%= periodLabel %></div>
+</div>
+
+<% if (welcome) { %>
+<div class="section keep welcome">
+  <div class="text"><%= welcome.text %></div>
+  <% if (welcome.signedBy) { %><div class="by"><%= welcome.signedBy %></div><% } %>
+</div>
+<% } %>
+
+<% if (highlights.length) { %>
+<div class="section">
+  <div class="heading serif"><%= highlightsHeading %></div>
+  <% highlights.forEach((item) => { %>
+  <div class="item">
+    <% if (item.hasPhoto) { %><img class="photo" <% if (item.photo) { %>src="<%= item.photo %>" <% } %>alt=""><% } %>
+    <div class="body">
+      <% if (item.title) { %><div class="name"><%= item.title %></div><% } %>
+      <% if (item.text) { %><div class="text"><%= item.text %></div><% } %>
+      <% if (item.date) { %><div class="date"><%= item.date %></div><% } %>
+    </div>
+  </div>
+  <% }) %>
+</div>
+<% } %>
+
+<% if (comingUp.length || notices.length || newcomers) { %>
+<div class="section columns">
+  <% if (comingUp.length) { %>
+  <div>
+    <div class="heading serif">Coming up</div>
+    <% comingUp.forEach((item) => { %>
+    <div class="coming">
+      <div class="when">
+        <div class="day"><%= item.date %></div>
+        <% if (item.time) { %><div class="time"><%= item.time %></div><% } %>
+      </div>
+      <div>
+        <div class="what"><%= item.title %></div>
+        <% if (item.detail) { %><div class="more"><%= item.detail %></div><% } %>
+      </div>
+    </div>
+    <% }) %>
+  </div>
+  <% } %>
+  <% if (notices.length || newcomers) { %>
+  <div>
+    <% if (notices.length) { %><div class="heading serif">Notices</div><% } %>
+    <% notices.forEach((notice) => { %>
+    <div class="card">
+      <div class="name"><%= notice.title %></div>
+      <% if (notice.body) { %><div class="text"><%= notice.body %></div><% } %>
+    </div>
+    <% }) %>
+    <% if (newcomers) { %><div class="newcomers"><b>A warm welcome to: </b><%= newcomers %></div><% } %>
+  </div>
+  <% } %>
+</div>
+<% } %>
+
+<% if (gallery.length) { %>
+<div class="section">
+  <div class="heading serif">Photo gallery</div>
+  <div class="gallery">
+    <% gallery.forEach((item) => { %>
+    <div>
+      <img class="photo" <% if (item.photo) { %>src="<%= item.photo %>" <% } %>alt="">
+      <% if (item.caption) { %><div class="caption"><%= item.caption %></div><% } %>
+    </div>
+    <% }) %>
+  </div>
+</div>
+<% } %>
+
+<div class="footer">
+  <div>
+    <div class="home"><%= footer.homeName %></div>
+    <% if (footer.address) { %><div class="small"><%= footer.address %></div><% } %>
+  </div>
+  <div class="right">
+    <% footer.lines.forEach((line) => { %><div><%= line %></div><% }) %>
+  </div>
+</div>
+</body>
+</html>

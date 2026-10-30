@@ -6,7 +6,12 @@ const mongoose = require("mongoose");
  */
 const familySettingsSchema = new mongoose.Schema(
   {
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true, unique: true },
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+      unique: true,
+    },
     gazette: {
       /** Days from the start of one issue to the start of the next. */
       issueEveryDays: { type: Number, default: 14 },
@@ -15,11 +20,17 @@ const familySettingsSchema = new mongoose.Schema(
       /** The first day of an issue; every later issue starts a whole number of cycles after it. */
       anchorDate: { type: Date, default: null },
     },
-    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-const FamilySettings = mongoose.models.FamilySettings || mongoose.model("FamilySettings", familySettingsSchema);
+const FamilySettings =
+  mongoose.models.FamilySettings ||
+  mongoose.model("FamilySettings", familySettingsSchema);
 
 module.exports = { FamilySettings };

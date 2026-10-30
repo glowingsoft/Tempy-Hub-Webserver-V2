@@ -16,6 +16,7 @@ const { receivePhoto, receivePhotos } = require("@middlewares/familyPhotoMiddlew
 const { MembershipRole } = require("@models/domainEnums");
 const createRateLimiter = require("@utils/rateLimiter");
 const familyStaffController = require("../controllers/familyStaffController");
+const familyVisitStaffController = require("../controllers/familyVisitStaffController");
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ const photoBatchLimiter = createRateLimiter("family-post-photo-batches", 15, 12)
 const postLimiter = createRateLimiter("family-posts", 15, 60);
 const newsletterSendLimiter = createRateLimiter("family-newsletter-sends", 15, 20);
 const gazetteLimiter = createRateLimiter("family-gazette-builds", 15, 60);
+const visitLimiter = createRateLimiter("family-visit-invitations", 15, 60);
 
 // A fixed list for the form dropdowns: a signed-in user needs no organization, module or permission.
 router.get("/relationships", auth, familyStaffController.listRelationships);
@@ -72,5 +74,10 @@ router.put("/newsletters/:id/delivery", newsletterSendLimiter, requirePermission
 router.delete("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffController.removeNewsletter);
 
 router.get("/handovers", requirePermission(FAMILY_VIEW), familyStaffController.listHandovers);
+
+router.get("/visit-settings", requirePermission(FAMILY_VIEW), familyVisitStaffController.getSettings);
+router.put("/visit-settings", requirePermission(FAMILY_MANAGE), familyVisitStaffController.updateSettings);
+router.post("/visits", visitLimiter, requirePermission(FAMILY_MANAGE), familyVisitStaffController.inviteFamily);
+router.put("/visits/:id", requirePermission(FAMILY_APPROVE), familyVisitStaffController.updateVisit);
 
 module.exports = router;

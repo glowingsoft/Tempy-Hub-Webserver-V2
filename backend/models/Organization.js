@@ -9,7 +9,7 @@ const moduleAccessSchema = new mongoose.Schema(
     purchasedAt: { type: Date, default: null },
     expiresAt: { type: Date, default: null },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const organizationSchema = new mongoose.Schema(
@@ -54,8 +54,12 @@ const organizationSchema = new mongoose.Schema(
         pendingLeave: { type: Boolean, default: false },
       },
     },
+    /** Storage the plan includes, in GB; empty until the platform operator sets it. */
+    billing: {
+      planLimitGb: { type: Number, default: null, min: 0 },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 organizationSchema.pre("save", function setNameKey(next) {
@@ -69,7 +73,7 @@ organizationSchema.pre("save", function setNameKey(next) {
  */
 organizationSchema.index(
   { nameKey: 1 },
-  { unique: true, partialFilterExpression: { nameKey: { $type: "string" } } }
+  { unique: true, partialFilterExpression: { nameKey: { $type: "string" } } },
 );
 
 const Organization =

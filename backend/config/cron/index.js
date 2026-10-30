@@ -12,6 +12,7 @@ const {
   runFamilyGazetteRecoveryCron,
   runFamilyGazetteSchedulerCron,
 } = require("./family/familyGazettes.cron");
+const { runStorageUsageCron } = require("./billing/storageUsage.cron");
 
 const envFlag = (key, fallback = true) => {
   const raw = process.env[key];
@@ -106,6 +107,14 @@ const startCrons = () => {
     ttlSec: 280,
     enabled: true,
     run: runFamilyGazetteRecoveryCron,
+  });
+
+  registerJob({
+    name: "storage-usage",
+    schedule: process.env.CRON_STORAGE_USAGE_SCHEDULE || "30 2 * * *",
+    ttlSec: 3 * 60 * 60,
+    enabled: envFlag("CRON_STORAGE_USAGE", true),
+    run: runStorageUsageCron,
   });
 };
 

@@ -6,13 +6,23 @@ const { toObjectId } = require("@appServices/family/familyPipeline");
 const everyTaggedResidentConsents = {
   $expr: {
     $allElementsTrue: [
-      { $map: { input: "$tagged", as: "resident", in: { $eq: ["$$resident.photographyConsent", true] } } },
+      {
+        $map: {
+          input: "$tagged",
+          as: "resident",
+          in: { $eq: ["$$resident.photographyConsent", true] },
+        },
+      },
     ],
   },
 };
 
 /** The live posts of one site that are safe to reuse in a printed or sent document. */
-const publishedPostsOfSite = ({ organizationId, branchId, includeTagged = false }) => [
+const publishedPostsOfSite = ({
+  organizationId,
+  branchId,
+  includeTagged = false,
+}) => [
   {
     $match: {
       organizationId: toObjectId(organizationId),
@@ -22,7 +32,14 @@ const publishedPostsOfSite = ({ organizationId, branchId, includeTagged = false 
       ...(includeTagged ? {} : { audience: { $ne: "tagged" } }),
     },
   },
-  { $lookup: { from: Resident.collection.name, localField: "taggedResidentIds", foreignField: "_id", as: "tagged" } },
+  {
+    $lookup: {
+      from: Resident.collection.name,
+      localField: "taggedResidentIds",
+      foreignField: "_id",
+      as: "tagged",
+    },
+  },
   { $match: everyTaggedResidentConsents },
 ];
 

@@ -3,7 +3,7 @@ const {
   getTermsAndConditions,
   getAboutUs,
   getPrivacyPolicy,
-  getFaqs
+  getFaqs,
 } = require("../../commonModules/controllers/settingsController");
 const createRateLimiter = require("@utils/rateLimiter");
 

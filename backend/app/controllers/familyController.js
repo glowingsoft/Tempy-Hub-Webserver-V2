@@ -9,31 +9,52 @@ const familyHandoverService = require("@appServices/family/familyHandoverService
 const familyInviteService = require("@appServices/family/familyInviteService");
 const familyUploadService = require("@appServices/family/familyUploadService");
 const familyTimelineService = require("@appServices/family/familyTimelineService");
+const familyGalleryService = require("@appServices/family/familyGalleryService");
+const familyVisitService = require("@appServices/family/familyVisitService");
+const familyHomeService = require("@appServices/family/familyHomeService");
+const familyVisitPassService = require("@appServices/family/familyVisitPassService");
 const familyWallService = require("@appServices/family/familyWallService");
 const familyNewsletterService = require("@appServices/family/familyNewsletterService");
 const familyGazetteService = require("@appServices/family/familyGazetteService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { sendPdf } = require("@utils/familyPdfResponse");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
-const listRelationships = respond(() => familyAccessService.listRelationships());
+const listRelationships = respond(() =>
+  familyAccessService.listRelationships(),
+);
+
+const getHome = respond((req) =>
+  familyHomeService.getHome({
+    user: req.user,
+    residentId: queryText(req.query.residentId),
+  }),
+);
 
 const listMyResidents = respond((req) =>
   familyAccessService.resolveFamilyResidents(req.user._id, {
     activeResidentId: queryText(req.query.residentId),
-  })
+  }),
 );
 
 const getCurrentFamilyCode = respond((req) =>
-  familyCodeService.getCurrentCode({ link: req.familyLink })
+  familyCodeService.getCurrentCode({ link: req.familyLink }),
 );
 
 const createFamilyCode = respond(
-  (req) => familyCodeService.createCode({ link: req.familyLink, userId: req.user._id }),
-  { statusCode: 201, translationKey: "family_code_created" }
+  (req) =>
+    familyCodeService.createCode({
+      link: req.familyLink,
+      userId: req.user._id,
+    }),
+  { statusCode: 201, translationKey: "family_code_created" },
 );
 
 const previewJoinCode = respond((req) =>
-  familyJoinService.previewCode({ userId: req.user._id, code: queryText(req.query.code) })
+  familyJoinService.previewCode({
+    userId: req.user._id,
+    code: queryText(req.query.code),
+  }),
 );
 
 const requestToJoin = respond(
@@ -43,19 +64,24 @@ const requestToJoin = respond(
       code: req.body.code,
       relationship: req.body.relationship,
     }),
-  { statusCode: 201, translationKey: "join_request_created" }
+  { statusCode: 201, translationKey: "join_request_created" },
 );
 
 const getCurrentJoinRequest = respond((req) =>
-  familyJoinService.getCurrentRequest(req.user._id)
+  familyJoinService.getCurrentRequest(req.user._id),
 );
 
 const listJoinRequests = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
-    return familyMemberService.listJoinRequests({ link: req.familyLink, page, limit, skip });
+    return familyMemberService.listJoinRequests({
+      link: req.familyLink,
+      page,
+      limit,
+      skip,
+    });
   },
-  { paged: true }
+  { paged: true },
 );
 
 const decide = (decision, translationKey) => ({
@@ -74,23 +100,35 @@ const updateJoinRequest = respondByAction({
   reject: decide(FamilyMemberStatus.REJECTED, "join_request_rejected"),
   cancel: {
     run: (req) =>
-      familyJoinService.cancelRequest({ userId: req.user._id, requestId: req.params.id }),
+      familyJoinService.cancelRequest({
+        userId: req.user._id,
+        requestId: req.params.id,
+      }),
     translationKey: "join_request_cancelled",
   },
 });
 
 const listMembers = respond((req) =>
-  familyMemberService.listMembers({ userId: req.user._id, link: req.familyLink })
+  familyMemberService.listMembers({
+    userId: req.user._id,
+    link: req.familyLink,
+  }),
 );
 
 const removeMember = respond(
   (req) =>
-    familyMemberService.removeMember({ userId: req.user._id, memberId: req.params.memberId }),
-  { translationKey: "family_member_removed" }
+    familyMemberService.removeMember({
+      userId: req.user._id,
+      memberId: req.params.memberId,
+    }),
+  { translationKey: "family_member_removed" },
 );
 
 const listHandoverCandidates = respond((req) =>
-  familyHandoverService.listCandidates({ userId: req.user._id, link: req.familyLink })
+  familyHandoverService.listCandidates({
+    userId: req.user._id,
+    link: req.familyLink,
+  }),
 );
 
 const requestHandover = respond(
@@ -101,14 +139,14 @@ const requestHandover = respond(
       toMemberId: req.body.toMemberId,
       homeChooses: req.body.homeChooses,
     }),
-  { statusCode: 201, translationKey: "handover_requested" }
+  { statusCode: 201, translationKey: "handover_requested" },
 );
 
 const getCurrentHandover = respond((req) =>
   familyHandoverService.getCurrentHandover({
     userId: req.user._id,
     residentId: queryText(req.query.residentId),
-  })
+  }),
 );
 
 const answerHandover = (answer, translationKey) => ({
@@ -117,14 +155,27 @@ const answerHandover = (answer, translationKey) => ({
 });
 
 const updateHandover = respondByAction({
-  accept: answerHandover(familyHandoverService.acceptHandover, "handover_accepted"),
-  decline: answerHandover(familyHandoverService.declineHandover, "handover_declined"),
-  cancel: answerHandover(familyHandoverService.cancelHandover, "handover_cancelled"),
+  accept: answerHandover(
+    familyHandoverService.acceptHandover,
+    "handover_accepted",
+  ),
+  decline: answerHandover(
+    familyHandoverService.declineHandover,
+    "handover_declined",
+  ),
+  cancel: answerHandover(
+    familyHandoverService.cancelHandover,
+    "handover_cancelled",
+  ),
 });
 
 const leaveFamily = respond(
-  (req) => familyHandoverService.leaveFamily({ userId: req.user._id, link: req.familyLink }),
-  { translationKey: "family_left" }
+  (req) =>
+    familyHandoverService.leaveFamily({
+      userId: req.user._id,
+      link: req.familyLink,
+    }),
+  { translationKey: "family_left" },
 );
 
 const listSentInvitations = respond(
@@ -139,17 +190,22 @@ const listSentInvitations = respond(
       skip,
     });
   },
-  { paged: true }
+  { paged: true },
 );
 
 const uploadPhoto = respond(
-  (req) => familyUploadService.uploadPhoto({ userId: req.user._id, file: req.file }),
-  { statusCode: 201, translationKey: "photo_uploaded" }
+  (req) =>
+    familyUploadService.uploadPhoto({ userId: req.user._id, file: req.file }),
+  { statusCode: 201, translationKey: "photo_uploaded" },
 );
 
 const uploadPhotos = respond(
-  (req) => familyUploadService.uploadPhotos({ userId: req.user._id, files: req.files }),
-  { statusCode: 201, translationKey: "photos_uploaded" }
+  (req) =>
+    familyUploadService.uploadPhotos({
+      userId: req.user._id,
+      files: req.files,
+    }),
+  { statusCode: 201, translationKey: "photos_uploaded" },
 );
 
 const createUpload = respond(
@@ -162,7 +218,7 @@ const createUpload = respond(
       includeInGazette: req.body.includeInGazette,
       clientId: req.body.clientId,
     }),
-  { statusCode: 201, translationKey: "upload_sent_for_approval" }
+  { statusCode: 201, translationKey: "upload_sent_for_approval" },
 );
 
 const listMyUploads = respond(
@@ -177,7 +233,17 @@ const listMyUploads = respond(
       skip,
     });
   },
-  { paged: true }
+  { paged: true },
+);
+
+const deleteUpload = respond(
+  (req) =>
+    familyUploadService.deleteUpload({
+      userId: req.user._id,
+      links: req.familyLinks,
+      uploadId: req.params.id,
+    }),
+  { translationKey: "upload_deleted" },
 );
 
 const updateUpload = respond(
@@ -190,17 +256,121 @@ const updateUpload = respond(
       mediaIds: req.body.mediaIds,
       includeInGazette: req.body.includeInGazette,
     }),
-  { translationKey: "upload_updated" }
+  { translationKey: "upload_updated" },
 );
 
 const TIMELINE_PAGE_SIZE = 20;
 const TIMELINE_MAX_PAGE_SIZE = 50;
 
+const GALLERY_PAGE_SIZE = 30;
+const GALLERY_MAX_PAGE_SIZE = 60;
+
+const listGallery = respond(
+  (req) => {
+    const { page } = parsePaginationParams(req);
+    const requested = parseInt(req.query.limit, 10);
+    const limit =
+      requested >= 1
+        ? Math.min(requested, GALLERY_MAX_PAGE_SIZE)
+        : GALLERY_PAGE_SIZE;
+    return familyGalleryService.listGallery({
+      link: req.familyLink,
+      userId: req.user._id,
+      tab: queryText(req.query.tab) || undefined,
+      page,
+      limit,
+      skip: (page - 1) * limit,
+    });
+  },
+  { paged: true },
+);
+
+const VISITS_PAGE_SIZE = 20;
+const VISITS_MAX_PAGE_SIZE = 50;
+
+const listVisits = respond(
+  (req) => {
+    const { page } = parsePaginationParams(req);
+    const requested = parseInt(req.query.limit, 10);
+    const limit =
+      requested >= 1
+        ? Math.min(requested, VISITS_MAX_PAGE_SIZE)
+        : VISITS_PAGE_SIZE;
+    return familyVisitService.listVisits({
+      link: req.familyLink,
+      userId: req.user._id,
+      tab: queryText(req.query.tab) || undefined,
+      page,
+      limit,
+      skip: (page - 1) * limit,
+    });
+  },
+  { paged: true },
+);
+
+const getNextVisit = respond((req) =>
+  familyVisitService.getNextVisit({
+    link: req.familyLink,
+    userId: req.user._id,
+  }),
+);
+
+const getVisitOptions = respond((req) =>
+  familyVisitService.getOptions({ link: req.familyLink }),
+);
+
+const requestVisit = respond(
+  (req) =>
+    familyVisitService.requestVisit({
+      link: req.familyLink,
+      user: req.user,
+      body: req.body,
+    }),
+  { statusCode: 201, translationKey: "visit_requested" },
+);
+
+const answerVisit = (translationKey) => ({
+  run: (req) =>
+    familyVisitService.updateVisit({
+      links: req.familyLinks,
+      user: req.user,
+      visitId: req.params.id,
+      action: req.body.action,
+    }),
+  translationKey,
+});
+
+const updateVisit = respondByAction({
+  [familyVisitService.VisitAction.CANCEL]: answerVisit("visit_cancelled"),
+  [familyVisitService.VisitAction.GOING]: answerVisit("visit_reply_saved"),
+  [familyVisitService.VisitAction.CANT_MAKE_IT]: answerVisit("visit_reply_saved"),
+});
+
+const getVisitPass = respond((req) =>
+  familyVisitPassService.getPass({
+    link: req.familyLink,
+    userId: req.user._id,
+  }),
+);
+
+const updateVisitPass = respond(
+  (req) =>
+    familyVisitPassService.updatePass({
+      link: req.familyLink,
+      userId: req.user._id,
+      body: req.body,
+    }),
+  { translationKey: "visit_pass_saved" },
+);
+
 const listTimeline = respond(
   (req) => {
     const { page } = parsePaginationParams(req);
     const requested = parseInt(req.query.limit, 10);
-    const limit = requested >= 1 ? Math.min(requested, TIMELINE_MAX_PAGE_SIZE) : TIMELINE_PAGE_SIZE;
+    const limit =
+      requested >= 1
+        ? Math.min(requested, TIMELINE_MAX_PAGE_SIZE)
+        : TIMELINE_PAGE_SIZE;
     return familyTimelineService.listTimeline({
       link: req.familyLink,
       userId: req.user._id,
@@ -209,32 +379,45 @@ const listTimeline = respond(
       skip: (page - 1) * limit,
     });
   },
-  { paged: true }
+  { paged: true },
 );
 
-const getNextGazette = respond((req) => familyGazetteService.nextGazette({ link: req.familyLink }));
+const getNextGazette = respond((req) =>
+  familyGazetteService.nextGazette({ link: req.familyLink }),
+);
 
 const listGazettes = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
-    return familyGazetteService.listGazettes({ link: req.familyLink, page, limit, skip });
+    return familyGazetteService.listGazettes({
+      link: req.familyLink,
+      page,
+      limit,
+      skip,
+    });
   },
-  { paged: true }
+  { paged: true },
 );
 
-const getGazette = respond((req) => familyGazetteService.getGazette({ links: req.familyLinks, gazetteId: req.params.gazetteId }));
+const getGazette = respond((req) =>
+  familyGazetteService.getGazette({
+    links: req.familyLinks,
+    gazetteId: req.params.gazetteId,
+  }),
+);
 
 const downloadGazettePdf = async (req, res) => {
   try {
-    const { buffer, filename } = await familyGazetteService.getPdf({ links: req.familyLinks, gazetteId: req.params.gazetteId });
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Length": buffer.length,
-      "Content-Disposition": `${req.query.download === "false" ? "inline" : "attachment"}; filename="${filename}"`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
+    const pdf = await familyGazetteService.getPdf({
+      links: req.familyLinks,
+      gazetteId: req.params.gazetteId,
     });
-    return res.status(200).send(buffer);
+    return await sendPdf({
+      req,
+      res,
+      pdf,
+      attachment: req.query.download !== "false",
+    });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");
   }
@@ -243,26 +426,35 @@ const downloadGazettePdf = async (req, res) => {
 const listNewsletters = respond(
   (req) => {
     const { page, limit, skip } = parsePaginationParams(req);
-    return familyNewsletterService.listNewsletters({ link: req.familyLink, page, limit, skip });
+    return familyNewsletterService.listNewsletters({
+      link: req.familyLink,
+      page,
+      limit,
+      skip,
+    });
   },
-  { paged: true }
+  { paged: true },
 );
 
 const getNewsletter = respond((req) =>
-  familyNewsletterService.getNewsletter({ links: req.familyLinks, newsletterId: req.params.newsletterId })
+  familyNewsletterService.getNewsletter({
+    links: req.familyLinks,
+    newsletterId: req.params.newsletterId,
+  }),
 );
 
 const downloadNewsletterPdf = async (req, res) => {
   try {
-    const { buffer, filename } = await familyNewsletterService.getPdf({ links: req.familyLinks, newsletterId: req.params.newsletterId });
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Length": buffer.length,
-      "Content-Disposition": `${req.query.download === "false" ? "inline" : "attachment"}; filename="${filename}"`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
+    const pdf = await familyNewsletterService.getPdf({
+      links: req.familyLinks,
+      newsletterId: req.params.newsletterId,
     });
-    return res.status(200).send(buffer);
+    return await sendPdf({
+      req,
+      res,
+      pdf,
+      attachment: req.query.download !== "false",
+    });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");
   }
@@ -280,7 +472,7 @@ const listWall = respond(
       skip,
     });
   },
-  { paged: true }
+  { paged: true },
 );
 
 const addReaction = respond(
@@ -290,12 +482,17 @@ const addReaction = respond(
       links: req.familyLinks,
       postId: req.params.postId,
     }),
-  { translationKey: "reaction_saved" }
+  { translationKey: "reaction_saved" },
 );
 
 const markPostsSeen = respond(
-  (req) => familyWallService.markSeen({ userId: req.user._id, links: req.familyLinks, postIds: req.body.postIds }),
-  { translationKey: "posts_marked_seen" }
+  (req) =>
+    familyWallService.markSeen({
+      userId: req.user._id,
+      links: req.familyLinks,
+      postIds: req.body.postIds,
+    }),
+  { translationKey: "posts_marked_seen" },
 );
 
 const reportPost = respond(
@@ -306,7 +503,7 @@ const reportPost = respond(
       postId: req.params.postId,
       reason: req.body.reason,
     }),
-  { statusCode: 201, translationKey: "post_reported" }
+  { statusCode: 201, translationKey: "post_reported" },
 );
 
 const removeReaction = respond(
@@ -316,7 +513,7 @@ const removeReaction = respond(
       links: req.familyLinks,
       postId: req.params.postId,
     }),
-  { translationKey: "reaction_removed" }
+  { translationKey: "reaction_removed" },
 );
 
 const inviteRelative = respond(
@@ -328,7 +525,7 @@ const inviteRelative = respond(
       email: req.body.email,
       relationship: req.body.relationship,
     }),
-  { statusCode: 201, translationKey: "invitation_sent_successfully" }
+  { statusCode: 201, translationKey: "invitation_sent_successfully" },
 );
 
 module.exports = {
@@ -341,6 +538,7 @@ module.exports = {
   getNewsletter,
   downloadNewsletterPdf,
   listMyResidents,
+  getHome,
   getCurrentFamilyCode,
   createFamilyCode,
   previewJoinCode,
@@ -362,7 +560,16 @@ module.exports = {
   createUpload,
   listMyUploads,
   updateUpload,
+  deleteUpload,
   listTimeline,
+  listGallery,
+  listVisits,
+  getNextVisit,
+  getVisitOptions,
+  requestVisit,
+  updateVisit,
+  getVisitPass,
+  updateVisitPass,
   listWall,
   addReaction,
   removeReaction,

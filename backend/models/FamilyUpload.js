@@ -47,7 +47,7 @@ const familyUploadSchema = new mongoose.Schema(
     /** Lets the app resend the same upload without creating a second one. */
     clientId: { type: String, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyUploadSchema.index({ residentId: 1, status: 1, createdAt: -1 });
@@ -56,10 +56,11 @@ familyUploadSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 familyUploadSchema.index({ authorId: 1, createdAt: -1 });
 familyUploadSchema.index(
   { authorId: 1, clientId: 1 },
-  { unique: true, partialFilterExpression: { clientId: { $type: "string" } } }
+  { unique: true, partialFilterExpression: { clientId: { $type: "string" } } },
 );
 
 const FamilyUpload =
-  mongoose.models.FamilyUpload || mongoose.model("FamilyUpload", familyUploadSchema);
+  mongoose.models.FamilyUpload ||
+  mongoose.model("FamilyUpload", familyUploadSchema);
 
 module.exports = { FamilyUpload };

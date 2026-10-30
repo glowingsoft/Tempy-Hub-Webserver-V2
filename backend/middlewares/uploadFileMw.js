@@ -7,7 +7,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     cb(
       null,
-      file.fieldname + "-" + Date.now() + path.extname(file.originalname)
+      file.fieldname + "-" + Date.now() + path.extname(file.originalname),
     );
   },
 });
@@ -25,7 +25,8 @@ const upload = multer({
 function checkFileType(file, cb) {
   const ext = path.extname(file.originalname).toLowerCase();
   const allowedExt = /\.(jpe?g|png|gif|bmp|tiff|webp|pdf)$/;
-  const allowedMime = /^(image\/(jpeg|jpg|png|gif|bmp|tiff|webp)|application\/pdf)$/i;
+  const allowedMime =
+    /^(image\/(jpeg|jpg|png|gif|bmp|tiff|webp)|application\/pdf)$/i;
 
   if (allowedExt.test(ext) && allowedMime.test(file.mimetype)) {
     return cb(null, true);

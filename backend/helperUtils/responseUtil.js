@@ -43,7 +43,6 @@ const sendResponse = ({
     }
     response.message = message;
   } else {
-
     response.message = translationKey;
   }
 
@@ -93,7 +92,7 @@ const sendResponse = ({
         // If the error is a primitive value (string, boolean, number, etc.)
         response.error = error;
       }
-      console.log(error)
+      console.log(error);
     }
   }
   // Send the response with the appropriate status code
@@ -204,7 +203,7 @@ const validateParams = (req, res, options = {}) => {
   for (const param of queryParams) {
     if (req.query[param]) {
       req.query[camelCase(param)] = convertUnderscoresToSpaces(
-        req.query[param]
+        req.query[param],
       );
     } else {
       missingParamsQuery.push(param);
@@ -226,7 +225,7 @@ const validateParams = (req, res, options = {}) => {
   for (const param of pathParams) {
     if (req.params[param]) {
       req.params[camelCase(param)] = convertUnderscoresToSpaces(
-        req.params[param]
+        req.params[param],
       );
     } else {
       missingParamsPath.push(param);
@@ -260,9 +259,7 @@ const validateParams = (req, res, options = {}) => {
     const raw = req.body[param] ?? req.body[camelCase(param)];
     if (isFormFieldPresent(raw)) {
       req.body[camelCase(param)] =
-        typeof raw === "string"
-          ? convertUnderscoresToSpaces(raw.trim())
-          : raw;
+        typeof raw === "string" ? convertUnderscoresToSpaces(raw.trim()) : raw;
     } else {
       missingParamsForm.push(param);
     }
@@ -284,7 +281,7 @@ const validateParams = (req, res, options = {}) => {
     const value = extractNestedFields(req.body, param);
 
     if (
-      typeof value === "string" && value.trim() !== "" ||
+      (typeof value === "string" && value.trim() !== "") ||
       typeof value === "number" ||
       typeof value === "boolean" ||
       (typeof value === "object" && value !== null)
@@ -326,7 +323,6 @@ const validateParams = (req, res, options = {}) => {
         fieldNames.push(field);
       }
     }
-
   }
   if (!validateObjectIdsArr(res, objectIdsToValidate, fieldNames)) {
     return false;
@@ -389,7 +385,7 @@ const validateParams = (req, res, options = {}) => {
     if (value) {
       if (Array.isArray(value)) {
         // Check if every item in the array is allowed
-        const invalidValues = value.filter(v => !allowedValues.includes(v));
+        const invalidValues = value.filter((v) => !allowedValues.includes(v));
         if (invalidValues.length > 0) {
           sendResponse({
             res,
@@ -398,7 +394,7 @@ const validateParams = (req, res, options = {}) => {
             values: {
               field,
               allowedValues: allowedValues.join(", "),
-              invalidValues: invalidValues.join(", ")
+              invalidValues: invalidValues.join(", "),
             },
           });
           return false;
@@ -419,7 +415,6 @@ const validateParams = (req, res, options = {}) => {
       }
     }
   }
-
 
   // Validate minimum length fields
   for (const [field, minLength] of Object.entries(minLengthFields)) {
@@ -505,7 +500,6 @@ const extractNestedFields = (obj, fieldPath) => {
   return value;
 };
 
-
 // Example usage
 const exampleMiddleware = (req, res, next) => {
   const validationOptions = {
@@ -522,10 +516,6 @@ const exampleMiddleware = (req, res, next) => {
   next();
 };
 
-
-
-
-
 /**
  * Convert UTC date to a specific timezone and format it as AM/PM
  * @param {string} date - The date to be converted.
@@ -537,8 +527,8 @@ const exampleMiddleware = (req, res, next) => {
 const convertUtcToTimezoneAMPM = (
   date,
   timezone,
-  outputFormat = "hh:mm A",  // Default output format is AM/PM
-  inputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ"  // Default input format (ISO 8601)
+  outputFormat = "hh:mm A", // Default output format is AM/PM
+  inputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ", // Default input format (ISO 8601)
 ) => {
   // Check if the date is valid before proceeding
   if (!date || !moment(date, inputFormat, true).isValid()) {
@@ -550,15 +540,12 @@ const convertUtcToTimezoneAMPM = (
 
   if (timezone) {
     // Apply timezone conversion if timezone is provided
-    return momentDate.tz(timezone).format(outputFormat);  // Return in AM/PM format
+    return momentDate.tz(timezone).format(outputFormat); // Return in AM/PM format
   } else {
     // Simply format the date without timezone conversion
-    return momentDate.format(outputFormat);  // Return in AM/PM format
+    return momentDate.format(outputFormat); // Return in AM/PM format
   }
 };
-
-
-
 
 /**
  * Converts a date from a specified input format to a specified user timezone.
@@ -573,7 +560,7 @@ const convertUtcToTimezone = (
   date,
   timezone,
   outputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ",
-  inputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ"
+  inputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ",
 ) => {
   const momentDate = moment(date, inputFormat, true); // Parse date with strict input format
 
@@ -600,31 +587,29 @@ const convertTimezoneToUtc = (
   date,
   timezone,
   inputFormat = "YYYY-MM-DD hh:mm A",
-  outputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ"
+  outputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ",
 ) => {
   const momentDate = moment.tz(date, inputFormat, timezone).utc();
   return momentDate.format(outputFormat); // return string
 };
 const convertToUtcDateOnly = (date, timezone, inputFormat = "YYYY-MM-DD") => {
-
-
   // Parse the date in the specified timezone but do not change the time zone
   const momentDate = moment.tz(date, inputFormat, timezone);
 
   // Format the date in the given timezone without changing the time zone
-  return momentDate.format("YYYY-MM-DD[T]HH:mm:ss.SSS[+00:00]");  // Return the formatted date
+  return momentDate.format("YYYY-MM-DD[T]HH:mm:ss.SSS[+00:00]"); // Return the formatted date
 };
 
 const convertTimezoneToUtcDateOnly = (
   date,
   timezone,
-  inputFormat = "YYYY-MM-DD hh:mm A"
+  inputFormat = "YYYY-MM-DD hh:mm A",
 ) => {
   const momentDate = moment.tz(date, inputFormat, timezone).utc();
 
   // Manually set UTC time to midnight WITHOUT startOf()
   const year = momentDate.year();
-  const month = momentDate.month();   // 0-based
+  const month = momentDate.month(); // 0-based
   const day = momentDate.date();
 
   const utcMidnight = moment
@@ -633,7 +618,6 @@ const convertTimezoneToUtcDateOnly = (
 
   return utcMidnight;
 };
-
 
 // Get the current date in user's timezone
 //Emphasizes the returned value is UTC-based, calculated using a timezone
@@ -656,7 +640,6 @@ const getCurrentDateInTimezone = ({
   return now.toDate();
 };
 
-
 const getStartAndEndOfDay = (date, timezone) => {
   const start = moment(date)
     .tz(timezone)
@@ -675,7 +658,6 @@ const getStartAndEndOfDay = (date, timezone) => {
   return { start, end };
 };
 
-
 const getStartAndEndOfWeek = (date, timezone) => {
   const start = moment.tz(date, timezone).startOf("week").toDate();
   const end = moment.tz(date, timezone).endOf("week").toDate();
@@ -686,8 +668,6 @@ const getStartAndEndOfMonth = (date, timezone) => {
   const end = moment.tz(date, timezone).endOf("month").toDate();
   return { start, end };
 };
-
-
 
 /**
  * Converts a date from a specified input format to a specified output format.
@@ -700,7 +680,7 @@ const getStartAndEndOfMonth = (date, timezone) => {
 const convertDateFormat = (
   date,
   outputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ",
-  inputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ"
+  inputFormat = "YYYY-MM-DDTHH:mm:ss.SSSZ",
 ) => {
   // Parse date with strict input format
   const momentDate = moment(date, inputFormat, true);
@@ -712,11 +692,7 @@ const convertDateFormat = (
 const getReadableErrorMessage = (error) => {
   // Set status code based on error type
   const statusCode =
-    error.name === "ValidationError"
-      ? 400
-      : error.code === 11000
-        ? 409
-        : 500;
+    error.name === "ValidationError" ? 400 : error.code === 11000 ? 409 : 500;
 
   // Handle duplicate key error
   if (error.code === 11000 && error.message.includes("dup key")) {
@@ -756,7 +732,7 @@ const getReadableErrorMessage = (error) => {
       // Try to extract full path from error.message if possible
       // e.g., "Course validation failed: vocabullary.items.0.word: Path `word` is required."
       let match = error.message.match(
-        new RegExp(`([\\w\\.]+):\\s*Path \`${e.path}\` is required`)
+        new RegExp(`([\\w\\.]+):\\s*Path \`${e.path}\` is required`),
       );
       if (match && match[1]) {
         fullPath = match[1];
@@ -798,12 +774,12 @@ const getCurrentUtcDateOnly = () => {
     Date.UTC(
       now.getUTCFullYear(),
       now.getUTCMonth(),
-      now.getUTCDate(),  // set time to 00:00:00 UTC
+      now.getUTCDate(), // set time to 00:00:00 UTC
       0,
       0,
       0,
-      0
-    )
+      0,
+    ),
   );
 };
 const getEndDate = (pricingPlan, startDate = new Date()) => {
@@ -823,11 +799,8 @@ const getEndDate = (pricingPlan, startDate = new Date()) => {
 };
 
 const fireAndForget = (promise, label) => {
-  promise.catch((err) =>
-    console.error(`[${label}] failed:`, err)
-  );
+  promise.catch((err) => console.error(`[${label}] failed:`, err));
 };
-
 
 module.exports = {
   sendResponse,
@@ -850,5 +823,5 @@ module.exports = {
   getCurrentUtcDateOnly,
   convertToUtcDateOnly,
   getEndDate,
-  fireAndForget
+  fireAndForget,
 };

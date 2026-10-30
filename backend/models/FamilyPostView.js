@@ -6,18 +6,35 @@ const mongoose = require("mongoose");
  */
 const familyPostViewSchema = new mongoose.Schema(
   {
-    postId: { type: mongoose.Schema.Types.ObjectId, ref: "FamilyPost", required: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
-    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", required: true },
+    postId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FamilyPost",
+      required: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+    },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
     residentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resident" }],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyPostViewSchema.index({ postId: 1, userId: 1 }, { unique: true });
 
 const FamilyPostView =
-  mongoose.models.FamilyPostView || mongoose.model("FamilyPostView", familyPostViewSchema);
+  mongoose.models.FamilyPostView ||
+  mongoose.model("FamilyPostView", familyPostViewSchema);
 
 module.exports = { FamilyPostView };

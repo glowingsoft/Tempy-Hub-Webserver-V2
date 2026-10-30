@@ -9,30 +9,43 @@ const ROLE_LABELS = {
   [MembershipRole.STAFF]: "Staff",
 };
 
-/** Adds authorRole ("Site Manager") to rows that carry authorId and organizationId. */
-const authorRoleStages = () => [
+/** Adds a role label ("Site Manager") for the user in userField, as the field named output; rows need an organizationId. */
+const authorRoleStages = ({
+  userField = "authorId",
+  output = "authorRole",
+} = {}) => [
   {
     $lookup: {
       from: Membership.collection.name,
-      let: { authorId: "$authorId", organizationId: "$organizationId" },
+      let: { userId: `$${userField}`, organizationId: "$organizationId" },
       pipeline: [
         {
           $match: {
-            $expr: { $and: [{ $eq: ["$userId", "$$authorId"] }, { $eq: ["$organizationId", "$$organizationId"] }] },
+            $expr: {
+              $and: [
+                { $eq: ["$userId", "$$userId"] },
+                { $eq: ["$organizationId", "$$organizationId"] },
+              ],
+            },
           },
         },
         { $limit: 1 },
         { $project: { role: 1 } },
       ],
-      as: "authorMembership",
+      as: `${output}Membership`,
     },
   },
   {
     $addFields: {
-      authorRole: {
+      [output]: {
         $switch: {
           branches: Object.entries(ROLE_LABELS).map(([role, label]) => ({
-            case: { $eq: [{ $arrayElemAt: ["$authorMembership.role", 0] }, role] },
+            case: {
+              $eq: [
+                { $arrayElemAt: [`$${output}Membership.role`, 0] },
+                role,
+              ],
+            },
             then: label,
           })),
           default: "",
@@ -42,4 +55,4 @@ const authorRoleStages = () => [
   },
 ];
 
-module.exports = { authorRoleStages };
+module.exports = { authorRoleStages, ROLE_LABELS };

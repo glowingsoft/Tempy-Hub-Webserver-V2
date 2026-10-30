@@ -14,7 +14,7 @@ const familyReactionSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyReactionSchema.index({ postId: 1, userId: 1 }, { unique: true });

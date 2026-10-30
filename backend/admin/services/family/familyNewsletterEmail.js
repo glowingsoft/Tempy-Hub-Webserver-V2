@@ -7,15 +7,27 @@ const { toObjectId, joinOne } = require("@appServices/family/familyPipeline");
 const SEND_BATCH = 10;
 const EXCERPT_LENGTH = 300;
 
-const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+const HTML_ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
 
 /** A header cannot carry a line break, whatever a manager typed into a title. */
-const oneLine = (value) => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
+const oneLine = (value) =>
+  String(value ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
 
 const excerpt = (text) => {
   const clean = String(text ?? "").trim();
-  return clean.length <= EXCERPT_LENGTH ? clean : `${clean.slice(0, EXCERPT_LENGTH - 1).trimEnd()}…`;
+  return clean.length <= EXCERPT_LENGTH
+    ? clean
+    : `${clean.slice(0, EXCERPT_LENGTH - 1).trimEnd()}…`;
 };
 
 /** Everything a manager typed is escaped: the email shows it as text and never as markup. */
@@ -56,14 +68,26 @@ const emailRecipients = async ({ organizationId, branchId }) => {
     { $project: { _id: 0, email: { $ifNull: ["$user.email", ""] } } },
   ]);
 
-  return [...new Set(rows.map((row) => String(row.email).trim().toLowerCase()).filter(Boolean))];
+  return [
+    ...new Set(
+      rows.map((row) => String(row.email).trim().toLowerCase()).filter(Boolean),
+    ),
+  ];
 };
 
 /**
  * Each family member gets their own message with the PDF attached, so nobody sees another family's
  * address. A message that fails is counted and the rest still go out.
  */
-const sendNewsletterEmails = async ({ newsletter, homeName, periodLabel, pdf, filename, alreadySent = [], onSent }) => {
+const sendNewsletterEmails = async ({
+  newsletter,
+  homeName,
+  periodLabel,
+  pdf,
+  filename,
+  alreadySent = [],
+  onSent,
+}) => {
   const everyone = await emailRecipients(newsletter);
   const done = new Set(alreadySent);
   const recipients = everyone.filter((address) => !done.has(address));
@@ -84,7 +108,17 @@ const sendNewsletterEmails = async ({ newsletter, homeName, periodLabel, pdf, fi
 
   for (let i = 0; i < recipients.length; i += SEND_BATCH) {
     const batch = recipients.slice(i, i + SEND_BATCH);
-    const results = await Promise.allSettled(batch.map((to) => sendTransactionalEmail({ to, subject, html, attachments, throwOnError: true })));
+    const results = await Promise.allSettled(
+      batch.map((to) =>
+        sendTransactionalEmail({
+          to,
+          subject,
+          html,
+          attachments,
+          throwOnError: true,
+        }),
+      ),
+    );
     const sent = [];
     results.forEach((result, index) => {
       if (result.status === "rejected") {
@@ -100,8 +134,14 @@ const sendNewsletterEmails = async ({ newsletter, homeName, periodLabel, pdf, fi
     if (sent.length && onSent) await onSent(sent);
   }
 
-  if (!delivered && !failed && sendingIsOff) return { status: "skipped", count: 0, failed: 0 };
+  if (!delivered && !failed && sendingIsOff)
+    return { status: "skipped", count: 0, failed: 0 };
   return { status: delivered ? "done" : "failed", count: delivered, failed };
 };
 
-module.exports = { sendNewsletterEmails, emailRecipients, renderEmailHtml, escapeHtml };
+module.exports = {
+  sendNewsletterEmails,
+  emailRecipients,
+  renderEmailHtml,
+  escapeHtml,
+};

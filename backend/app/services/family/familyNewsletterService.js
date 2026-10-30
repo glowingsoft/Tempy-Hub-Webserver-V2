@@ -19,19 +19,28 @@ const inAppSent = (extra = {}) => ({
   "delivery.inApp": true,
 });
 
-const cut = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
+const cut = (text, max) =>
+  text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
 /** Current and past issues of the home, newest first. */
 const listNewsletters = async ({ link, page, limit, skip }) => {
   const { data, meta } = await paginateWithFacet({
     model: FamilyNewsletter,
-    match: inAppSent({ organizationId: toObjectId(link.organizationId), branchId: toObjectId(link.branchId) }),
+    match: inAppSent({
+      organizationId: toObjectId(link.organizationId),
+      branchId: toObjectId(link.branchId),
+    }),
     page,
     limit,
     skip,
     sort: { sentAt: -1, _id: -1 },
     extraDataStages: [
-      ...joinOne({ from: Branch, localField: "branchId", as: "branch", optional: true }),
+      ...joinOne({
+        from: Branch,
+        localField: "branchId",
+        as: "branch",
+        optional: true,
+      }),
       {
         $project: {
           _id: 0,
@@ -60,15 +69,18 @@ const listNewsletters = async ({ link, page, limit, skip }) => {
 
 /** A newsletter the caller's links reach: sent into the app, from a home they belong to. Anything else is "not found". */
 const loadVisible = async ({ links, newsletterId }) => {
-  if (!isValidObjectId(newsletterId)) throw new AppError("newsletter_not_found", 404);
+  if (!isValidObjectId(newsletterId))
+    throw new AppError("newsletter_not_found", 404);
 
-  const [newsletter] = await FamilyNewsletter.aggregate([{ $match: inAppSent({ _id: toObjectId(newsletterId) }) }]);
+  const [newsletter] = await FamilyNewsletter.aggregate([
+    { $match: inAppSent({ _id: toObjectId(newsletterId) }) },
+  ]);
   const visible =
     newsletter &&
     links.some(
       (link) =>
         String(link.organizationId) === String(newsletter.organizationId) &&
-        String(link.branchId) === String(newsletter.branchId)
+        String(link.branchId) === String(newsletter.branchId),
     );
   if (!visible) throw new AppError("newsletter_not_found", 404);
   return newsletter;
@@ -83,14 +95,23 @@ const getNewsletter = async ({ links, newsletterId }) => {
   const content = await adminNewsletters.pruneForSend(newsletter);
   const on = newsletter.sections;
 
-  const mediaIds = [...content.highlights.map((item) => item.mediaId), ...content.gallery.map((item) => item.mediaId)].filter(Boolean);
+  const mediaIds = [
+    ...content.highlights.map((item) => item.mediaId),
+    ...content.gallery.map((item) => item.mediaId),
+  ].filter(Boolean);
   const media = mediaIds.length
-    ? await FamilyMedia.aggregate([{ $match: { _id: { $in: mediaIds } } }, { $project: { url: 1 } }])
+    ? await FamilyMedia.aggregate([
+        { $match: { _id: { $in: mediaIds } } },
+        { $project: { url: 1 } },
+      ])
     : [];
   const urlOf = new Map(media.map((item) => [String(item._id), item.url]));
   const photoUrl = (id) => (id ? urlOf.get(String(id)) || "" : "");
 
-  const [branch] = await Branch.aggregate([{ $match: { _id: newsletter.branchId } }, { $project: { name: 1 } }]);
+  const [branch] = await Branch.aggregate([
+    { $match: { _id: newsletter.branchId } },
+    { $project: { name: 1 } },
+  ]);
 
   return {
     newsletterId: newsletter._id,
@@ -101,14 +122,35 @@ const getNewsletter = async ({ links, newsletterId }) => {
     issueNumber: newsletter.issueNumber,
     sentAt: newsletter.sentAt,
     editedAt: newsletter.updatedAt,
-    welcome: on.welcome && newsletter.welcome.text ? { text: newsletter.welcome.text, signedBy: newsletter.welcome.signedBy } : null,
+    welcome:
+      on.welcome && newsletter.welcome.text
+        ? {
+            text: newsletter.welcome.text,
+            signedBy: newsletter.welcome.signedBy,
+          }
+        : null,
     highlights: on.highlights
-      ? content.highlights.map((item) => ({ title: item.title, text: item.text, photoUrl: photoUrl(item.mediaId), postedAt: item.postedAt }))
+      ? content.highlights.map((item) => ({
+          title: item.title,
+          text: item.text,
+          photoUrl: photoUrl(item.mediaId),
+          postedAt: item.postedAt,
+        }))
       : [],
     comingUp: on.comingUp ? newsletter.comingUp : [],
     notices: on.notices ? newsletter.notices : [],
-    newResidents: on.newResidents ? content.newResidents.map((item) => ({ name: item.name, roomNumber: item.roomNumber })) : [],
-    gallery: on.gallery ? content.gallery.map((item) => ({ url: photoUrl(item.mediaId), caption: item.caption })) : [],
+    newResidents: on.newResidents
+      ? content.newResidents.map((item) => ({
+          name: item.name,
+          roomNumber: item.roomNumber,
+        }))
+      : [],
+    gallery: on.gallery
+      ? content.gallery.map((item) => ({
+          url: photoUrl(item.mediaId),
+          caption: item.caption,
+        }))
+      : [],
     footer: newsletter.footer,
   };
 };
@@ -116,7 +158,10 @@ const getNewsletter = async ({ links, newsletterId }) => {
 /** The same PDF the home emailed: the stored copy, or drawn from what was sent when none was stored. */
 const getPdf = async ({ links, newsletterId }) => {
   const newsletter = await loadVisible({ links, newsletterId });
-  return adminNewsletters.getPdf({ organizationId: newsletter.organizationId, newsletterId });
+  return adminNewsletters.getPdf({
+    organizationId: newsletter.organizationId,
+    newsletterId,
+  });
 };
 
 module.exports = { listNewsletters, getNewsletter, getPdf };

@@ -9,9 +9,15 @@ const visibleToLink = (link) => ({
   organizationId: toObjectId(link.organizationId),
   status: FamilyPostStatus.PUBLISHED,
   $or: [
-    { audience: { $in: [FamilyPostAudience.BRANCH, null] }, branchId: toObjectId(link.branchId) },
+    {
+      audience: { $in: [FamilyPostAudience.BRANCH, null] },
+      branchId: toObjectId(link.branchId),
+    },
     { audience: FamilyPostAudience.ALL },
-    { audience: FamilyPostAudience.TAGGED, taggedResidentIds: toObjectId(link.residentId) },
+    {
+      audience: FamilyPostAudience.TAGGED,
+      taggedResidentIds: toObjectId(link.residentId),
+    },
   ],
 });
 
@@ -30,6 +36,8 @@ const AUDIENCE_LABELS = {
 };
 
 const audienceLabelOf = (audience, homeName) =>
-  audience === FamilyPostAudience.BRANCH || !audience ? `${homeName || "Home"} families` : AUDIENCE_LABELS[audience];
+  audience === FamilyPostAudience.BRANCH || !audience
+    ? `${homeName || "Home"} families`
+    : AUDIENCE_LABELS[audience];
 
 module.exports = { visibleToLink, visibleToAny, audienceLabelOf };

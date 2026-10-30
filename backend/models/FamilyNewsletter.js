@@ -1,7 +1,11 @@
 const mongoose = require("mongoose");
 const { FamilyNewsletterStatus } = require("./domainEnums");
 
-const objectId = (ref, extra = {}) => ({ type: mongoose.Schema.Types.ObjectId, ref, ...extra });
+const objectId = (ref, extra = {}) => ({
+  type: mongoose.Schema.Types.ObjectId,
+  ref,
+  ...extra,
+});
 
 /**
  * A monthly newsletter for one site (Figma: Newsletters). It starts as a draft filled in from the
@@ -56,7 +60,13 @@ const familyNewsletterSchema = new mongoose.Schema(
         category: { type: String, default: "" },
       },
     ],
-    notices: [{ _id: false, title: { type: String, required: true }, body: { type: String, default: "" } }],
+    notices: [
+      {
+        _id: false,
+        title: { type: String, required: true },
+        body: { type: String, default: "" },
+      },
+    ],
     newResidents: [
       {
         _id: false,
@@ -96,7 +106,7 @@ const familyNewsletterSchema = new mongoose.Schema(
     /** Addresses already emailed, so a send that is resumed after a crash never mails anyone twice. */
     emailedTo: { type: [String], default: [] },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 familyNewsletterSchema.index({ branchId: 1, month: 1 }, { unique: true });
@@ -105,6 +115,7 @@ familyNewsletterSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 familyNewsletterSchema.index({ status: 1, sendAt: 1 });
 
 const FamilyNewsletter =
-  mongoose.models.FamilyNewsletter || mongoose.model("FamilyNewsletter", familyNewsletterSchema);
+  mongoose.models.FamilyNewsletter ||
+  mongoose.model("FamilyNewsletter", familyNewsletterSchema);
 
 module.exports = { FamilyNewsletter };

@@ -4,7 +4,10 @@ const { Resident } = require("@models/Resident");
 const { FamilyMember } = require("@models/FamilyMember");
 const { FamilyHandover } = require("@models/FamilyHandover");
 const { AppError } = require("@services/_errors/AppError");
-const { FamilyHandoverStatus, FamilyMemberStatus } = require("@models/domainEnums");
+const {
+  FamilyHandoverStatus,
+  FamilyMemberStatus,
+} = require("@models/domainEnums");
 const { listActiveLinks } = require("./familyAccessService");
 const {
   toObjectId,
@@ -29,7 +32,9 @@ const listCandidates = async ({ userId, link }) => {
       $match: {
         residentId: toObjectId(link.residentId),
         userId: { $ne: toObjectId(userId) },
-        status: { $in: [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING] },
+        status: {
+          $in: [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING],
+        },
       },
     },
     ...joinOne({ from: User, localField: "userId", as: "user" }),
@@ -56,14 +61,21 @@ const listCandidates = async ({ userId, link }) => {
 };
 
 const findHandoverTarget = async ({ userId, link, toMemberId }) => {
-  if (!isValidObjectId(toMemberId)) throw new AppError("family_member_not_found", 404);
+  if (!isValidObjectId(toMemberId))
+    throw new AppError("family_member_not_found", 404);
 
   const [target] = await FamilyMember.aggregate([
-    { $match: { _id: toObjectId(toMemberId), residentId: toObjectId(link.residentId) } },
+    {
+      $match: {
+        _id: toObjectId(toMemberId),
+        residentId: toObjectId(link.residentId),
+      },
+    },
     { $project: { userId: 1, status: 1 } },
   ]);
   if (!target) throw new AppError("family_member_not_found", 404);
-  if (String(target.userId) === String(userId)) throw new AppError("handover_to_self", 400);
+  if (String(target.userId) === String(userId))
+    throw new AppError("handover_to_self", 400);
   if (target.status === FamilyMemberStatus.PENDING) {
     throw new AppError("handover_member_not_approved", 409);
   }
@@ -75,7 +87,12 @@ const findHandoverTarget = async ({ userId, link, toMemberId }) => {
 
 const assertNoOpenHandover = async (residentId) => {
   const [open] = await FamilyHandover.aggregate([
-    { $match: { residentId: toObjectId(residentId), status: FamilyHandoverStatus.PENDING } },
+    {
+      $match: {
+        residentId: toObjectId(residentId),
+        status: FamilyHandoverStatus.PENDING,
+      },
+    },
     { $limit: 1 },
     { $project: { _id: 1 } },
   ]);
@@ -88,7 +105,9 @@ const requestHandover = async ({ userId, link, toMemberId, homeChooses }) => {
     throw new AppError("handover_target_required", 400);
   }
 
-  const target = homeChooses ? null : await findHandoverTarget({ userId, link, toMemberId });
+  const target = homeChooses
+    ? null
+    : await findHandoverTarget({ userId, link, toMemberId });
   await assertNoOpenHandover(link.residentId);
 
   try {
@@ -130,7 +149,12 @@ const getCurrentHandover = async ({ userId, residentId }) => {
     { $limit: 1 },
     ...joinOne({ from: Resident, localField: "residentId", as: "resident" }),
     ...joinOne({ from: User, localField: "fromUserId", as: "from" }),
-    ...joinOne({ from: User, localField: "toUserId", as: "to", optional: true }),
+    ...joinOne({
+      from: User,
+      localField: "toUserId",
+      as: "to",
+      optional: true,
+    }),
     {
       $project: {
         residentId: 1,
@@ -149,7 +173,8 @@ const getCurrentHandover = async ({ userId, residentId }) => {
   return {
     ...shapeHandover(row),
     residentName: row.residentName,
-    direction: String(row.fromUserId) === String(userId) ? "outgoing" : "incoming",
+    direction:
+      String(row.fromUserId) === String(userId) ? "outgoing" : "incoming",
     from: pickPerson(row, "from"),
     to: row.homeChooses ? null : pickPerson(row, "to"),
   };
@@ -157,16 +182,27 @@ const getCurrentHandover = async ({ userId, residentId }) => {
 
 /** side: "toUserId" for the person asked, "fromUserId" for the next of kin who asked. */
 const loadOpenHandover = async ({ userId, handoverId, side }) => {
-  if (!isValidObjectId(handoverId)) throw new AppError("handover_not_found", 404);
+  if (!isValidObjectId(handoverId))
+    throw new AppError("handover_not_found", 404);
 
   const [row] = await FamilyHandover.aggregate([
     { $match: { _id: toObjectId(handoverId), [side]: toObjectId(userId) } },
-    { $project: { organizationId: 1, residentId: 1, fromUserId: 1, toUserId: 1, status: 1 } },
+    {
+      $project: {
+        organizationId: 1,
+        residentId: 1,
+        fromUserId: 1,
+        toUserId: 1,
+        status: 1,
+      },
+    },
   ]);
   if (!row) throw new AppError("handover_not_found", 404);
 
   const links = await listActiveLinks(userId);
-  if (!links.some((link) => String(link.residentId) === String(row.residentId))) {
+  if (
+    !links.some((link) => String(link.residentId) === String(row.residentId))
+  ) {
     throw new AppError("handover_not_found", 404);
   }
   if (row.status !== FamilyHandoverStatus.PENDING) {
@@ -180,7 +216,7 @@ const closeHandover = async ({ userId, handoverId, side, status }) => {
 
   const result = await FamilyHandover.updateOne(
     { _id: row._id, status: FamilyHandoverStatus.PENDING },
-    { $set: { status, decidedAt: new Date() } }
+    { $set: { status, decidedAt: new Date() } },
   );
   if (!result.modifiedCount) throw new AppError("handover_not_pending", 409);
 
@@ -188,10 +224,20 @@ const closeHandover = async ({ userId, handoverId, side, status }) => {
 };
 
 const declineHandover = ({ userId, handoverId }) =>
-  closeHandover({ userId, handoverId, side: "toUserId", status: FamilyHandoverStatus.DECLINED });
+  closeHandover({
+    userId,
+    handoverId,
+    side: "toUserId",
+    status: FamilyHandoverStatus.DECLINED,
+  });
 
 const cancelHandover = ({ userId, handoverId }) =>
-  closeHandover({ userId, handoverId, side: "fromUserId", status: FamilyHandoverStatus.CANCELLED });
+  closeHandover({
+    userId,
+    handoverId,
+    side: "fromUserId",
+    status: FamilyHandoverStatus.CANCELLED,
+  });
 
 const STALE = Symbol("handover no longer valid");
 
@@ -201,15 +247,20 @@ const swapNextOfKin = async (row, session) => {
 
   // the old one steps down first: only one active next of kin is allowed at a time
   const demoted = await FamilyMember.updateOne(
-    { residentId, userId: fromUserId, status: FamilyMemberStatus.ACTIVE, isNextOfKin: true },
+    {
+      residentId,
+      userId: fromUserId,
+      status: FamilyMemberStatus.ACTIVE,
+      isNextOfKin: true,
+    },
     { $set: { isNextOfKin: false } },
-    { session }
+    { session },
   );
   const promoted = demoted.modifiedCount
     ? await FamilyMember.updateOne(
         { residentId, userId: toUserId, status: FamilyMemberStatus.ACTIVE },
         { $set: { isNextOfKin: true } },
-        { session }
+        { session },
       )
     : null;
   if (!promoted?.modifiedCount) throw STALE;
@@ -217,7 +268,7 @@ const swapNextOfKin = async (row, session) => {
   const closed = await FamilyHandover.updateOne(
     { _id: row._id, status: FamilyHandoverStatus.PENDING },
     { $set: { status: FamilyHandoverStatus.ACCEPTED, decidedAt: new Date() } },
-    { session }
+    { session },
   );
   if (!closed.modifiedCount) throw new AppError("handover_not_pending", 409);
 };
@@ -234,14 +285,20 @@ const acceptHandover = async ({ userId, handoverId }) => {
     // the next of kin changed, or one of the two left, since it was asked
     await FamilyHandover.updateOne(
       { _id: row._id, status: FamilyHandoverStatus.PENDING },
-      { $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt: new Date() } }
+      {
+        $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt: new Date() },
+      },
     );
     throw new AppError("handover_no_longer_valid", 409);
   } finally {
     await session.endSession();
   }
 
-  return { handoverId: row._id, status: FamilyHandoverStatus.ACCEPTED, residentId: row.residentId };
+  return {
+    handoverId: row._id,
+    status: FamilyHandoverStatus.ACCEPTED,
+    residentId: row.residentId,
+  };
 };
 
 /** The next of kin can't leave until someone has taken over. Leaving also withdraws any handover asked of them. */
@@ -252,7 +309,11 @@ const leaveFamily = async ({ userId, link }) => {
   try {
     await session.withTransaction(async () => {
       await FamilyMember.updateOne(
-        { residentId: link.residentId, userId, status: FamilyMemberStatus.ACTIVE },
+        {
+          residentId: link.residentId,
+          userId,
+          status: FamilyMemberStatus.ACTIVE,
+        },
         {
           $set: {
             status: FamilyMemberStatus.REMOVED,
@@ -260,12 +321,21 @@ const leaveFamily = async ({ userId, link }) => {
             removedAt: new Date(),
           },
         },
-        { session }
+        { session },
       );
       await FamilyHandover.updateMany(
-        { residentId: link.residentId, toUserId: userId, status: FamilyHandoverStatus.PENDING },
-        { $set: { status: FamilyHandoverStatus.CANCELLED, decidedAt: new Date() } },
-        { session }
+        {
+          residentId: link.residentId,
+          toUserId: userId,
+          status: FamilyHandoverStatus.PENDING,
+        },
+        {
+          $set: {
+            status: FamilyHandoverStatus.CANCELLED,
+            decidedAt: new Date(),
+          },
+        },
+        { session },
       );
     });
   } finally {

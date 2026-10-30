@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title><%= title %></title>
+<style>
+<%- fontCss %>
+@page {
+  size: A4;
+  margin: 45pt 45pt 80pt 45pt;
+  @bottom-left { content: <%- cssString(homeName) %>; font: 10.5pt Arimo, Arial, sans-serif; color: <%= colors.muted %>; vertical-align: top; padding-top: 14pt; border-top: 0.8pt solid <%= colors.line %>; }
+  @bottom-right { content: "Page " counter(page); font: 10.5pt Arimo, Arial, sans-serif; color: <%= colors.muted %>; text-align: right; vertical-align: top; padding-top: 14pt; border-top: 0.8pt solid <%= colors.line %>; }
+}
+html { background: #fff; color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arimo, Arial, sans-serif; font-size: 12pt; color: <%= colors.ink %>; -webkit-print-color-adjust: exact; }
+.serif { font-family: Tinos, "Times New Roman", serif; font-weight: 700; }
+.photo { display: block; width: 100%; object-fit: cover; background: <%= colors.placeholder %>; }
+.pre { white-space: pre-line; }
+.newpage { break-before: page; }
+
+.bar { height: 10pt; background: <%= colors.navy %>; }
+.cover .for { margin-top: 20pt; text-align: center; font-size: 11pt; letter-spacing: 1.6pt; color: <%= colors.muted %>; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cover .name { margin-top: 10pt; text-align: center; color: <%= colors.navy %>; line-height: 1.15; white-space: nowrap; }
+.cover .rule { margin-top: 16pt; border-top: 0.8pt solid <%= colors.ink %>; }
+.cover .facts { display: flex; justify-content: space-between; gap: 12pt; padding: 8pt 0 14pt; font-size: 11pt; color: <%= colors.muted %>; border-bottom: 2.4pt solid <%= colors.ink %>; }
+.cover .facts > div { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cover .facts > div:nth-child(2) { text-align: center; }
+.cover .facts > div:nth-child(3) { text-align: right; }
+.cover .dear { margin-top: 26pt; font-size: 26pt; }
+.cover .hero { margin-top: 18pt; height: 300pt; border-radius: 12pt; }
+.cover .count { margin-top: 14pt; font-size: 13pt; color: <%= colors.muted %>; }
+.cover .love { margin-top: 12pt; border: 0.8pt solid #d8d3c3; border-radius: 10pt; padding: 16pt 20pt; font-size: 15pt; line-height: 1.3; }
+.cover .love b { color: <%= colors.navy %>; }
+
+.heading { font-size: 24pt; color: <%= colors.navy %>; padding-bottom: 8pt; border-bottom: 2pt solid <%= colors.navy %>; margin-bottom: 16pt; }
+
+.message { margin-bottom: 26pt; break-inside: avoid; }
+.message .main { height: 205pt; border-radius: 10pt; }
+.message .more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; margin-top: 10pt; }
+.message .more .photo { height: 110pt; border-radius: 8pt; }
+.message .text { margin-top: 10pt; font-size: 16pt; line-height: 1.3; }
+.message .sign { margin-top: 10pt; font-size: 11.5pt; color: <%= colors.muted %>; }
+.message .sign b { color: <%= colors.accent %>; }
+.message.plain { border: 0.8pt solid #d8d3c3; border-radius: 10pt; padding: 18pt; }
+.message.plain .text { margin-top: 0; }
+
+.life { display: flex; gap: 22pt; margin-bottom: 20pt; break-inside: avoid; }
+.life .photo { width: 200pt; height: 146pt; flex: none; border-radius: 10pt; }
+.life .body { flex: 1; min-width: 0; }
+.life .name { font-size: 17pt; font-weight: 700; margin-bottom: 6pt; }
+.life .text { font-size: 14pt; line-height: 1.25; margin-bottom: 8pt; }
+.life .date { font-size: 11pt; color: <%= colors.muted %>; }
+
+.closing { background: <%= colors.cream %>; border-radius: 10pt; padding: 20pt 22pt; font-size: 14pt; line-height: 1.3; break-inside: avoid; }
+.spaced { margin-top: 20pt; }
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="bar"></div>
+  <div class="for">A gazette for <%= residentName %></div>
+  <div class="name serif" style="font-size: <%= titleSize %>pt"><%= title %></div>
+  <div class="rule"></div>
+  <div class="facts">
+    <div>Issue <%= issueNumber %></div>
+    <div><%= periodLabel %></div>
+    <div><%= place %></div>
+  </div>
+  <div class="dear serif">Dear <%= firstName %>,</div>
+  <% if (hasCover) { %><img class="photo hero" <% if (cover) { %>src="<%= cover %>" <% } %>alt=""><% } %>
+  <div class="count">Your family has sent you <%= messages.length %> message<%= messages.length === 1 ? "" : "s" %> in this issue.</div>
+  <% if (senders) { %><div class="love">With love from <b><%= senders %></b></div><% } %>
+  <% if (!messages.length && !life.length) { %><%- include("closing") %><% } %>
+</div>
+
+<% if (messages.length) { %>
+<div class="newpage">
+  <div class="heading serif">From your family</div>
+  <% messages.forEach((message) => { %>
+  <div class="message<%= message.photos.length ? "" : " plain" %>">
+    <% if (message.photos.length) { %>
+    <img class="photo main" <% if (message.photos[0]) { %>src="<%= message.photos[0] %>" <% } %>alt="">
+    <% if (message.photos.length > 1) { %>
+    <div class="more">
+      <% message.photos.slice(1, 4).forEach((photo) => { %><img class="photo" <% if (photo) { %>src="<%= photo %>" <% } %>alt=""><% }) %>
+    </div>
+    <% } %>
+    <% } %>
+    <% if (message.text) { %><div class="text pre"><%= message.text %></div><% } %>
+    <div class="sign">From <b><%= message.author %></b><%= message.relationship %> · <%= message.date %></div>
+  </div>
+  <% }) %>
+  <% if (!life.length) { %><div class="spaced"><%- include("closing") %></div><% } %>
+</div>
+<% } %>
+
+<% if (life.length) { %>
+<div class="newpage">
+  <div class="heading serif"><%= lifeHeading %></div>
+  <% life.forEach((item) => { %>
+  <div class="life">
+    <% if (item.hasPhoto) { %><img class="photo" <% if (item.photo) { %>src="<%= item.photo %>" <% } %>alt=""><% } %>
+    <div class="body">
+      <% if (item.title) { %><div class="name pre"><%= item.title %></div><% } %>
+      <% if (item.text) { %><div class="text pre"><%= item.text %></div><% } %>
+      <% if (item.date) { %><div class="date"><%= item.date %></div><% } %>
+    </div>
+  </div>
+  <% }) %>
+  <div class="spaced"><%- include("closing") %></div>
+</div>
+<% } %>
+</body>
+</html>

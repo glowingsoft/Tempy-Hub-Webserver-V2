@@ -21666,7 +21666,7 @@
                         }
                       ]
                     },
-                    "description": "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=waiting lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, waiting, approved and rejected for the tabs and ignores the status filter; meta.oldestWaitingAt is when the oldest waiting upload was sent. Needs familyEngagement.view; 404 when the module is off."
+                    "description": "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=waiting lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, waiting, approved and rejected for the tabs and ignores the status filter; meta.oldestWaitingAt is when the oldest waiting upload was sent. Needs familyEngagement.view; 404 when the module is off. Each row also has decidedByName, decidedByRole (Owner, Site Manager, Line Manager or Staff) and decidedAt once it is decided; they are empty while it waits."
                   },
                   "response": []
                 },
@@ -21708,7 +21708,7 @@
                         "{{uploadId}}"
                       ]
                     },
-                    "description": "Approves a waiting upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "Approves a waiting upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. The response has uploadId, status, decidedByName, decidedByRole and decidedAt.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"approve\"\n}",
@@ -21759,7 +21759,7 @@
                         "{{uploadId}}"
                       ]
                     },
-                    "description": "Approve after blurring. blur maps a photo id of the upload to rectangles {x, y, width, height}, each a fraction of the photo (0 to 1) so the app does not need the stored size. The server saves a blurred copy, which is the only one ever shown to families, and keeps the original for audit. 400 invalid_blur_areas for a photo of another upload or rectangles outside the photo. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "Approve after blurring. blur maps a photo id of the upload to rectangles {x, y, width, height}, each a fraction of the photo (0 to 1) so the app does not need the stored size. The server saves a blurred copy, which is the only one ever shown to families, and keeps the original for audit. 400 invalid_blur_areas for a photo of another upload or rectangles outside the photo. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. The response has uploadId, status, decidedByName, decidedByRole and decidedAt.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"approve\",\n  \"blur\": {\n    \"{{mediaId}}\": [\n      {\n        \"x\": 0.1,\n        \"y\": 0.2,\n        \"width\": 0.3,\n        \"height\": 0.25\n      }\n    ]\n  }\n}",
@@ -21810,7 +21810,7 @@
                         "{{uploadId}}"
                       ]
                     },
-                    "description": "Rejects a waiting upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                    "description": "Rejects a waiting upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. The response has uploadId, status, decidedByName, decidedByRole and decidedAt.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"reject\",\n  \"reason\": \"Another resident is in the photo. Please crop and send again.\"\n}",

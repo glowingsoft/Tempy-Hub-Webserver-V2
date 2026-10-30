@@ -23,6 +23,7 @@ const {
   joinOne,
 } = require("@appServices/family/familyPipeline");
 const { searchClause } = require("./familySearch");
+const { authorRoleStages, ROLE_LABELS } = require("./familyAuthor");
 
 const MAX_REASON_LENGTH = 500;
 
@@ -68,6 +69,7 @@ const queueStages = [
     as: "decider",
     optional: true,
   }),
+  ...authorRoleStages({ userField: "decidedBy", output: "decidedByRole" }),
   {
     $lookup: {
       from: FamilyMember.collection.name,
@@ -128,6 +130,7 @@ const queueStages = [
       status: 1,
       rejectionReason: 1,
       decidedByName: { $ifNull: ["$decider.name", ""] },
+      decidedByRole: 1,
       decidedAt: 1,
       createdAt: 1,
     },
@@ -216,27 +219,35 @@ const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
   ]);
   if (!upload) throw new AppError("upload_not_found", 404);
 
-  assertMayAccessResidents(
-    await actorStanding(actor, organizationId),
-    upload.branchId,
-  );
+  const standing = await actorStanding(actor, organizationId);
+  assertMayAccessResidents(standing, upload.branchId);
 
   if (upload.status !== FamilyUploadStatus.WAITING) {
     throw new AppError("upload_already_decided", 409, {
       status: upload.status,
     });
   }
-  return upload;
+  return { ...upload, decidedByRole: ROLE_LABELS[standing.role] ?? "" };
 };
 
 /** The status is part of the filter, so two managers deciding at once cannot both win. */
 const settle = async ({ upload, actor, set }) => {
+  const decidedAt = new Date();
   const result = await FamilyUpload.updateOne(
     { _id: upload._id, status: FamilyUploadStatus.WAITING },
-    { $set: { decidedBy: actor._id, decidedAt: new Date(), ...set } },
+    { $set: { decidedBy: actor._id, decidedAt, ...set } },
   );
   if (!result.modifiedCount) throw new AppError("upload_already_decided", 409);
+  return decidedAt;
 };
+
+const decisionOf = ({ upload, actor, status, decidedAt }) => ({
+  uploadId: upload._id,
+  status,
+  decidedByName: actor.name,
+  decidedByRole: upload.decidedByRole,
+  decidedAt,
+});
 
 const notifyAuthor = async ({ upload, actor, type, title, body }) => {
   try {
@@ -289,7 +300,7 @@ const approveUpload = async ({ actor, organizationId, uploadId, blur }) => {
   const upload = await loadWaitingUpload({ actor, organizationId, uploadId });
 
   await saveBlurredCopies({ upload, areas: blur });
-  await settle({
+  const decidedAt = await settle({
     upload,
     actor,
     set: {
@@ -306,7 +317,12 @@ const approveUpload = async ({ actor, organizationId, uploadId, blur }) => {
     title: "Upload approved",
     body: "Your photos and message are now shared with the family.",
   });
-  return { uploadId: upload._id, status: FamilyUploadStatus.APPROVED };
+  return decisionOf({
+    upload,
+    actor,
+    status: FamilyUploadStatus.APPROVED,
+    decidedAt,
+  });
 };
 
 const rejectUpload = async ({ actor, organizationId, uploadId, reason }) => {
@@ -316,7 +332,7 @@ const rejectUpload = async ({ actor, organizationId, uploadId, reason }) => {
     throw new AppError("reason_too_long", 400);
 
   const upload = await loadWaitingUpload({ actor, organizationId, uploadId });
-  await settle({
+  const decidedAt = await settle({
     upload,
     actor,
     set: {
@@ -333,7 +349,12 @@ const rejectUpload = async ({ actor, organizationId, uploadId, reason }) => {
     title: "Upload not approved",
     body: text,
   });
-  return { uploadId: upload._id, status: FamilyUploadStatus.REJECTED };
+  return decisionOf({
+    upload,
+    actor,
+    status: FamilyUploadStatus.REJECTED,
+    decidedAt,
+  });
 };
 
 module.exports = { listUploads, approveUpload, rejectUpload };

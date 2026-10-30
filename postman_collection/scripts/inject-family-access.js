@@ -2178,6 +2178,22 @@ collection.item.push({
   item: notificationRequests,
 });
 
+// Who decided a moderation request, shown on the queue and returned by the decision.
+const DECIDER_NOTES = {
+  "upload queue": " Each row also has decidedByName, decidedByRole (Owner, Site Manager, Line Manager or Staff) and decidedAt once it is decided; they are empty while it waits.",
+  "approve upload": " The response has uploadId, status, decidedByName, decidedByRole and decidedAt.",
+  "approve upload with blur": " The response has uploadId, status, decidedByName, decidedByRole and decidedAt.",
+  "reject upload": " The response has uploadId, status, decidedByName, decidedByRole and decidedAt.",
+};
+const noteDecider = (item) => {
+  if (item.item) return item.item.forEach(noteDecider);
+  const note = DECIDER_NOTES[item.name];
+  const description = (item.request && item.request.description) || "";
+  if (note && /\/admin\//.test(item.request.url.raw || "") && !description.includes("decidedByRole"))
+    item.request.description = `${description}${note}`;
+};
+noteDecider(collection);
+
 const vars = collection.variable || [];
 for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId", "recipientId", "notificationId"]) {
   if (!vars.find((v) => v.key === key)) {

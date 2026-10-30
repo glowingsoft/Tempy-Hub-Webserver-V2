@@ -246,10 +246,24 @@ const resolveSubordinateStaffIds = async (args) => {
 };
 
 /**
- * Restricts a list match to a Line Manager's team.
- * Other roles: optional single staffId only.
- * Returns false when the caller should return an empty page.
+ * Staff may only list their own profile.
+ * Returns false when the page must be empty (no profile, or staffId is someone else).
+ * Other roles keep the staffId they passed.
  */
+const scopeStaffIdForActor = async ({ standing, actor, organizationId, staffId }) => {
+  if (standing.role !== MembershipRole.STAFF) return staffId;
+
+  const profile = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId,
+  })
+    .select("_id")
+    .lean();
+  if (!profile) return false;
+  if (staffId && String(staffId) !== String(profile._id)) return false;
+  return profile._id;
+};
+
 /** Staff ids the actor may see for leave / attendance registers. */
 const resolveScopedStaffIds = async ({
   standing,
@@ -374,5 +388,6 @@ module.exports = {
   resolveScopedStaffIds,
   resolveSuperviseeStaffIds,
   resolveScopedSuperviseeIds,
+  scopeStaffIdForActor,
   duplicateKey,
 };

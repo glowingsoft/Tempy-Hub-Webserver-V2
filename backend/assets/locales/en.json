@@ -728,5 +728,14 @@
   "invalid_due_date": "Due date is not valid",
   "invalid_completed_at": "Completion date is not valid",
   "requirement_record_created_successfully": "Record saved successfully",
-  "invalid_training_status": "Status must be in_progress, completed, or expired"
+  "invalid_training_status": "Status must be in_progress, completed, or expired",
+  "person_category_name_required": "Person category name is required",
+  "person_category_name_taken": "A person category with this name already exists",
+  "person_category_not_found": "Person category not found",
+  "person_category_created_successfully": "Person category created successfully",
+  "person_category_updated_successfully": "Person category updated successfully",
+  "person_category_deleted_successfully": "Person category deleted successfully",
+  "person_category_in_use": "Move people off this category before deleting it",
+  "invalid_person_category_status": "Status must be active or inactive",
+  "invalid_person_category_applies_to": "Applies to must be visitor, contractor, guest, or any"
 }

@@ -26,6 +26,7 @@ const acknowledgeAppraisal = async (req, res) => {
       actor: req.user,
       organizationId: req.orgId,
       appraisalId: req.params.appraisalId,
+      signatureUrl: req.body?.signatureUrl,
     });
 
     return sendResponse({

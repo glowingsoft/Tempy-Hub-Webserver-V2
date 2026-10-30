@@ -73,12 +73,14 @@ const appraisalRecordSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    staffSignatureUrl: { type: String, default: "" },
     siteManagerSignedAt: { type: Date, default: null },
     siteManagerSignedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
+    siteManagerSignatureUrl: { type: String, default: "" },
     lockedAt: { type: Date, default: null },
     status: {
       type: String,

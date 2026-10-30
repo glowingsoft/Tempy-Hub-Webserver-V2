@@ -15,6 +15,7 @@ const {
   actorStanding,
   assertMaySuperviseStaff,
   resolveScopedSuperviseeIds,
+  scopeStaffIdForActor,
 } = require("../staff/staffAccess");
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("./supervisionSchedule");
 const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
@@ -310,11 +311,24 @@ const listTeamSupervision = async ({
 }) => {
   const tz = viewerTimezone(timezone || actor?.timezone);
   const standing = await actorStanding(actor, organizationId);
+  const requestedStaffId = staffId
+    ? toObjectId(staffId, "invalid_staff_profile_id")
+    : null;
+  const scopedStaffId = await scopeStaffIdForActor({
+    standing,
+    actor,
+    organizationId,
+    staffId: requestedStaffId,
+  });
+  if (scopedStaffId === false) {
+    const empty = emptyPage(page, limit);
+    return { ...empty, meta: { ...empty.meta, timezone: tz } };
+  }
   const ids = await resolveScopedSuperviseeIds({
     standing,
     actor,
     organizationId,
-    staffId: staffId ? toObjectId(staffId, "invalid_staff_profile_id") : null,
+    staffId: scopedStaffId,
     branchId,
   });
   if (!ids.length) {

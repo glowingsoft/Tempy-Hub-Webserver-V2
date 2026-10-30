@@ -1,6 +1,5 @@
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { VisitSession } = require("@models/VisitSession");
-const { PersonCategory } = require("@models/PersonCategory");
 const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const { Invitation } = require("@models/Invitation");
@@ -14,7 +13,6 @@ const {
   DocumentAudience,
   InvitationStatus,
   BadgeType,
-  PersonCategoryAppliesTo,
   KioskMode,
 } = require("@models/domainEnums");
 const visitSessionService = require("@adminServices/visitors/visitSessionService");
@@ -31,6 +29,9 @@ const { versionFile } = require("@adminServices/documents/documentService");
 const {
   policyCategoryIds,
 } = require("@adminServices/documents/documentCategoryService");
+const {
+  listVisitCategories,
+} = require("@adminServices/visitors/personCategoryService");
 
 const MIN_SEARCH_LENGTH = 2;
 
@@ -102,49 +103,6 @@ const shapeVisit = async ({ session, person, kiosk, invitation }) => {
       ? { from: invitation.arrivalAt, until: invitation.visitingUntil }
       : null,
   };
-};
-
-const DEFAULT_CATEGORIES = [
-  { name: "Family / Friend", appliesTo: PersonCategoryAppliesTo.VISITOR },
-  { name: "Contractor", appliesTo: PersonCategoryAppliesTo.CONTRACTOR },
-  { name: "Professional", appliesTo: PersonCategoryAppliesTo.ANY },
-];
-
-const listVisitCategories = async ({ organizationId, branchId }) => {
-  let categories = await PersonCategory.find({
-    active: true,
-    $or: [
-      { branchId },
-      { organizationId, branchId: null },
-      { organizationId: null, branchId: null },
-    ],
-  })
-    .sort({ name: 1 })
-    .lean();
-
-  if (!categories.length) {
-    await PersonCategory.insertMany(
-      DEFAULT_CATEGORIES.map((row) => ({
-        ...row,
-        organizationId: null,
-        branchId: null,
-        active: true,
-      }))
-    );
-    categories = await PersonCategory.find({
-      organizationId: null,
-      branchId: null,
-      active: true,
-    })
-      .sort({ name: 1 })
-      .lean();
-  }
-
-  return categories.map((row) => ({
-    _id: row._id,
-    name: row.name,
-    appliesTo: row.appliesTo,
-  }));
 };
 
 const searchVisitPeople = async ({

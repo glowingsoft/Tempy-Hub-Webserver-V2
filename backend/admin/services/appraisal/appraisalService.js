@@ -18,6 +18,7 @@ const {
   assertMaySuperviseStaff,
   resolveScopedStaffIds,
   resolveScopedSuperviseeIds,
+  scopeStaffIdForActor,
   MANAGER_ROLES,
 } = require("../staff/staffAccess");
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("../supervision/supervisionSchedule");
@@ -29,6 +30,7 @@ const { updateStaffComplianceSettings } = require("../staff/complianceSettings")
 const { actorConductor, conductedByStages } = require("../staff/meetingConductor");
 const { paginateWithFacet } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
+const { toPublicImageUrl } = require("@utils/imageHelper");
 const {
   MEETING_STATUSES,
   emptyStatusCounts,
@@ -83,19 +85,27 @@ const scopedAppraisalStaffIds = async ({
   staffId,
   branchId,
 }) => {
+  const scopedStaffId = await scopeStaffIdForActor({
+    standing,
+    actor,
+    organizationId,
+    staffId,
+  });
+  if (scopedStaffId === false) return [];
+
   const [reports, supervisees] = await Promise.all([
     resolveScopedStaffIds({
       standing,
       actor,
       organizationId,
-      staffId,
+      staffId: scopedStaffId,
       branchId,
     }),
     resolveScopedSuperviseeIds({
       standing,
       actor,
       organizationId,
-      staffId,
+      staffId: scopedStaffId,
       branchId,
     }),
   ]);
@@ -280,7 +290,10 @@ const listTeamAppraisals = async ({
     countAppraisalStatuses(countMatch),
   ]);
 
-  return { data, meta: { ...meta, counts } };
+  return {
+    data: data.map(withSignatureUrls),
+    meta: { ...meta, counts },
+  };
 };
 
 const getAppraisal = async ({ actor, organizationId, appraisalId }) => {
@@ -297,7 +310,19 @@ const getAppraisal = async ({ actor, organizationId, appraisalId }) => {
     organizationId,
     staff: { _id: row.staffId, branchId: row.branchId },
   });
-  return row;
+  return withSignatureUrls(row);
+};
+
+const optionalSignatureUrl = (value) =>
+  value == null ? "" : String(value).trim();
+
+const withSignatureUrls = (row) => {
+  if (!row) return row;
+  return {
+    ...row,
+    staffSignatureUrl: toPublicImageUrl(row.staffSignatureUrl),
+    siteManagerSignatureUrl: toPublicImageUrl(row.siteManagerSignatureUrl),
+  };
 };
 
 const textFrom = (value) => (value == null ? "" : String(value));
@@ -417,7 +442,7 @@ const shapeAppraisal = async (appraisalId, organizationId) => {
     },
     ...appraisalRecordStages,
   ]);
-  return row;
+  return withSignatureUrls(row);
 };
 
 const uniquePointIds = (value) => {
@@ -602,7 +627,12 @@ const signOffActionPoints = async ({
   return shapeAppraisal(appraisalId, organizationId);
 };
 
-const managerSignAppraisal = async ({ actor, organizationId, appraisalId }) => {
+const managerSignAppraisal = async ({
+  actor,
+  organizationId,
+  appraisalId,
+  signatureUrl,
+}) => {
   const record = await loadAppraisal(appraisalId, organizationId);
   if (record.lockedAt) throw new AppError("appraisal_locked", 400);
   if (record.status !== ComplianceMeetingStatus.COMPLETED) {
@@ -614,9 +644,10 @@ const managerSignAppraisal = async ({ actor, organizationId, appraisalId }) => {
 
   record.siteManagerSignedAt = moment.tz(await timezoneFor(staff.branchId)).toDate();
   record.siteManagerSignedByUserId = actor._id;
+  record.siteManagerSignatureUrl = optionalSignatureUrl(signatureUrl);
   maybeLock(record);
   await record.save();
-  return record.toObject();
+  return shapeAppraisal(appraisalId, organizationId);
 };
 
 const myAppraisal = async ({ actor, organizationId }) => {
@@ -662,12 +693,19 @@ const myAppraisal = async ({ actor, organizationId }) => {
       nextDueAt: standing.nextDueAt,
       lastCompletedAt: standing.lastCompletedAt,
     },
-    upcoming: standing.upcoming,
-    past: meetings.filter((meeting) => meeting.status === ComplianceMeetingStatus.COMPLETED),
+    upcoming: withSignatureUrls(standing.upcoming),
+    past: meetings
+      .filter((meeting) => meeting.status === ComplianceMeetingStatus.COMPLETED)
+      .map(withSignatureUrls),
   };
 };
 
-const acknowledgeAppraisal = async ({ actor, organizationId, appraisalId }) => {
+const acknowledgeAppraisal = async ({
+  actor,
+  organizationId,
+  appraisalId,
+  signatureUrl,
+}) => {
   const staff = await StaffProfile.findOne({
     userId: actor._id,
     organizationId,
@@ -686,9 +724,10 @@ const acknowledgeAppraisal = async ({ actor, organizationId, appraisalId }) => {
 
   record.staffSignedAt = moment.tz(await timezoneFor(staff.branchId)).toDate();
   record.staffSignedByUserId = actor._id;
+  record.staffSignatureUrl = optionalSignatureUrl(signatureUrl);
   maybeLock(record);
   await record.save();
-  return record.toObject();
+  return shapeAppraisal(appraisalId, organizationId);
 };
 
 module.exports = {

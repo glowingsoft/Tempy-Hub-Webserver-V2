@@ -149,7 +149,7 @@ upsertFolder(adminPanel, "Appraisal", [
     "appraisals",
     "{{appraisalId}}",
     "manager-sign",
-  ]),
+  ], { body: { signatureUrl: "" } }),
 ]);
 
 upsertFolder(appFolder, "Appraisal", [
@@ -159,7 +159,7 @@ upsertFolder(appFolder, "Appraisal", [
     "appraisal",
     "{{appraisalId}}",
     "acknowledge",
-  ]),
+  ], { body: { signatureUrl: "" } }),
 ]);
 
 fs.writeFileSync(FILE, `${JSON.stringify(collection, null, 2)}\n`);

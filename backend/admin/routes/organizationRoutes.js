@@ -27,6 +27,7 @@ const attendanceController = require("../controllers/attendanceController");
 const leaveController = require("../controllers/leaveController");
 const evacuationController = require("../controllers/evacuationController");
 const externalPersonController = require("../controllers/externalPersonController");
+const personCategoryController = require("../controllers/personCategoryController");
 const visitSessionController = require("../controllers/visitSessionController");
 const siteLiveController = require("../../app/controllers/siteLiveController");
 const teamLiveController = require("../../app/controllers/teamLiveController");
@@ -264,7 +265,7 @@ scoped.patch(
 );
 scoped.get(
   "/supervision",
-  requireRoles(TEAM_APPROVER_ROLES),
+  requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   supervisionController.listTeamSupervision
 );
@@ -312,7 +313,7 @@ scoped.get(
 );
 scoped.get(
   "/appraisals",
-  requireRoles(TEAM_APPROVER_ROLES),
+  requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
   appraisalController.listTeamAppraisals
 );
@@ -534,6 +535,36 @@ scoped.get(
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),
   externalPersonController.listExternalPeople,
+);
+
+const PERSON_CATEGORY_MANAGERS = [...MANAGERS, MembershipRole.LINE_MANAGER];
+
+scoped.get(
+  "/person-categories",
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_VIEW),
+  personCategoryController.listPersonCategories
+);
+scoped.post(
+  "/person-categories",
+  requireRoles(PERSON_CATEGORY_MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  personCategoryController.createPersonCategory
+);
+scoped.patch(
+  "/person-categories/:categoryId",
+  requireRoles(PERSON_CATEGORY_MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  personCategoryController.updatePersonCategory
+);
+scoped.delete(
+  "/person-categories/:categoryId",
+  requireRoles(PERSON_CATEGORY_MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  personCategoryController.deletePersonCategory
 );
 
 scoped.get(

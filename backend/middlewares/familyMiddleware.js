@@ -11,6 +11,7 @@ const { Branch } = require("@models/Branch");
 const { Resident } = require("@models/Resident");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { AppError } = require("@services/_errors/AppError");
+const { MembershipRole } = require("@models/domainEnums");
 const { queryId } = require("../helperUtils/familyQuery");
 
 // 404 rather than 403, so a resident's existence is not revealed: a resident that does not exist
@@ -126,7 +127,29 @@ const checkFamilyFilters = async (req, res, next) => {
   }
 };
 
+const BRANCH_BOUND_ROLES = [
+  MembershipRole.SITE_MANAGER,
+  MembershipRole.LINE_MANAGER,
+  MembershipRole.STAFF,
+];
+
+const scopeToOwnBranch = (req, res, next) => {
+  const membership = req.membership;
+  if (req.isPlatformAdmin || !BRANCH_BOUND_ROLES.includes(membership?.role)) {
+    req.branchScope = null;
+    return next();
+  }
+  if (!membership.branchId)
+    return handleServiceError(res, new AppError("outside_managed_branch", 403), "some_thing_went_wrong");
+  req.branchScope = String(membership.branchId);
+  return next();
+};
+
+const branchFilter = (req) => req.branchScope || queryId(req.query.branchId, "branchId");
+
 module.exports = {
+  scopeToOwnBranch,
+  branchFilter,
   requireFamilyAccess,
   requireNextOfKin,
   requireFamilyModule,

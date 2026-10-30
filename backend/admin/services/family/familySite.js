@@ -3,7 +3,7 @@ const {
   actorStanding,
   assertMayAccessResidents,
   assertBranchInOrganization,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 
 /**
  * The site staff are acting on: the one asked for, or their own. A site or line manager cannot

@@ -24,7 +24,7 @@ const {
   assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 const { inTransaction } = require("@appServices/family/familyLinkActions");
 const {
   toObjectId,

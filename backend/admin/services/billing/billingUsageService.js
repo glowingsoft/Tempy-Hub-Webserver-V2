@@ -1,8 +1,10 @@
 const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
+const { Branch } = require("@models/Branch");
 const { OrganizationUsage } = require("@models/OrganizationUsage");
+const { BranchUsage } = require("@models/BranchUsage");
 const { PlatformBilling, SETTINGS_KEY } = require("@models/PlatformBilling");
-const { OrganizationStatus } = require("@models/domainEnums");
+const { MembershipRole, OrganizationStatus } = require("@models/domainEnums");
 const { searchText } = require("@utils/familyQuery");
 const { generateMeta } = require("@utils/responseUtil");
 const { facetCount } = require("@utils/paginate");
@@ -35,6 +37,8 @@ const SORTS = {
 
 const isPlatformAdmin = (actor) => actor?.userType === "admin";
 
+const MAY_EDIT_ORGANIZATION = [MembershipRole.OWNER, MembershipRole.SUPER_ADMIN];
+
 const requirePlatformAdmin = (actor) => {
   if (!isPlatformAdmin(actor)) throw new AppError("insufficient_role", 403);
 };
@@ -51,14 +55,12 @@ const statusOf = (usagePercent) => {
   return Usage.NORMAL;
 };
 
-/** What each organization row needs: its owner, what it stores, and how much of its plan that is. */
-const usageStages = [
-  ...joinOne({ from: User, localField: "ownerUserId", as: "owner", optional: true }),
+const usageStages = (planLimitGb, { usageModel = OrganizationUsage, foreignField = "organizationId" } = {}) => [
   {
     $lookup: {
-      from: OrganizationUsage.collection.name,
+      from: usageModel.collection.name,
       localField: "_id",
-      foreignField: "organizationId",
+      foreignField,
       as: "usage",
     },
   },
@@ -72,9 +74,7 @@ const usageStages = [
       measuredAt: { $ifNull: ["$usage.measuredAt", null] },
       measuringSince: { $ifNull: ["$usage.measuringSince", null] },
       unmeasured: { $ifNull: ["$usage.unmeasured", 0] },
-      planLimitGb: {
-        $cond: [{ $gt: ["$billing.planLimitGb", 0] }, "$billing.planLimitGb", null],
-      },
+      planLimitGb: { $literal: planLimitGb > 0 ? planLimitGb : null },
     },
   },
   {
@@ -98,22 +98,23 @@ const usageStages = [
   },
 ];
 
-const getPrices = async () => {
-  const prices = await PlatformBilling.findOneAndUpdate(
+const getBilling = async () => {
+  const billing = await PlatformBilling.findOneAndUpdate(
     { key: SETTINGS_KEY },
     { $setOnInsert: { key: SETTINGS_KEY } },
     { upsert: true, new: true },
   ).lean();
-  return { baseTierGbp: prices.baseTierGbp, overageGbpPerGb: prices.overageGbpPerGb };
+  return {
+    planLimitGb: billing.planLimitGb ?? null,
+    baseTierGbp: billing.baseTierGbp,
+    overageGbpPerGb: billing.overageGbpPerGb,
+  };
 };
 
-const rowOf = (row, { canEdit }) => {
+const figuresOf = (row) => {
   const usagePercent = row.usagePercent === null ? null : Math.round(row.usagePercent * 10) / 10;
   const status = statusOf(usagePercent);
   return {
-    organizationId: row._id,
-    name: row.name,
-    owner: { name: row.ownerName || "", email: row.ownerEmail || "" },
     usedGb: toGb(row.usedBytes),
     planLimitGb: row.planLimitGb,
     usagePercent,
@@ -130,20 +131,38 @@ const rowOf = (row, { canEdit }) => {
       count: row.fileCount,
     },
     measuredAt: row.measuredAt,
-    measuring: Boolean(row.measuringSince),
     unmeasured: row.unmeasured,
-    canEdit,
   };
 };
 
-const summaryOf = (totals, prices) => {
+const rowOf = (row, { canEdit }) => ({
+  organizationId: row._id,
+  name: row.name,
+  owner: { name: row.ownerName || "", email: row.ownerEmail || "" },
+  ...figuresOf(row),
+  emergencyNotifyOffsite: Boolean(row.emergencyNotifyOffsite),
+  measuring: Boolean(row.measuringSince),
+  canEdit,
+});
+
+const branchRowOf = (row) => ({
+  branchId: row._id,
+  organizationId: row.organizationId,
+  name: row.name,
+  manager: { name: row.managerName || "", email: row.managerEmail || "" },
+  ...figuresOf(row),
+  canEdit: false,
+});
+
+const summaryOf = (totals, prices, planLimitGb) => {
   const used = totals.imageBytes + totals.fileBytes;
   const overageGb = toGb(totals.overageBytes);
   const overageChargeGbp = Math.round(overageGb * prices.overageGbpPerGb * 100) / 100;
   return {
     activeOrganizations: totals.organizations,
     totalUsedGb: toGb(used),
-    planLimitGb: toGb(totals.limitBytes),
+    planLimitGb,
+    totalPlanGb: totals.limitBytes > 0 ? toGb(totals.limitBytes) : null,
     quotaPercent: totals.limitBytes > 0 ? percent(totals.limitUsedBytes, totals.limitBytes) : null,
     images: { gb: toGb(totals.imageBytes), percentOfTotal: percent(totals.imageBytes, used), count: totals.imageCount },
     files: { gb: toGb(totals.fileBytes), percentOfTotal: percent(totals.fileBytes, used), count: totals.fileCount },
@@ -164,10 +183,10 @@ const EMPTY_TOTALS = {
   limitBytes: 0, limitUsedBytes: 0, overageBytes: 0, organizationsOver: 0, lastMeasuredAt: null,
 };
 
-const totalsOf = async (match) => {
-  const [totals] = await Organization.aggregate([
+const totalsOf = async (model, match, stages) => {
+  const [totals] = await model.aggregate([
     { $match: match },
-    ...usageStages,
+    ...stages,
     {
       $group: {
         _id: null,
@@ -205,12 +224,48 @@ const totalsOf = async (match) => {
   return totals ? { ...EMPTY_TOTALS, ...totals } : EMPTY_TOTALS;
 };
 
-/**
- * The Billing & Usage screen. A platform admin sees every active organization (and can pick one); everyone else
- * sees their own. The cards cover everything in scope; the table follows the filter and the search.
- */
+const organizationStages = (planLimitGb) => [
+  ...joinOne({ from: User, localField: "ownerUserId", as: "owner", optional: true }),
+  ...usageStages(planLimitGb),
+  { $addFields: { ownerName: "$owner.name", ownerEmail: "$owner.email" } },
+];
+
+const branchStages = (planLimitGb) => [
+  ...joinOne({ from: User, localField: "managerUserId", as: "manager", optional: true }),
+  ...usageStages(planLimitGb, { usageModel: BranchUsage, foreignField: "branchId" }),
+  { $addFields: { managerName: "$manager.name", managerEmail: "$manager.email" } },
+];
+
+const FIGURES = {
+  name: 1, planLimitGb: 1, usagePercent: 1, usedBytes: 1,
+  imageBytes: 1, imageCount: 1, fileBytes: 1, fileCount: 1,
+  measuredAt: 1, unmeasured: 1,
+};
+
+const searchOn = (text, fields) =>
+  text
+    ? [{ $match: { $or: fields.map((field) => ({ [field]: { $regex: text, $options: "i" } })) } }]
+    : [];
+
+const pageOf = async ({ model, scope, stages, search, sort, skip, limit, project }) => {
+  const [result] = await model.aggregate([
+    { $match: scope },
+    ...stages,
+    ...search,
+    {
+      $facet: {
+        data: [{ $sort: SORTS[sort] }, { $skip: skip }, { $limit: limit }, { $project: project }],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ]);
+  return result;
+};
+
 const listUsage = async ({
   actor,
+  role,
+  branchId,
   organizationId,
   filterOrganizationId,
   keyword,
@@ -223,127 +278,91 @@ const listUsage = async ({
     throw new AppError("invalid_usage_sort", 400);
 
   const platform = isPlatformAdmin(actor);
-  const scope = platform
-    ? { status: OrganizationStatus.ACTIVE }
-    : { _id: toObjectId(organizationId) };
-  const listed = { ...scope };
-  if (platform && filterOrganizationId) listed._id = toObjectId(filterOrganizationId);
+  const orgWide = platform || MAY_EDIT_ORGANIZATION.includes(role);
+  if (!orgWide && !isValidObjectId(branchId)) throw new AppError("insufficient_role", 403);
 
   const text = searchText(keyword);
-  const search = text
-    ? [
-        {
-          $match: {
-            $or: [
-              { name: { $regex: text, $options: "i" } },
-              { ownerName: { $regex: text, $options: "i" } },
-              { ownerEmail: { $regex: text, $options: "i" } },
-            ],
-          },
-        },
-      ]
-    : [];
+  const { planLimitGb, ...prices } = await getBilling();
+  const orgStages = organizationStages(planLimitGb);
+  const orgProject = { ...FIGURES, ownerName: 1, ownerEmail: 1, measuringSince: 1,
+    emergencyNotifyOffsite: { $ifNull: ["$settings.emergencyNotifyOffsite", false] } };
+  const paging = { sort, skip, limit };
 
-  const [[result], totals, prices, options] = await Promise.all([
-    Organization.aggregate([
-      { $match: listed },
-      ...usageStages,
-      { $addFields: { ownerName: "$owner.name", ownerEmail: "$owner.email" } },
-      ...search,
-      {
-        $facet: {
-          data: [
-            { $sort: SORTS[sort] },
-            { $skip: skip },
-            { $limit: limit },
-            {
-              $project: {
-                name: 1, ownerName: 1, ownerEmail: 1, planLimitGb: 1, usagePercent: 1,
-                usedBytes: 1, imageBytes: 1, imageCount: 1, fileBytes: 1, fileCount: 1,
-                measuredAt: 1, measuringSince: 1, unmeasured: 1,
-              },
-            },
-          ],
-          totalCount: [{ $count: "count" }],
-        },
+  if (platform) {
+    const scope = { status: OrganizationStatus.ACTIVE };
+    const listed = { ...scope };
+    if (filterOrganizationId) listed._id = toObjectId(filterOrganizationId);
+
+    const [result, totals, options] = await Promise.all([
+      pageOf({
+        model: Organization, scope: listed, stages: orgStages, project: orgProject, ...paging,
+        search: searchOn(text, ["name", "ownerName", "ownerEmail"]),
+      }),
+      totalsOf(Organization, scope, orgStages),
+      Organization.aggregate([{ $match: scope }, { $sort: { name: 1 } }, { $project: { name: 1 } }]),
+    ]);
+    return {
+      data: result.data.map((row) => rowOf(row, { canEdit: true })),
+      meta: {
+        ...generateMeta(page, limit, facetCount(result.totalCount)),
+        summary: summaryOf(totals, prices, planLimitGb),
+        organizations: options.map((org) => ({ organizationId: org._id, name: org.name })),
       },
-    ]),
-    totalsOf(scope),
-    getPrices(),
-    platform
-      ? Organization.aggregate([
-          { $match: scope },
-          { $sort: { name: 1 } },
-          { $project: { name: 1 } },
-        ])
+    };
+  }
+
+  const organization = toObjectId(organizationId);
+  const stages = branchStages(planLimitGb);
+  const scope = orgWide
+    ? { organizationId: organization }
+    : { organizationId: organization, _id: toObjectId(branchId) };
+
+  const [result, branchTotals, organizationTotals, [organizationRow]] = await Promise.all([
+    pageOf({
+      model: Branch, scope, stages, project: { ...FIGURES, organizationId: 1, managerName: 1, managerEmail: 1 }, ...paging,
+      search: searchOn(text, ["name", "managerName", "managerEmail"]),
+    }),
+    orgWide ? null : totalsOf(Branch, scope, stages),
+    orgWide ? totalsOf(Organization, { _id: organization }, orgStages) : null,
+    orgWide
+      ? Organization.aggregate([{ $match: { _id: organization } }, ...orgStages, { $project: orgProject }])
       : [],
   ]);
 
   return {
-    data: result.data.map((row) => rowOf(row, { canEdit: platform })),
+    data: result.data.map(branchRowOf),
     meta: {
       ...generateMeta(page, limit, facetCount(result.totalCount)),
-      summary: summaryOf(totals, prices),
-      ...(platform
-        ? { organizations: options.map((org) => ({ organizationId: org._id, name: org.name })) }
-        : {}),
+      summary: summaryOf(branchTotals || organizationTotals, prices, planLimitGb),
+      ...(organizationRow ? { organization: rowOf(organizationRow, { canEdit: true }) } : {}),
     },
   };
 };
 
-const requireOrganization = async (organizationId) => {
-  if (!isValidObjectId(organizationId))
-    throw new AppError("organization_not_found", 404);
-  const [organization] = await Organization.aggregate([
-    { $match: { _id: toObjectId(organizationId) } },
-    { $project: { _id: 1 } },
-  ]);
-  if (!organization) throw new AppError("organization_not_found", 404);
-  return organization._id;
-};
-
-const rowFor = async (organizationId) => {
-  const [row] = await Organization.aggregate([
-    { $match: { _id: toObjectId(organizationId) } },
-    ...usageStages,
-    { $addFields: { ownerName: "$owner.name", ownerEmail: "$owner.email" } },
-  ]);
-  return rowOf(row, { canEdit: true });
-};
-
-/** The pencil: set the storage an organization's plan includes, or clear it with null. */
-const updatePlan = async ({ actor, organizationId, planLimitGb }) => {
-  requirePlatformAdmin(actor);
-  const id = await requireOrganization(organizationId);
-
-  const cleared = planLimitGb === null;
-  if (
-    !cleared &&
-    (typeof planLimitGb !== "number" ||
-      !Number.isFinite(planLimitGb) ||
-      planLimitGb <= 0 ||
-      planLimitGb > MAX_PLAN_LIMIT_GB)
-  )
-    throw new AppError("invalid_plan_limit", 400, { max: MAX_PLAN_LIMIT_GB });
-
-  await Organization.updateOne({ _id: id }, { $set: { "billing.planLimitGb": planLimitGb } });
-  return rowFor(id);
-};
-
-/** The platform prices shown on the Billing Readiness card. */
-const updatePrices = async ({ actor, baseTierGbp, overageGbpPerGb }) => {
+const updateSettings = async ({ actor, planLimitGb, baseTierGbp, overageGbpPerGb }) => {
   requirePlatformAdmin(actor);
   const set = {};
+
+  if (planLimitGb !== undefined) {
+    const valid =
+      planLimitGb === null ||
+      (typeof planLimitGb === "number" &&
+        Number.isFinite(planLimitGb) &&
+        planLimitGb > 0 &&
+        planLimitGb <= MAX_PLAN_LIMIT_GB);
+    if (!valid) throw new AppError("invalid_plan_limit", 400, { max: MAX_PLAN_LIMIT_GB });
+    set.planLimitGb = planLimitGb;
+  }
   for (const [field, value] of Object.entries({ baseTierGbp, overageGbpPerGb })) {
     if (value === undefined) continue;
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_PRICE_GBP)
       throw new AppError("invalid_billing_price", 400, { max: MAX_PRICE_GBP });
     set[field] = value;
   }
-  if (!Object.keys(set).length) throw new AppError("invalid_billing_price", 400, { max: MAX_PRICE_GBP });
+  if (!Object.keys(set).length) throw new AppError("invalid_billing_settings", 400);
 
   await PlatformBilling.updateOne({ key: SETTINGS_KEY }, { $set: set }, { upsert: true });
-  return getPrices();
+  return getBilling();
 };
 
 /** Takes the organization's measurement slot; false when one is already running (a stuck one is taken over after 30 minutes). */
@@ -369,11 +388,24 @@ const claimMeasurement = async (organizationId, now) => {
 
 const runClaimedMeasurement = async (organizationId, now) => {
   try {
-    const totals = await measureOrganization(organizationId);
+    const { branches, ...totals } = await measureOrganization(organizationId);
     await OrganizationUsage.updateOne(
       { organizationId: toObjectId(organizationId) },
       { $set: { ...totals, measuredAt: now, measuringSince: null } },
     );
+    if (branches.length)
+      await BranchUsage.bulkWrite(
+        branches.map(({ branchId, ...figures }) => ({
+          updateOne: {
+            filter: { branchId: toObjectId(branchId) },
+            update: {
+              $set: { ...figures, organizationId: toObjectId(organizationId), measuredAt: now },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
   } catch (error) {
     await OrganizationUsage.updateOne(
       { organizationId: toObjectId(organizationId) },
@@ -388,24 +420,6 @@ const recalculateOrganization = async (organizationId, now = new Date()) => {
   if (!(await claimMeasurement(organizationId, now))) return false;
   await runClaimedMeasurement(organizationId, now);
   return true;
-};
-
-/** The Recalculate button: starts a measurement and answers at once; the numbers update when it finishes. */
-const startRecalculation = async ({
-  actor,
-  organizationId,
-  background = true,
-  now = new Date(),
-}) => {
-  requirePlatformAdmin(actor);
-  const id = await requireOrganization(organizationId);
-  if (!(await claimMeasurement(id, now)))
-    throw new AppError("usage_recalculating", 409);
-
-  const run = runClaimedMeasurement(id, now);
-  if (!background) await run;
-  else run.catch((error) => console.error("usage recalculation failed", error.message));
-  return { organizationId: id, started: true };
 };
 
 const recalculateAll = async () => {
@@ -425,9 +439,7 @@ const recalculateAll = async () => {
 
 module.exports = {
   listUsage,
-  updatePlan,
-  updatePrices,
-  startRecalculation,
+  updateSettings,
   recalculateOrganization,
   recalculateAll,
   SORTS,

@@ -54,10 +54,6 @@ const organizationSchema = new mongoose.Schema(
         pendingLeave: { type: Boolean, default: false },
       },
     },
-    /** Storage the plan includes, in GB; empty until the platform operator sets it. */
-    billing: {
-      planLimitGb: { type: Number, default: null, min: 0 },
-    },
   },
   { timestamps: true },
 );

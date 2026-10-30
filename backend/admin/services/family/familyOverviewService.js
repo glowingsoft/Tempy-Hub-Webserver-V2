@@ -17,7 +17,7 @@ const {
   assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 const {
   toObjectId,
   joinOne,
@@ -59,13 +59,13 @@ const activityOf = async ({ scope, since }) => {
 
   const byStatus = Object.fromEntries(uploads.map((row) => [row._id, row.count]));
   const approved = byStatus[FamilyUploadStatus.APPROVED] ?? 0;
-  const waiting = byStatus[FamilyUploadStatus.WAITING] ?? 0;
+  const pending = byStatus[FamilyUploadStatus.PENDING] ?? 0;
   const notApproved = byStatus[FamilyUploadStatus.REJECTED] ?? 0;
   return {
     uploads: {
-      total: approved + waiting + notApproved,
+      total: approved + pending + notApproved,
       approved,
-      waiting,
+      pending,
       notApproved,
     },
     wallPosts: posts?.count ?? 0,
@@ -221,7 +221,7 @@ const getOverview = async ({ actor, organizationId, branchId, days }) => {
   return {
     site,
     stats: {
-      uploadsWaiting: attention.pendingUploads.count,
+      uploadsPending: attention.pendingUploads.count,
       reportedPosts: attention.reportedPosts.count,
       residentsWithFamily: residents ? residents.total - residents.noFamily : 0,
       residentsWithNoContent: residents?.noContent ?? 0,

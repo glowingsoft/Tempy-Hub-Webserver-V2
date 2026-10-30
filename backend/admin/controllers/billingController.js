@@ -8,6 +8,8 @@ const listUsage = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return billingUsageService.listUsage({
       actor: req.user,
+      role: req.membership?.role,
+      branchId: req.membership?.branchId,
       organizationId: req.orgId,
       filterOrganizationId: queryId(req.query.organizationId, "organizationId"),
       keyword: queryText(req.query.keyword),
@@ -20,33 +22,15 @@ const listUsage = respond(
   { paged: true },
 );
 
-const updatePlan = respond(
+const updateSettings = respond(
   (req) =>
-    billingUsageService.updatePlan({
+    billingUsageService.updateSettings({
       actor: req.user,
-      organizationId: req.params.organizationId,
       planLimitGb: req.body?.planLimitGb,
-    }),
-  { translationKey: "billing_plan_saved" },
-);
-
-const recalculate = respond(
-  (req) =>
-    billingUsageService.startRecalculation({
-      actor: req.user,
-      organizationId: req.params.organizationId,
-    }),
-  { statusCode: 202, translationKey: "usage_recalculation_started" },
-);
-
-const updatePrices = respond(
-  (req) =>
-    billingUsageService.updatePrices({
-      actor: req.user,
       baseTierGbp: req.body?.baseTierGbp,
       overageGbpPerGb: req.body?.overageGbpPerGb,
     }),
-  { translationKey: "billing_prices_saved" },
+  { translationKey: "billing_settings_saved" },
 );
 
-module.exports = { listUsage, updatePlan, recalculate, updatePrices };
+module.exports = { listUsage, updateSettings };

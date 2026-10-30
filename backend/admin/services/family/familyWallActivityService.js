@@ -21,7 +21,7 @@ const { authorRoleStages } = require("./familyAuthor");
 const {
   actorStanding,
   assertMayAccessResidents,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 
 const MAX_REACTORS = 3;
 const MAX_REPORTS_SHOWN = 5;
@@ -215,7 +215,7 @@ const getAttention = async ({ organizationId, branchId }) => {
 
   const [[uploads], [reported]] = await Promise.all([
     FamilyUpload.aggregate([
-      { $match: { ...scope, status: FamilyUploadStatus.WAITING } },
+      { $match: { ...scope, status: FamilyUploadStatus.PENDING } },
       {
         $group: {
           _id: null,

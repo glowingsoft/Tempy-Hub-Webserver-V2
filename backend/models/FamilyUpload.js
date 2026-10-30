@@ -33,7 +33,7 @@ const familyUploadSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.values(FamilyUploadStatus),
-      default: FamilyUploadStatus.WAITING,
+      default: FamilyUploadStatus.PENDING,
     },
     rejectionReason: { type: String, default: "" },
     decidedBy: {

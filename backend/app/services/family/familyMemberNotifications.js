@@ -14,7 +14,6 @@ const MESSAGES = {
   ],
 };
 
-/** A member's access was paused or ended; change is paused or removed. Only they are told. */
 const notifyAccessChanged = ({ linkId, change, actorId }) =>
   quietly(async () => {
     const [link] = await FamilyMember.aggregate([

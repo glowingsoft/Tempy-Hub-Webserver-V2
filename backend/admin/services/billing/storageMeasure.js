@@ -41,8 +41,10 @@ const inPool = async (items, limit, work) => {
 const urlKey = (url) =>
   keyFromUrl(url, { bucket: process.env.S3_BUCKET_NAME });
 
-const refs = (kind, ...keys) =>
-  keys.filter(Boolean).map((key) => ({ key, kind }));
+const refs = (kind, branchId, ...keys) =>
+  keys
+    .filter(Boolean)
+    .map((key) => ({ key, kind, branchId: branchId ? String(branchId) : null }));
 
 const familyMediaOf = (model, organizationId) =>
   model.aggregate([
@@ -59,6 +61,7 @@ const familyMediaOf = (model, organizationId) =>
     {
       $project: {
         _id: 0,
+        branchId: "$branchId",
         storageKey: "$media.storageKey",
         blurredKey: "$media.blurredKey",
         size: "$media.size",
@@ -87,19 +90,19 @@ const gatherReferences = async (organizationId) => {
   ] = await Promise.all([
     Resident.aggregate([
       { $match: { organizationId: organization } },
-      { $project: { photoUrl: 1 } },
+      { $project: { photoUrl: 1, branchId: 1 } },
     ]),
     StaffProfile.aggregate([
       { $match: { organizationId: organization } },
-      { $project: { photoUrl: 1, bannerUrl: 1 } },
+      { $project: { photoUrl: 1, bannerUrl: 1, branchId: 1 } },
     ]),
     FloorPlan.aggregate([
       { $match: { organizationId: organization } },
-      { $project: { imageUrl: 1, pdfUrl: 1 } },
+      { $project: { imageUrl: 1, pdfUrl: 1, branchId: 1 } },
     ]),
     ResidentMedia.aggregate([
       { $match: { branchId: { $in: branches.map((branch) => branch._id) } } },
-      { $project: { url: 1, thumbnailUrl: 1 } },
+      { $project: { url: 1, thumbnailUrl: 1, branchId: 1 } },
     ]),
     familyMediaOf(FamilyUpload, organization),
     familyMediaOf(FamilyPost, organization),
@@ -114,37 +117,37 @@ const gatherReferences = async (organizationId) => {
         },
       },
       { $unwind: "$version" },
-      { $project: { _id: 0, fileUrl: "$version.fileUrl" } },
+      { $project: { _id: 0, branchId: "$branchId", fileUrl: "$version.fileUrl" } },
     ]),
     FamilyNewsletter.aggregate([
       { $match: { organizationId: organization } },
-      { $project: { pdfKey: 1 } },
+      { $project: { pdfKey: 1, branchId: 1 } },
     ]),
     FamilyGazetteItem.aggregate([
       { $match: { organizationId: organization } },
-      { $project: { pdfKey: 1 } },
+      { $project: { pdfKey: 1, branchId: 1 } },
     ]),
   ]);
 
   const found = [
-    ...residents.flatMap((row) => refs(IMAGE, urlKey(row.photoUrl))),
+    ...residents.flatMap((row) => refs(IMAGE, row.branchId, urlKey(row.photoUrl))),
     ...staff.flatMap((row) =>
-      refs(IMAGE, urlKey(row.photoUrl), urlKey(row.bannerUrl)),
+      refs(IMAGE, row.branchId, urlKey(row.photoUrl), urlKey(row.bannerUrl)),
     ),
     ...plans.flatMap((row) => [
-      ...refs(IMAGE, urlKey(row.imageUrl)),
-      ...refs(FILE, urlKey(row.pdfUrl)),
+      ...refs(IMAGE, row.branchId, urlKey(row.imageUrl)),
+      ...refs(FILE, row.branchId, urlKey(row.pdfUrl)),
     ]),
     ...residentMedia.flatMap((row) =>
-      refs(IMAGE, urlKey(row.url), urlKey(row.thumbnailUrl)),
+      refs(IMAGE, row.branchId, urlKey(row.url), urlKey(row.thumbnailUrl)),
     ),
     ...[...uploadMedia, ...postMedia].flatMap((row) => [
-      ...refs(IMAGE, row.storageKey).map((ref) => ({ ...ref, size: row.size })),
-      ...refs(IMAGE, row.blurredKey),
+      ...refs(IMAGE, row.branchId, row.storageKey).map((ref) => ({ ...ref, size: row.size })),
+      ...refs(IMAGE, row.branchId, row.blurredKey),
     ]),
-    ...documents.flatMap((row) => refs(FILE, urlKey(row.fileUrl))),
-    ...newsletters.flatMap((row) => refs(FILE, row.pdfKey)),
-    ...gazettes.flatMap((row) => refs(FILE, row.pdfKey)),
+    ...documents.flatMap((row) => refs(FILE, row.branchId, urlKey(row.fileUrl))),
+    ...newsletters.flatMap((row) => refs(FILE, row.branchId, row.pdfKey)),
+    ...gazettes.flatMap((row) => refs(FILE, row.branchId, row.pdfKey)),
   ];
   return [...new Map(found.map((ref) => [ref.key, ref])).values()];
 };
@@ -194,13 +197,21 @@ const sizesOf = async (references) => {
   return sizes;
 };
 
-/** What the organization stores: bytes and file counts for images and for everything else. */
+const emptyFigures = () => ({ imageBytes: 0, imageCount: 0, fileBytes: 0, fileCount: 0 });
+
 const measureOrganization = async (organizationId) => {
-  const references = await gatherReferences(organizationId);
+  const [references, branches] = await Promise.all([
+    gatherReferences(organizationId),
+    Branch.aggregate([
+      { $match: { organizationId: toObjectId(organizationId) } },
+      { $project: { _id: 1 } },
+    ]),
+  ]);
   const sizes = await sizesOf(references);
 
-  const totals = { imageBytes: 0, imageCount: 0, fileBytes: 0, fileCount: 0, unmeasured: 0 };
-  references.forEach(({ key, kind }) => {
+  const totals = { ...emptyFigures(), unmeasured: 0 };
+  const byBranch = new Map(branches.map((branch) => [String(branch._id), emptyFigures()]));
+  references.forEach(({ key, kind, branchId }) => {
     if (!sizes.has(key)) {
       totals.unmeasured += 1;
       return;
@@ -209,8 +220,16 @@ const measureOrganization = async (organizationId) => {
     if (size === null) return;
     totals[`${kind}Bytes`] += size;
     totals[`${kind}Count`] += 1;
+    const branch = byBranch.get(branchId);
+    if (branch) {
+      branch[`${kind}Bytes`] += size;
+      branch[`${kind}Count`] += 1;
+    }
   });
-  return totals;
+  return {
+    ...totals,
+    branches: [...byBranch].map(([branchId, figures]) => ({ branchId, ...figures })),
+  };
 };
 
 module.exports = { gatherReferences, sizesOf, measureOrganization };

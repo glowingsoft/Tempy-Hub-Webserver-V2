@@ -616,10 +616,6 @@
   "invalid_usage_sort": "Sort must be usedDesc, usedAsc, percentDesc or name",
   "invalid_plan_limit": "The plan limit must be a number above 0 (up to {max} GB), or empty for none",
   "invalid_billing_price": "Prices must be numbers from 0 to {max}",
-  "billing_plan_saved": "Plan limit saved",
-  "billing_prices_saved": "Prices saved",
-  "usage_recalculating": "Usage is already being recalculated. Try again in a few minutes",
-  "usage_recalculation_started": "Recalculating usage. Refresh in a few minutes",
   "upload_deleted": "Upload deleted",
   "upload_not_deletable": "An approved upload can't be deleted because it is already shared with the family. Ask the home to remove it",
   "not_assigned_supervisor": "You can only book supervision for staff assigned to you as supervisor",
@@ -737,5 +733,7 @@
   "person_category_deleted_successfully": "Person category deleted successfully",
   "person_category_in_use": "Move people off this category before deleting it",
   "invalid_person_category_status": "Status must be active or inactive",
-  "invalid_person_category_applies_to": "Applies to must be visitor, contractor, guest, or any"
+  "invalid_person_category_applies_to": "Applies to must be visitor, contractor, guest, or any",
+  "billing_settings_saved": "Billing settings saved",
+  "invalid_billing_settings": "Send a plan limit (GB), a base tier price or an overage price"
 }

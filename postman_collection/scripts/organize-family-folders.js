@@ -52,7 +52,7 @@ const familyEngagement = folder(adminRoot, "Staff side of the family module, one
     "family overview"
   )),
   folder("Moderation", "Uploads families send, waiting for a manager to approve, blur or reject.", adminPlace(
-    "upload queue", "approve upload", "approve upload with blur", "reject upload"
+    "upload photo for approval", "upload photos for approval", "send upload for approval (staff)", "upload queue", "approve upload", "approve upload with blur", "reject upload"
   )),
   folder("Community Wall", "Staff wall posts, with photos and tagged residents.", adminPlace(
     "wall posts", "post authors", "dismiss post reports", "taggable residents", "upload post photo", "upload post photos", "create post", "update post", "remove post"

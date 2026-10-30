@@ -7,7 +7,6 @@ const describe = ({ message, mediaIds }) => {
   return mediaIds.length === 1 ? "a photo" : "photos";
 };
 
-/** An upload is waiting for approval: the site's managers review it. */
 const notifyUploadWaiting = ({ upload }) =>
   quietly(async () => {
     const [author, { resident }, managers] = await Promise.all([

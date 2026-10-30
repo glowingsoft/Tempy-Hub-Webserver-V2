@@ -405,12 +405,12 @@ requests.push(
         'pm.test("Upload sent for approval", function () {',
         "    pm.response.to.have.status(201);",
         "    const data = pm.response.json().data;",
-        '    pm.expect(data.status).to.eql("waiting");',
+        '    pm.expect(data.status).to.eql("pending");',
         '    pm.collectionVariables.set("uploadId", data.uploadId);',
         "});",
       ],
       description:
-        "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as waiting; nobody but you sees it until a manager approves.",
+        "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as pending; nobody but you sees it until a manager approves.",
     }),
     {
       residentId: "{{residentId}}",
@@ -469,7 +469,7 @@ requests.push(
   req("my uploads", "GET", ["app", "family", "uploads"], {
     query: "page=1&limit=10",
     optional: {
-      status: ["waiting", "Tab: waiting, approved or rejected"],
+      status: ["pending", "Tab: pending, approved or rejected"],
       residentId: ["{{residentId}}", "One resident"],
     },
     tests: [
@@ -477,22 +477,22 @@ requests.push(
       "    pm.response.to.have.status(200);",
       "    const json = pm.response.json();",
       '    pm.expect(json.data).to.be.an("array");',
-      '    pm.expect(json.meta.counts).to.have.all.keys("waiting", "approved", "rejected");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("pending", "approved", "rejected");',
       "});",
     ],
     description:
-      "My Uploads: Approved, Waiting For Approval and Not Approved (with rejectionReason). Optional query: status (waiting, approved, rejected), residentId, page, limit. meta.counts has the three totals and ignores the status filter. Photos show the blurred copy once one exists. Rejected uploads disappear 30 days after rejection.",
+      "My Uploads: Approved, Waiting For Approval and Not Approved (with rejectionReason). Optional query: status (pending, approved, rejected), residentId, page, limit. meta.counts has the three totals and ignores the status filter. Photos show the blurred copy once one exists. Rejected uploads disappear 30 days after rejection.",
   }),
   withBody(
     req("edit and resend upload", "PUT", ["app", "family", "uploads", "{{uploadId}}"], {
       tests: [
         'pm.test("Upload resent", function () {',
         "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data.status).to.eql("waiting");',
+        '    pm.expect(pm.response.json().data.status).to.eql("pending");',
         "});",
       ],
       description:
-        "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
+        "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A pending or not approved upload returns to pending with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
     }),
     { message: "Lily scored twice at her first football match, Gran!", includeInGazette: true }
   ),
@@ -504,7 +504,7 @@ requests.push(
       "});",
     ],
     description:
-      "My Uploads: delete my own upload. Only a waiting or not approved upload can be deleted; an approved one is already shared with the family and is final (409 upload_not_deletable). Its photos are deleted with it, including the files in storage, and so are the notifications about it, so the managers' New upload to review disappears. 404 upload_not_found for an upload that is not mine, for a resident I am no longer linked to, or one that is already gone. Returns uploadId. Family token.",
+      "My Uploads: delete my own upload. Only a pending or not approved upload can be deleted; an approved one is already shared with the family and is final (409 upload_not_deletable). Its photos are deleted with it, including the files in storage, and so are the notifications about it, so the managers' New upload to review disappears. 404 upload_not_found for an upload that is not mine, for a resident I am no longer linked to, or one that is already gone. Returns uploadId. Family token.",
   })
 );
 
@@ -521,7 +521,7 @@ requests.push(
       "});",
     ],
     description:
-      "Home Family Tab, Family: everything shared about the resident, newest first. Query: residentId (required), page, limit (default 20, max 50). Approved uploads from any family member only; waiting and rejected ones never appear. Each item has type, authorName, authorPhotoUrl, authorRelationship, message, photos (the blurred copy where one exists) and publishedAt (when it was approved). 404 if you are not linked to the resident or the module is off.",
+      "Home Family Tab, Family: everything shared about the resident, newest first. Query: residentId (required), page, limit (default 20, max 50). Approved uploads from any family member only; pending and rejected ones never appear. Each item has type, authorName, authorPhotoUrl, authorRelationship, message, photos (the blurred copy where one exists) and publishedAt (when it was approved). 404 if you are not linked to the resident or the module is off.",
   })
 );
 
@@ -538,7 +538,7 @@ requests.push(
       "});",
     ],
     description:
-      "The Gallery screen. Query: residentId (required), tab (all, thisMonth or fromMe: the tabs All, This Month and From Me; 400 invalid_gallery_tab for anything else), page, limit (default 30, max 60). One tile per photo, newest first: mediaId, url (the blurred copy where the home made one), width, height, source (upload or wallPost), uploadId or postId, takenAt, fromMe. The photos are the approved family uploads for the resident plus the published wall posts that tag them; waiting and rejected uploads never appear. meta.counts has the three tab totals and meta.photoSharing is false, with no photos at all, when the resident has photo sharing switched off: it is checked on every request, so the photos leave at once.",
+      "The Gallery screen. Query: residentId (required), tab (all, thisMonth or fromMe: the tabs All, This Month and From Me; 400 invalid_gallery_tab for anything else), page, limit (default 30, max 60). One tile per photo, newest first: mediaId, url (the blurred copy where the home made one), width, height, source (upload or wallPost), uploadId or postId, takenAt, fromMe. The photos are the approved family uploads for the resident plus the published wall posts that tag them; pending and rejected uploads never appear. meta.counts has the three tab totals and meta.photoSharing is false, with no photos at all, when the resident has photo sharing switched off: it is checked on every request, so the photos leave at once.",
   })
 );
 
@@ -977,7 +977,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "The Family overview screen of owners, site managers and line managers, in one call. site is the home shown under the title (null when an owner looks at every site). stats are the four cards: uploadsWaiting, reportedPosts, residentsWithFamily and residentsWithNoContent. gazette is the Issue card: number, closesAt, closesInDays and state (collecting or notStarted), or scheduled false when gazettes are not set up. activity is Family activity: uploads (total, approved, waiting, notApproved), wallPosts, reactions over the last days, and nextNewsletter (title, status, dueAt, homeName; null when none is open). checklist is Checklist before the issue closes, in order: moderation, noContent, generate, printAndGive, each with count and done. The Go to moderation and New wall post buttons use the moderation and wall endpoints. Optional query: branchId, days. A site or line manager is always held to their own site. Needs familyEngagement.view; 404 when the module is off.",
+      "The Family overview screen of owners, site managers and line managers, in one call. site is the home shown under the title (null when an owner looks at every site). stats are the four cards: uploadsPending, reportedPosts, residentsWithFamily and residentsWithNoContent. gazette is the Issue card: number, closesAt, closesInDays and state (collecting or notStarted), or scheduled false when gazettes are not set up. activity is Family activity: uploads (total, approved, pending, notApproved), wallPosts, reactions over the last days, and nextNewsletter (title, status, dueAt, homeName; null when none is open). checklist is Checklist before the issue closes, in order: moderation, noContent, generate, printAndGive, each with count and done. The Go to moderation and New wall post buttons use the moderation and wall endpoints. Optional query: branchId, days. A site or line manager is always held to their own site. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("post authors", "GET", ["admin", "organizations", "{{organizationId}}", "family-post-authors"], {
     optional: {
@@ -1054,10 +1054,76 @@ const staffRequests = [
     },
     response: [],
   },
+  {
+    name: "upload photo for approval",
+    event: [
+      test([
+        'pm.test("Photo uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data).to.have.keys(["mediaId", "url", "width", "height"]);',
+        '    pm.collectionVariables.set("mediaId", data.mediaId);',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: orgHeader,
+      body: { mode: "formdata", formdata: [{ key: "file", type: "file", src: [] }] },
+      url: { raw: "{{url}}/admin/family/uploads/media", host: ["{{url}}"], path: ["admin", "family", "uploads", "media"] },
+      description:
+        "Staff side of New Upload: one photo. Form-data field file (choose a file in Postman). Images only, up to 10 MB; checked, resized and stored. Sets mediaId for send upload for approval. Nothing is shared until the upload is approved." + STAFF_ACCESS,
+    },
+    response: [],
+  },
+  {
+    name: "upload photos for approval",
+    event: [
+      test([
+        'pm.test("Photos uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const photos = pm.response.json().data.photos;",
+        '    pm.expect(photos).to.be.an("array").that.is.not.empty;',
+        '    pm.collectionVariables.set("mediaId", photos[0].mediaId);',
+        '    pm.collectionVariables.set("mediaIds", JSON.stringify(photos.map((p) => p.mediaId)));',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: orgHeader,
+      body: { mode: "formdata", formdata: [{ key: "files", type: "file", src: [] }] },
+      url: { raw: "{{url}}/admin/family/uploads/media/batch", host: ["{{url}}"], path: ["admin", "family", "uploads", "media", "batch"] },
+      description:
+        "Staff side of New Upload: several photos at once. Form-data field files; select up to 10 images in that one row (10 MB each, 50 MB together). Every file is checked before any is stored. Returns photos with their mediaIds. Sets mediaId (the first) and mediaIds." + STAFF_ACCESS,
+    },
+    response: [],
+  },
+  withBody(
+    staff("send upload for approval (staff)", "POST", ["admin", "family", "uploads"], {
+      tests: [
+        'pm.test("Upload sent for approval", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("pending");',
+        '    pm.collectionVariables.set("uploadId", data.uploadId);',
+        "});",
+      ],
+      description:
+        "A staff member sends a note or photos about a resident for approval, the same as a family member does; it waits in the upload queue until a manager approves or rejects it. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo for approval), includeInGazette, clientId (stops a double tap creating two). Needs a message or a photo. An owner or super admin can send for any resident; a site manager, line manager or staff member only for a resident of their own site (403 outside_managed_branch). 404 resident_not_found. 400 photos_cannot_be_shared when the home has photo sharing off.",
+    }),
+    {
+      residentId: "{{residentId}}",
+      message: "Tea party in the garden room",
+      mediaIds: ["{{mediaId}}"],
+      includeInGazette: true,
+      clientId: "postman-staff-upload-1",
+    }
+  ),
   req("upload queue", "GET", ["admin", "organizations", "{{organizationId}}", "family-uploads"], {
     query: "page=1&limit=10",
     optional: {
-      status: ["waiting", "Tab: all (default), waiting, approved or rejected"],
+      status: ["pending", "Tab: all (default), pending, approved or rejected"],
       branchId: ["{{branchId}}", "One site"],
       residentId: ["{{residentId}}", "One resident"],
       keyword: ["margaret", "Search caption, resident, room or uploader"],
@@ -1067,11 +1133,11 @@ const staffRequests = [
       "    pm.response.to.have.status(200);",
       "    const json = pm.response.json();",
       '    pm.expect(json.data).to.be.an("array");',
-      '    pm.expect(json.meta.counts).to.have.all.keys("waiting", "approved", "rejected");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("pending", "approved", "rejected");',
       "});",
     ],
     description:
-      "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=waiting lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, waiting, approved and rejected for the tabs and ignores the status filter; meta.oldestWaitingAt is when the oldest waiting upload was sent. Needs familyEngagement.view; 404 when the module is off.",
+      "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=pending lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, pending, approved and rejected for the tabs and ignores the status filter; meta.oldestPendingAt is when the oldest pending upload was sent. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family member detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-members", "{{memberId}}"], {
     tests: [
@@ -1082,7 +1148,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Family member detail: name, email, the phone from their account, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (waiting, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
+      "Family member detail: name, email, the phone from their account, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (pending, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family group detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups", "{{residentId}}"], {
     tests: [
@@ -1252,7 +1318,7 @@ const uploadDecisions = [
     body: { action: "approve" },
     status: "approved",
     description:
-      "Approves a waiting upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first.",
+      "Approves a pending upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first.",
   },
   {
     name: "approve upload with blur",
@@ -1266,7 +1332,7 @@ const uploadDecisions = [
     body: { action: "reject", reason: "Another resident is in the photo. Please crop and send again." },
     status: "rejected",
     description:
-      "Rejects a waiting upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later.",
+      "Rejects a pending upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later.",
   },
 ];
 uploadDecisions.forEach(({ name, body, status, description }) => {
@@ -2156,53 +2222,28 @@ const billingRequests = [
       '    pm.expect(json.meta.summary).to.include.keys("activeOrganizations", "totalUsedGb", "quotaPercent", "images", "files", "billing");',
       "});",
     ],
-    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. A platform admin (Admin Login) needs no x-org-id header and sees every active organization; everyone else sends x-org-id and sees only their own organization. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization: organizationId, name, owner {name, email}, usedGb, planLimitGb (null when none is set), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), measuredAt, measuring, unmeasured and canEdit (true for a platform admin only). meta.summary is the four cards for everything in scope, ignoring the filter and search: activeOrganizations, totalUsedGb with quotaPercent (used against the plan limits that are set), images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket nightly and on Recalculate, so measuredAt says how fresh it is.",
+    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. Who sees what: a Super Admin (platform admin, Admin Login, no x-org-id) gets one row per active organization. An owner (or an organization's super admin) sends x-org-id and gets one row per branch of their organization, with their organization itself in meta.organization. A site manager, line manager or staff member sends x-org-id and gets only their own branch. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email for a platform admin; branch name or manager name or email for the others), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization for a platform admin: organizationId, name, owner {name, email}, usedGb, planLimitGb (the same for every organization; null until the platform admin sets it), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit when no limit is set) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), emergencyNotifyOffsite, measuredAt, measuring, unmeasured and canEdit. A branch row (owner, site manager, line manager, staff) has branchId, organizationId, name, manager {name, email}, usedGb, planLimitGb (the organization's limit, shared by its branches), usagePercent (the branch's share of that limit) with status and statusLabel, images, files, measuredAt, unmeasured and canEdit (always false). The pencil opens Edit Organization: show it on an organization row when canEdit is true (a platform admin, an owner or a super admin) and fill the dialog from the row (name, owner name and email, which cannot be changed, and emergencyNotifyOffsite); Save Changes is update organization (PUT /admin/organizations/:organizationId with name and settings.emergencyNotifyOffsite). meta.summary is the four cards for everything in scope, ignoring the search (all organizations for a platform admin, the organization for an owner, the one branch for a site manager, line manager or staff member): activeOrganizations, totalUsedGb with quotaPercent (used against planLimitGb for each organization, which is totalPlanGb), planLimitGb, images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket every night, so measuredAt says how fresh it is.",
   }),
   withBody(
-    req("update plan limit", "PUT", ["admin", "billing", "organizations", "{{organizationId}}"], {
+    req("update billing settings", "PUT", ["admin", "billing", "settings"], {
       header: billingHeader,
       tests: [
-        'pm.test("Plan limit saved", function () {',
+        'pm.test("Settings saved", function () {',
         "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data).to.have.property("planLimitGb");',
+        '    pm.expect(pm.response.json().data).to.have.keys("planLimitGb", "baseTierGbp", "overageGbpPerGb");',
         "});",
       ],
       description:
-        "The pencil on a row: set the storage an organization's plan includes. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb, a number above 0 up to 1000000 (400 invalid_plan_limit otherwise), or null to clear it. Returns the updated row.",
+        "The billing settings for the whole platform: one plan limit that every organization shares, and the prices on the Billing Readiness card. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb (the storage in GB every organization's plan includes: a number above 0 up to 1000000, or null to clear it; 400 invalid_plan_limit otherwise), baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default; each a number from 0 to 100000, 400 invalid_billing_price otherwise). Send any of the three; none at all is 400 invalid_billing_settings. Returns all three. The limit stays empty (No limit set on every row) until it is set here.",
     }),
-    { planLimitGb: 750 }
-  ),
-  req("recalculate usage", "POST", ["admin", "billing", "organizations", "{{organizationId}}", "recalculate"], {
-    header: billingHeader,
-    tests: [
-      'pm.test("Recalculation started", function () {',
-      "    pm.response.to.have.status(202);",
-      '    pm.expect(pm.response.json().data.started).to.eql(true);',
-      "});",
-    ],
-    description:
-      "Measure an organization's storage now. Platform admin only. Answers 202 at once and measures in the background; the row's measuring is true until it finishes, then usedGb and measuredAt update. 409 usage_recalculating when one is already running. The same measurement runs for every active organization every night at 02:30.",
-  }),
-  withBody(
-    req("update billing prices", "PUT", ["admin", "billing", "settings"], {
-      header: billingHeader,
-      tests: [
-        'pm.test("Prices saved", function () {',
-        "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data).to.have.keys("baseTierGbp", "overageGbpPerGb");',
-        "});",
-      ],
-      description:
-        "The prices on the Billing Readiness card. Platform admin only. Body: baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default); send either or both, each a number from 0 to 100000 (400 invalid_billing_price otherwise). Returns both prices.",
-    }),
-    { baseTierGbp: 380, overageGbpPerGb: 0.15 }
+    { planLimitGb: 750, baseTierGbp: 380, overageGbpPerGb: 0.15 }
   ),
 ];
 
 adminFolder.item = adminFolder.item.filter((i) => i.name !== "Billing & Usage");
 adminFolder.item.push({
   name: "Billing & Usage",
-  description: "Storage used by each organization against its plan. Everyone sees the screen (a platform admin sees every organization, others their own); only a platform admin edits.",
+  description: "Storage used by each organization against one shared plan limit. Everyone sees the screen: a platform admin every organization, an owner their organization and its branches, a site manager, line manager or staff member their own branch. The pencil edits the organization (update organization, in the Organizations folder); only a platform admin changes the billing settings.",
   item: billingRequests,
 });
 

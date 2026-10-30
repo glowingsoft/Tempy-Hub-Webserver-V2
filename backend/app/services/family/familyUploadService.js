@@ -4,6 +4,7 @@ const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyGazetteItem } = require("@models/FamilyGazetteItem");
 const { FamilyGazetteIssue } = require("@models/FamilyGazetteIssue");
+const { NotificationExp } = require("@models/Notifications");
 const {
   FamilyGazetteItemStatus,
   FamilyUploadStatus,
@@ -558,6 +559,74 @@ const updateUpload = async ({
   return getMyUpload({ userId, uploadId });
 };
 
+/** Files already gone, or a failing notification clean-up, never fail a delete that was saved. */
+const cleanUpAfterDelete = async ({ uploadId, keys }) => {
+  for (const key of keys) {
+    try {
+      await uploadAwsService.deleteFiles(key);
+    } catch (error) {
+      console.error("upload file delete failed", key, error.message);
+    }
+  }
+  try {
+    await NotificationExp.deleteMany({
+      objectType: "familyUpload",
+      objectId: uploadId,
+    });
+  } catch (error) {
+    console.error("upload notification clean-up failed", error.message);
+  }
+};
+
+/**
+ * Delete my own upload. Only a Waiting or Not Approved one can go: an approved one is shared with the family and
+ * is final. Its photos are deleted with it, and so are the notifications about it.
+ */
+const deleteUpload = async ({ userId, links, uploadId }) => {
+  if (!isValidObjectId(uploadId)) throw new AppError("upload_not_found", 404);
+
+  const [current] = await FamilyUpload.aggregate([
+    { $match: { _id: toObjectId(uploadId), authorId: toObjectId(userId) } },
+    { $project: { residentId: 1, status: 1 } },
+  ]);
+  const linked =
+    current &&
+    links.some((l) => String(l.residentId) === String(current.residentId));
+  if (!linked) throw new AppError("upload_not_found", 404);
+  if (current.status === FamilyUploadStatus.APPROVED)
+    throw new AppError("upload_not_deletable", 409);
+
+  const photos = await FamilyMedia.aggregate([
+    { $match: { uploadId: current._id, uploadedBy: toObjectId(userId) } },
+    { $project: { storageKey: 1, blurredKey: 1 } },
+  ]);
+
+  await inTransaction(async (session) => {
+    const removed = await FamilyUpload.deleteOne(
+      {
+        _id: current._id,
+        authorId: toObjectId(userId),
+        status: {
+          $in: [FamilyUploadStatus.WAITING, FamilyUploadStatus.REJECTED],
+        },
+      },
+      { session },
+    );
+    if (!removed.deletedCount) throw new AppError("upload_not_deletable", 409);
+
+    await FamilyMedia.deleteMany(
+      { _id: { $in: photos.map((photo) => photo._id) } },
+      { session },
+    );
+  });
+
+  await cleanUpAfterDelete({
+    uploadId: current._id,
+    keys: photos.flatMap((photo) => [photo.storageKey, photo.blurredKey]).filter(Boolean),
+  });
+  return { uploadId: current._id };
+};
+
 const rejectedDeleteAfter = (from = new Date()) =>
   new Date(from.getTime() + REJECTED_KEEP_DAYS * 24 * 60 * 60 * 1000);
 
@@ -567,5 +636,6 @@ module.exports = {
   listMyUploads,
   createUpload,
   updateUpload,
+  deleteUpload,
   rejectedDeleteAfter,
 };

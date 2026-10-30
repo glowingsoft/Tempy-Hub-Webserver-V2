@@ -107,7 +107,7 @@ const family = folder("Family", "The family app: what a family member and the ne
     )),
   ]),
   folder("Moderation", "A family member's own uploads, from photo to approval.", appPlace(
-    "upload photo", "upload photos", "send upload for approval", "my uploads", "edit and resend upload"
+    "upload photo", "upload photos", "send upload for approval", "my uploads", "edit and resend upload", "delete my upload"
   )),
   folder("Gazette", "The gazette being collected, the printed ones and the reader.", appPlace("next gazette", "printed gazettes", "read gazette", "download gazette pdf")),
   folder("Home", "The Home Family tab in one call: greeting, next visit, gazette due, notices and unread counts.", appPlace("home")),

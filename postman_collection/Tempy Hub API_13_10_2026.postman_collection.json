@@ -9693,6 +9693,41 @@
                     }
                   },
                   "response": []
+                },
+                {
+                  "name": "delete my upload",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Upload deleted\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.have.property(\"uploadId\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/uploads/{{uploadId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "uploads",
+                        "{{uploadId}}"
+                      ]
+                    },
+                    "description": "My Uploads: delete my own upload. Only a waiting or not approved upload can be deleted; an approved one is already shared with the family and is final (409 upload_not_deletable). Its photos are deleted with it, including the files in storage, and so are the notifications about it, so the managers' New upload to review disappears. 404 upload_not_found for an upload that is not mine, for a resident I am no longer linked to, or one that is already gone. Returns uploadId. Family token."
+                  },
+                  "response": []
                 }
               ]
             },

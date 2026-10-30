@@ -193,6 +193,12 @@ router.put(
   requireFamilyAccess(),
   familyController.updateUpload,
 );
+router.delete(
+  "/uploads/:id",
+  writeLimiter,
+  requireFamilyAccess(),
+  familyController.deleteUpload,
+);
 
 router.post("/leave", residentInBody, familyController.leaveFamily);
 

@@ -236,6 +236,16 @@ const listMyUploads = respond(
   { paged: true },
 );
 
+const deleteUpload = respond(
+  (req) =>
+    familyUploadService.deleteUpload({
+      userId: req.user._id,
+      links: req.familyLinks,
+      uploadId: req.params.id,
+    }),
+  { translationKey: "upload_deleted" },
+);
+
 const updateUpload = respond(
   (req) =>
     familyUploadService.updateUpload({
@@ -550,6 +560,7 @@ module.exports = {
   createUpload,
   listMyUploads,
   updateUpload,
+  deleteUpload,
   listTimeline,
   listGallery,
   listVisits,

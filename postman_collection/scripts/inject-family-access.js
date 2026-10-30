@@ -494,7 +494,17 @@ requests.push(
         "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
     }),
     { message: "Lily scored twice at her first football match, Gran!", includeInGazette: true }
-  )
+  ),
+  req("delete my upload", "DELETE", ["app", "family", "uploads", "{{uploadId}}"], {
+    tests: [
+      'pm.test("Upload deleted", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.have.property("uploadId");',
+      "});",
+    ],
+    description:
+      "My Uploads: delete my own upload. Only a waiting or not approved upload can be deleted; an approved one is already shared with the family and is final (409 upload_not_deletable). Its photos are deleted with it, including the files in storage, and so are the notifications about it, so the managers' New upload to review disappears. 404 upload_not_found for an upload that is not mine, for a resident I am no longer linked to, or one that is already gone. Returns uploadId. Family token.",
+  })
 );
 
 // ---------------------------------------------------------------- Resident timeline

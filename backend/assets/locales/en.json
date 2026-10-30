@@ -621,5 +621,7 @@
   "billing_plan_saved": "Plan limit saved",
   "billing_prices_saved": "Prices saved",
   "usage_recalculating": "Usage is already being recalculated. Try again in a few minutes",
-  "usage_recalculation_started": "Recalculating usage. Refresh in a few minutes"
+  "usage_recalculation_started": "Recalculating usage. Refresh in a few minutes",
+  "upload_deleted": "Upload deleted",
+  "upload_not_deletable": "An approved upload can't be deleted because it is already shared with the family. Ask the home to remove it"
 }

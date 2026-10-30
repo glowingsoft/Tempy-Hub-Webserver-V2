@@ -596,6 +596,26 @@ scoped.post(
   visitorAccountInvitationController.createVisitorAccountInvitation
 );
 scoped.get(
+  "/visitor-account-invitations",
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_VIEW),
+  visitorAccountInvitationController.listVisitorAccountInvitations
+);
+scoped.post(
+  "/visitor-account-invitations/:invitationId/resend",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  visitorAccountInvitationController.resendVisitorAccountInvitation
+);
+scoped.post(
+  "/visitor-account-invitations/:invitationId/revoke",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  visitorAccountInvitationController.revokeVisitorAccountInvitation
+);
+scoped.get(
   "/visitor-invitations",
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),

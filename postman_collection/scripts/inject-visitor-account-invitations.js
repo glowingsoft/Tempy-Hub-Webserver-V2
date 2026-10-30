@@ -50,6 +50,72 @@ const req = (
 
 const adminRequests = [
   req(
+    "list visitor account invitations",
+    "GET",
+    [
+      "admin",
+      "organizations",
+      "{{organizationId}}",
+      "visitor-account-invitations",
+    ],
+    {
+      tests: [
+        'pm.test("Visitor account invitations listed", function () {',
+        "    pm.response.to.have.status(200);",
+        "});",
+      ],
+      description:
+        "Query: branchId, status (pending|accepted|revoked|expired), type (visitor|contractor), keyword, page, limit. Lookups for branch and person run after skip/limit. tokenHash is never returned.",
+    }
+  ),
+  req(
+    "resend visitor account invitation",
+    "POST",
+    [
+      "admin",
+      "organizations",
+      "{{organizationId}}",
+      "visitor-account-invitations",
+      "{{visitorAccountInvitationId}}",
+      "resend",
+    ],
+    {
+      tests: [
+        'pm.test("Visitor account invitation resent", function () {',
+        "    pm.response.to.have.status(200);",
+        "});",
+        "",
+        "const jsonData = pm.response.json();",
+        "if (jsonData.data && jsonData.data.acceptUrl) {",
+        '    pm.collectionVariables.set("visitorAccountInviteToken", jsonData.data.acceptUrl.split("/").pop());',
+        "}",
+      ],
+      description:
+        "Pending only. Rotates the accept token, extends expiry, and sends the email again. Old link stops working.",
+    }
+  ),
+  req(
+    "revoke visitor account invitation",
+    "POST",
+    [
+      "admin",
+      "organizations",
+      "{{organizationId}}",
+      "visitor-account-invitations",
+      "{{visitorAccountInvitationId}}",
+      "revoke",
+    ],
+    {
+      tests: [
+        'pm.test("Visitor account invitation revoked", function () {',
+        "    pm.response.to.have.status(200);",
+        "});",
+      ],
+      description:
+        "Pending only. Sets status revoked so the accept link dies and a new invite can use the same email at this branch.",
+    }
+  ),
+  req(
     "invite visitor account",
     "POST",
     ["admin", "organizations", "{{organizationId}}", "visitor-account-invitations"],
@@ -66,6 +132,9 @@ const adminRequests = [
         "});",
         "",
         "const jsonData = pm.response.json();",
+        "if (jsonData.data && jsonData.data._id) {",
+        '    pm.collectionVariables.set("visitorAccountInvitationId", jsonData.data._id);',
+        "}",
         "if (jsonData.data && jsonData.data.acceptUrl) {",
         '    pm.collectionVariables.set("visitorAccountInviteToken", jsonData.data.acceptUrl.split("/").pop());',
         "}",
@@ -161,6 +230,7 @@ const vars = collection.variable || [];
 for (const [key, value] of [
   ["visitorAccountEmail", "contractor.postman@example.com"],
   ["visitorAccountInviteToken", ""],
+  ["visitorAccountInvitationId", ""],
 ]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value, type: "string" });

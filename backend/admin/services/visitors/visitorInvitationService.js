@@ -13,6 +13,7 @@ const {
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./visitorAccess");
+const { toObjectId } = require("./visitPresenceQuery");
 
 const INVITE_CODE_LENGTH = 6;
 const OPEN_INVITE_STATUSES = [
@@ -41,6 +42,35 @@ const visitorInvitationStatusCountsFromFacet = (result) =>
       facetCount(result[`${status}Count`]),
     ])
   );
+
+const invitationBranchStages = [
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $project: {
+            name: 1,
+            code: 1,
+            timezone: 1,
+            status: 1,
+            address: 1,
+          },
+        },
+        { $limit: 1 },
+      ],
+      as: "_branch",
+    },
+  },
+  {
+    $addFields: {
+      branch: { $arrayElemAt: ["$_branch", 0] },
+    },
+  },
+  { $project: { _branch: 0 } },
+];
 
 const parseVisitorInvitationStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -181,8 +211,8 @@ const listVisitorInvitations = async ({
     await assertBranchInOrganization(scopedBranchId, organizationId);
   }
 
-  const match = { organizationId };
-  if (scopedBranchId) match.branchId = scopedBranchId;
+  const match = { organizationId: toObjectId(organizationId) };
+  if (scopedBranchId) match.branchId = toObjectId(scopedBranchId);
 
   const countMatch = { ...match };
   const invitationStatus = parseVisitorInvitationStatus(status);
@@ -195,6 +225,7 @@ const listVisitorInvitations = async ({
     limit,
     skip,
     sort: { createdAt: -1 },
+    extraDataStages: invitationBranchStages,
     extraFacets: visitorInvitationStatusCountFacets(countMatch),
   });
 

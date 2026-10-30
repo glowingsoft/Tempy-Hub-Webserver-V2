@@ -69,6 +69,12 @@ const visitorAccountInvitationSchema = new mongoose.Schema(
       default: null,
     },
     lastSentAt: { type: Date, default: null },
+    revokedAt: { type: Date, default: null },
+    revokedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

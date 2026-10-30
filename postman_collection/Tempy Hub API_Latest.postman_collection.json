@@ -8554,6 +8554,48 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Staff Dashboard Settings",
+          "item": [
+            {
+              "name": "get my staff dashboard settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Staff dashboard settings for app\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/staff/dashboard-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "staff",
+                    "dashboard-settings"
+                  ]
+                },
+                "description": "Staff app. Effective visibility after org toggles, attendance/leave modules, and site allowPhoneCheckIn / enableLeaveRequests."
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -24585,6 +24627,138 @@
                   ]
                 },
                 "description": "Pending only. Sets status revoked so the accept link dies and a new invite can use the same email at this branch."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Staff Dashboard Settings",
+          "item": [
+            {
+              "name": "get staff dashboard settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Staff dashboard settings loaded\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-dashboard-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-dashboard-settings"
+                  ]
+                },
+                "description": "Owner/super-admin. Returns cards.checkIn / cards.pendingLeave plus catalog for the Staff Dashboard Settings screen."
+              },
+              "response": []
+            },
+            {
+              "name": "save staff dashboard settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Staff dashboard settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cards\": {\n    \"checkIn\": true,\n    \"pendingLeave\": false\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-dashboard-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-dashboard-settings"
+                  ]
+                },
+                "description": "Owner/super-admin. Toggles which staff-home cards are shown. Not kiosk widgets."
+              },
+              "response": []
+            },
+            {
+              "name": "reset staff dashboard settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Staff dashboard settings reset\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-dashboard-settings/reset",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-dashboard-settings",
+                    "reset"
+                  ]
+                },
+                "description": "Sets checkIn and pendingLeave back to false."
               },
               "response": []
             }

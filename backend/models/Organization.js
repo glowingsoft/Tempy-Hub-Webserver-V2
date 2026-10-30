@@ -49,6 +49,10 @@ const organizationSchema = new mongoose.Schema(
       ],
       /** Null until Philip confirms a default (Q1). Per-requirement override wins. */
       amberDays: { type: Number, default: null, min: 1 },
+      staffDashboardCards: {
+        checkIn: { type: Boolean, default: false },
+        pendingLeave: { type: Boolean, default: false },
+      },
     },
   },
   { timestamps: true }

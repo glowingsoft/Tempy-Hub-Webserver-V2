@@ -3,6 +3,7 @@ const router = express.Router();
 
 
 const homeRoutes = require("./homeRoutes");
+const staffRoutes = require("./staffRoutes");
 const siteLiveRoutes = require("./siteLiveRoutes");
 const teamLiveRoutes = require("./teamLiveRoutes");
 const usersRoutes = require("./userRoutes");
@@ -37,6 +38,7 @@ router.use("/appraisal", appraisalRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/notifications", notificationsRoutes);
 router.use("/home", homeRoutes);
+router.use("/staff", staffRoutes);
 router.use("/site-live", siteLiveRoutes);
 router.use("/team-live", teamLiveRoutes);
 router.use("/users", usersRoutes);

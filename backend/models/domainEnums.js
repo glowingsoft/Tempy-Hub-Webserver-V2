@@ -150,6 +150,12 @@ const FamilyJoinSource = {
   HOME: "home",
 };
 
+/** Owner Staff Dashboard Settings — which cards appear on the staff app home. */
+const StaffDashboardCard = {
+  CHECK_IN: "checkIn",
+  PENDING_LEAVE: "pendingLeave",
+};
+
 const ModuleSlug = {
   SIGN_IN_ATTENDANCE: "signInAttendance",
   ROTA_SCHEDULING: "rotaScheduling",
@@ -522,6 +528,7 @@ module.exports = {
   FamilyGazetteItemStatus,
   FamilyCodeStatus,
   AuthAudience,
+  StaffDashboardCard,
   ModuleSlug,
   OrganizationStatus,
   BranchStatus,

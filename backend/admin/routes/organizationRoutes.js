@@ -15,6 +15,7 @@ const {
 const { MembershipRole, ModuleSlug } = require("@models/domainEnums");
 
 const organizationController = require("../controllers/organizationController");
+const staffDashboardSettingsController = require("../controllers/staffDashboardSettingsController");
 
 const branchController = require("../controllers/branchController");
 
@@ -132,6 +133,22 @@ scoped.get(
 scoped.get("/", organizationController.getOrganization);
 
 scoped.patch("/", requireRoles(OWNER_OR_SA), organizationController.updateOrganization);
+
+scoped.get(
+  "/staff-dashboard-settings",
+  requireRoles(OWNER_OR_SA),
+  staffDashboardSettingsController.getStaffDashboardSettings
+);
+scoped.put(
+  "/staff-dashboard-settings",
+  requireRoles(OWNER_OR_SA),
+  staffDashboardSettingsController.saveStaffDashboardSettings
+);
+scoped.post(
+  "/staff-dashboard-settings/reset",
+  requireRoles(OWNER_OR_SA),
+  staffDashboardSettingsController.resetStaffDashboardSettings
+);
 
 
 

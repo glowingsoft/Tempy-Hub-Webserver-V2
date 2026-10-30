@@ -21,7 +21,7 @@ const { authorRoleStages } = require("./familyAuthor");
 const {
   actorStanding,
   assertMayAccessResidents,
-} = require("@adminServices/family/familyScope");
+} = require("@adminServices/residents/residentAccess");
 
 const MAX_REACTORS = 3;
 const MAX_REPORTS_SHOWN = 5;

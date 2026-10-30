@@ -11,7 +11,7 @@ const {
   assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
-} = require("@adminServices/family/familyScope");
+} = require("@adminServices/residents/residentAccess");
 const { requireManageableResident } = require("./familyService");
 const { listScope } = require("./familyStaffService");
 const {

@@ -21,7 +21,7 @@ const {
 const {
   actorStanding,
   assertMayAccessResidents,
-} = require("@adminServices/family/familyScope");
+} = require("@adminServices/residents/residentAccess");
 const {
   isStaffAccount,
   familyModuleOrganizationIds,

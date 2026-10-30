@@ -320,7 +320,7 @@ const listGazettes = async ({
   };
 };
 
-const loadItemInOrganization = async ({ organizationId, itemId }) => {
+const loadItemInOrganization = async ({ organizationId, branchId, itemId }) => {
   if (!isValidObjectId(itemId))
     throw new AppError("gazette_item_not_found", 404);
   const [item] = await FamilyGazetteItem.aggregate([
@@ -328,6 +328,7 @@ const loadItemInOrganization = async ({ organizationId, itemId }) => {
       $match: {
         _id: toObjectId(itemId),
         organizationId: toObjectId(organizationId),
+        ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
   ]);
@@ -338,8 +339,8 @@ const loadItemInOrganization = async ({ organizationId, itemId }) => {
 const photoOf = (media) =>
   media ? { mediaId: media._id, url: media.blurredUrl || media.url } : null;
 
-const getGazette = async ({ organizationId, itemId }) => {
-  const item = await loadItemInOrganization({ organizationId, itemId });
+const getGazette = async ({ organizationId, branchId, itemId }) => {
+  const item = await loadItemInOrganization({ organizationId, branchId, itemId });
   const [issue] = await FamilyGazetteIssue.aggregate([
     { $match: { _id: item.issueId } },
   ]);
@@ -807,8 +808,8 @@ const markGiven = async ({
   return getGazette({ organizationId, itemId });
 };
 
-const getPdf = async ({ organizationId, itemId }) => {
-  await loadItemInOrganization({ organizationId, itemId });
+const getPdf = async ({ organizationId, branchId, itemId }) => {
+  await loadItemInOrganization({ organizationId, branchId, itemId });
   return getItemPdf({ itemId });
 };
 

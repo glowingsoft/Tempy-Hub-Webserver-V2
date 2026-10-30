@@ -404,12 +404,12 @@ requests.push(
         'pm.test("Upload sent for approval", function () {',
         "    pm.response.to.have.status(201);",
         "    const data = pm.response.json().data;",
-        '    pm.expect(data.status).to.eql("waiting");',
+        '    pm.expect(data.status).to.eql("pending");',
         '    pm.collectionVariables.set("uploadId", data.uploadId);',
         "});",
       ],
       description:
-        "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as waiting; nobody but you sees it until a manager approves.",
+        "New Upload: Send For Approval. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo), includeInGazette, clientId. Needs a message or a photo. 400 photos_cannot_be_shared when the resident has photo sharing off (a message alone is allowed); 400 for too many photos, a message over 500 characters or photos that are not yours; 404 for a resident you are not linked to. The same clientId returns the upload already made. Saved as pending; nobody but you sees it until a manager approves.",
     }),
     {
       residentId: "{{residentId}}",
@@ -468,7 +468,7 @@ requests.push(
   req("my uploads", "GET", ["app", "family", "uploads"], {
     query: "page=1&limit=10",
     optional: {
-      status: ["waiting", "Tab: waiting, approved or rejected"],
+      status: ["pending", "Tab: pending, approved or rejected"],
       residentId: ["{{residentId}}", "One resident"],
     },
     tests: [
@@ -476,22 +476,22 @@ requests.push(
       "    pm.response.to.have.status(200);",
       "    const json = pm.response.json();",
       '    pm.expect(json.data).to.be.an("array");',
-      '    pm.expect(json.meta.counts).to.have.all.keys("waiting", "approved", "rejected");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("pending", "approved", "rejected");',
       "});",
     ],
     description:
-      "My Uploads: Approved, Waiting For Approval and Not Approved (with rejectionReason). Optional query: status (waiting, approved, rejected), residentId, page, limit. meta.counts has the three totals and ignores the status filter. Photos show the blurred copy once one exists. Rejected uploads disappear 30 days after rejection.",
+      "My Uploads: Approved, Waiting For Approval and Not Approved (with rejectionReason). Optional query: status (pending, approved, rejected), residentId, page, limit. meta.counts has the three totals and ignores the status filter. Photos show the blurred copy once one exists. Rejected uploads disappear 30 days after rejection.",
   }),
   withBody(
     req("edit and resend upload", "PUT", ["app", "family", "uploads", "{{uploadId}}"], {
       tests: [
         'pm.test("Upload resent", function () {',
         "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data.status).to.eql("waiting");',
+        '    pm.expect(pm.response.json().data.status).to.eql("pending");',
         "});",
       ],
       description:
-        "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A waiting or not approved upload returns to waiting with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
+        "My Uploads: Edit And Resend. Body (all optional): message, mediaIds, includeInGazette. A pending or not approved upload returns to pending with the reason cleared. 409 upload_not_editable once approved; 404 for someone else's upload or after you were removed from the family.",
     }),
     { message: "Lily scored twice at her first football match, Gran!", includeInGazette: true }
   ),
@@ -503,7 +503,7 @@ requests.push(
       "});",
     ],
     description:
-      "My Uploads: delete my own upload. Only a waiting or not approved upload can be deleted; an approved one is already shared with the family and is final (409 upload_not_deletable). Its photos are deleted with it, including the files in storage, and so are the notifications about it, so the managers' New upload to review disappears. 404 upload_not_found for an upload that is not mine, for a resident I am no longer linked to, or one that is already gone. Returns uploadId. Family token.",
+      "My Uploads: delete my own upload. Only a pending or not approved upload can be deleted; an approved one is already shared with the family and is final (409 upload_not_deletable). Its photos are deleted with it, including the files in storage, and so are the notifications about it, so the managers' New upload to review disappears. 404 upload_not_found for an upload that is not mine, for a resident I am no longer linked to, or one that is already gone. Returns uploadId. Family token.",
   })
 );
 
@@ -520,7 +520,7 @@ requests.push(
       "});",
     ],
     description:
-      "Home Family Tab, Family: everything shared about the resident, newest first. Query: residentId (required), page, limit (default 20, max 50). Approved uploads from any family member only; waiting and rejected ones never appear. Each item has type, authorName, authorPhotoUrl, authorRelationship, message, photos (the blurred copy where one exists) and publishedAt (when it was approved). 404 if you are not linked to the resident or the module is off.",
+      "Home Family Tab, Family: everything shared about the resident, newest first. Query: residentId (required), page, limit (default 20, max 50). Approved uploads from any family member only; pending and rejected ones never appear. Each item has type, authorName, authorPhotoUrl, authorRelationship, message, photos (the blurred copy where one exists) and publishedAt (when it was approved). 404 if you are not linked to the resident or the module is off.",
   })
 );
 
@@ -537,7 +537,7 @@ requests.push(
       "});",
     ],
     description:
-      "The Gallery screen. Query: residentId (required), tab (all, thisMonth or fromMe: the tabs All, This Month and From Me; 400 invalid_gallery_tab for anything else), page, limit (default 30, max 60). One tile per photo, newest first: mediaId, url (the blurred copy where the home made one), width, height, source (upload or wallPost), uploadId or postId, takenAt, fromMe. The photos are the approved family uploads for the resident plus the published wall posts that tag them; waiting and rejected uploads never appear. meta.counts has the three tab totals and meta.photoSharing is false, with no photos at all, when the resident has photo sharing switched off: it is checked on every request, so the photos leave at once.",
+      "The Gallery screen. Query: residentId (required), tab (all, thisMonth or fromMe: the tabs All, This Month and From Me; 400 invalid_gallery_tab for anything else), page, limit (default 30, max 60). One tile per photo, newest first: mediaId, url (the blurred copy where the home made one), width, height, source (upload or wallPost), uploadId or postId, takenAt, fromMe. The photos are the approved family uploads for the resident plus the published wall posts that tag them; pending and rejected uploads never appear. meta.counts has the three tab totals and meta.photoSharing is false, with no photos at all, when the resident has photo sharing switched off: it is checked on every request, so the photos leave at once.",
   })
 );
 
@@ -976,7 +976,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "The Family overview screen of owners, site managers and line managers, in one call. site is the home shown under the title (null when an owner looks at every site). stats are the four cards: uploadsWaiting, reportedPosts, residentsWithFamily and residentsWithNoContent. gazette is the Issue card: number, closesAt, closesInDays and state (collecting or notStarted), or scheduled false when gazettes are not set up. activity is Family activity: uploads (total, approved, waiting, notApproved), wallPosts, reactions over the last days, and nextNewsletter (title, status, dueAt, homeName; null when none is open). checklist is Checklist before the issue closes, in order: moderation, noContent, generate, printAndGive, each with count and done. The Go to moderation and New wall post buttons use the moderation and wall endpoints. Optional query: branchId, days. A site or line manager is always held to their own site. Needs familyEngagement.view; 404 when the module is off.",
+      "The Family overview screen of owners, site managers and line managers, in one call. site is the home shown under the title (null when an owner looks at every site). stats are the four cards: uploadsPending, reportedPosts, residentsWithFamily and residentsWithNoContent. gazette is the Issue card: number, closesAt, closesInDays and state (collecting or notStarted), or scheduled false when gazettes are not set up. activity is Family activity: uploads (total, approved, pending, notApproved), wallPosts, reactions over the last days, and nextNewsletter (title, status, dueAt, homeName; null when none is open). checklist is Checklist before the issue closes, in order: moderation, noContent, generate, printAndGive, each with count and done. The Go to moderation and New wall post buttons use the moderation and wall endpoints. Optional query: branchId, days. A site or line manager is always held to their own site. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("post authors", "GET", ["admin", "organizations", "{{organizationId}}", "family-post-authors"], {
     optional: {
@@ -1053,10 +1053,76 @@ const staffRequests = [
     },
     response: [],
   },
+  {
+    name: "upload photo for approval",
+    event: [
+      test([
+        'pm.test("Photo uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data).to.have.keys(["mediaId", "url", "width", "height"]);',
+        '    pm.collectionVariables.set("mediaId", data.mediaId);',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: orgHeader,
+      body: { mode: "formdata", formdata: [{ key: "file", type: "file", src: [] }] },
+      url: { raw: "{{url}}/admin/family/uploads/media", host: ["{{url}}"], path: ["admin", "family", "uploads", "media"] },
+      description:
+        "Staff side of New Upload: one photo. Form-data field file (choose a file in Postman). Images only, up to 10 MB; checked, resized and stored. Sets mediaId for send upload for approval. Nothing is shared until the upload is approved." + STAFF_ACCESS,
+    },
+    response: [],
+  },
+  {
+    name: "upload photos for approval",
+    event: [
+      test([
+        'pm.test("Photos uploaded", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const photos = pm.response.json().data.photos;",
+        '    pm.expect(photos).to.be.an("array").that.is.not.empty;',
+        '    pm.collectionVariables.set("mediaId", photos[0].mediaId);',
+        '    pm.collectionVariables.set("mediaIds", JSON.stringify(photos.map((p) => p.mediaId)));',
+        "});",
+      ]),
+    ],
+    request: {
+      method: "POST",
+      header: orgHeader,
+      body: { mode: "formdata", formdata: [{ key: "files", type: "file", src: [] }] },
+      url: { raw: "{{url}}/admin/family/uploads/media/batch", host: ["{{url}}"], path: ["admin", "family", "uploads", "media", "batch"] },
+      description:
+        "Staff side of New Upload: several photos at once. Form-data field files; select up to 10 images in that one row (10 MB each, 50 MB together). Every file is checked before any is stored. Returns photos with their mediaIds. Sets mediaId (the first) and mediaIds." + STAFF_ACCESS,
+    },
+    response: [],
+  },
+  withBody(
+    staff("send upload for approval (staff)", "POST", ["admin", "family", "uploads"], {
+      tests: [
+        'pm.test("Upload sent for approval", function () {',
+        "    pm.response.to.have.status(201);",
+        "    const data = pm.response.json().data;",
+        '    pm.expect(data.status).to.eql("pending");',
+        '    pm.collectionVariables.set("uploadId", data.uploadId);',
+        "});",
+      ],
+      description:
+        "A staff member sends a note or photos about a resident for approval, the same as a family member does; it waits in the upload queue until a manager approves or rejects it. Body: residentId, message (up to 500 characters), mediaIds (up to 10, from upload photo for approval), includeInGazette, clientId (stops a double tap creating two). Needs a message or a photo. An owner or super admin can send for any resident; a site manager, line manager or staff member only for a resident of their own site (403 outside_managed_branch). 404 resident_not_found. 400 photos_cannot_be_shared when the home has photo sharing off.",
+    }),
+    {
+      residentId: "{{residentId}}",
+      message: "Tea party in the garden room",
+      mediaIds: ["{{mediaId}}"],
+      includeInGazette: true,
+      clientId: "postman-staff-upload-1",
+    }
+  ),
   req("upload queue", "GET", ["admin", "organizations", "{{organizationId}}", "family-uploads"], {
     query: "page=1&limit=10",
     optional: {
-      status: ["waiting", "Tab: all (default), waiting, approved or rejected"],
+      status: ["pending", "Tab: all (default), pending, approved or rejected"],
       branchId: ["{{branchId}}", "One site"],
       residentId: ["{{residentId}}", "One resident"],
       keyword: ["margaret", "Search caption, resident, room or uploader"],
@@ -1066,11 +1132,11 @@ const staffRequests = [
       "    pm.response.to.have.status(200);",
       "    const json = pm.response.json();",
       '    pm.expect(json.data).to.be.an("array");',
-      '    pm.expect(json.meta.counts).to.have.all.keys("waiting", "approved", "rejected");',
+      '    pm.expect(json.meta.counts).to.have.all.keys("pending", "approved", "rejected");',
       "});",
     ],
     description:
-      "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=waiting lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, waiting, approved and rejected for the tabs and ignores the status filter; meta.oldestWaitingAt is when the oldest waiting upload was sent. Needs familyEngagement.view; 404 when the module is off.",
+      "Moderation queue: uploads families sent. Every status by default, newest first, so decided uploads stay visible; status=pending lists only the queue, oldest first. Optional query: status (all by default, or waiting, approved, rejected), branchId, residentId, keyword (caption, resident, room or uploader name or email), page, limit. Each row has the resident (name, room, photo), the uploader (name, email, photo and relationship to the resident such as daughter), the caption (message), the original photos, status and when it was sent. meta.counts has total, pending, approved and rejected for the tabs and ignores the status filter; meta.oldestPendingAt is when the oldest pending upload was sent. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family member detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-members", "{{memberId}}"], {
     tests: [
@@ -1081,7 +1147,7 @@ const staffRequests = [
       "});",
     ],
     description:
-      "Family member detail: name, email, the phone from their account, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (waiting, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
+      "Family member detail: name, email, the phone from their account, photo, relationship, isNextOfKin, status and joinedVia; the resident, room and home; familySize; uploads (pending, approved, rejected for this resident); and when they joined, who approved them and who removed them. A removed member can still be opened. memberId comes from the family members list. 404 for another organization's member. Needs familyEngagement.view; 404 when the module is off.",
   }),
   req("family group detail", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups", "{{residentId}}"], {
     tests: [
@@ -1251,7 +1317,7 @@ const uploadDecisions = [
     body: { action: "approve" },
     status: "approved",
     description:
-      "Approves a waiting upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first.",
+      "Approves a pending upload; the author is notified. Body: action approve. Needs familyEngagement.approve (a line manager only if granted) and, for site and line managers, an upload on their own site. 409 upload_already_decided (with the status) when another manager decided first.",
   },
   {
     name: "approve upload with blur",
@@ -1265,7 +1331,7 @@ const uploadDecisions = [
     body: { action: "reject", reason: "Another resident is in the photo. Please crop and send again." },
     status: "rejected",
     description:
-      "Rejects a waiting upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later.",
+      "Rejects a pending upload. Body: action reject and reason (required, up to 500 characters). The author sees the reason under Not Approved and is notified; the upload is removed 30 days later.",
   },
 ];
 uploadDecisions.forEach(({ name, body, status, description }) => {

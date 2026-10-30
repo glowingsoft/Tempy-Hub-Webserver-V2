@@ -12,7 +12,7 @@ const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const {
   actorStanding,
   assertMayAccessResidents,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 const { blurAreas, validateAreas } = require("@appServices/family/familyImage");
 const {
   rejectedDeleteAfter,
@@ -137,7 +137,7 @@ const queueStages = [
   },
 ];
 
-/** Every status by default, newest first; status=waiting lists the queue oldest first. meta.counts (with a total) ignores the status filter; meta.oldestWaitingAt feeds the "oldest" age. */
+/** Every status by default, newest first; status=pending lists the queue oldest first. meta.counts (with a total) ignores the status filter; meta.oldestPendingAt feeds the "oldest" age. */
 const listUploads = async ({
   organizationId,
   branchId,
@@ -172,14 +172,14 @@ const listUploads = async ({
     page,
     limit,
     skip,
-    sort: { createdAt: wanted === FamilyUploadStatus.WAITING ? 1 : -1 },
+    sort: { createdAt: wanted === FamilyUploadStatus.PENDING ? 1 : -1 },
     extraFacets: {
       statusCounts: [
         { $match: base },
         { $group: { _id: "$status", count: { $sum: 1 } } },
       ],
-      oldestWaiting: [
-        { $match: { ...base, status: FamilyUploadStatus.WAITING } },
+      oldestPending: [
+        { $match: { ...base, status: FamilyUploadStatus.PENDING } },
         { $group: { _id: null, createdAt: { $min: "$createdAt" } } },
       ],
     },
@@ -191,7 +191,7 @@ const listUploads = async ({
     meta: {
       ...meta,
       counts: statusCountsOf(result.statusCounts),
-      oldestWaitingAt: result.oldestWaiting?.[0]?.createdAt ?? null,
+      oldestPendingAt: result.oldestPending?.[0]?.createdAt ?? null,
     },
   };
 };
@@ -222,7 +222,7 @@ const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
   const standing = await actorStanding(actor, organizationId);
   assertMayAccessResidents(standing, upload.branchId);
 
-  if (upload.status !== FamilyUploadStatus.WAITING) {
+  if (upload.status !== FamilyUploadStatus.PENDING) {
     throw new AppError("upload_already_decided", 409, {
       status: upload.status,
     });
@@ -234,7 +234,7 @@ const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
 const settle = async ({ upload, actor, set }) => {
   const decidedAt = new Date();
   const result = await FamilyUpload.updateOne(
-    { _id: upload._id, status: FamilyUploadStatus.WAITING },
+    { _id: upload._id, status: FamilyUploadStatus.PENDING },
     { $set: { decidedBy: actor._id, decidedAt, ...set } },
   );
   if (!result.modifiedCount) throw new AppError("upload_already_decided", 409);

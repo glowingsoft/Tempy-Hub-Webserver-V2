@@ -360,7 +360,7 @@ const recipientsOf = async ({ organizationId, branchId }) => {
   return row || { families: 0, members: 0 };
 };
 
-const getNewsletter = async ({ organizationId, newsletterId }) => {
+const getNewsletter = async ({ organizationId, branchId, newsletterId }) => {
   if (!isValidObjectId(newsletterId))
     throw new AppError("newsletter_not_found", 404);
 
@@ -369,6 +369,7 @@ const getNewsletter = async ({ organizationId, newsletterId }) => {
       $match: {
         _id: toObjectId(newsletterId),
         organizationId: toObjectId(organizationId),
+        ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
     ...joinOne({
@@ -1001,7 +1002,7 @@ const storePdf = async ({ newsletter, ctx }) => {
   return buffer.length;
 };
 
-const getPdf = async ({ organizationId, newsletterId }) => {
+const getPdf = async ({ organizationId, branchId, newsletterId }) => {
   if (!isValidObjectId(newsletterId))
     throw new AppError("newsletter_not_found", 404);
 
@@ -1010,6 +1011,7 @@ const getPdf = async ({ organizationId, newsletterId }) => {
       $match: {
         _id: toObjectId(newsletterId),
         organizationId: toObjectId(organizationId),
+        ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
   ]);

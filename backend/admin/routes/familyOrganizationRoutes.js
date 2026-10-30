@@ -6,6 +6,7 @@ const {
 const {
   requireFamilyModule,
   checkFamilyFilters,
+  scopeToOwnBranch,
 } = require("@middlewares/familyMiddleware");
 const {
   FAMILY_VIEW,
@@ -26,6 +27,7 @@ const canViewFamily = [
   requireFamilyModule,
   requireRoles(FAMILY_STAFF_ROLES),
   requirePermission(FAMILY_VIEW),
+  scopeToOwnBranch,
   checkFamilyFilters,
 ];
 

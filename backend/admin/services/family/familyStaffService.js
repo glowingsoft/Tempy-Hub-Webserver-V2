@@ -17,7 +17,7 @@ const {
   assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 const { requireManageableResident } = require("./familyService");
 const { searchClause } = require("./familySearch");
 const familyCodeService = require("@appServices/family/familyCodeService");
@@ -231,7 +231,7 @@ const uploadCountsOf = (rows = []) => {
   return counts;
 };
 
-const getMember = async ({ organizationId, memberId }) => {
+const getMember = async ({ organizationId, branchId, memberId }) => {
   if (!isValidObjectId(memberId))
     throw new AppError("family_member_not_found", 404);
 
@@ -240,6 +240,7 @@ const getMember = async ({ organizationId, memberId }) => {
       $match: {
         _id: toObjectId(memberId),
         organizationId: toObjectId(organizationId),
+        ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
     ...joinUser,

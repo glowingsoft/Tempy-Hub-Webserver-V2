@@ -6,6 +6,7 @@ const {
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const familyService = require("@adminServices/family/familyService");
 const { queryText, queryId } = require("@utils/familyQuery");
+const { branchFilter } = require("@middlewares/familyMiddleware");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { FamilyRelationship } = require("@models/domainEnums");
 
@@ -47,7 +48,7 @@ const listInvitations = async (req, res) => {
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await familyService.listInvitations({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId, "branchId"),
+      branchId: branchFilter(req),
       page,
       limit,
       skip,
@@ -75,6 +76,7 @@ const getInvitation = async (req, res) => {
     const data = await familyService.getInvitation({
       invitationId: req.params.invitationId,
       organizationId: req.orgId,
+      branchId: req.branchScope,
     });
 
     return sendResponse({

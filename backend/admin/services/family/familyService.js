@@ -21,7 +21,7 @@ const {
 const {
   actorStanding,
   assertMayAccessResidents,
-} = require("@adminServices/residents/residentAccess");
+} = require("@adminServices/family/familyScope");
 const {
   isStaffAccount,
   familyModuleOrganizationIds,
@@ -307,7 +307,7 @@ const listInvitations = async ({
   };
 };
 
-const getInvitation = async ({ invitationId, organizationId }) => {
+const getInvitation = async ({ invitationId, organizationId, branchId }) => {
   if (!isValidObjectId(invitationId))
     throw new AppError("invitation_not_found", 404);
 
@@ -316,6 +316,7 @@ const getInvitation = async ({ invitationId, organizationId }) => {
       $match: {
         _id: toObjectId(invitationId),
         organizationId: toObjectId(organizationId),
+        ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
     ...joinOne({

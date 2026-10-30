@@ -54,6 +54,9 @@ router.post("/residents/:residentId/code", requirePermission(FAMILY_MANAGE), fam
 router.get("/join-requests", requirePermission(FAMILY_VIEW), familyStaffController.listJoinRequests);
 router.put("/join-requests/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateJoinRequest);
 
+router.post("/uploads/media/batch", photoBatchLimiter, requirePermission(FAMILY_MANAGE), receivePhotos, familyStaffController.uploadPostPhotos);
+router.post("/uploads/media", photoLimiter, requirePermission(FAMILY_MANAGE), receivePhoto, familyStaffController.uploadPostPhoto);
+router.post("/uploads", postLimiter, requirePermission(FAMILY_MANAGE), familyStaffController.sendUpload);
 router.put("/uploads/:id", requirePermission(FAMILY_APPROVE), familyStaffController.updateUpload);
 
 router.get("/posts/taggable-residents", requirePermission(FAMILY_VIEW), familyStaffController.listTaggableResidents);

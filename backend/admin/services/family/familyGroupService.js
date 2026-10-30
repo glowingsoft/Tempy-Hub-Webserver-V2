@@ -224,7 +224,7 @@ const GROUP_MEMBER_STATUSES = [
  * One resident's family group, as the detail page shows it: the resident, the primary next of kin,
  * the linked members and a summary. The group id is the resident's id.
  */
-const getFamilyGroup = async ({ organizationId, residentId }) => {
+const getFamilyGroup = async ({ organizationId, branchId, residentId }) => {
   if (!isValidObjectId(residentId))
     throw new AppError("resident_not_found", 404);
 
@@ -235,6 +235,7 @@ const getFamilyGroup = async ({ organizationId, residentId }) => {
         _id: toObjectId(residentId),
         organizationId: toObjectId(organizationId),
         admissionStatus: AdmissionStatus.ADMITTED,
+        ...(branchId ? { branchId: toObjectId(branchId) } : {}),
       },
     },
     ...groupStages(now),

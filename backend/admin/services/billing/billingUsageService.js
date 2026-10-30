@@ -247,7 +247,6 @@ const searchOn = (text, fields) =>
     ? [{ $match: { $or: fields.map((field) => ({ [field]: { $regex: text, $options: "i" } })) } }]
     : [];
 
-/** The organizations a platform admin sees, or the branches of one organization (or a single branch). */
 const pageOf = async ({ model, scope, stages, search, sort, skip, limit, project }) => {
   const [result] = await model.aggregate([
     { $match: scope },
@@ -263,13 +262,6 @@ const pageOf = async ({ model, scope, stages, search, sort, skip, limit, project
   return result;
 };
 
-/**
- * The Billing & Usage screen, by who is looking:
- *  - a platform admin sees every active organization (and can pick one);
- *  - an owner or super admin sees their organization (meta.organization) and the rows are its branches;
- *  - a site manager, line manager or staff member sees only their own branch.
- * The cards cover everything in scope; the table follows the search.
- */
 const listUsage = async ({
   actor,
   role,

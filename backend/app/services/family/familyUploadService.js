@@ -147,7 +147,7 @@ const TITLE_LENGTH = 60;
 
 const STATUS_LABELS = {
   [FamilyUploadStatus.APPROVED]: "Approved",
-  [FamilyUploadStatus.WAITING]: "Waiting For Approval",
+  [FamilyUploadStatus.PENDING]: "Waiting For Approval",
   [FamilyUploadStatus.REJECTED]: "Not Approved",
 };
 
@@ -511,7 +511,7 @@ const updateUpload = async ({
         _id: current._id,
         authorId: toObjectId(userId),
         status: {
-          $in: [FamilyUploadStatus.WAITING, FamilyUploadStatus.REJECTED],
+          $in: [FamilyUploadStatus.PENDING, FamilyUploadStatus.REJECTED],
         },
       },
       {
@@ -522,7 +522,7 @@ const updateUpload = async ({
             includeInGazette === undefined
               ? current.includeInGazette
               : Boolean(includeInGazette),
-          status: FamilyUploadStatus.WAITING,
+          status: FamilyUploadStatus.PENDING,
           rejectionReason: "",
           decidedBy: null,
           decidedAt: null,
@@ -607,7 +607,7 @@ const deleteUpload = async ({ userId, links, uploadId }) => {
         _id: current._id,
         authorId: toObjectId(userId),
         status: {
-          $in: [FamilyUploadStatus.WAITING, FamilyUploadStatus.REJECTED],
+          $in: [FamilyUploadStatus.PENDING, FamilyUploadStatus.REJECTED],
         },
       },
       { session },

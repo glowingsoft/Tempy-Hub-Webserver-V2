@@ -95,7 +95,7 @@ const FamilyHandoverStatus = {
 };
 
 const FamilyUploadStatus = {
-  WAITING: "waiting",
+  PENDING: "pending",
   APPROVED: "approved",
   REJECTED: "rejected",
 };

@@ -199,7 +199,6 @@ const sizesOf = async (references) => {
 
 const emptyFigures = () => ({ imageBytes: 0, imageCount: 0, fileBytes: 0, fileCount: 0 });
 
-/** The organization's totals, and the same figures for each of its branches (files that belong to no branch count only in the totals). */
 const measureOrganization = async (organizationId) => {
   const [references, branches] = await Promise.all([
     gatherReferences(organizationId),

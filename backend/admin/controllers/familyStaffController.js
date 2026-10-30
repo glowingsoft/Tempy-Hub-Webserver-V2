@@ -2,6 +2,7 @@ const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const { queryText, queryId, searchText } = require("@utils/familyQuery");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { branchFilter } = require("@middlewares/familyMiddleware");
 const { sendPdf } = require("@utils/familyPdfResponse");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyGroupService = require("@adminServices/family/familyGroupService");
@@ -13,6 +14,7 @@ const familySettingsService = require("@adminServices/family/familySettingsServi
 const familyGazetteAdminService = require("@adminServices/family/familyGazetteAdminService");
 const familyOverviewService = require("@adminServices/family/familyOverviewService");
 const familyUploadService = require("@appServices/family/familyUploadService");
+const familyStaffUploadService = require("@adminServices/family/familyStaffUploadService");
 const familyAccessService = require("@appServices/family/familyAccessService");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
@@ -21,7 +23,7 @@ const listGazettes = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyGazetteAdminService.listGazettes({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId, "branchId"),
+      branchId: branchFilter(req),
       status: queryText(req.query.status),
       keyword: queryText(req.query.keyword),
       page,
@@ -35,6 +37,7 @@ const listGazettes = respond(
 const getGazette = respond((req) =>
   familyGazetteAdminService.getGazette({
     organizationId: req.orgId,
+    branchId: req.branchScope,
     itemId: req.params.itemId,
   }),
 );
@@ -43,6 +46,7 @@ const downloadGazettePdf = async (req, res) => {
   try {
     const pdf = await familyGazetteAdminService.getPdf({
       organizationId: req.orgId,
+      branchId: req.branchScope,
       itemId: req.params.itemId,
     });
     return await sendPdf({
@@ -61,7 +65,7 @@ const downloadGazetteZip = async (req, res) => {
     const { entries, fileName } =
       await familyGazetteAdminService.downloadEntries({
         organizationId: req.orgId,
-        branchId: queryId(req.query.branchId, "branchId"),
+        branchId: branchFilter(req),
       });
     res.set({
       "Content-Type": "application/zip",
@@ -181,7 +185,7 @@ const listAllMembers = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyStaffService.listAllMembers({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId, "branchId"),
+      branchId: branchFilter(req),
       residentId: queryId(req.query.residentId, "residentId"),
       status: queryText(req.query.status),
       isNextOfKin: queryText(req.query.isNextOfKin),
@@ -201,7 +205,7 @@ const listFamilyGroups = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyGroupService.listFamilyGroups({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId, "branchId"),
+      branchId: branchFilter(req),
       status: queryText(req.query.status),
       keyword: queryText(req.query.keyword),
       page,
@@ -215,6 +219,7 @@ const listFamilyGroups = respond(
 const getFamilyGroup = respond((req) =>
   familyGroupService.getFamilyGroup({
     organizationId: req.orgId,
+    branchId: req.branchScope,
     residentId: req.params.residentId,
   }),
 );
@@ -224,7 +229,7 @@ const listUploads = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyModerationService.listUploads({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId, "branchId"),
+      branchId: branchFilter(req),
       residentId: queryId(req.query.residentId, "residentId"),
       status: queryText(req.query.status),
       keyword: queryText(req.query.keyword),
@@ -234,6 +239,20 @@ const listUploads = respond(
     });
   },
   { paged: true },
+);
+
+const sendUpload = respond(
+  (req) =>
+    familyStaffUploadService.sendUpload({
+      actor: req.user,
+      organizationId: req.orgId,
+      residentId: req.body.residentId,
+      message: req.body.message,
+      mediaIds: req.body.mediaIds,
+      includeInGazette: req.body.includeInGazette,
+      clientId: req.body.clientId,
+    }),
+  { statusCode: 201, translationKey: "upload_sent_for_approval" },
 );
 
 const uploadScope = (req) => ({
@@ -266,7 +285,7 @@ const listPosts = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyPostService.listPosts({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId, "branchId"),
+      branchId: branchFilter(req),
       residentId: queryId(req.query.residentId, "residentId"),
       authorId: queryId(req.query.authorId, "authorId"),
       status: queryText(req.query.status),
@@ -324,6 +343,7 @@ const updateMemberAccess = respondByAction({
 const getMember = respond((req) =>
   familyStaffService.getMember({
     organizationId: req.orgId,
+    branchId: req.branchScope,
     memberId: req.params.memberId,
   }),
 );
@@ -343,7 +363,7 @@ const updatePostReports = respondByAction({
 const listPostAuthors = respond((req) =>
   familyPostService.listAuthors({
     organizationId: req.orgId,
-    branchId: queryId(req.query.branchId, "branchId"),
+    branchId: branchFilter(req),
     keyword: searchText(req.query.keyword),
   }),
 );
@@ -422,7 +442,7 @@ const listNewsletters = respond(
     const { page, limit, skip } = parsePaginationParams(req);
     return familyNewsletterService.listNewsletters({
       organizationId: req.orgId,
-      branchId: queryId(req.query.branchId),
+      branchId: branchFilter(req),
       status: queryText(req.query.status),
       month: queryText(req.query.month),
       keyword: queryText(req.query.keyword),
@@ -437,6 +457,7 @@ const listNewsletters = respond(
 const getNewsletter = respond((req) =>
   familyNewsletterService.getNewsletter({
     organizationId: req.orgId,
+    branchId: req.branchScope,
     newsletterId: req.params.newsletterId,
   }),
 );
@@ -521,6 +542,7 @@ const downloadNewsletterPdf = async (req, res) => {
   try {
     const pdf = await familyNewsletterService.getPdf({
       organizationId: req.orgId,
+      branchId: req.branchScope,
       newsletterId: req.params.newsletterId,
     });
     return await sendPdf({
@@ -646,6 +668,7 @@ module.exports = {
   listFamilyGroups,
   getFamilyGroup,
   listUploads,
+  sendUpload,
   updateUpload,
   listPosts,
   updatePostReports,

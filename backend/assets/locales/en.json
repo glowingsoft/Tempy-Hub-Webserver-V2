@@ -735,5 +735,17 @@
   "invalid_person_category_status": "Status must be active or inactive",
   "invalid_person_category_applies_to": "Applies to must be visitor, contractor, guest, or any",
   "billing_settings_saved": "Billing settings saved",
-  "invalid_billing_settings": "Send a plan limit (GB), a base tier price or an overage price"
+  "invalid_billing_settings": "Send a plan limit (GB), a base tier price or an overage price",
+  "visitor_survey_settings_required": "Visitor survey settings are required",
+  "visitor_survey_settings_updated": "Visitor survey settings saved",
+  "visitor_survey_questions_required": "Send at least one survey question",
+  "visitor_survey_questions_updated": "Visitor survey questions saved",
+  "visitor_survey_prompt_required": "Question text is required",
+  "invalid_visitor_survey_question_type": "Type must be yesNo, singleSelect, rating, or text",
+  "visitor_survey_key_taken": "A survey question with this key already exists",
+  "visitor_survey_key_reserved": "That question key is reserved for a default question",
+  "visitor_survey_question_not_found": "Survey question not found",
+  "visitor_survey_answers_required": "Answers are required",
+  "visitor_survey_answer_required": "Answer every required question",
+  "visitor_survey_response_saved": "Visitor feedback saved"
 }

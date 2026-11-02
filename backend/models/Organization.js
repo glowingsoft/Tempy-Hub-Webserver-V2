@@ -53,6 +53,23 @@ const organizationSchema = new mongoose.Schema(
         checkIn: { type: Boolean, default: false },
         pendingLeave: { type: Boolean, default: false },
       },
+      visitorSurvey: {
+        enabled: { type: Boolean, default: false },
+        notifyVia: {
+          email: { type: Boolean, default: true },
+          inApp: { type: Boolean, default: true },
+        },
+        recipients: {
+          siteManager: { type: Boolean, default: true },
+          lineManager: { type: Boolean, default: false },
+        },
+        include: {
+          ratingSummary: { type: Boolean, default: true },
+          visitDuration: { type: Boolean, default: true },
+          whoTheyVisited: { type: Boolean, default: true },
+          freeText: { type: Boolean, default: true },
+        },
+      },
     },
   },
   { timestamps: true },

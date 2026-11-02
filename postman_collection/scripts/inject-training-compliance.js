@@ -5,7 +5,8 @@ const FILE = collectionFile();
 const collection = JSON.parse(fs.readFileSync(FILE, "utf8"));
 
 const adminPanel = collection.item.find((i) => i.name === "Admin Panel");
-if (!adminPanel) throw new Error("Admin Panel folder not found");
+const appFolder = collection.item.find((i) => i.name === "App");
+if (!adminPanel || !appFolder) throw new Error("Admin Panel or App folder not found");
 
 const upsertVar = (key) => {
   if (!collection.variable) collection.variable = [];
@@ -160,6 +161,17 @@ upsertFolder(adminPanel, "Training & Competency", [
     [...org, "training-records"],
     { query: "keyword=&status=&page=1&limit=20" }
   ),
+]);
+
+upsertFolder(appFolder, "Training", [
+  req("GET my training", "GET", ["app", "training"], {
+    query: "page=1&limit=10",
+  }),
+]);
+upsertFolder(appFolder, "Competencies", [
+  req("GET my competencies", "GET", ["app", "competencies"], {
+    query: "page=1&limit=10",
+  }),
 ]);
 
 fs.writeFileSync(FILE, `${JSON.stringify(collection, null, 2)}\n`);

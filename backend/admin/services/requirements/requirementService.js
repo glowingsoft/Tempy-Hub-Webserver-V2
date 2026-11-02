@@ -1249,6 +1249,77 @@ const listTrainingRecords = async ({
   };
 };
 
+const MET_CELL = new Set([
+  RequirementCellStatus.VALID,
+  RequirementCellStatus.DUE_SOON,
+]);
+
+const scoreShapedAssignments = (items) => {
+  const expected = items.length;
+  const done = items.filter((row) => MET_CELL.has(row.cellStatus)).length;
+  return {
+    score:
+      expected === 0 ? null : Math.min(100, Math.round((done / expected) * 100)),
+    done,
+    expected,
+  };
+};
+
+const myRequirementAssignments = async ({
+  actor,
+  organizationId,
+  type,
+  status,
+  page,
+  limit,
+  skip,
+}) => {
+  if (!TYPES.has(type)) throw new AppError("invalid_requirement_type", 400);
+  const staffId = await actorStaffProfileId(actor, organizationId);
+  if (!staffId) throw new AppError("staff_profile_not_found", 404);
+
+  const listed =
+    type === RequirementType.TRAINING
+      ? await listTrainingRecords({
+          actor,
+          organizationId,
+          staffId,
+          type,
+          status,
+          page,
+          limit,
+          skip,
+        })
+      : await listAssignments({
+          actor,
+          organizationId,
+          staffId,
+          type,
+          page,
+          limit,
+          skip,
+        });
+
+  const { data: allRows } = await listAssignments({
+    actor,
+    organizationId,
+    staffId,
+    type,
+    page: 1,
+    limit: 500,
+    skip: 0,
+    applyLimit: false,
+  });
+
+  return {
+    data: listed.data,
+    meta: {
+      ...listed.meta,
+      compliance: scoreShapedAssignments(allRows),
+    },
+  };
+};
+
 module.exports = {
   listRequirements,
   getRequirement,
@@ -1262,4 +1333,5 @@ module.exports = {
   createRecord,
   competencyMatrix,
   listTrainingRecords,
+  myRequirementAssignments,
 };

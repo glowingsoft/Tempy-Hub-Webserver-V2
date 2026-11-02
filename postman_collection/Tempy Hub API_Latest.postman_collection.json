@@ -11147,6 +11147,388 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Appraisal",
+          "item": [
+            {
+              "name": "GET my appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/appraisal?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "appraisal"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET my appraisal detail",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/appraisal/{{appraisalId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "appraisal",
+                    "{{appraisalId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST acknowledge appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signatureUrl\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/appraisal/{{appraisalId}}/acknowledge",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "appraisal",
+                    "{{appraisalId}}",
+                    "acknowledge"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Compliance",
+          "item": [
+            {
+              "name": "GET my compliance",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/compliance",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "compliance"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Supervision",
+          "item": [
+            {
+              "name": "GET my supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/supervision?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "supervision"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET my supervision detail",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/supervision/{{supervisionId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "supervision",
+                    "{{supervisionId}}"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Training",
+          "item": [
+            {
+              "name": "GET my training",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/training?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "training"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Competencies",
+          "item": [
+            {
+              "name": "GET my competencies",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/competencies?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "competencies"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -25388,6 +25770,1823 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Visitor Survey",
+          "item": [
+            {
+              "name": "GET visitor survey settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "visitor-survey-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT visitor survey settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": true,\n  \"notifyVia\": {\n    \"email\": true,\n    \"inApp\": true\n  },\n  \"recipients\": {\n    \"siteManager\": true,\n    \"lineManager\": false\n  },\n  \"include\": {\n    \"ratingSummary\": true,\n    \"visitDuration\": true,\n    \"whoTheyVisited\": true,\n    \"freeText\": true\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "visitor-survey-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET visitor survey questions",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-questions",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "visitor-survey-questions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT visitor survey questions",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"questions\": [\n    {\n      \"key\": \"expectedVisit\",\n      \"prompt\": \"Was your visit for the reason you expected?\",\n      \"type\": \"yesNo\",\n      \"options\": [\n        \"Yes\",\n        \"No\",\n        \"Other\"\n      ],\n      \"required\": true,\n      \"sortOrder\": 1,\n      \"active\": true\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-questions",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "visitor-survey-questions"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET visitor survey responses",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-responses?page=1&limit=10&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "visitor-survey-responses"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST visitor survey response",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"visitorName\": \"Jane Visitor\",\n  \"stayDuration\": \"45 minutes\",\n  \"answers\": [\n    {\n      \"questionId\": \"{{visitorSurveyQuestionId}}\",\n      \"value\": \"Yes\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-responses",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "visitor-survey-responses"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Appraisal",
+          "item": [
+            {
+              "name": "PATCH org appraisal interval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"settings\": {\n    \"defaultAppraisalIntervalMonths\": 12\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH staff appraisal settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"appraisalIntervalMonths\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-profiles/{{staffProfileId}}/appraisal-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-profiles",
+                    "{{staffProfileId}}",
+                    "appraisal-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH staff compliance settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"supervisionIntervalMonths\": 3,\n  \"appraisalIntervalMonths\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-profiles/{{staffProfileId}}/compliance-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-profiles",
+                    "{{staffProfileId}}",
+                    "compliance-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET team appraisals",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals?branchId={{branchId}}&staffId={{staffProfileId}}&page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "{{staffProfileId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET compliance history",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/compliance-history?branchId={{branchId}}&staffId={{staffProfileId}}&type=supervision&page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "compliance-history"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "{{staffProfileId}}"
+                    },
+                    {
+                      "key": "type",
+                      "value": "supervision"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST book appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"appraisalId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"appraisalActionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"kind\": \"annual\",\n  \"status\": \"scheduled\",\n  \"scheduledAt\": \"2026-11-16T09:00:00\",\n  \"periodLabel\": \"Annual Review 2026\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT complete appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"appraisalId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"appraisalActionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"completed\",\n  \"managerComments\": \"Meeting held\",\n  \"goals\": \"Complete NVQ\",\n  \"trainingNeeds\": \"Medication refresher\",\n  \"actionPoints\": [\n    \"Book the next review\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST sign off action points",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}/action-points/sign-off",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}",
+                    "action-points",
+                    "sign-off"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST sign off one action point",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}/action-points/{{appraisalActionPointId}}/sign-off",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}",
+                    "action-points",
+                    "{{appraisalActionPointId}}",
+                    "sign-off"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST manager sign appraisal",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signatureUrl\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/appraisals/{{appraisalId}}/manager-sign",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "appraisals",
+                    "{{appraisalId}}",
+                    "manager-sign"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Supervision",
+          "item": [
+            {
+              "name": "PATCH org supervision interval",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"settings\": {\n    \"defaultSupervisionIntervalMonths\": 3\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH staff supervision settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"supervisorStaffId\": \"{{supervisorStaffId}}\",\n  \"supervisionIntervalMonths\": 3\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-profiles/{{staffProfileId}}/supervision-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-profiles",
+                    "{{staffProfileId}}",
+                    "supervision-settings"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET team supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/supervision?branchId={{branchId}}&staffId={{staffProfileId}}&page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "{{staffProfileId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST book supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"supervisionId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"actionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffId\": \"{{staffProfileId}}\",\n  \"status\": \"scheduled\",\n  \"scheduledAt\": \"2026-11-16T09:00:00\",\n  \"locationLabel\": \"Office\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/supervision",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/supervision/{{supervisionId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision",
+                    "{{supervisionId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PUT complete supervision",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"supervisionId\", json.data._id);",
+                      "const point = json.data && json.data.actionPoints && json.data.actionPoints[0];",
+                      "if (point && point._id) pm.collectionVariables.set(\"actionPointId\", point._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"completed\",\n  \"topics\": [\n    \"Wellbeing\",\n    \"Training\"\n  ],\n  \"notes\": \"Meeting held\",\n  \"actionPoints\": [\n    \"Book the next review\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/supervision/{{supervisionId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision",
+                    "{{supervisionId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST sign off action points",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/supervision/{{supervisionId}}/action-points/sign-off",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision",
+                    "{{supervisionId}}",
+                    "action-points",
+                    "sign-off"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST sign off one action point",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/supervision/{{supervisionId}}/action-points/{{actionPointId}}/sign-off",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "supervision",
+                    "{{supervisionId}}",
+                    "action-points",
+                    "{{actionPointId}}",
+                    "sign-off"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Training & Competency",
+          "item": [
+            {
+              "name": "GET /admin/organizations/:id/requirements",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/requirements?type=competency&keyword=",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "requirements"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "competency"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/organizations/:id/requirements",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"requirementId\", json.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Medication competency\",\n  \"type\": \"competency\",\n  \"renewalMonths\": 12,\n  \"firstCompletionDays\": 30,\n  \"amberDaysOverride\": null,\n  \"evidenceRequired\": false,\n  \"staffEvidenceAllowed\": false,\n  \"appliesTo\": {\n    \"jobTitleIds\": [],\n    \"departmentIds\": []\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/requirements",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "requirements"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH /admin/requirements/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "if (json.data && json.data._id) pm.collectionVariables.set(\"requirementId\", json.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"renewalMonths\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/requirements/{{requirementId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "requirements",
+                    "{{requirementId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/organizations/:id/assignments",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/assignments?type=&staffId=&requirementId=&keyword=&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "assignments"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": ""
+                    },
+                    {
+                      "key": "staffId",
+                      "value": ""
+                    },
+                    {
+                      "key": "requirementId",
+                      "value": ""
+                    },
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/organizations/:id/assignments",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const json = pm.response.json();",
+                      "const row = json.data && json.data.assignments && json.data.assignments[0];",
+                      "if (row && (row.assignmentId || row._id)) pm.collectionVariables.set(\"assignmentId\", row.assignmentId || row._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"requirementId\": \"{{requirementId}}\",\n  \"staffIds\": [\n    \"{{staffProfileId}}\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/assignments",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "assignments"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/assignments/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "PATCH /admin/assignments/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"dueDate\": \"2026-12-01\",\n  \"renewalMonthsOverride\": 12\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "POST /admin/assignments/:id/records",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"completedAt\": \"2026-10-27\",\n  \"notes\": \"Signed off\",\n  \"documents\": [\n    {\n      \"key\": \"requirements/example.pdf\",\n      \"originalName\": \"certificate.pdf\",\n      \"mimeType\": \"application/pdf\",\n      \"sizeBytes\": 12000\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}/records",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}",
+                    "records"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "DELETE /admin/assignments/:id",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/assignments/{{assignmentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "assignments",
+                    "{{assignmentId}}"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/organizations/:id/competency-matrix",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/competency-matrix?keyword=&staffId=&jobTitleId=&departmentId=&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "competency-matrix"
+                  ],
+                  "query": [
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "staffId",
+                      "value": ""
+                    },
+                    {
+                      "key": "jobTitleId",
+                      "value": ""
+                    },
+                    {
+                      "key": "departmentId",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "GET /admin/organizations/:id/training-records",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/training-records?keyword=&status=&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "training-records"
+                  ],
+                  "query": [
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -26368,6 +28567,41 @@
     },
     {
       "key": "notificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appraisalId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "appraisalActionPointId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supervisionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "actionPointId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supervisorStaffId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requirementId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assignmentId",
       "value": "",
       "type": "string"
     }

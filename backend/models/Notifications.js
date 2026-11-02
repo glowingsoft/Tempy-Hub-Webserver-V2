@@ -13,6 +13,7 @@ const NotificationTypes = {
   FAMILY_JOIN_REQUEST: "familyJoinRequest",
   FAMILY_UPLOAD_PENDING: "familyUploadPending",
   FAMILY_ACCESS: "familyAccess",
+  VISITOR_SURVEY: "visitorSurvey",
   SYSTEM: "system",
   REMINDER: "reminder",
   DOCUMENTS_UPDATE: "documentsUpdate",

@@ -28,6 +28,7 @@ const leaveController = require("../controllers/leaveController");
 const evacuationController = require("../controllers/evacuationController");
 const externalPersonController = require("../controllers/externalPersonController");
 const personCategoryController = require("../controllers/personCategoryController");
+const visitorSurveyController = require("../controllers/visitorSurveyController");
 const visitSessionController = require("../controllers/visitSessionController");
 const siteLiveController = require("../../app/controllers/siteLiveController");
 const teamLiveController = require("../../app/controllers/teamLiveController");
@@ -140,6 +141,37 @@ scoped.post(
   "/staff-dashboard-settings/reset",
   requireRoles(OWNER_OR_SA),
   staffDashboardSettingsController.resetStaffDashboardSettings
+);
+
+scoped.get(
+  "/visitor-survey-settings",
+  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
+  visitorSurveyController.getVisitorSurveySettings
+);
+scoped.put(
+  "/visitor-survey-settings",
+  requireRoles(OWNER_OR_SA),
+  visitorSurveyController.saveVisitorSurveySettings
+);
+scoped.get(
+  "/visitor-survey-questions",
+  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
+  visitorSurveyController.listVisitorSurveyQuestions
+);
+scoped.put(
+  "/visitor-survey-questions",
+  requireRoles(OWNER_OR_SA),
+  visitorSurveyController.saveVisitorSurveyQuestions
+);
+scoped.get(
+  "/visitor-survey-responses",
+  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
+  visitorSurveyController.listVisitorSurveyResponses
+);
+scoped.post(
+  "/visitor-survey-responses",
+  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
+  visitorSurveyController.createVisitorSurveyResponse
 );
 
 scoped.get(
@@ -423,6 +455,12 @@ scoped.get(
   shiftController.getClaim
 );
 
+scoped.get(
+  "/reports/attendance",
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  requirePermission(ATTENDANCE_VIEW),
+  attendanceController.attendanceReport
+);
 scoped.get(
   "/attendance/rota",
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),

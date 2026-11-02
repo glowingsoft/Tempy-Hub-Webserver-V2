@@ -140,7 +140,14 @@ upsertFolder(adminPanel, "Supervision", [
 ]);
 
 upsertFolder(appFolder, "Supervision", [
-  req("GET my supervision", "GET", ["app", "supervision"]),
+  req("GET my supervision", "GET", ["app", "supervision"], {
+    query: "page=1&limit=10",
+  }),
+  req("GET my supervision detail", "GET", [
+    "app",
+    "supervision",
+    "{{supervisionId}}",
+  ]),
 ]);
 
 fs.writeFileSync(FILE, `${JSON.stringify(collection, null, 2)}\n`);

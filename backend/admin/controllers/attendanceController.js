@@ -37,6 +37,42 @@ const listAttendanceDays = async (req, res) => {
   }
 };
 
+const attendanceReport = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const {
+      from,
+      to,
+      timezone,
+      branchId,
+      kpis,
+      weekly,
+      rows,
+      meta,
+    } = await attendanceService.attendanceReport({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
+      from: req.query.from,
+      to: req.query.to,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { from, to, timezone, branchId, kpis, weekly, rows },
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const listAttendanceRota = async (req, res) => {
   try {
     const data = await attendanceService.listAttendanceRota({
@@ -209,6 +245,7 @@ const rejectRoster = async (req, res) => {
 module.exports = {
   listAttendanceDays,
   listAttendanceRota,
+  attendanceReport,
   getAttendanceDay,
   updateAttendanceDay,
   listChangeRequests,

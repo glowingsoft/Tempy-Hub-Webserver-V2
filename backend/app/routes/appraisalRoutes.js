@@ -13,6 +13,7 @@ router.use(
 );
 
 router.get("/", appraisalController.myAppraisal);
+router.get("/:appraisalId", appraisalController.getAppraisal);
 router.post("/:appraisalId/acknowledge", appraisalController.acknowledgeAppraisal);
 
 module.exports = router;

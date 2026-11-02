@@ -376,6 +376,31 @@ const listTeamSupervision = async ({
   };
 };
 
+const assertMayViewSupervision = async ({ actor, organizationId, row }) => {
+  const standing = await actorStanding(actor, organizationId);
+  if (standing.role === MembershipRole.STAFF) {
+    const mine = await StaffProfile.findOne({
+      userId: actor._id,
+      organizationId,
+      status: StaffProfileStatus.ACTIVE,
+    })
+      .select("_id")
+      .lean();
+    if (!mine || String(row.staffId) !== String(mine._id)) {
+      throw new AppError("insufficient_role", 403);
+    }
+    return standing;
+  }
+  await assertMaySuperviseStaff({
+    standing,
+    actor,
+    organizationId,
+    branchId: row.branchId,
+    targetStaffId: row.staffId,
+  });
+  return standing;
+};
+
 const getSupervision = async ({ actor, organizationId, supervisionId, timezone }) => {
   const tz = viewerTimezone(timezone || actor?.timezone);
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
@@ -386,11 +411,7 @@ const getSupervision = async ({ actor, organizationId, supervisionId, timezone }
   ]);
   if (!row) throw new AppError("supervision_not_found", 404);
 
-  await assertCanAccessStaff({
-    actor,
-    organizationId,
-    staff: { _id: row.staffId, branchId: row.branchId },
-  });
+  await assertMayViewSupervision({ actor, organizationId, row });
   return datesForViewer(row, tz);
 };
 
@@ -666,7 +687,37 @@ const signOffActionPoints = async ({
   });
 };
 
-const mySupervision = async ({ actor, organizationId }) => {
+const supervisorNameOf = async (supervisorStaffId) => {
+  if (!supervisorStaffId) return "";
+  const [row] = await StaffProfile.aggregate([
+    { $match: { _id: supervisorStaffId } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "userId",
+        foreignField: "_id",
+        pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+        as: "user",
+      },
+    },
+    {
+      $project: {
+        name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+      },
+    },
+  ]);
+  return row?.name || "";
+};
+
+const mySupervision = async ({
+  actor,
+  organizationId,
+  timezone: viewerTz,
+  status,
+  page,
+  limit,
+  skip,
+}) => {
   const staff = await StaffProfile.findOne({
     userId: actor._id,
     organizationId,
@@ -675,39 +726,60 @@ const mySupervision = async ({ actor, organizationId }) => {
   if (!staff) throw new AppError("staff_profile_not_found", 404);
 
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
-  const [defaultInterval, meetings, timezone] = await Promise.all([
-    orgInterval(organizationId),
-    SupervisionRecord.aggregate([
-      {
-        $match: {
-          organizationId: orgOid,
-          staffId: staff._id,
-          status: { $ne: ComplianceMeetingStatus.CANCELLED },
-        },
-      },
-      { $sort: { completedAt: -1, scheduledAt: -1 } },
-      ...conductedByStages,
-    ]),
-    timezoneFor(staff.branchId),
-  ]);
+  const [listed, defaultInterval, meetings, timezone, supervisor] =
+    await Promise.all([
+      listTeamSupervision({
+        actor,
+        organizationId,
+        staffId: staff._id,
+        status,
+        timezone: viewerTz,
+        page,
+        limit,
+        skip,
+      }),
+      orgInterval(organizationId),
+      SupervisionRecord.find({
+        organizationId: orgOid,
+        staffId: staff._id,
+        status: { $ne: ComplianceMeetingStatus.CANCELLED },
+      })
+        .select("status completedAt scheduledAt")
+        .lean(),
+      timezoneFor(staff.branchId),
+      supervisorNameOf(staff.supervisorStaffId),
+    ]);
 
+  const intervalMonths = staff.supervisionIntervalMonths || defaultInterval;
   const standing = supervisionStanding({
     startDate: staff.startDate,
-    intervalMonths: staff.supervisionIntervalMonths || defaultInterval,
+    intervalMonths,
     meetings,
     timezone,
   });
+  const behind = Math.max(0, standing.required - standing.completed);
+  const monthsEmployed = staff.startDate
+    ? Math.max(0, moment.tz(timezone).diff(moment.tz(staff.startDate, timezone), "months"))
+    : 0;
 
   return {
-    compliance: {
-      completedThisCycle: standing.completedThisCycle,
-      expectedThisCycle: standing.expectedThisCycle,
-      score: standing.score,
-      badge: standing.badge,
-      nextDueAt: standing.nextDueAt,
+    data: listed.data,
+    meta: {
+      ...listed.meta,
+      compliance: {
+        score: standing.score,
+        badge: standing.badge,
+        completed: standing.completed,
+        expected: standing.required,
+        completedThisCycle: standing.completedThisCycle,
+        expectedThisCycle: standing.expectedThisCycle,
+        intervalMonths,
+        monthsEmployed,
+        behind,
+        nextDueAt: standing.nextDueAt,
+        supervisor,
+      },
     },
-    upcoming: standing.upcoming,
-    past: meetings.filter((meeting) => meeting.status === ComplianceMeetingStatus.COMPLETED),
   };
 };
 

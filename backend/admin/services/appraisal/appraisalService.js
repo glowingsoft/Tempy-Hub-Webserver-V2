@@ -27,7 +27,7 @@ const {
   effectiveIntervals,
 } = require("./cycle");
 const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
-const { actorConductor, conductedByStages } = require("../staff/meetingConductor");
+const { actorConductor } = require("../staff/meetingConductor");
 const { paginateWithFacet } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { toPublicImageUrl } = require("@utils/imageHelper");
@@ -296,6 +296,29 @@ const listTeamAppraisals = async ({
   };
 };
 
+const assertMayViewAppraisal = async ({ actor, organizationId, row }) => {
+  const standing = await actorStanding(actor, organizationId);
+  if (standing.role === MembershipRole.STAFF) {
+    const mine = await StaffProfile.findOne({
+      userId: actor._id,
+      organizationId,
+      status: StaffProfileStatus.ACTIVE,
+    })
+      .select("_id")
+      .lean();
+    if (!mine || String(row.staffId) !== String(mine._id)) {
+      throw new AppError("insufficient_role", 403);
+    }
+    return standing;
+  }
+  await assertCanAccessStaff({
+    actor,
+    organizationId,
+    staff: { _id: row.staffId, branchId: row.branchId },
+  });
+  return standing;
+};
+
 const getAppraisal = async ({ actor, organizationId, appraisalId }) => {
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
   const recordId = toObjectId(appraisalId, "invalid_appraisal_id");
@@ -305,11 +328,7 @@ const getAppraisal = async ({ actor, organizationId, appraisalId }) => {
   ]);
   if (!row) throw new AppError("appraisal_not_found", 404);
 
-  await assertCanAccessStaff({
-    actor,
-    organizationId,
-    staff: { _id: row.staffId, branchId: row.branchId },
-  });
+  await assertMayViewAppraisal({ actor, organizationId, row });
   return withSignatureUrls(row);
 };
 
@@ -650,7 +669,36 @@ const managerSignAppraisal = async ({
   return shapeAppraisal(appraisalId, organizationId);
 };
 
-const myAppraisal = async ({ actor, organizationId }) => {
+const supervisorNameOf = async (supervisorStaffId) => {
+  if (!supervisorStaffId) return "";
+  const [row] = await StaffProfile.aggregate([
+    { $match: { _id: supervisorStaffId } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "userId",
+        foreignField: "_id",
+        pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+        as: "user",
+      },
+    },
+    {
+      $project: {
+        name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+      },
+    },
+  ]);
+  return row?.name || "";
+};
+
+const myAppraisal = async ({
+  actor,
+  organizationId,
+  status,
+  page,
+  limit,
+  skip,
+}) => {
   const staff = await StaffProfile.findOne({
     userId: actor._id,
     organizationId,
@@ -659,20 +707,26 @@ const myAppraisal = async ({ actor, organizationId }) => {
   if (!staff) throw new AppError("staff_profile_not_found", 404);
 
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
-  const [settings, meetings, timezone] = await Promise.all([
+  const [listed, settings, meetings, timezone, supervisor] = await Promise.all([
+    listTeamAppraisals({
+      actor,
+      organizationId,
+      staffId: staff._id,
+      status,
+      page,
+      limit,
+      skip,
+    }),
     loadOrgCycleSettings(organizationId),
-    AppraisalRecord.aggregate([
-      {
-        $match: {
-          organizationId: orgOid,
-          staffId: staff._id,
-          status: { $ne: ComplianceMeetingStatus.CANCELLED },
-        },
-      },
-      { $sort: { completedAt: -1, scheduledAt: -1 } },
-      ...conductedByStages,
-    ]),
+    AppraisalRecord.find({
+      organizationId: orgOid,
+      staffId: staff._id,
+      status: { $ne: ComplianceMeetingStatus.CANCELLED },
+    })
+      .select("status completedAt scheduledAt kind")
+      .lean(),
     timezoneFor(staff.branchId),
+    supervisorNameOf(staff.supervisorStaffId),
   ]);
 
   const intervalMonths = effectiveIntervals(staff, settings).appraisalMonths;
@@ -682,21 +736,26 @@ const myAppraisal = async ({ actor, organizationId }) => {
     meetings: standingMeetings(meetings),
     timezone,
   });
+  const behind = Math.max(0, standing.required - standing.completed);
 
   return {
-    compliance: {
-      intervalMonths,
-      completedThisCycle: standing.completedThisCycle,
-      expectedThisCycle: standing.expectedThisCycle,
-      score: standing.score,
-      badge: standing.badge,
-      nextDueAt: standing.nextDueAt,
-      lastCompletedAt: standing.lastCompletedAt,
+    data: listed.data,
+    meta: {
+      ...listed.meta,
+      compliance: {
+        score: standing.score,
+        badge: standing.badge,
+        completed: standing.completed,
+        expected: standing.required,
+        completedThisCycle: standing.completedThisCycle,
+        expectedThisCycle: standing.expectedThisCycle,
+        intervalMonths,
+        behind,
+        nextDueAt: standing.nextDueAt,
+        lastCompletedAt: standing.lastCompletedAt,
+        supervisor,
+      },
     },
-    upcoming: withSignatureUrls(standing.upcoming),
-    past: meetings
-      .filter((meeting) => meeting.status === ComplianceMeetingStatus.COMPLETED)
-      .map(withSignatureUrls),
   };
 };
 

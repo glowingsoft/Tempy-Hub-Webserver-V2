@@ -153,13 +153,24 @@ upsertFolder(adminPanel, "Appraisal", [
 ]);
 
 upsertFolder(appFolder, "Appraisal", [
-  req("GET my appraisal", "GET", ["app", "appraisal"]),
+  req("GET my appraisal", "GET", ["app", "appraisal"], {
+    query: "page=1&limit=10",
+  }),
+  req("GET my appraisal detail", "GET", [
+    "app",
+    "appraisal",
+    "{{appraisalId}}",
+  ]),
   req("POST acknowledge appraisal", "POST", [
     "app",
     "appraisal",
     "{{appraisalId}}",
     "acknowledge",
   ], { body: { signatureUrl: "" } }),
+]);
+
+upsertFolder(appFolder, "Compliance", [
+  req("GET my compliance", "GET", ["app", "compliance"]),
 ]);
 
 fs.writeFileSync(FILE, `${JSON.stringify(collection, null, 2)}\n`);

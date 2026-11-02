@@ -520,6 +520,24 @@ const PersonCategoryAppliesTo = {
   ANY: "any",
 };
 
+const VisitorSurveyQuestionType = {
+  YES_NO: "yesNo",
+  SINGLE_SELECT: "singleSelect",
+  RATING: "rating",
+  TEXT: "text",
+};
+
+const VisitorSurveyQuestionSource = {
+  SYSTEM: "system",
+  CUSTOM: "custom",
+};
+
+const VisitorSurveyResponseSource = {
+  ADMIN_MANUAL: "adminManual",
+  KIOSK: "kiosk",
+  VISITOR_APP: "visitorApp",
+};
+
 module.exports = {
   MembershipRole,
   MembershipRoleRank,
@@ -595,4 +613,7 @@ module.exports = {
   ResidentMediaReviewStatus,
   VisitRequestStatus,
   PersonCategoryAppliesTo,
+  VisitorSurveyQuestionType,
+  VisitorSurveyQuestionSource,
+  VisitorSurveyResponseSource,
 };

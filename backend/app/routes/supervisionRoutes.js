@@ -13,5 +13,6 @@ router.use(
 );
 
 router.get("/", supervisionController.mySupervision);
+router.get("/:supervisionId", supervisionController.getSupervision);
 
 module.exports = router;

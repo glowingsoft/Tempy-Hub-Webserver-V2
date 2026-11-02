@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { AttendanceDay } = require("@models/AttendanceDay");
 const { Shift } = require("@models/Shift");
+const { Department } = require("@models/Department");
 const { AttendanceChangeRequest } = require("@models/AttendanceChangeRequest");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -19,6 +20,7 @@ const {
   LeaveType,
   LeaveRequestStatus,
   RosterRequestStatus,
+  ShiftStatus,
 } = require("@models/domainEnums");
 const {
   getActiveShift,
@@ -1816,6 +1818,320 @@ const rejectRosterForDay = async ({
   return day.toObject();
 };
 
+const FILLED_SHIFT_STATUSES = [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED];
+
+const emptyWeekBuckets = () =>
+  [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({
+    weekday,
+    scheduled: 0,
+    worked: 0,
+  }));
+
+const REPORT_STAFF_LOOKUPS = [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "userId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, email: 1 } }, { $limit: 1 }],
+      as: "_user",
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+      as: "_dept",
+    },
+  },
+  {
+    $addFields: {
+      name: { $ifNull: [{ $arrayElemAt: ["$_user.name", 0] }, ""] },
+      email: { $ifNull: [{ $arrayElemAt: ["$_user.email", 0] }, ""] },
+      department: { $arrayElemAt: ["$_dept", 0] },
+    },
+  },
+  {
+    $project: {
+      employeeCode: 1,
+      photoUrl: 1,
+      name: 1,
+      email: 1,
+      department: 1,
+    },
+  },
+];
+
+const shapeReportStaff = (row) => ({
+  _id: row._id,
+  employeeCode: row.employeeCode || "",
+  name: row.name || "",
+  email: row.email || "",
+  photoUrl: toPublicImageUrl(row.photoUrl) || row.photoUrl || "",
+  department: row.department
+    ? { _id: row.department._id, name: row.department.name }
+    : null,
+});
+
+const bumpWeek = (weekly, weekday, field) => {
+  if (weekday < 1 || weekday > 7) return;
+  weekly[weekday - 1][field] += 1;
+};
+
+const attendanceReport = async ({
+  actor,
+  organizationId,
+  branchId,
+  departmentId,
+  from,
+  to,
+  page,
+  limit,
+  skip,
+}) => {
+  if (!from || !to) throw new AppError("invalid_date_range", 400);
+
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const branchMatch = { organizationId };
+  if (scopedBranchId) branchMatch._id = scopedBranchId;
+  const branches = await Branch.find(branchMatch).select("_id timezone").lean();
+  if (!branches.length) {
+    const { tz, fromDay, toDay } = resolveRotaRange(from, to, DEFAULT_TZ);
+    return {
+      from: fromDay.format("YYYY-MM-DD"),
+      to: toDay.format("YYYY-MM-DD"),
+      timezone: tz,
+      branchId: scopedBranchId || null,
+      kpis: {
+        workedMinutes: 0,
+        lateCount: 0,
+        sickDays: 0,
+        sicknessRate: null,
+      },
+      weekly: emptyWeekBuckets(),
+      rows: [],
+      meta: generateMeta(page, limit, 0),
+    };
+  }
+
+  const tz =
+    (scopedBranchId
+      ? branches[0].timezone
+      : branches.length === 1
+        ? branches[0].timezone
+        : DEFAULT_TZ) || DEFAULT_TZ;
+  const { fromDay, toDay } = resolveRotaRange(from, to, tz);
+  const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
+  const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
+  const shiftEnd = moment.utc(toUtc).add(1, "day").toDate();
+  const branchOids = branches.map((row) => row._id);
+
+  let staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    branchId,
+  });
+  if (departmentId) {
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      throw new AppError("invalid_department_id", 400);
+    }
+    staffIds = await StaffProfile.find({
+      _id: { $in: staffIds },
+      departmentIds: new mongoose.Types.ObjectId(String(departmentId)),
+    }).distinct("_id");
+  }
+  if (!staffIds.length) {
+    return {
+      from: fromDay.format("YYYY-MM-DD"),
+      to: toDay.format("YYYY-MM-DD"),
+      timezone: tz,
+      branchId: scopedBranchId || null,
+      kpis: {
+        workedMinutes: 0,
+        lateCount: 0,
+        sickDays: 0,
+        sicknessRate: null,
+      },
+      weekly: emptyWeekBuckets(),
+      rows: [],
+      meta: generateMeta(page, limit, 0),
+    };
+  }
+
+  const staffOids = staffIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const dayMatch = {
+    branchId: { $in: branchOids },
+    staffId: { $in: staffOids },
+    workDate: { $gte: fromUtc, $lte: toUtc },
+  };
+
+  const [attendanceGroups, shiftGroups, leaveDays, paged] = await Promise.all([
+    AttendanceDay.aggregate([
+      { $match: dayMatch },
+      {
+        $group: {
+          _id: { staffId: "$staffId", workDate: "$workDate" },
+          workedMinutes: { $sum: { $ifNull: ["$workedMinutes", 0] } },
+          lateCount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$punctualityStatus", PunctualityStatus.LATE] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.staffId",
+          workedDays: { $sum: 1 },
+          workedMinutes: { $sum: "$workedMinutes" },
+          lateCount: { $sum: "$lateCount" },
+          days: { $push: "$_id.workDate" },
+        },
+      },
+    ]),
+    Shift.aggregate([
+      {
+        $match: {
+          organizationId: new mongoose.Types.ObjectId(String(organizationId)),
+          branchId: { $in: branchOids },
+          staffId: { $in: staffOids },
+          status: { $in: FILLED_SHIFT_STATUSES },
+          startsAt: { $gte: fromUtc, $lt: shiftEnd },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            staffId: "$staffId",
+            day: {
+              $dateToString: { format: "%Y-%m-%d", date: "$startsAt", timezone: tz },
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.staffId",
+          scheduledDays: { $sum: 1 },
+          days: { $push: "$_id.day" },
+        },
+      },
+    ]),
+    listLeaveRegisterDays({ staffIds: staffOids, from: fromUtc, to: toUtc }),
+    paginateWithFacet({
+      model: StaffProfile,
+      match: { _id: { $in: staffOids } },
+      page,
+      limit,
+      skip,
+      sort: { createdAt: -1 },
+      extraDataStages: REPORT_STAFF_LOOKUPS,
+    }),
+  ]);
+
+  const byStaff = new Map();
+  const weekly = emptyWeekBuckets();
+  let workedMinutes = 0;
+  let lateCount = 0;
+  let workedDaysTotal = 0;
+
+  for (const row of attendanceGroups) {
+    const key = String(row._id);
+    const current = byStaff.get(key) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    current.worked = row.workedDays;
+    current.lateCount = row.lateCount;
+    current.workedMinutes = row.workedMinutes;
+    byStaff.set(key, current);
+    workedMinutes += row.workedMinutes;
+    lateCount += row.lateCount;
+    workedDaysTotal += row.workedDays;
+    for (const day of row.days || []) {
+      bumpWeek(weekly, moment.utc(day).isoWeekday(), "worked");
+    }
+  }
+
+  for (const row of shiftGroups) {
+    const key = String(row._id);
+    const current = byStaff.get(key) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    current.scheduled = row.scheduledDays;
+    byStaff.set(key, current);
+    for (const day of row.days || []) {
+      bumpWeek(weekly, moment.utc(day, "YYYY-MM-DD").isoWeekday(), "scheduled");
+    }
+  }
+
+  let sickDays = 0;
+  for (const row of leaveDays) {
+    if (row.leaveType !== LeaveType.SICK) continue;
+    const key = String(row.staffId);
+    const current = byStaff.get(key) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    current.sickDays += 1;
+    byStaff.set(key, current);
+    sickDays += 1;
+  }
+
+  const denom = workedDaysTotal + sickDays;
+  const rows = paged.data.map((staff) => {
+    const stats = byStaff.get(String(staff._id)) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    return {
+      staff: shapeReportStaff(staff),
+      scheduled: stats.scheduled,
+      worked: stats.worked,
+      variance: stats.worked - stats.scheduled,
+      lateCount: stats.lateCount,
+      workedMinutes: stats.workedMinutes,
+    };
+  });
+
+  return {
+    from: fromDay.format("YYYY-MM-DD"),
+    to: toDay.format("YYYY-MM-DD"),
+    timezone: tz,
+    branchId: scopedBranchId || null,
+    kpis: {
+      workedMinutes,
+      lateCount,
+      sickDays,
+      sicknessRate: denom ? Math.round((1000 * sickDays) / denom) / 10 : null,
+    },
+    weekly,
+    rows,
+    meta: paged.meta,
+  };
+};
+
 module.exports = {
   getTodayAttendance,
   getTodayAttendanceForStaff,
@@ -1841,4 +2157,5 @@ module.exports = {
   requestRosterForDay,
   approveRosterForDay,
   rejectRosterForDay,
+  attendanceReport,
 };

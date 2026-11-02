@@ -4,7 +4,7 @@ const { acquireLock, releaseLock } = require("../redis/redisCache");
 const { runEventReminderCron } = require("./events/eventReminder.cron");
 const { runFamilyScheduledPostsCron, runFamilyScheduledNewslettersCron } = require("./family/familyPosts.cron");
 const { runFamilyGazetteRecoveryCron, runFamilyGazetteSchedulerCron } = require("./family/familyGazettes.cron");
-const { runStorageUsageCron } = require("./billing/storageUsage.cron");
+const { runStorageUsageCron, runStorageUsageCatchUp } = require("./billing/storageUsage.cron");
 const startCrons = () => {
 
 
@@ -101,6 +101,10 @@ const startCrons = () => {
       await releaseLock(lockKey, lock);
     }
   });
+
+  runStorageUsageCatchUp().catch((err) =>
+    console.error("Storage usage catch-up error:", err),
+  );
 };
 
 module.exports = { startCrons };

@@ -1,4 +1,3 @@
-const moment = require("moment-timezone");
 const { User } = require("@models/UserModel");
 const { Resident } = require("@models/Resident");
 const { FamilyVisit } = require("@models/FamilyVisit");
@@ -21,18 +20,16 @@ const {
   personFields,
 } = require("@appServices/family/familyPipeline");
 const {
-  slotId,
-  isProtected,
   loadRules,
+  toMinutes,
+  STEP_MINUTES,
   visitingNotice,
   visitWindow,
   assertDayInRange,
   cleanText,
   isText,
   TIME,
-  DATE,
 } = require("@appServices/family/familyVisitRules");
-const { seatsInRange } = require("@appServices/family/familyVisitCapacity");
 const {
   notifyVisitInvited,
   notifyVisitDecision,
@@ -50,11 +47,8 @@ const VisitDecision = {
   CANCEL: "cancel",
 };
 
-const MAX_SLOTS = 12;
 const MAX_PROTECTED = 6;
 const MAX_LABEL_LENGTH = 40;
-const MAX_PLACES = 20;
-const MAX_PLACE_LENGTH = 60;
 const MAX_NOTE_LENGTH = 500;
 const MAX_REASON_LENGTH = 200;
 
@@ -137,7 +131,6 @@ const listVisits = async ({
           status: 1,
           startAt: 1,
           endAt: 1,
-          place: 1,
           partySize: 1,
           note: 1,
           decisionNote: 1,
@@ -177,7 +170,6 @@ const inviteFamily = async ({
   date,
   startTime,
   endTime,
-  place,
   note,
   now = new Date(),
 }) => {
@@ -207,7 +199,6 @@ const inviteFamily = async ({
     invitedBy: actor._id,
     startAt,
     endAt,
-    place: cleanText(place, { field: "place", max: MAX_PLACE_LENGTH }),
     note: cleanText(note, { field: "note", max: MAX_NOTE_LENGTH }),
     status: FamilyVisitStatus.INVITED,
   });
@@ -345,8 +336,7 @@ const decideVisit = async ({
 const settingsView = (rules, branchId) => ({
   branchId,
   timezone: rules.timezone,
-  slots: rules.slots.map((slot) => ({ id: slotId(slot), ...slot })),
-  places: rules.places,
+  visitingHours: rules.visitingHours,
   protectedTimes: rules.protectedTimes.map(({ start, end, label }) => ({
     start,
     end,
@@ -373,48 +363,11 @@ const getSettings = async ({ actor, organizationId, branchId }) => {
   return settingsView(await loadRules(site), site);
 };
 
-const cleanSlots = (value) => {
-  if (!Array.isArray(value) || !value.length || value.length > MAX_SLOTS)
-    throw new AppError("invalid_visit_settings", 400, { field: "slots" });
-
-  const slots = value.map((slot) => {
-    const start = slot?.start;
-    const end = slot?.end;
-    if (
-      !isText(start) ||
-      !isText(end) ||
-      !TIME.test(start) ||
-      !TIME.test(end) ||
-      end <= start
-    )
-      throw new AppError("invalid_visit_settings", 400, { field: "slots" });
-    return { start, end };
-  });
-  if (new Set(slots.map(slotId)).size !== slots.length)
-    throw new AppError("invalid_visit_settings", 400, { field: "slots" });
-  return slots.sort((a, b) => a.start.localeCompare(b.start));
-};
-
-const cleanPlaces = (value) => {
-  if (!Array.isArray(value) || !value.length || value.length > MAX_PLACES)
-    throw new AppError("invalid_visit_settings", 400, { field: "places" });
-
-  const places = value.map((place) => {
-    const name = isText(place) ? place : place?.name;
-    const text = isText(name) ? name.trim() : "";
-    const capacity = isText(place) ? null : (place?.capacity ?? null);
-    if (
-      !text ||
-      text.length > MAX_PLACE_LENGTH ||
-      (capacity !== null &&
-        (!Number.isInteger(capacity) || capacity < 1 || capacity > 500))
-    )
-      throw new AppError("invalid_visit_settings", 400, { field: "places" });
-    return { name: text, capacity };
-  });
-  if (new Set(places.map((place) => place.name)).size !== places.length)
-    throw new AppError("invalid_visit_settings", 400, { field: "places" });
-  return places;
+const cleanVisitingHours = (value) => {
+  const { start, end } = value || {};
+  if (!isText(start) || !isText(end) || !TIME.test(start) || !TIME.test(end) || toMinutes(end) - toMinutes(start) < STEP_MINUTES)
+    throw new AppError("invalid_visit_settings", 400, { field: "visitingHours" });
+  return { start, end };
 };
 
 const cleanProtectedTimes = (value) => {
@@ -448,7 +401,7 @@ const cleanWhole = (value, { field, min, max }) => {
   return value;
 };
 
-/** Saves what a site offers on Book A Visit, and pauses or resumes visiting; fields left out stay as they were. */
+/** Saves the visiting hours and rules of a site, and pauses or resumes visiting; fields left out stay as they were. */
 const updateSettings = async ({
   actor,
   organizationId,
@@ -460,8 +413,8 @@ const updateSettings = async ({
   const before = await loadRules(site);
   const set = {};
 
-  if (body.slots !== undefined) set.slots = cleanSlots(body.slots);
-  if (body.places !== undefined) set.places = cleanPlaces(body.places);
+  if (body.visitingHours !== undefined)
+    set.visitingHours = cleanVisitingHours(body.visitingHours);
   if (body.protectedTimes !== undefined)
     set.protectedTimes = cleanProtectedTimes(body.protectedTimes);
   if (body.daysAhead !== undefined)
@@ -532,70 +485,6 @@ const setVisiting = ({
     now,
   });
 
-/** The capacity card for one day: seats taken against seats available for each limited place and time, and the closed times. */
-const getCapacity = async ({
-  actor,
-  organizationId,
-  branchId,
-  date,
-  now = new Date(),
-}) => {
-  const site = await requireSite({ actor, organizationId, branchId });
-  const rules = await loadRules(site);
-  const day =
-    date === undefined ? moment.tz(now, rules.timezone).format(DATE) : date;
-  const { startAt: from } = visitWindow({
-    date: day,
-    start: "00:00",
-    end: "23:59",
-    timezone: rules.timezone,
-  });
-  const to = moment.tz(day, DATE, true, rules.timezone).add(1, "day").toDate();
-  const held = await seatsInRange({ branchId: site, from, to });
-
-  const times = rules.slots
-    .filter((slot) => !isProtected(slot, rules))
-    .map((slot) => ({
-      slot,
-      startAt: visitWindow({
-        date: day,
-        start: slot.start,
-        end: slot.end,
-        timezone: rules.timezone,
-      }).startAt,
-    }));
-
-  return {
-    date: day,
-    weekday: moment.tz(day, DATE, true, rules.timezone).format("dddd"),
-    timezone: rules.timezone,
-    visiting: visitingNotice(rules),
-    protectedTimes: rules.protectedTimes.map(({ start, end, label }) => ({
-      start,
-      end,
-      label: label || "Protected time",
-      note: `${label || "Protected time"} ${start} - ${end} isn't bookable.`,
-    })),
-    spaces: rules.places
-      .filter((place) => place.capacity !== null)
-      .map((place) => ({
-        place: place.name,
-        capacity: place.capacity,
-        slots: times.map(({ slot, startAt }) => {
-          const booked = held.get(`${place.name}|${startAt.getTime()}`) ?? 0;
-          return {
-            id: slotId(slot),
-            start: slot.start,
-            end: slot.end,
-            booked,
-            capacity: place.capacity,
-            full: booked >= place.capacity,
-          };
-        }),
-      })),
-  };
-};
-
 module.exports = {
   VisitDecision,
   listVisits,
@@ -604,5 +493,4 @@ module.exports = {
   getSettings,
   updateSettings,
   setVisiting,
-  getCapacity,
 };

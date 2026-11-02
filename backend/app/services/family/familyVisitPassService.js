@@ -119,7 +119,6 @@ const getPass = async ({ link, userId, now = new Date() }) => {
           id: "$_id",
           startAt: 1,
           endAt: 1,
-          place: 1,
           partySize: 1,
           code: "$invitation.inviteCode",
         },

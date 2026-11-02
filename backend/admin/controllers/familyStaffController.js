@@ -10,7 +10,6 @@ const familyModerationService = require("@adminServices/family/familyModerationS
 const familyPostService = require("@adminServices/family/familyPostService");
 const familyWallActivityService = require("@adminServices/family/familyWallActivityService");
 const familyNewsletterService = require("@adminServices/family/familyNewsletterService");
-const familySettingsService = require("@adminServices/family/familySettingsService");
 const familyGazetteAdminService = require("@adminServices/family/familyGazetteAdminService");
 const familyOverviewService = require("@adminServices/family/familyOverviewService");
 const familyUploadService = require("@appServices/family/familyUploadService");
@@ -151,20 +150,6 @@ const getOverview = respond((req) =>
     branchId: queryId(req.query.branchId, "branchId"),
     days: queryText(req.query.days),
   }),
-);
-
-const getSettings = respond((req) =>
-  familySettingsService.getSettings({ organizationId: req.orgId }),
-);
-
-const updateSettings = respond(
-  (req) =>
-    familySettingsService.updateSettings({
-      actor: req.user,
-      organizationId: req.orgId,
-      gazette: req.body.gazette,
-    }),
-  { translationKey: "family_settings_saved" },
 );
 
 const listRelationships = respond(() =>
@@ -657,8 +642,6 @@ module.exports = {
   generateGazettes,
   updateGazetteIssue,
   updateGazette,
-  getSettings,
-  updateSettings,
   listRelationships,
   listMembers,
   listAllMembers,

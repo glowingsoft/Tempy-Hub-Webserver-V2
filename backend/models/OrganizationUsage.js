@@ -14,6 +14,7 @@ const organizationUsageSchema = new mongoose.Schema(
     fileCount: { type: Number, default: 0, min: 0 },
     /** Files that could not be measured on the last run, so the totals may be a little low. */
     unmeasured: { type: Number, default: 0, min: 0 },
+    categories: { type: mongoose.Schema.Types.Mixed, default: {} },
     measuredAt: { type: Date, default: null },
     /** Set while a measurement runs, so two never run at once. */
     measuringSince: { type: Date, default: null },

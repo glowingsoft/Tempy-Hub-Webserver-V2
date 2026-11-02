@@ -10133,7 +10133,7 @@
                         }
                       ]
                     },
-                    "description": "My Visits. Query: residentId (required), tab (upcoming or past; 400 invalid_visit_tab for anything else), page, limit (default 20, max 50). Upcoming is soonest first, past is newest first and includes declined and cancelled ones. A row is either my own request or an invitation From The Home (fromTheHome true): id, source (family or home), status (requested, confirmed, declined, cancelled; for an invitation invited until I answer, then going or cantMakeIt), startAt, endAt, place, partySize, note, decisionNote (the home's reply to a request), canCancel (my request, not yet over), canReply (an invitation I can still answer) and hasPass (Visit Pass available). meta.counts has the two tab totals; meta.visiting.paused, reason and since drive the Visiting is paused notice. A request is only visible to the person who made it; invitations from the home are visible to the whole family of the resident."
+                    "description": "My Visits. Query: residentId (required), tab (upcoming or past; 400 invalid_visit_tab for anything else), page, limit (default 20, max 50). Upcoming is soonest first, past is newest first and includes declined and cancelled ones. A row is either my own request or an invitation From The Home (fromTheHome true): id, source (family or home), status (requested, confirmed, declined, cancelled; for an invitation invited until I answer, then going or cantMakeIt), startAt, endAt, partySize, note, decisionNote (the home's reply to a request), canCancel (my request, not yet over), canReply (an invitation I can still answer) and hasPass (Visit Pass available). meta.counts has the two tab totals; meta.visiting.paused, reason and since drive the Visiting is paused notice. A request is only visible to the person who made it; invitations from the home are visible to the whole family of the resident."
                   },
                   "response": []
                 },
@@ -10190,11 +10190,10 @@
                           "pm.test(\"Visit options fetched\", function () {",
                           "    pm.response.to.have.status(200);",
                           "    const data = pm.response.json().data;",
-                          "    pm.expect(data).to.include.keys(\"days\", \"slots\", \"places\", \"maxPartySize\", \"visiting\");",
-                          "    if (data.days.length && data.slots.length) {",
+                          "    pm.expect(data).to.include.keys(\"days\", \"visitingHours\", \"maxPartySize\", \"visiting\");",
+                          "    if (data.days.length) {",
                           "        pm.collectionVariables.set(\"visitDate\", data.days[Math.min(1, data.days.length - 1)].date);",
-                          "        pm.collectionVariables.set(\"visitSlot\", data.slots[0].id);",
-                          "        pm.collectionVariables.set(\"visitPlace\", data.places[0]);",
+                          "        pm.collectionVariables.set(\"visitTime\", data.visitingHours.start);",
                           "    }",
                           "});"
                         ]
@@ -10222,7 +10221,7 @@
                         }
                       ]
                     },
-                    "description": "Book A Visit: what the home offers. days (the next few days, date and weekday; today is left out once no slot remains), slots (id such as 10:00-12:00, start, end), places (for example Garden Lounge), maxPartySize, timezone and the visiting notice. Slots that fall in a protected time are left out. The home sets these per site; until it does, the defaults are three slots, two places, 14 days ahead and up to 6 people. Sets visitDate, visitSlot and visitPlace for the request below."
+                    "description": "Book A Visit: what the home offers. days (the next few days, date and weekday; today is left out once no time remains), visitingHours {start, end}, protectedTimes [{start, end, label}], maxPartySize, timezone and the visiting notice. The app builds the time to pick itself, from the visiting hours, a start every half hour; the server checks the time it sends. The home sets these per site; until it does, the defaults are visiting hours of 12:00 to 18:00, 14 days ahead and up to 6 people. Sets visitDate and visitTime (the opening time) for the request below."
                   },
                   "response": []
                 },
@@ -10258,10 +10257,10 @@
                         "visits"
                       ]
                     },
-                    "description": "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), slot (a slot id), place (one of the places), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). It is a request until the home confirms it. Errors: 403 visiting_paused, 400 for a slot, place, date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 409 visit_slot_full when the place has no room left for that many people at that time (waiting requests hold their seats), 400 visit_protected_time for a closed time, 429 once five requests are waiting. Notification: New visit request goes to the site's site and line managers.",
+                    "description": "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), time (HH:mm on the half hour, inside the visiting hours with at least half an hour before closing, and not in a protected time), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). The visit runs from that time until the visiting hours end. It is a request until the home confirms it. Errors: 403 visiting_paused, 400 invalid_visit_time for a time that isn't offered, 400 visit_protected_time for a closed time, 400 for a date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 429 once five requests are waiting. Notification: New visit request goes to the site's site and line managers.",
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"slot\": \"{{visitSlot}}\",\n  \"place\": \"{{visitPlace}}\",\n  \"totalPeople\": 2,\n  \"note\": \"Birthday tea\"\n}",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"time\": \"{{visitTime}}\",\n  \"totalPeople\": 2,\n  \"note\": \"Birthday tea\"\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -10887,60 +10886,6 @@
                   ]
                 },
                 "description": "Visit Requests screen of the site manager and line manager apps: the requests waiting for an answer, soonest first. meta.totalRecords is the Requests (2) count and meta.visiting {paused, reason, since} drives the Pause Visiting card. Each row has the resident (residentName), requestedBy {name, photoUrl, email}, startAt, endAt, place, partySize and note: 'Sarah Hughes for Margaret Hughes, 3 people, Bringing a birthday cake'. A site or line manager sees their own site. Send the x-org-id header. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
-              },
-              "response": []
-            },
-            {
-              "name": "app visit capacity",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Visit capacity fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.include.keys(\"date\", \"spaces\", \"protectedTimes\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/app/family-visits/capacity?date=2026-10-26",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "app",
-                    "family-visits",
-                    "capacity"
-                  ],
-                  "query": [
-                    {
-                      "key": "date",
-                      "value": "2026-10-26"
-                    },
-                    {
-                      "key": "branchId",
-                      "value": "{{branchId}}",
-                      "description": "The site (an owner picks one)",
-                      "disabled": true
-                    }
-                  ]
-                },
-                "description": "The capacity card (Lounge On Sun 26 Oct). Query: date (YYYY-MM-DD, today when left out). spaces has one entry for each place with a limit: place, capacity and slots with start, end, booked, capacity and full (14:00 3/4, 15:00 4/4). Waiting requests hold their seats as well as confirmed visits. protectedTimes lists the closed windows with a ready note: 'Protected mealtime 12:00 - 13:30 isn't bookable.' Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
               },
               "response": []
             },
@@ -23567,104 +23512,6 @@
               ]
             },
             {
-              "name": "Settings",
-              "description": "How often gazettes are built and how many messages one holds.",
-              "item": [
-                {
-                  "name": "family settings",
-                  "event": [
-                    {
-                      "listen": "test",
-                      "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                          "pm.test(\"Settings fetched\", function () {",
-                          "    pm.response.to.have.status(200);",
-                          "    const data = pm.response.json().data;",
-                          "    pm.expect(data).to.include.keys(\"configured\", \"gazette\");",
-                          "});"
-                        ]
-                      }
-                    }
-                  ],
-                  "request": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "x-org-id",
-                        "value": "{{organizationId}}",
-                        "description": "Organization scope for admin routes.",
-                        "type": "text"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{url}}/admin/family/settings",
-                      "host": [
-                        "{{url}}"
-                      ],
-                      "path": [
-                        "admin",
-                        "family",
-                        "settings"
-                      ]
-                    },
-                    "description": "Family settings for the organization (the x-org-id header). gazette.issueEveryDays (days between issues, default 14), gazette.messageCap (most family messages in one resident's gazette, default 30) and gazette.anchorDate (the first day of an issue, such as 2026-10-01; every later issue starts a whole number of cycles after it). configured is false until the settings are saved; nothing runs on a schedule before that, and the values shown are the defaults. Owners and super admins only. Needs familyEngagement.view."
-                  },
-                  "response": []
-                },
-                {
-                  "name": "update family settings",
-                  "event": [
-                    {
-                      "listen": "test",
-                      "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                          "pm.test(\"Settings saved\", function () {",
-                          "    pm.response.to.have.status(200);",
-                          "    pm.expect(pm.response.json().data.configured).to.eql(true);",
-                          "});"
-                        ]
-                      }
-                    }
-                  ],
-                  "request": {
-                    "method": "PUT",
-                    "header": [
-                      {
-                        "key": "x-org-id",
-                        "value": "{{organizationId}}",
-                        "description": "Organization scope for admin routes.",
-                        "type": "text"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{url}}/admin/family/settings",
-                      "host": [
-                        "{{url}}"
-                      ],
-                      "path": [
-                        "admin",
-                        "family",
-                        "settings"
-                      ]
-                    },
-                    "description": "Saves the gazette settings; only what is sent changes. gazette.issueEveryDays is a whole number from 1 to 90, gazette.messageCap from 1 to 100 and gazette.anchorDate a day like 2026-10-01. The first save must include anchorDate, because saving is what starts the schedule: the first issue begins on that day and each later one follows without a gap, in whole days in each site's timezone. 400 gazette_setting_invalid or gazette_anchor_invalid for a bad value. Owners and super admins only. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"gazette\": {\n    \"anchorDate\": \"2026-10-01\",\n    \"issueEveryDays\": 14,\n    \"messageCap\": 30\n  }\n}",
-                      "options": {
-                        "raw": {
-                          "language": "json"
-                        }
-                      }
-                    }
-                  },
-                  "response": []
-                }
-              ]
-            },
-            {
               "name": "Visits",
               "description": "Visit requests and invitations, and what a site offers on Book A Visit.",
               "item": [
@@ -23741,7 +23588,7 @@
                         }
                       ]
                     },
-                    "description": "Visit requests and invitations for the organization in the path, soonest first. Optional query: status, source, range, branchId, residentId, page, limit. A site or line manager sees their own site. Each row has the resident, source, status, startAt, endAt, place, partySize, note, decisionNote, requestedBy (name, photo and email for a request) and answers {going, cantMakeIt} for an invitation. Needs familyEngagement.view; 404 when the module is off."
+                    "description": "Visit requests and invitations for the organization in the path, soonest first. Optional query: status, source, range, branchId, residentId, page, limit. A site or line manager sees their own site. Each row has the resident, source, status, startAt, endAt, partySize, note, decisionNote, requestedBy (name, photo and email for a request) and answers {going, cantMakeIt} for an invitation. Needs familyEngagement.view; 404 when the module is off."
                   },
                   "response": []
                 },
@@ -23783,10 +23630,10 @@
                         "visits"
                       ]
                     },
-                    "description": "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional place (up to 60 characters) and note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit invitation goes to the resident's active family.",
+                    "description": "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted. Notification: Visit invitation goes to the resident's active family.",
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"startTime\": \"14:00\",\n  \"endTime\": \"16:00\",\n  \"place\": \"Garden Lounge\",\n  \"note\": \"Afternoon tea with the residents\"\n}",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"date\": \"{{visitDate}}\",\n  \"startTime\": \"14:00\",\n  \"endTime\": \"16:00\",\n  \"note\": \"Afternoon tea with the residents\"\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -23940,104 +23787,6 @@
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"action\": \"cancel\"\n}",
-                      "options": {
-                        "raw": {
-                          "language": "json"
-                        }
-                      }
-                    }
-                  },
-                  "response": []
-                },
-                {
-                  "name": "visit settings",
-                  "event": [
-                    {
-                      "listen": "test",
-                      "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                          "pm.test(\"Visit settings fetched\", function () {",
-                          "    pm.response.to.have.status(200);",
-                          "    const data = pm.response.json().data;",
-                          "    pm.expect(data).to.include.keys(\"slots\", \"places\", \"daysAhead\", \"maxPartySize\", \"paused\");",
-                          "});"
-                        ]
-                      }
-                    }
-                  ],
-                  "request": {
-                    "method": "GET",
-                    "header": [
-                      {
-                        "key": "x-org-id",
-                        "value": "{{organizationId}}",
-                        "description": "Organization scope for admin routes.",
-                        "type": "text"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{url}}/admin/family/visit-settings?branchId={{branchId}}",
-                      "host": [
-                        "{{url}}"
-                      ],
-                      "path": [
-                        "admin",
-                        "family",
-                        "visit-settings"
-                      ],
-                      "query": [
-                        {
-                          "key": "branchId",
-                          "value": "{{branchId}}"
-                        }
-                      ]
-                    },
-                    "description": "What a site offers on Book A Visit and whether visiting is paused: slots, places (name and capacity), protectedTimes, daysAhead, maxPartySize, paused, pausedReason and pausedAt, plus the site's timezone. Until the site saves its own, the defaults apply. A site or line manager uses their own site. Needs familyEngagement.view. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
-                  },
-                  "response": []
-                },
-                {
-                  "name": "update visit settings",
-                  "event": [
-                    {
-                      "listen": "test",
-                      "script": {
-                        "type": "text/javascript",
-                        "exec": [
-                          "pm.test(\"Visit settings saved\", function () {",
-                          "    pm.response.to.have.status(200);",
-                          "    pm.expect(pm.response.json().data).to.have.property(\"paused\");",
-                          "});"
-                        ]
-                      }
-                    }
-                  ],
-                  "request": {
-                    "method": "PUT",
-                    "header": [
-                      {
-                        "key": "x-org-id",
-                        "value": "{{organizationId}}",
-                        "description": "Organization scope for admin routes.",
-                        "type": "text"
-                      }
-                    ],
-                    "url": {
-                      "raw": "{{url}}/admin/family/visit-settings",
-                      "host": [
-                        "{{url}}"
-                      ],
-                      "path": [
-                        "admin",
-                        "family",
-                        "visit-settings"
-                      ]
-                    },
-                    "description": "Saves what the site offers, and pauses or resumes visiting. Body: branchId, then any of slots [{start, end}] (HH:mm, up to 12, no repeats), places (up to 20, each a name or {name, capacity}: capacity is the most people at once for one time slot, empty for no limit), protectedTimes [{start, end, label}] (up to 6 daily windows nobody can book, such as a mealtime; a slot that overlaps one is not offered), daysAhead (1 to 60), maxPartySize (1 to 20) and paused (true or false) with an optional pausedReason (up to 200 characters). Pausing stops new requests at once (403 visiting_paused), cancels every visit still to come at the site, withdraws their kiosk codes and notifies the families; the response has cancelled, the number of visits cancelled. Anything left out stays as it was. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
-                    "body": {
-                      "mode": "raw",
-                      "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"paused\": true,\n  \"pausedReason\": \"Visiting is paused on Maple floor while we deal with a flu outbreak\"\n}",
                       "options": {
                         "raw": {
                           "language": "json"
@@ -25263,6 +25012,160 @@
           ]
         },
         {
+          "name": "All Settings",
+          "description": "Billing, family and visit settings in one call.",
+          "item": [
+            {
+              "name": "all settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Settings fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data).to.have.property(\"access\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/settings/all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "all"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "The site for visits (an owner, super admin or platform admin picks one)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "All the settings in one call: billing {planLimitGb, baseTierGbp, overageGbpPerGb}, family {configured, gazette {issueEveryDays, messageCap, anchorDate}, updatedAt} and visits (the visiting rules of one site: branchId, timezone, visitingHours {start, end}, protectedTimes, daysAhead, maxPartySize, paused, pausedReason, pausedAt). access says which sections the caller may use: billing is for a platform admin only; family is for an owner or super admin of the organization; visits is for an owner, super admin, site manager, line manager or staff member who holds familyEngagement.view (an owner or super admin needs no stored permission). A section the caller may not use is left out, and so are family and visits when the Family Engagement module is off or no x-org-id is sent. A platform admin sends x-org-id only to also get family and visits. Query branchId picks the site for visits: an owner, super admin or platform admin must send it, and visits is null until they do; a site manager, line manager or staff member always gets their own site."
+              },
+              "response": []
+            },
+            {
+              "name": "update all settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/settings/all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "all"
+                  ]
+                },
+                "description": "Saves any of the three sections in one call. Send only the sections you want to change, and inside a section only what changes. billing {planLimitGb (a number above 0 up to 1000000, or null to clear it), baseTierGbp and overageGbpPerGb (0 to 100000)}: platform admin only; it changes the one limit and prices every organization shares (400 invalid_plan_limit, invalid_billing_price or invalid_billing_settings). family {gazette {issueEveryDays 1-90, messageCap 1-100, anchorDate YYYY-MM-DD}}: owner or super admin; it changes the organization in x-org-id, and the first save needs anchorDate and switches the gazette schedule on. visits {branchId, visitingHours {start, end} (HH:mm, at least half an hour apart), protectedTimes [{start, end, label}], daysAhead 1-60, maxPartySize 1-20, paused, pausedReason}: needs familyEngagement.manage; it changes one site (400 invalid_visit_settings), and pausing cancels the visits still to come and tells the families. Every section is checked for access first and nothing is saved if any is refused (403 insufficient_role). Then the sections are saved in the order billing, family, visits, so a section that fails validation (400) stops the rest: sections before it are already saved. Returns the saved sections. 400 nothing_to_update when no section is sent, 400 invalid_settings_section when one is not an object.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"family\": {\n    \"gazette\": {\n      \"issueEveryDays\": 14,\n      \"messageCap\": 30,\n      \"anchorDate\": \"2026-10-01\"\n    }\n  },\n  \"visits\": {\n    \"branchId\": \"{{branchId}}\",\n    \"daysAhead\": 14,\n    \"maxPartySize\": 6,\n    \"paused\": false\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update billing settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Billing settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.billing).to.have.keys(\"planLimitGb\", \"baseTierGbp\", \"overageGbpPerGb\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/settings/all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "all"
+                  ]
+                },
+                "description": "Billing & Usage settings, sent as the billing section of the all settings call. Platform admin only (403 insufficient_role for anyone else); an x-org-id is not needed. They are the one plan limit every organization shares and the prices on the Billing Readiness card. planLimitGb is a number above 0 up to 1000000, or null to clear it (400 invalid_plan_limit); baseTierGbp and overageGbpPerGb are numbers from 0 to 100000 (400 invalid_billing_price). Send only what changes; a billing section with none of the three is 400 invalid_billing_settings. Returns all three values. Read them with all settings.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"billing\": {\n    \"planLimitGb\": 750,\n    \"baseTierGbp\": 380,\n    \"overageGbpPerGb\": 0.15\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Billing & Usage",
           "description": "Storage used by each organization against one shared plan limit. Everyone sees the screen: a platform admin every organization, an owner their organization and its branches, a site manager, line manager or staff member their own branch. The pencil edits the organization (update organization, in the Organizations folder); only a platform admin changes the billing settings.",
           "item": [
@@ -25338,23 +25241,25 @@
               "response": []
             },
             {
-              "name": "update billing settings",
+              "name": "usage detail",
               "event": [
                 {
                   "listen": "test",
                   "script": {
                     "type": "text/javascript",
                     "exec": [
-                      "pm.test(\"Settings saved\", function () {",
+                      "pm.test(\"Usage detail fetched\", function () {",
                       "    pm.response.to.have.status(200);",
-                      "    pm.expect(pm.response.json().data).to.have.keys(\"planLimitGb\", \"baseTierGbp\", \"overageGbpPerGb\");",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"organization\", \"storage\", \"categories\", \"branches\", \"billing\", \"record\");",
+                      "    pm.expect(data.categories).to.be.an(\"array\");",
                       "});"
                     ]
                   }
                 }
               ],
               "request": {
-                "method": "PUT",
+                "method": "GET",
                 "header": [
                   {
                     "key": "x-org-id",
@@ -25364,26 +25269,18 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/billing/settings",
+                  "raw": "{{url}}/admin/billing/usage/{{organizationId}}",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "admin",
                     "billing",
-                    "settings"
+                    "usage",
+                    "{{organizationId}}"
                   ]
                 },
-                "description": "The billing settings for the whole platform: one plan limit that every organization shares, and the prices on the Billing Readiness card. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb (the storage in GB every organization's plan includes: a number above 0 up to 1000000, or null to clear it; 400 invalid_plan_limit otherwise), baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default; each a number from 0 to 100000, 400 invalid_billing_price otherwise). Send any of the three; none at all is 400 invalid_billing_settings. Returns all three. The limit stays empty (No limit set on every row) until it is set here.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"planLimitGb\": 750,\n  \"baseTierGbp\": 380,\n  \"overageGbpPerGb\": 0.15\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
+                "description": "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts."
               },
               "response": []
             }
@@ -26337,16 +26234,6 @@
       "type": "string"
     },
     {
-      "key": "visitSlot",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "visitPlace",
-      "value": "",
-      "type": "string"
-    },
-    {
       "key": "familyVisitId",
       "value": "",
       "type": "string"
@@ -26368,6 +26255,11 @@
     },
     {
       "key": "notificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitTime",
       "value": "",
       "type": "string"
     }

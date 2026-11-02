@@ -33,7 +33,6 @@ router.use(
 );
 
 router.get("/", requirePermission(FAMILY_VIEW), familyVisitManagerController.listRequests);
-router.get("/capacity", requirePermission(FAMILY_VIEW), familyVisitManagerController.getCapacity);
 router.put("/visiting", pauseLimiter, requirePermission(FAMILY_MANAGE), familyVisitManagerController.updateVisiting);
 router.put("/:id", decideLimiter, requirePermission(FAMILY_APPROVE), familyVisitManagerController.updateRequest);
 

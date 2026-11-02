@@ -11,21 +11,20 @@ const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId } = require("./familyPipeline");
 const {
-  slotId,
-  isProtected,
+  timesOf,
   loadRules,
   visitingNotice,
   visitWindow,
   assertDayInRange,
   cleanText,
   isText,
+  TIME,
   DATE,
 } = require("./familyVisitRules");
 const {
   issueInvitation,
   cancelInvitation,
 } = require("./familyVisitInvitation");
-const { seatsHeld } = require("./familyVisitCapacity");
 const {
   notifyVisitRequested,
   notifyVisitReply,
@@ -109,7 +108,6 @@ const itemStage = {
     status: "$state",
     startAt: 1,
     endAt: 1,
-    place: 1,
     partySize: 1,
     note: 1,
     decisionNote: 1,
@@ -234,16 +232,17 @@ const getNextVisit = async ({ link, userId, now = new Date() }) => {
   return { visit: visit || null, visiting: visitingNotice(rules) };
 };
 
-/** Book A Visit: the days, time slots and places the site offers. */
+/** Book A Visit: the days and start times the site offers. */
 const getOptions = async ({ link, now = new Date() }) => {
   const rules = await loadRules(link.branchId);
   const local = moment.tz(now, rules.timezone);
+  const times = timesOf(rules);
 
   const days = [];
   for (let offset = 0; offset <= rules.daysAhead; offset += 1) {
     const day = local.clone().startOf("day").add(offset, "days");
-    const open = rules.slots.some((slot) => {
-      const [hours, minutes] = slot.start.split(":").map(Number);
+    const open = times.some((time) => {
+      const [hours, minutes] = time.split(":").map(Number);
       return day.clone().hour(hours).minute(minutes).isAfter(local);
     });
     if (open)
@@ -254,10 +253,8 @@ const getOptions = async ({ link, now = new Date() }) => {
     visiting: visitingNotice(rules),
     timezone: rules.timezone,
     days,
-    slots: rules.slots
-      .filter((slot) => !isProtected(slot, rules))
-      .map((slot) => ({ id: slotId(slot), ...slot })),
-    places: rules.places.map((place) => place.name),
+    visitingHours: rules.visitingHours,
+    protectedTimes: rules.protectedTimes.map(({ start, end, label }) => ({ start, end, label: label || "" })),
     maxPartySize: rules.maxPartySize,
   };
 };
@@ -280,25 +277,19 @@ const requestVisit = async ({ link, user, body = {}, now = new Date() }) => {
       reason: rules.pausedReason,
     });
 
-  const slot = isText(body.slot)
-    ? rules.slots.find((candidate) => slotId(candidate) === body.slot)
-    : null;
-  if (!slot) throw new AppError("invalid_visit_slot", 400);
-  if (isProtected(slot, rules)) throw new AppError("visit_protected_time", 400);
+  const time = isText(body.time) && TIME.test(body.time) ? body.time : null;
+  if (!time || !timesOf(rules, { includeProtected: true }).includes(time))
+    throw new AppError("invalid_visit_time", 400);
+  if (!timesOf(rules).includes(time)) throw new AppError("visit_protected_time", 400);
 
   const { startAt, endAt } = visitWindow({
     date: body.date,
-    start: slot.start,
-    end: slot.end,
+    start: time,
+    end: rules.visitingHours.end,
     timezone: rules.timezone,
   });
   assertDayInRange({ date: body.date, rules, now });
   if (startAt <= now) throw new AppError("visit_in_past", 400);
-
-  const place = isText(body.place)
-    ? rules.places.find((candidate) => candidate.name === body.place)
-    : null;
-  if (!place) throw new AppError("invalid_visit_place", 400);
 
   const partySize = readPartySize(body.totalPeople, rules.maxPartySize);
   const note = cleanText(body.note, { field: "note", max: MAX_NOTE_LENGTH });
@@ -327,18 +318,6 @@ const requestVisit = async ({ link, user, body = {}, now = new Date() }) => {
       max: MAX_OPEN_REQUESTS,
     });
 
-  const seatsLeft = async () =>
-    place.capacity === null
-      ? Infinity
-      : place.capacity -
-        (await seatsHeld({
-          branchId: link.branchId,
-          place: place.name,
-          startAt,
-        }));
-  if ((await seatsLeft()) < partySize)
-    throw new AppError("visit_slot_full", 409, { place: place.name });
-
   const visit = await FamilyVisit.create({
     organizationId: link.organizationId,
     branchId: link.branchId,
@@ -348,15 +327,9 @@ const requestVisit = async ({ link, user, body = {}, now = new Date() }) => {
     startAt,
     endAt,
     partySize,
-    place: place.name,
     note,
     status: FamilyVisitStatus.REQUESTED,
   });
-  // Two requests can arrive together and both pass the check above: count again with this one included.
-  if ((await seatsLeft()) < 0) {
-    await FamilyVisit.deleteOne({ _id: visit._id });
-    throw new AppError("visit_slot_full", 409, { place: place.name });
-  }
 
   await notifyVisitRequested({ visit, requesterName: user.name });
 
@@ -390,7 +363,6 @@ const cancelMine = async ({ link, user, visitId, now }) => {
         residentId: 1,
         startAt: 1,
         endAt: 1,
-        place: 1,
       },
     },
   ).lean();

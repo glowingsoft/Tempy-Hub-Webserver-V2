@@ -34,14 +34,6 @@ const listRequests = respond(
   { paged: true },
 );
 
-const getCapacity = respond((req) =>
-  familyVisitStaffService.getCapacity({
-    ...withScope(req),
-    branchId: queryId(req.query.branchId, "branchId"),
-    date: queryText(req.query.date),
-  }),
-);
-
 const decide = (decision, translationKey) => ({
   run: (req) =>
     familyVisitStaffService.decideVisit({
@@ -75,4 +67,4 @@ const updateVisiting = respondByAction({
   resume: setVisiting(false, "visiting_resumed"),
 });
 
-module.exports = { listRequests, getCapacity, updateRequest, updateVisiting };
+module.exports = { listRequests, updateRequest, updateVisiting };

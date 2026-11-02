@@ -10,7 +10,7 @@ const { generateMeta } = require("@utils/responseUtil");
 const { facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
-const { measureOrganization } = require("./storageMeasure");
+const { CATEGORIES, measureOrganization } = require("./storageMeasure");
 
 const GB = 1024 ** 3;
 const MAX_PLAN_LIMIT_GB = 1000000;
@@ -28,6 +28,16 @@ const USAGE_LABELS = {
 const MODERATE_FROM_PERCENT = 60;
 const HIGH_FROM_PERCENT = 90;
 
+const CATEGORY_LABELS = {
+  residents: "Resident Photos & Media",
+  staff: "Staff Profile Photos",
+  floorPlans: "PEEP & Floor Plans",
+  documents: "Documents, Signatures & Leave Attachments",
+  family: "Family Photos, Newsletters & Gazettes",
+  visitors: "Visitor Photos & Signatures",
+  profiles: "Profile Pictures",
+};
+
 const SORTS = {
   usedDesc: { usedBytes: -1, name: 1, _id: 1 },
   usedAsc: { usedBytes: 1, name: 1, _id: 1 },
@@ -43,7 +53,7 @@ const requirePlatformAdmin = (actor) => {
   if (!isPlatformAdmin(actor)) throw new AppError("insufficient_role", 403);
 };
 
-const toGb = (bytes) => Math.round((bytes / GB) * 100) / 100;
+const toGb = (bytes) => Math.round((bytes / GB) * 10000) / 10000;
 const percent = (part, whole) =>
   whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0;
 
@@ -339,6 +349,116 @@ const listUsage = async ({
   };
 };
 
+const sharesOf = (figures, used) => ({
+  gb: toGb(figures.imageBytes + figures.fileBytes),
+  percentOfUsed: percent(figures.imageBytes + figures.fileBytes, used),
+  images: { gb: toGb(figures.imageBytes), count: figures.imageCount },
+  files: { gb: toGb(figures.fileBytes), count: figures.fileCount },
+});
+
+const getUsageDetail = async ({ actor, role, organizationId, scopeOrganizationId }) => {
+  if (!isValidObjectId(organizationId)) throw new AppError("organization_not_found", 404);
+  if (!isPlatformAdmin(actor)) {
+    if (!MAY_EDIT_ORGANIZATION.includes(role)) throw new AppError("insufficient_role", 403);
+    if (String(organizationId) !== String(scopeOrganizationId))
+      throw new AppError("organization_not_found", 404);
+  }
+
+  const target = toObjectId(organizationId);
+  const { planLimitGb, ...prices } = await getBilling();
+  const [[row], branches] = await Promise.all([
+    Organization.aggregate([
+      { $match: { _id: target } },
+      ...organizationStages(planLimitGb),
+      {
+        $project: {
+          ...FIGURES,
+          ownerName: 1, ownerEmail: 1, status: 1, createdAt: 1, updatedAt: 1,
+          limitBytes: 1, categories: "$usage.categories",
+        },
+      },
+    ]),
+    Branch.aggregate([
+      { $match: { organizationId: target } },
+      {
+        $lookup: {
+          from: BranchUsage.collection.name,
+          localField: "_id",
+          foreignField: "branchId",
+          as: "usage",
+        },
+      },
+      { $unwind: { path: "$usage", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          name: 1,
+          imageBytes: { $ifNull: ["$usage.imageBytes", 0] },
+          imageCount: { $ifNull: ["$usage.imageCount", 0] },
+          fileBytes: { $ifNull: ["$usage.fileBytes", 0] },
+          fileCount: { $ifNull: ["$usage.fileCount", 0] },
+        },
+      },
+    ]),
+  ]);
+  if (!row) throw new AppError("organization_not_found", 404);
+
+  const figures = figuresOf(row);
+  const overageBytes = row.limitBytes > 0 ? Math.max(0, row.usedBytes - row.limitBytes) : 0;
+  const overageGb = toGb(overageBytes);
+
+  return {
+    organization: {
+      organizationId: row._id,
+      name: row.name,
+      owner: { name: row.ownerName || "", email: row.ownerEmail || "" },
+      status: row.status,
+    },
+    storage: {
+      totalUsedGb: figures.usedGb,
+      planQuotaGb: row.planLimitGb,
+      quotaPercent: figures.usagePercent,
+      status: figures.status,
+      statusLabel: figures.statusLabel,
+      images: { ...figures.images, percentOfTotal: figures.images.percentOfUsed },
+      files: { ...figures.files, percentOfTotal: figures.files.percentOfUsed },
+      measuredAt: row.measuredAt,
+      unmeasured: row.unmeasured,
+    },
+    categories: CATEGORIES.map((category) => ({
+      key: category,
+      label: CATEGORY_LABELS[category],
+      ...sharesOf(
+        { imageBytes: 0, imageCount: 0, fileBytes: 0, fileCount: 0, ...row.categories?.[category] },
+        row.usedBytes,
+      ),
+    })),
+    branches: branches
+      .sort(
+        (a, b) =>
+          b.imageBytes + b.fileBytes - (a.imageBytes + a.fileBytes) || a.name.localeCompare(b.name),
+      )
+      .map((branch) => {
+        const { gb, images, files } = sharesOf(branch, row.usedBytes);
+        return { branchId: branch._id, name: branch.name, usedGb: gb, images, files };
+      }),
+    billing: {
+      planLimitGb: row.planLimitGb,
+      monthlyBaseGbp: prices.baseTierGbp,
+      overageGbpPerGb: prices.overageGbpPerGb,
+      status: overageBytes > 0 ? "overPlan" : "withinPlan",
+      label: overageBytes > 0 ? "Over Plan" : "Within Plan",
+      overageGb,
+      projectedOverageGbp: Math.round(overageGb * prices.overageGbpPerGb * 100) / 100,
+    },
+    record: { createdAt: row.createdAt, updatedAt: row.updatedAt },
+  };
+};
+
+const getSettings = async ({ actor }) => {
+  requirePlatformAdmin(actor);
+  return getBilling();
+};
+
 const updateSettings = async ({ actor, planLimitGb, baseTierGbp, overageGbpPerGb }) => {
   requirePlatformAdmin(actor);
   const set = {};
@@ -422,9 +542,22 @@ const recalculateOrganization = async (organizationId, now = new Date()) => {
   return true;
 };
 
-const recalculateAll = async () => {
+const recalculateAll = async ({ unmeasuredOnly = false } = {}) => {
   const organizations = await Organization.aggregate([
     { $match: { status: OrganizationStatus.ACTIVE } },
+    ...(unmeasuredOnly
+      ? [
+          {
+            $lookup: {
+              from: OrganizationUsage.collection.name,
+              localField: "_id",
+              foreignField: "organizationId",
+              as: "usage",
+            },
+          },
+          { $match: { usage: { $not: { $elemMatch: { measuredAt: { $ne: null } } } } } },
+        ]
+      : []),
     { $project: { _id: 1 } },
   ]);
   for (const { _id } of organizations) {
@@ -439,6 +572,8 @@ const recalculateAll = async () => {
 
 module.exports = {
   listUsage,
+  getUsageDetail,
+  getSettings,
   updateSettings,
   recalculateOrganization,
   recalculateAll,

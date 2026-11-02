@@ -20,7 +20,7 @@ const handlers = requireRoles(RESIDENT_HANDLER_ROLES);
 
 router.get("/", requireRoles(RESIDENT_READER_ROLES), residentController.listResidents);
 router.post("/", handlers, residentController.createResident);
-router.get("/:residentId", handlers, residentController.getResident);
+router.get("/:residentId", requireRoles(RESIDENT_READER_ROLES), residentController.getResident);
 router.patch("/:residentId", handlers, residentController.updateResident);
 router.put(
   "/:residentId/visitor-passcode",

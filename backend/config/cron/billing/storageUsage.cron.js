@@ -2,4 +2,6 @@ const { recalculateAll } = require("@adminServices/billing/billingUsageService")
 
 const runStorageUsageCron = () => recalculateAll();
 
-module.exports = { runStorageUsageCron };
+const runStorageUsageCatchUp = () => recalculateAll({ unmeasuredOnly: true });
+
+module.exports = { runStorageUsageCron, runStorageUsageCatchUp };

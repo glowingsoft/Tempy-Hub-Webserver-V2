@@ -1,22 +1,5 @@
 const mongoose = require("mongoose");
 
-const slotSchema = new mongoose.Schema(
-  {
-    start: { type: String, required: true },
-    end: { type: String, required: true },
-  },
-  { _id: false },
-);
-
-const placeSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    /** Most people at once in this place for one time slot; empty means no limit. */
-    capacity: { type: Number, min: 1, max: 500, default: null },
-  },
-  { _id: false },
-);
-
 const protectedTimeSchema = new mongoose.Schema(
   {
     start: { type: String, required: true },
@@ -40,8 +23,10 @@ const familyVisitSettingsSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    slots: { type: [slotSchema], default: undefined },
-    places: { type: [placeSchema], default: undefined },
+    visitingHours: {
+      start: { type: String, default: undefined },
+      end: { type: String, default: undefined },
+    },
     /** Daily windows nobody can book, such as a mealtime. */
     protectedTimes: { type: [protectedTimeSchema], default: undefined },
     daysAhead: { type: Number, min: 1, max: 60, default: undefined },

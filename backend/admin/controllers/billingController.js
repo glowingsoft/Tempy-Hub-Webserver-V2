@@ -31,4 +31,14 @@ const getUsageDetail = respond((req) =>
   }),
 );
 
-module.exports = { listUsage, getUsageDetail };
+const getBranchUsageDetail = respond((req) =>
+  billingUsageService.getBranchUsageDetail({
+    actor: req.user,
+    role: req.membership?.role,
+    organizationId: req.params.organizationId,
+    branchId: req.params.branchId,
+    scopeOrganizationId: req.orgId,
+  }),
+);
+
+module.exports = { listUsage, getUsageDetail, getBranchUsageDetail };

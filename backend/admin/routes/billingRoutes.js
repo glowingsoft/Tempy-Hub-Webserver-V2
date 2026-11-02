@@ -16,5 +16,6 @@ router.use(auth, billingAccess);
 
 router.get("/usage", readLimiter, billingController.listUsage);
 router.get("/usage/:organizationId", readLimiter, billingController.getUsageDetail);
+router.get("/usage/:organizationId/branches/:branchId", readLimiter, billingController.getBranchUsageDetail);
 
 module.exports = router;

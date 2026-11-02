@@ -49,6 +49,7 @@ const inPool = async (items, limit, work) => {
 const urlKey = (url) =>
   keyFromUrl(url, { bucket: process.env.S3_BUCKET_NAME });
 
+const MEASUREMENT_VERSION = 2;
 const CATEGORIES = ["residents", "staff", "floorPlans", "documents", "family", "visitors", "profiles"];
 
 const refs = (kind, category, branchId, ...keys) =>
@@ -280,6 +281,9 @@ const sizesOf = async (references) => {
 
 const emptyFigures = () => ({ imageBytes: 0, imageCount: 0, fileBytes: 0, fileCount: 0 });
 
+const emptyCategories = () =>
+  Object.fromEntries(CATEGORIES.map((category) => [category, emptyFigures()]));
+
 const measureOrganization = async (organizationId) => {
   const [references, branches] = await Promise.all([
     gatherReferences(organizationId),
@@ -291,8 +295,10 @@ const measureOrganization = async (organizationId) => {
   const sizes = await sizesOf(references);
 
   const totals = { ...emptyFigures(), unmeasured: 0 };
-  const byBranch = new Map(branches.map((branch) => [String(branch._id), emptyFigures()]));
-  const categories = Object.fromEntries(CATEGORIES.map((category) => [category, emptyFigures()]));
+  const byBranch = new Map(
+    branches.map((branch) => [String(branch._id), { ...emptyFigures(), categories: emptyCategories() }]),
+  );
+  const categories = emptyCategories();
   references.forEach(({ key, kind, category, branchId }) => {
     if (!sizes.has(key)) {
       totals.unmeasured += 1;
@@ -308,6 +314,8 @@ const measureOrganization = async (organizationId) => {
     if (branch) {
       branch[`${kind}Bytes`] += size;
       branch[`${kind}Count`] += 1;
+      branch.categories[category][`${kind}Bytes`] += size;
+      branch.categories[category][`${kind}Count`] += 1;
     }
   });
   return {
@@ -317,4 +325,4 @@ const measureOrganization = async (organizationId) => {
   };
 };
 
-module.exports = { CATEGORIES, gatherReferences, sizesOf, measureOrganization };
+module.exports = { CATEGORIES, MEASUREMENT_VERSION, gatherReferences, sizesOf, measureOrganization };

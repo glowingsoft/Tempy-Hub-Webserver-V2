@@ -25278,55 +25278,17 @@
                     "billing",
                     "usage",
                     "{{organizationId}}"
-                  ]
-                },
-                "description": "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts."
-              },
-              "response": []
-            },
-            {
-              "name": "branch usage detail",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Branch usage detail fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.include.keys(\"scope\", \"organization\", \"branch\", \"storage\", \"categories\", \"billing\", \"record\");",
-                      "    pm.expect(data.scope.type).to.eql(\"branch\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/billing/usage/{{organizationId}}/branches/{{branchId}}",
-                  "host": [
-                    "{{url}}"
                   ],
-                  "path": [
-                    "admin",
-                    "billing",
-                    "usage",
-                    "{{organizationId}}",
-                    "branches",
-                    "{{branchId}}"
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "One branch of the organization: its own usage detail",
+                      "disabled": true
+                    }
                   ]
                 },
-                "description": "The usage detail page of one branch (click a branch row on an organization's branch list). The ids in the path are organizationId and branchId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, an owner asking for another organization gets 404 organization_not_found, and a branch that is not in the organization is 404 branch_not_found. Same sections as the organization detail, for that branch only: scope {type: branch, branchId}, organization {organizationId, name, owner {name, email}, status}, branch {branchId, name, status}, storage (totalUsedGb, planQuotaGb, which is the organization's shared limit, quotaPercent, status, images and files), categories (the same list, for this branch), branches (just this one), billing and record. The branch's category figures are filled by the next measurement after a restart or the nightly run; until then every category shows 0."
+                "description": "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts. Add the query branchId to get the usage detail of one branch of that organization instead (click a branch row on the organization's branch list). A branch detail has scope {type: branch, branchId}, organization {organizationId, name, owner {name, email}, status}, branch {branchId, name, status} and the same storage, categories, billing and record sections for that branch only; planQuotaGb is the organization's shared limit, and branches is just that one. A branch that is not in the organization is 404 branch_not_found. The branch's category figures are filled by the next measurement after a restart or the nightly run; until then every category shows 0."
               },
               "response": []
             }

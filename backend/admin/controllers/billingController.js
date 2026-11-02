@@ -27,18 +27,9 @@ const getUsageDetail = respond((req) =>
     actor: req.user,
     role: req.membership?.role,
     organizationId: req.params.organizationId,
+    branchId: queryId(req.query.branchId, "branchId"),
     scopeOrganizationId: req.orgId,
   }),
 );
 
-const getBranchUsageDetail = respond((req) =>
-  billingUsageService.getBranchUsageDetail({
-    actor: req.user,
-    role: req.membership?.role,
-    organizationId: req.params.organizationId,
-    branchId: req.params.branchId,
-    scopeOrganizationId: req.orgId,
-  }),
-);
-
-module.exports = { listUsage, getUsageDetail, getBranchUsageDetail };
+module.exports = { listUsage, getUsageDetail };

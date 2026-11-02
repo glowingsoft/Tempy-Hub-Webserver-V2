@@ -430,8 +430,7 @@ const requireDetailAccess = ({ actor, role, organizationId, scopeOrganizationId 
     throw new AppError("organization_not_found", 404);
 };
 
-const getUsageDetail = async (access) => {
-  requireDetailAccess(access);
+const getOrganizationUsageDetail = async (access) => {
   const target = toObjectId(access.organizationId);
   const { planLimitGb, ...prices } = await getBilling();
   const [[row], branches] = await Promise.all([
@@ -481,7 +480,6 @@ const getUsageDetail = async (access) => {
 };
 
 const getBranchUsageDetail = async ({ branchId, ...access }) => {
-  requireDetailAccess(access);
   const target = toObjectId(access.organizationId);
   const { planLimitGb, ...prices } = await getBilling();
   const [[organization], [row]] = await Promise.all([
@@ -516,6 +514,13 @@ const getBranchUsageDetail = async ({ branchId, ...access }) => {
       branch: { branchId: row._id, name: row.name, status: row.status },
     },
   });
+};
+
+const getUsageDetail = async ({ branchId, ...access }) => {
+  requireDetailAccess(access);
+  return branchId
+    ? getBranchUsageDetail({ branchId, ...access })
+    : getOrganizationUsageDetail(access);
 };
 
 const getSettings = async ({ actor }) => {
@@ -645,7 +650,6 @@ const recalculateAll = async ({ unmeasuredOnly = false } = {}) => {
 module.exports = {
   listUsage,
   getUsageDetail,
-  getBranchUsageDetail,
   getSettings,
   updateSettings,
   recalculateOrganization,

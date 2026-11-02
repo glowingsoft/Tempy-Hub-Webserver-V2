@@ -3,7 +3,6 @@ const { acquireLock, releaseLock } = require("../redis/redisCache");
 const { isRedisUp } = require("../redis/redisConfig");
 const { runHeartbeatCron } = require("./jobs/heartbeat.cron");
 const { runAutoCheckoutCron } = require("./jobs/autoCheckout.cron");
-const { runEventReminderCron } = require("./events/eventReminder.cron");
 const {
   runFamilyScheduledPostsCron,
   runFamilyScheduledNewslettersCron,
@@ -67,14 +66,6 @@ const startCrons = () => {
     ttlSec: 600,
     enabled: envFlag("CRON_AUTO_CHECKOUT", true),
     run: runAutoCheckoutCron,
-  });
-
-  registerJob({
-    name: "event-reminder",
-    schedule: process.env.CRON_EVENT_REMINDER_SCHEDULE || "* * * * *",
-    ttlSec: 50,
-    enabled: envFlag("CRON_EVENT_REMINDER", true),
-    run: runEventReminderCron,
   });
 
   registerJob({

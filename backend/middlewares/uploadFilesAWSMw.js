@@ -6,7 +6,7 @@ const storage = multer.memoryStorage(); // Store files in memory as a buffer
 // Multer middleware for file upload
 const uploads3Mw = multer({
   storage: storage,
-  // limits: { fileSize: 10 * 1024 * 1024 }, // Initial limit to handle larger uncompressed files
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MiB maximum per file
   fileFilter: (req, file, cb) => {
     checkFileType(file, cb);
   },

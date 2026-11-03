@@ -6,7 +6,18 @@ const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const mapMulterError = (res, err) => {
   if (err instanceof multer.MulterError) {
-    if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return sendResponse({
+        res,
+        statusCode: 413,
+        translationKey: "file_upload",
+        values: { errorMessage: "Request Entity Too large" },
+      });
+    }
+    if (
+      err.code === "LIMIT_FILE_COUNT" ||
+      err.code === "LIMIT_UNEXPECTED_FILE"
+    ) {
       return sendResponse({
         res,
         statusCode: 400,

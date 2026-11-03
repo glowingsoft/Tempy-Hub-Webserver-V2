@@ -27258,6 +27258,62 @@
           ]
         },
         {
+          "name": "Site Manager Dashboard",
+          "description": "The site manager home screen.",
+          "item": [
+            {
+              "name": "site dashboard",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Dashboard fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"summary\", \"peopleOnSite\", \"activityFeed\", \"visitorAndContractorActivity\", \"compliance\", \"staffTraining\", \"supervisionAppraisal\", \"openShifts\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/site-dashboard",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "site-dashboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "people",
+                      "value": "all",
+                      "description": "People on site now filter: all, staff, resident, visitor, contractor or professional",
+                      "disabled": true
+                    },
+                    {
+                      "key": "period",
+                      "value": "thisMonth",
+                      "description": "Visitor and contractor activity: thisWeek, thisMonth (default) or thisYear",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The site manager dashboard in one call. Site manager only, and always their own site; everyone else gets 403. Query: people (the People filter of People on site now: all, staff, resident, visitor, contractor or professional; 400 invalid_people_filter) and period (the Visitor and contractor activity dropdown: thisWeek, thisMonth, which is the default, or thisYear; 400 invalid_activity_period). summary (the cards): visitorsOnSite, staffOnSite, residentsPresent (admitted), pendingApprovals (visits waiting for approval), contractorsOnSite, professionalsOnSite and residentsOutOfHome (null because nothing stores it). peopleOnSite: total and the five latest check-ins {name, email, photoUrl, type (staff, resident, visitor, contractor or professional; All lists staff, visitors, contractors and professionals, residents only with the Residents filter), checkInAt, status (onSite or onBreak)}. activityFeed: the six latest events of the site (the same items as Site Live activity, View all uses site-live/activity). visitorAndContractorActivity (for the period): visitorVisits, contractorProfessionalVisits, averageVisitMinutes (null when no visit has checked out) and topReasons {reason, count}, three at most. compliance and staffTraining: compliantPercent for the site team and items {name, pending, dueAt} of competency and training requirements not yet met, the earliest due first, three at most. supervisionAppraisal: compliantPercent and items {type (supervision or appraisal), staffName, status (overdue, dueSoon or booked), dueAt (null when overdue)}, overdue first, three at most. openShifts: the site's upcoming open shifts, soonest first, five at most {startsAt, endsAt, urgentCover, openedAt}."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Owner Dashboard",
           "description": "The owner home screen.",
           "item": [

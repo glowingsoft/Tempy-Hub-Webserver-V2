@@ -744,5 +744,8 @@
   "visitor_survey_question_not_found": "Survey question not found",
   "visitor_survey_answers_required": "Answers are required",
   "visitor_survey_answer_required": "Answer every required question",
-  "visitor_survey_response_saved": "Visitor feedback saved"
+  "visitor_survey_response_saved": "Visitor feedback saved",
+  "invalid_people_filter": "People must be all, staff, resident, visitor, contractor or professional",
+  "invalid_statistics_period": "Period must be thisMonth, thisQuarter or thisYear",
+  "invalid_activity_period": "Period must be thisWeek, thisMonth or thisYear"
 }

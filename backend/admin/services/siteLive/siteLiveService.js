@@ -47,59 +47,52 @@ const getSiteLive = async ({ actor, organizationId, branchId }) => {
     branchId,
   });
 
-  const [
-    onSite,
-    evacuation,
-    walkIns,
-    planned,
-    kiosks,
-    myStatus,
-    activity,
-  ] = await Promise.all([
-    evacuationService.getOnSiteSummary({
-      organizationId,
-      branchId: liveBranchId,
-    }),
-    evacuationService.getActiveEvacuation({
-      organizationId,
-      branchId: liveBranchId,
-      includeStats: true,
-    }),
-    visitSessionService.listVisitSessions({
-      actor,
-      organizationId,
-      branchId: liveBranchId,
-      status: VisitSessionStatus.AWAITING_APPROVAL,
-      method: VisitMethod.WALK_IN,
-      page: 1,
-      limit: WALK_IN_PREVIEW,
-      skip: 0,
-    }),
-    visitorInvitationService.listVisitorInvitations({
-      actor,
-      organizationId,
-      branchId: liveBranchId,
-      status: InvitationStatus.ACCEPTED,
-      page: 1,
-      limit: PLANNED_PREVIEW,
-      skip: 0,
-    }),
-    kioskService.listKiosksForAdmin({
-      actor,
-      organizationId,
-      branchId: liveBranchId,
-      page: 1,
-      limit: KIOSK_LIMIT,
-      skip: 0,
-    }),
-    loadMyStatus({ userId: actor._id, organizationId }),
-    listSiteActivity({
-      branchId: liveBranchId,
-      page: 1,
-      limit: ACTIVITY_PREVIEW_LIMIT,
-      skip: 0,
-    }),
-  ]);
+  const [onSite, evacuation, walkIns, planned, kiosks, myStatus, activity] =
+    await Promise.all([
+      evacuationService.getOnSiteSummary({
+        organizationId,
+        branchId: liveBranchId,
+      }),
+      evacuationService.getActiveEvacuation({
+        organizationId,
+        branchId: liveBranchId,
+        includeStats: true,
+      }),
+      visitSessionService.listVisitSessions({
+        actor,
+        organizationId,
+        branchId: liveBranchId,
+        status: VisitSessionStatus.AWAITING_APPROVAL,
+        method: VisitMethod.WALK_IN,
+        page: 1,
+        limit: WALK_IN_PREVIEW,
+        skip: 0,
+      }),
+      visitorInvitationService.listVisitorInvitations({
+        actor,
+        organizationId,
+        branchId: liveBranchId,
+        status: InvitationStatus.ACCEPTED,
+        page: 1,
+        limit: PLANNED_PREVIEW,
+        skip: 0,
+      }),
+      kioskService.listKiosksForAdmin({
+        actor,
+        organizationId,
+        branchId: liveBranchId,
+        page: 1,
+        limit: KIOSK_LIMIT,
+        skip: 0,
+      }),
+      loadMyStatus({ userId: actor._id, organizationId }),
+      listSiteActivity({
+        branchId: liveBranchId,
+        page: 1,
+        limit: ACTIVITY_PREVIEW_LIMIT,
+        skip: 0,
+      }),
+    ]);
 
   return {
     branch: {
@@ -153,4 +146,4 @@ const getSiteLiveActivity = async ({
   });
 };
 
-module.exports = { getSiteLive, getSiteLiveActivity };
+module.exports = { getSiteLive, getSiteLiveActivity, resolveLiveBranchId };

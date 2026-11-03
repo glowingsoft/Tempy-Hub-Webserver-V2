@@ -368,23 +368,24 @@ const meetingScores = (standings, now) => {
   };
 };
 
-const complianceSnapshot = async ({ organization, branchZones, now }) => {
+const complianceSnapshot = async ({ organization, branchZones, now, branchId = null }) => {
+  const scope = branchId ? { branchId } : {};
   const [staff, [org], supervisions, appraisals, assignments] = await Promise.all([
     StaffProfile.aggregate([
-      { $match: { organizationId: organization, status: StaffProfileStatus.ACTIVE } },
+      { $match: { organizationId: organization, status: StaffProfileStatus.ACTIVE, ...scope } },
       { $project: { branchId: 1, startDate: 1, supervisionIntervalMonths: 1, appraisalIntervalMonths: 1 } },
     ]),
     Organization.aggregate([{ $match: { _id: organization } }, { $project: { settings: 1 } }]),
     SupervisionRecord.aggregate([
-      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED } } },
+      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED }, ...scope } },
       { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1 } },
     ]),
     AppraisalRecord.aggregate([
-      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED } } },
+      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED }, ...scope } },
       { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1, kind: 1 } },
     ]),
     RequirementAssignment.aggregate([
-      { $match: { organizationId: organization } },
+      { $match: { organizationId: organization, ...scope } },
       { $lookup: { from: Requirement.collection.name, localField: "requirementId", foreignField: "_id", as: "requirement" } },
       { $unwind: "$requirement" },
       { $lookup: { from: RequirementRecord.collection.name, localField: "_id", foreignField: "assignmentId", as: "records" } },
@@ -433,6 +434,7 @@ const complianceSnapshot = async ({ organization, branchZones, now }) => {
   const supervision = meetingScores(supervisionStandings, now);
   const appraisal = meetingScores(appraisalStandings, now);
   return {
+    detail: { staff, cells, supervisionStandings, appraisalStandings },
     competency: requirementScores(cells.filter((cell) => cell.type === RequirementType.COMPETENCY)),
     training: requirementScores(cells.filter((cell) => cell.type === RequirementType.TRAINING)),
     supervisionAppraisal: {
@@ -496,14 +498,14 @@ const workforceUtilisation = async ({ organization, branchIds, now }) => {
   };
 };
 
-const openShifts = ({ organization, now }) =>
+const openShifts = ({ organization, now, branchId = null, include = {} }) =>
   Shift.aggregate([
-    { $match: { organizationId: organization, status: ShiftStatus.OPEN, startsAt: { $gt: now } } },
+    { $match: { organizationId: organization, status: ShiftStatus.OPEN, startsAt: { $gt: now }, ...(branchId ? { branchId } : {}) } },
     { $sort: { startsAt: 1 } },
     { $limit: OPEN_SHIFTS_SHOWN },
     { $lookup: { from: Branch.collection.name, localField: "branchId", foreignField: "_id", as: "branch" } },
     { $unwind: { path: "$branch", preserveNullAndEmptyArrays: true } },
-    { $project: { _id: 0, siteName: { $ifNull: ["$branch.name", ""] }, startsAt: 1, endsAt: 1, urgentCover: { $ifNull: ["$urgentCover", false] } } },
+    { $project: { _id: 0, siteName: { $ifNull: ["$branch.name", ""] }, startsAt: 1, endsAt: 1, urgentCover: { $ifNull: ["$urgentCover", false] }, ...include } },
   ]);
 
 const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
@@ -596,4 +598,4 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
   };
 };
 
-module.exports = { getOwnerDashboard };
+module.exports = { getOwnerDashboard, complianceSnapshot, openShifts };

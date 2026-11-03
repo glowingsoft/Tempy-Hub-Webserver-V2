@@ -88,7 +88,7 @@ jobs:
       - name: Install dependencies
         run: |
           # Install dependencies if package.json was changed
-          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd ~/backend-dev && npm install --force"
+          ssh -i ~/.ssh/ec2_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd ~/backend-dev && npm install --legacy-peer-deps --no-audit --no-fund"
 
       - name: Setup pm2 to auto-start
         run: |

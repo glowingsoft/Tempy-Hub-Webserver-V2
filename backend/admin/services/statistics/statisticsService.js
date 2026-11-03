@@ -8,6 +8,7 @@ const { JobTitle } = require("@models/JobTitle");
 const {
   AdmissionStatus,
   ExternalPersonType,
+  MembershipRole,
   StaffProfileStatus,
 } = require("@models/domainEnums");
 
@@ -53,35 +54,49 @@ const getPreviousPeriod = (period, currentRange) => {
   };
 };
 
+const leftAtStage = {
+  $addFields: {
+    leftAt: {
+      $cond: [
+        { $eq: ["$status", StaffProfileStatus.INACTIVE] },
+        { $ifNull: ["$inactiveAt", "$updatedAt"] },
+        null,
+      ],
+    },
+  },
+};
+
 const getWorkforcePeriod = async (staffScope, range) => {
-  const activeStatuses = [StaffProfileStatus.ACTIVE, StaffProfileStatus.ON_LEAVE];
-  const employedBefore = (date) => ({
-    startDate: { $lt: date },
-    $or: [
-      { status: { $in: activeStatuses } },
-      { inactiveAt: { $gte: date } },
-    ],
+  const employedAt = (date) => ({
+    $and: [{ $lt: ["$startDate", date] }, { $or: [{ $eq: ["$leftAt", null] }, { $gte: ["$leftAt", date] }] }],
   });
-  const atStart = employedBefore(range.start);
-  const atEnd = employedBefore(range.end);
-  const [startingHeadcount, retainedHeadcount, newStarters, leavers] = await Promise.all([
-    StaffProfile.countDocuments({ ...staffScope, ...atStart }),
-    StaffProfile.countDocuments({ ...staffScope, $and: [atStart, atEnd] }),
-    StaffProfile.countDocuments({ ...staffScope, startDate: { $gte: range.start, $lt: range.end } }),
-    StaffProfile.countDocuments({ ...staffScope, status: StaffProfileStatus.INACTIVE, inactiveAt: { $gte: range.start, $lt: range.end } }),
+  const inRange = (field) => ({ $and: [{ $gte: [field, range.start] }, { $lt: [field, range.end] }] });
+  const [row] = await StaffProfile.aggregate([
+    { $match: staffScope },
+    leftAtStage,
+    {
+      $group: {
+        _id: null,
+        startingHeadcount: { $sum: { $cond: [employedAt(range.start), 1, 0] } },
+        retainedHeadcount: {
+          $sum: { $cond: [{ $and: [employedAt(range.start), employedAt(range.end)] }, 1, 0] },
+        },
+        newStarters: { $sum: { $cond: [inRange("$startDate"), 1, 0] } },
+        leavers: { $sum: { $cond: [{ $and: [{ $ne: ["$leftAt", null] }, inRange("$leftAt")] }, 1, 0] } },
+      },
+    },
   ]);
+  const { startingHeadcount = 0, retainedHeadcount = 0, newStarters = 0, leavers = 0 } = row || {};
 
   return {
-    retentionRate: startingHeadcount
-      ? (retainedHeadcount / startingHeadcount) * 100
-      : 0,
+    retentionRate: startingHeadcount ? (retainedHeadcount / startingHeadcount) * 100 : 0,
     newStarters,
     leavers,
   };
 };
 
-const getStatistics = async ({ organizationId, requestedBranchId, role, membershipBranchId, year, period = "thisQuarter" }) => {
-  const effectiveBranchId = role === "siteManager" ? membershipBranchId : requestedBranchId;
+const getStatistics = async ({ organizationId, requestedBranchId, role, membershipBranchId, year, period = "thisQuarter", now = new Date() }) => {
+  const effectiveBranchId = role === MembershipRole.SITE_MANAGER ? membershipBranchId : requestedBranchId;
   const scope = { organizationId: new mongoose.Types.ObjectId(organizationId) };
 
   if (effectiveBranchId) {
@@ -100,7 +115,7 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
 
   const yearStart = new Date(Date.UTC(selectedYear, 0, 1));
   const yearEnd = new Date(Date.UTC(selectedYear + 1, 0, 1));
-  const range = resolvePeriod(period, new Date());
+  const range = resolvePeriod(period, now);
   const previousRange = getPreviousPeriod(period, range);
   const staffScope = { ...scope };
   const peopleScope = effectiveBranchId
@@ -123,13 +138,26 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
     ]),
     StaffProfile.aggregate([
       { $match: { ...staffScope, startDate: { $lt: yearEnd } } },
-      { $group: {
-        _id: {
-          jobTitleId: "$jobTitleId",
-          month: { $cond: [{ $lt: ["$startDate", yearStart] }, 0, { $month: "$startDate" }] },
+      leftAtStage,
+      {
+        $project: {
+          jobTitleId: 1,
+          startMonth: { $cond: [{ $lt: ["$startDate", yearStart] }, 0, { $month: "$startDate" }] },
+          leaveMonth: {
+            $cond: [
+              { $or: [{ $eq: ["$leftAt", null] }, { $gte: ["$leftAt", yearEnd] }] },
+              null,
+              { $cond: [{ $lt: ["$leftAt", yearStart] }, 0, { $month: "$leftAt" }] },
+            ],
+          },
         },
-        count: { $sum: 1 },
-      } },
+      },
+      {
+        $group: {
+          _id: { jobTitleId: "$jobTitleId", startMonth: "$startMonth", leaveMonth: "$leaveMonth" },
+          count: { $sum: 1 },
+        },
+      },
     ]),
     getWorkforcePeriod(staffScope, range),
     getWorkforcePeriod(staffScope, previousRange),
@@ -144,16 +172,22 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
   const activeStaff = countByStatus.get(StaffProfileStatus.ACTIVE) || 0;
 
   const employeesByRole = roleHires.map((row) => ({ role: titleName(row._id), count: row.count }));
-  const hireCounts = new Map(monthlyHires.map((row) => [`${row._id.jobTitleId}:${row._id.month}`, row.count]));
-  const trackedTitles = [...new Set(monthlyHires.map((row) => String(row._id.jobTitleId)))];
-  const employeesOverTime = trackedTitles.map((jobTitleId) => {
-    let cumulative = hireCounts.get(`${jobTitleId}:0`) || 0;
-    const data = MONTHS.map((_, index) => {
-      cumulative += hireCounts.get(`${jobTitleId}:${index + 1}`) || 0;
-      return cumulative;
-    });
-    return { role: titleName(jobTitleId), data };
+  const rowsByTitle = new Map();
+  monthlyHires.forEach((row) => {
+    const key = String(row._id.jobTitleId);
+    rowsByTitle.set(key, [...(rowsByTitle.get(key) || []), row]);
   });
+  const employeesOverTime = [...rowsByTitle]
+    .map(([jobTitleId, rows]) => ({
+      role: titleName(jobTitleId),
+      data: MONTHS.map((_, index) => {
+        const month = index + 1;
+        return rows
+          .filter(({ _id }) => _id.startMonth <= month && (_id.leaveMonth === null || _id.leaveMonth > month))
+          .reduce((total, row) => total + row.count, 0);
+      }),
+    }))
+    .filter((series) => series.data.some(Boolean));
 
   const retentionRate = Math.round(workforce.retentionRate);
   const previousRetentionRate = Math.round(previousWorkforce.retentionRate);

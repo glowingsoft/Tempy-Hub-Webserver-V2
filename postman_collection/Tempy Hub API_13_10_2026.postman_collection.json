@@ -25012,6 +25012,108 @@
           ]
         },
         {
+          "name": "Statistics",
+          "description": "Statistics screen data for an organization or site. Requires a signed-in owner, site manager or super admin and x-org-id. Owners and super admins see the whole organization by default and can pass branchId to filter to one site. Site managers are always limited to their membership site. Returns summary, employeesByRole, employeesOverTime for the requested year, and workforceMovement. workforceMovement has retentionRate, newStarters and leavers; each is {value, change, previousValue}, where change compares the selected period with the immediately previous period. Retention is a percentage and its change is in percentage points. period accepts thisMonth, thisQuarter (default) or thisYear.",
+          "item": [
+            {
+              "name": "statistic",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope."
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/statistics?year=2026&period=thisQuarter&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "statistics"
+                  ],
+                  "query": [
+                    {
+                      "key": "year",
+                      "value": "2026",
+                      "description": "Year shown in the monthly employee chart."
+                    },
+                    {
+                      "key": "period",
+                      "value": "thisQuarter",
+                      "description": "Workforce summary period: thisMonth, thisQuarter or thisYear."
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Optional site filter for owner and super admin. Site managers are automatically restricted to their membership site."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Super Admin Dashboard",
+          "description": "The Super Admin home screen.",
+          "item": [
+            {
+              "name": "super admin dashboard",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Dashboard fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"summary\", \"onboardingGrowth\", \"topOrganizations\", \"organizationOverview\", \"dataUsage\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/platform/dashboard",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "platform",
+                    "dashboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "year",
+                      "value": "2026",
+                      "description": "The year of the onboarding and data usage charts (the current year by default)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "organizationId",
+                      "value": "{{organizationId}}",
+                      "description": "The organization shown in Organizational Overview (the one with the most modules by default)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The Super Admin dashboard in one call. Platform admin only (Admin Login, no x-org-id): anyone else gets 403. Query: year (the year of the two charts, the current year by default; 400 invalid_statistics_year outside 2000 to 2100) and organizationId (the Select organization dropdown of Organizational Overview; the organization with the most modules by default; 404 organization_not_found). summary (the cards, over every organization): organizations, sites (branches), pendingInvitations (staff and owner invitations that are still pending and not expired), professionals (professional people records), siteAndLineManagers (active site and line manager memberships), staff (active staff profiles), residents (admitted) and totalMonthlyRevenueGbp (the Total Monthly Revenue card). onboardingGrowth (Onboarding Growth): year, months (Jan to Dec), organizations and sites (running totals at the end of each month; null for months still to come) and changePercent, the growth of organizations plus sites against a year ago (null when there were none then). topOrganizations (Top Organizations, five at most, most modules first): organizationId, name, status and modules (enabled modules that have not expired); organizations lists them all for the dropdown. revenueByOrganization (Revenue by Organization): organizationId, name and monthlyRevenueGbp for every organization. organizationOverview (the bars for the selected organization, null when there are none): organizationId, name, sites, staff, residents, modules, siteManagers and lineManagers. dataUsage (Data Usage & Images Shared): year, usedGb, planQuotaGb (the one plan limit times the number of organizations, null until the limit is set), quotaPercent, images and files {gb, percentOfUsed} and months, one per month with imagesGb, filesGb and totalGb. A past month shows what the nightly measurement recorded on its last run that month, so months before recording began are null; the current month shows today's numbers. Blank for now: totalMonthlyRevenueGbp and every monthlyRevenueGbp are null, because nothing stores revenue yet; the frontend shows them empty. Not included: Sites by Region, because nothing stores a branch's region."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "All Settings",
           "description": "Billing, family and visit settings in one call.",
           "item": [
@@ -25289,53 +25391,6 @@
                   ]
                 },
                 "description": "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts. Add the query branchId to get the usage detail of one branch of that organization instead (click a branch row on the organization's branch list). A branch detail has scope {type: branch, branchId}, organization {organizationId, name, owner {name, email}, status}, branch {branchId, name, status} and the same storage, categories, billing and record sections for that branch only; planQuotaGb is the organization's shared limit, and branches is just that one. A branch that is not in the organization is 404 branch_not_found. The branch's category figures are filled by the next measurement after a restart or the nightly run; until then every category shows 0."
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Statistics",
-          "description": "Statistics screen data for an organization or site. Requires a signed-in owner, site manager or super admin and x-org-id. Owners and super admins see the whole organization by default and can pass branchId to filter to one site. Site managers are always limited to their membership site. Returns summary, employeesByRole, employeesOverTime for the requested year, and workforceMovement. workforceMovement has retentionRate, newStarters and leavers; each is {value, change, previousValue}, where change compares the selected period with the immediately previous period. Retention is a percentage and its change is in percentage points. period accepts thisMonth, thisQuarter (default) or thisYear.",
-          "item": [
-            {
-              "name": "statistic",
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope."
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/statistics?year=2026&period=thisQuarter&branchId={{branchId}}",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "statistics"
-                  ],
-                  "query": [
-                    {
-                      "key": "year",
-                      "value": "2026",
-                      "description": "Year shown in the monthly employee chart."
-                    },
-                    {
-                      "key": "period",
-                      "value": "thisQuarter",
-                      "description": "Workforce summary period: thisMonth, thisQuarter or thisYear."
-                    },
-                    {
-                      "key": "branchId",
-                      "value": "{{branchId}}",
-                      "description": "Optional site filter for owner and super admin. Site managers are automatically restricted to their membership site."
-                    }
-                  ]
-                }
               },
               "response": []
             }

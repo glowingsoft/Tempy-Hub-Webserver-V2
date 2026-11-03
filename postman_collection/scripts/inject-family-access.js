@@ -2219,7 +2219,29 @@ const allSettingsRequests = [
   ),
 ];
 
-adminFolder.item = adminFolder.item.filter((i) => i.name !== "Billing & Usage" && i.name !== "All Settings");
+const dashboardRequests = [
+  req("super admin dashboard", "GET", ["admin", "platform", "dashboard"], {
+    optional: {
+      year: ["2026", "The year of the onboarding and data usage charts (the current year by default)"],
+      organizationId: ["{{organizationId}}", "The organization shown in Organizational Overview (the one with the most modules by default)"],
+    },
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("summary", "onboardingGrowth", "topOrganizations", "organizationOverview", "dataUsage");',
+      "});",
+    ],
+    description: "The Super Admin dashboard in one call. Platform admin only (Admin Login, no x-org-id): anyone else gets 403. Query: year (the year of the two charts, the current year by default; 400 invalid_statistics_year outside 2000 to 2100) and organizationId (the Select organization dropdown of Organizational Overview; the organization with the most modules by default; 404 organization_not_found). summary (the cards, over every organization): organizations, sites (branches), pendingInvitations (staff and owner invitations that are still pending and not expired), professionals (professional people records), siteAndLineManagers (active site and line manager memberships), staff (active staff profiles), residents (admitted) and totalMonthlyRevenueGbp (the Total Monthly Revenue card). onboardingGrowth (Onboarding Growth): year, months (Jan to Dec), organizations and sites (running totals at the end of each month; null for months still to come) and changePercent, the growth of organizations plus sites against a year ago (null when there were none then). topOrganizations (Top Organizations, five at most, most modules first): organizationId, name, status and modules (enabled modules that have not expired); organizations lists them all for the dropdown. revenueByOrganization (Revenue by Organization): organizationId, name and monthlyRevenueGbp for every organization. organizationOverview (the bars for the selected organization, null when there are none): organizationId, name, sites, staff, residents, modules, siteManagers and lineManagers. dataUsage (Data Usage & Images Shared): year, usedGb, planQuotaGb (the one plan limit times the number of organizations, null until the limit is set), quotaPercent, images and files {gb, percentOfUsed} and months, one per month with imagesGb, filesGb and totalGb. A past month shows what the nightly measurement recorded on its last run that month, so months before recording began are null; the current month shows today's numbers. Blank for now: totalMonthlyRevenueGbp and every monthlyRevenueGbp are null, because nothing stores revenue yet; the frontend shows them empty. Not included: Sites by Region, because nothing stores a branch's region.",
+  }),
+];
+
+adminFolder.item = adminFolder.item.filter((i) => !["Billing & Usage", "All Settings", "Super Admin Dashboard"].includes(i.name));
+adminFolder.item.push({
+  name: "Super Admin Dashboard",
+  description: "The Super Admin home screen.",
+  item: dashboardRequests,
+});
 adminFolder.item.push({
   name: "All Settings",
   description: "Billing, family and visit settings in one call.",

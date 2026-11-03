@@ -39,6 +39,7 @@ const kioskAdminRoutes = require("./kioskAdminRoutes.js");
 const floorPlanRoutes = require("./floorPlanRoutes.js");
 const peepRecordRoutes = require("./peepRecordRoutes.js");
 const statisticsRoutes = require("./statisticsRoutes.js");
+const platformRoutes = require("./platformRoutes.js");
 
 const {
   listModuleDefinitions,
@@ -82,6 +83,7 @@ router.use("/kiosks", kioskAdminRoutes);
 router.use("/floor-plans", floorPlanRoutes);
 router.use("/peep-records", peepRecordRoutes);
 router.use("/statistics", statisticsRoutes);
+router.use("/platform", platformRoutes);
 
 router.get("/module-definitions", auth, listModuleDefinitions);
 

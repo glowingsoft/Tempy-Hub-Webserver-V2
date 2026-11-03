@@ -3,6 +3,7 @@ const { User } = require("@models/UserModel");
 const { Branch } = require("@models/Branch");
 const { OrganizationUsage } = require("@models/OrganizationUsage");
 const { BranchUsage } = require("@models/BranchUsage");
+const { UsageSnapshot } = require("@models/UsageSnapshot");
 const { PlatformBilling, SETTINGS_KEY } = require("@models/PlatformBilling");
 const { MembershipRole, OrganizationStatus } = require("@models/domainEnums");
 const { searchText } = require("@utils/familyQuery");
@@ -611,6 +612,25 @@ const recalculateOrganization = async (organizationId, now = new Date()) => {
   return true;
 };
 
+const recordUsageSnapshot = async (now = new Date()) => {
+  const [totals] = await OrganizationUsage.aggregate([
+    { $group: { _id: null, imageBytes: { $sum: "$imageBytes" }, fileBytes: { $sum: "$fileBytes" }, organizations: { $sum: 1 } } },
+  ]);
+  const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  await UsageSnapshot.updateOne(
+    { month },
+    {
+      $set: {
+        imageBytes: totals?.imageBytes ?? 0,
+        fileBytes: totals?.fileBytes ?? 0,
+        organizations: totals?.organizations ?? 0,
+        capturedAt: now,
+      },
+    },
+    { upsert: true },
+  );
+};
+
 const recalculateAll = async ({ unmeasuredOnly = false } = {}) => {
   const organizations = await Organization.aggregate([
     { $match: { status: OrganizationStatus.ACTIVE } },
@@ -644,10 +664,18 @@ const recalculateAll = async ({ unmeasuredOnly = false } = {}) => {
       console.error("usage measurement failed", String(_id), error.message);
     }
   }
+  try {
+    await recordUsageSnapshot();
+  } catch (error) {
+    console.error("usage snapshot failed", error.message);
+  }
   return organizations.length;
 };
 
 module.exports = {
+  toGb,
+  getBilling,
+  recordUsageSnapshot,
   listUsage,
   getUsageDetail,
   getSettings,

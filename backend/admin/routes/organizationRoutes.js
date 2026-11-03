@@ -14,6 +14,8 @@ const { MembershipRole, ModuleSlug } = require("@models/domainEnums");
 
 const organizationController = require("../controllers/organizationController");
 
+const ownerDashboardController = require("../controllers/ownerDashboardController");
+
 const branchController = require("../controllers/branchController");
 
 const membershipController = require("../controllers/membershipController");
@@ -79,6 +81,12 @@ router.get("/", organizationController.listOrganizations);
 const scoped = express.Router({ mergeParams: true });
 
 scoped.use(requireMembership());
+
+scoped.get(
+  "/dashboard",
+  requireRoles(OWNER_OR_SA),
+  ownerDashboardController.getDashboard,
+);
 
 scoped.get(
   "/site-live/activity",

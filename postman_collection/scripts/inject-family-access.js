@@ -2236,7 +2236,25 @@ const dashboardRequests = [
   }),
 ];
 
-adminFolder.item = adminFolder.item.filter((i) => !["Billing & Usage", "All Settings", "Super Admin Dashboard"].includes(i.name));
+const ownerDashboardRequests = [
+  req("owner dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "dashboard"], {
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("summary", "attendance", "leaveBreakdown", "staffByDepartment", "workforceOverview", "evacuationRisk", "activeModules", "fireDrills", "compliance", "staffTraining", "supervisionAppraisal", "openShifts");',
+      "});",
+    ],
+    description: "The owner dashboard in one call. Owner or super admin of the organization in x-org-id (platform admin passes); site managers, line managers and staff get 403. No query. summary: totalStaff (active), totalResidents (admitted), todayVisitors (checked in today, denied left out), totalContractors, totalProfessionals. attendance: Mon to Sun (London time) of {day, present, absent}; present is staff with an attendance record, absent is staff on a shift that already started with none; days still to come are null. leaveBreakdown: this year's approved or closed leave as {label, percent} for Annual leave, Sick leave, Unpaid leave and Other. staffByDepartment: totalStaff and departments {name, count}, biggest first (staff with none are Unassigned). workforceOverview (this month, whole percents): attendance, training, retention, utilization; compliance and satisfaction are null. evacuationRisk: high, medium, low and notSet (admitted residents without a PEEP record). activeModules: active, total and modules {slug, name, active}. fireDrills: completed (closed mock evacuations this quarter) and overdueSites (no drill in 90 days). compliance: compliantPercent null and items []. staffTraining: compliantPercent and items []. supervisionAppraisal: compliantPercent, supervisions {pending, overdue}, appraisals {dueThisMonth, overdue}, items []. openShifts: the five soonest upcoming open shifts {siteName, startsAt, endsAt, urgentCover}.",
+  }),
+];
+
+adminFolder.item = adminFolder.item.filter((i) => !["Billing & Usage", "All Settings", "Super Admin Dashboard", "Owner Dashboard"].includes(i.name));
+adminFolder.item.push({
+  name: "Owner Dashboard",
+  description: "The owner home screen.",
+  item: ownerDashboardRequests,
+});
 adminFolder.item.push({
   name: "Super Admin Dashboard",
   description: "The Super Admin home screen.",

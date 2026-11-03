@@ -12,12 +12,30 @@ const {
   StaffProfileStatus,
 } = require("@models/domainEnums");
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 const resolvePeriod = (period, now) => {
   if (period === "thisMonth") {
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    return { start, end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)) };
+    const start = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    return {
+      start,
+      end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
+    };
   }
   if (period === "thisQuarter") {
     const quarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
@@ -38,13 +56,25 @@ const resolvePeriod = (period, now) => {
 const getPreviousPeriod = (period, currentRange) => {
   if (period === "thisMonth") {
     return {
-      start: new Date(Date.UTC(currentRange.start.getUTCFullYear(), currentRange.start.getUTCMonth() - 1, 1)),
+      start: new Date(
+        Date.UTC(
+          currentRange.start.getUTCFullYear(),
+          currentRange.start.getUTCMonth() - 1,
+          1,
+        ),
+      ),
       end: currentRange.start,
     };
   }
   if (period === "thisQuarter") {
     return {
-      start: new Date(Date.UTC(currentRange.start.getUTCFullYear(), currentRange.start.getUTCMonth() - 3, 1)),
+      start: new Date(
+        Date.UTC(
+          currentRange.start.getUTCFullYear(),
+          currentRange.start.getUTCMonth() - 3,
+          1,
+        ),
+      ),
       end: currentRange.start,
     };
   }
@@ -68,9 +98,14 @@ const leftAtStage = {
 
 const getWorkforcePeriod = async (staffScope, range) => {
   const employedAt = (date) => ({
-    $and: [{ $lt: ["$startDate", date] }, { $or: [{ $eq: ["$leftAt", null] }, { $gte: ["$leftAt", date] }] }],
+    $and: [
+      { $lt: ["$startDate", date] },
+      { $or: [{ $eq: ["$leftAt", null] }, { $gte: ["$leftAt", date] }] },
+    ],
   });
-  const inRange = (field) => ({ $and: [{ $gte: [field, range.start] }, { $lt: [field, range.end] }] });
+  const inRange = (field) => ({
+    $and: [{ $gte: [field, range.start] }, { $lt: [field, range.end] }],
+  });
   const [row] = await StaffProfile.aggregate([
     { $match: staffScope },
     leftAtStage,
@@ -79,37 +114,78 @@ const getWorkforcePeriod = async (staffScope, range) => {
         _id: null,
         startingHeadcount: { $sum: { $cond: [employedAt(range.start), 1, 0] } },
         retainedHeadcount: {
-          $sum: { $cond: [{ $and: [employedAt(range.start), employedAt(range.end)] }, 1, 0] },
+          $sum: {
+            $cond: [
+              { $and: [employedAt(range.start), employedAt(range.end)] },
+              1,
+              0,
+            ],
+          },
         },
         newStarters: { $sum: { $cond: [inRange("$startDate"), 1, 0] } },
-        leavers: { $sum: { $cond: [{ $and: [{ $ne: ["$leftAt", null] }, inRange("$leftAt")] }, 1, 0] } },
+        leavers: {
+          $sum: {
+            $cond: [
+              { $and: [{ $ne: ["$leftAt", null] }, inRange("$leftAt")] },
+              1,
+              0,
+            ],
+          },
+        },
       },
     },
   ]);
-  const { startingHeadcount = 0, retainedHeadcount = 0, newStarters = 0, leavers = 0 } = row || {};
+  const {
+    startingHeadcount = 0,
+    retainedHeadcount = 0,
+    newStarters = 0,
+    leavers = 0,
+  } = row || {};
 
   return {
-    retentionRate: startingHeadcount ? (retainedHeadcount / startingHeadcount) * 100 : 0,
+    retentionRate: startingHeadcount
+      ? (retainedHeadcount / startingHeadcount) * 100
+      : 0,
     newStarters,
     leavers,
   };
 };
 
-const getStatistics = async ({ organizationId, requestedBranchId, role, membershipBranchId, year, period = "thisQuarter", now = new Date() }) => {
-  const effectiveBranchId = role === MembershipRole.SITE_MANAGER ? membershipBranchId : requestedBranchId;
+const getStatistics = async ({
+  organizationId,
+  requestedBranchId,
+  role,
+  membershipBranchId,
+  year,
+  period = "thisQuarter",
+  now = new Date(),
+}) => {
+  const effectiveBranchId =
+    role === MembershipRole.SITE_MANAGER
+      ? membershipBranchId
+      : requestedBranchId;
   const scope = { organizationId: new mongoose.Types.ObjectId(organizationId) };
 
   if (effectiveBranchId) {
     if (!mongoose.Types.ObjectId.isValid(String(effectiveBranchId))) {
       throw new AppError("invalid_branch_id", 400);
     }
-    const branch = await Branch.findOne({ _id: effectiveBranchId, organizationId: scope.organizationId }).select("_id").lean();
+    const branch = await Branch.findOne({
+      _id: effectiveBranchId,
+      organizationId: scope.organizationId,
+    })
+      .select("_id")
+      .lean();
     if (!branch) throw new AppError("branch_not_found", 404);
     scope.branchId = branch._id;
   }
 
   const selectedYear = Number(year);
-  if (!Number.isInteger(selectedYear) || selectedYear < 2000 || selectedYear > 2100) {
+  if (
+    !Number.isInteger(selectedYear) ||
+    selectedYear < 2000 ||
+    selectedYear > 2100
+  ) {
     throw new AppError("invalid_statistics_year", 400);
   }
 
@@ -120,10 +196,27 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
   const staffScope = { ...scope };
   const peopleScope = effectiveBranchId
     ? { branchId: scope.branchId }
-    : { branchId: { $in: await Branch.find({ organizationId: scope.organizationId }).distinct("_id") } };
+    : {
+        branchId: {
+          $in: await Branch.find({
+            organizationId: scope.organizationId,
+          }).distinct("_id"),
+        },
+      };
 
-  const [residentCount, staffCounts, externalCounts, roleHires, monthlyHires, workforce, previousWorkforce] = await Promise.all([
-    Resident.countDocuments({ ...scope, admissionStatus: AdmissionStatus.ADMITTED }),
+  const [
+    residentCount,
+    staffCounts,
+    externalCounts,
+    roleHires,
+    monthlyHires,
+    workforce,
+    previousWorkforce,
+  ] = await Promise.all([
+    Resident.countDocuments({
+      ...scope,
+      admissionStatus: AdmissionStatus.ADMITTED,
+    }),
     StaffProfile.aggregate([
       { $match: staffScope },
       { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -142,19 +235,40 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
       {
         $project: {
           jobTitleId: 1,
-          startMonth: { $cond: [{ $lt: ["$startDate", yearStart] }, 0, { $month: "$startDate" }] },
+          startMonth: {
+            $cond: [
+              { $lt: ["$startDate", yearStart] },
+              0,
+              { $month: "$startDate" },
+            ],
+          },
           leaveMonth: {
             $cond: [
-              { $or: [{ $eq: ["$leftAt", null] }, { $gte: ["$leftAt", yearEnd] }] },
+              {
+                $or: [
+                  { $eq: ["$leftAt", null] },
+                  { $gte: ["$leftAt", yearEnd] },
+                ],
+              },
               null,
-              { $cond: [{ $lt: ["$leftAt", yearStart] }, 0, { $month: "$leftAt" }] },
+              {
+                $cond: [
+                  { $lt: ["$leftAt", yearStart] },
+                  0,
+                  { $month: "$leftAt" },
+                ],
+              },
             ],
           },
         },
       },
       {
         $group: {
-          _id: { jobTitleId: "$jobTitleId", startMonth: "$startMonth", leaveMonth: "$leaveMonth" },
+          _id: {
+            jobTitleId: "$jobTitleId",
+            startMonth: "$startMonth",
+            leaveMonth: "$leaveMonth",
+          },
           count: { $sum: 1 },
         },
       },
@@ -163,15 +277,33 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
     getWorkforcePeriod(staffScope, previousRange),
   ]);
 
-  const titleIds = [...new Set([...roleHires, ...monthlyHires].map((row) => String(row._id?.jobTitleId || row._id || "")).filter(Boolean))];
-  const titles = await JobTitle.find({ _id: { $in: titleIds }, organizationId: scope.organizationId }).select("name").lean();
-  const titleNames = new Map(titles.map((title) => [String(title._id), title.name]));
+  const titleIds = [
+    ...new Set(
+      [...roleHires, ...monthlyHires]
+        .map((row) => String(row._id?.jobTitleId || row._id || ""))
+        .filter(Boolean),
+    ),
+  ];
+  const titles = await JobTitle.find({
+    _id: { $in: titleIds },
+    organizationId: scope.organizationId,
+  })
+    .select("name")
+    .lean();
+  const titleNames = new Map(
+    titles.map((title) => [String(title._id), title.name]),
+  );
   const titleName = (id) => titleNames.get(String(id)) || "Unassigned";
-  const countByType = new Map(externalCounts.map((row) => [row._id, row.count]));
+  const countByType = new Map(
+    externalCounts.map((row) => [row._id, row.count]),
+  );
   const countByStatus = new Map(staffCounts.map((row) => [row._id, row.count]));
   const activeStaff = countByStatus.get(StaffProfileStatus.ACTIVE) || 0;
 
-  const employeesByRole = roleHires.map((row) => ({ role: titleName(row._id), count: row.count }));
+  const employeesByRole = roleHires.map((row) => ({
+    role: titleName(row._id),
+    count: row.count,
+  }));
   const rowsByTitle = new Map();
   monthlyHires.forEach((row) => {
     const key = String(row._id.jobTitleId);
@@ -183,7 +315,11 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
       data: MONTHS.map((_, index) => {
         const month = index + 1;
         return rows
-          .filter(({ _id }) => _id.startMonth <= month && (_id.leaveMonth === null || _id.leaveMonth > month))
+          .filter(
+            ({ _id }) =>
+              _id.startMonth <= month &&
+              (_id.leaveMonth === null || _id.leaveMonth > month),
+          )
           .reduce((total, row) => total + row.count, 0);
       }),
     }))
@@ -193,7 +329,10 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
   const previousRetentionRate = Math.round(previousWorkforce.retentionRate);
 
   return {
-    scope: { organizationId: scope.organizationId, branchId: scope.branchId || null },
+    scope: {
+      organizationId: scope.organizationId,
+      branchId: scope.branchId || null,
+    },
     summary: {
       visitors: countByType.get(ExternalPersonType.VISITOR) || 0,
       residents: residentCount,
@@ -205,12 +344,20 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
       total: activeStaff,
       roles: employeesByRole,
     },
-    employeesOverTime: { year: selectedYear, months: MONTHS, series: employeesOverTime },
+    employeesOverTime: {
+      year: selectedYear,
+      months: MONTHS,
+      series: employeesOverTime,
+    },
     workforceMovement: {
       period,
       retentionRate: {
         value: retentionRate,
-        change: Number((workforce.retentionRate - previousWorkforce.retentionRate).toFixed(1)),
+        change: Number(
+          (workforce.retentionRate - previousWorkforce.retentionRate).toFixed(
+            1,
+          ),
+        ),
         previousValue: previousRetentionRate,
       },
       newStarters: {
@@ -227,4 +374,4 @@ const getStatistics = async ({ organizationId, requestedBranchId, role, membersh
   };
 };
 
-module.exports = { getStatistics };
+module.exports = { getStatistics, getWorkforcePeriod, resolvePeriod };

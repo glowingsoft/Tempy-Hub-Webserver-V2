@@ -1891,7 +1891,8 @@ const attendanceReport = async ({
   limit,
   skip,
 }) => {
-  if (!from || !to) throw new AppError("invalid_date_range", 400);
+  const fromDate = from && String(from).trim() ? from : undefined;
+  const toDate = to && String(to).trim() ? to : undefined;
 
   const standing = await actorStanding(actor, organizationId);
   const scopedBranchId = scopeBranchFilter(standing, branchId);
@@ -1899,7 +1900,7 @@ const attendanceReport = async ({
   if (scopedBranchId) branchMatch._id = scopedBranchId;
   const branches = await Branch.find(branchMatch).select("_id timezone").lean();
   if (!branches.length) {
-    const { tz, fromDay, toDay } = resolveRotaRange(from, to, DEFAULT_TZ);
+    const { tz, fromDay, toDay } = resolveRotaRange(fromDate, toDate, DEFAULT_TZ);
     return {
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
@@ -1923,7 +1924,7 @@ const attendanceReport = async ({
       : branches.length === 1
         ? branches[0].timezone
         : DEFAULT_TZ) || DEFAULT_TZ;
-  const { fromDay, toDay } = resolveRotaRange(from, to, tz);
+  const { fromDay, toDay } = resolveRotaRange(fromDate, toDate, tz);
   const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
   const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
   const shiftEnd = moment.utc(toUtc).add(1, "day").toDate();

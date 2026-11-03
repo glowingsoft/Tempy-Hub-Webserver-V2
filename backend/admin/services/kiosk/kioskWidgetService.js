@@ -14,7 +14,7 @@ const {
   scopeBranchFilter,
 } = require("@adminServices/staff/staffAccess");
 
-const HOME_WIDGET_LIMIT = 8;
+const HOME_WIDGET_LIMIT = 3;
 const HTTP_URL = /^https?:\/\//i;
 const WIDGET_TYPES = Object.values(KioskWidgetType);
 const TEXT_KINDS = Object.values(KioskTextKind);

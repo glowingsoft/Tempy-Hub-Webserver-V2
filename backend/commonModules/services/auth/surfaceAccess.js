@@ -7,8 +7,8 @@ const {
 } = require("@models/domainEnums");
 
 /**
- * Minimum membership rank to enter each portal.
- * Rank is inclusive: owner (4) may open managerApp (min 2); staff (1) may not.
+ * Membership rank window for each portal.
+ * managerApp is site/line managers only — owner must use ownerAdmin.
  * platformAdmin is not rank-based — only accountState.userType === "admin".
  */
 const SURFACE_RULES = {
@@ -19,6 +19,7 @@ const SURFACE_RULES = {
   [AppSurface.MANAGER_APP]: {
     audience: AuthAudience.STAFF,
     minRank: MembershipRoleRank[MembershipRole.LINE_MANAGER],
+    maxRank: MembershipRoleRank[MembershipRole.SITE_MANAGER],
   },
   [AppSurface.OWNER_ADMIN]: {
     audience: AuthAudience.STAFF,
@@ -34,6 +35,14 @@ const SURFACE_RULES = {
 };
 
 const ALL_SURFACES = Object.values(AppSurface);
+
+const normalizeSurface = (value) => {
+  if (value == null || String(value).trim() === "") return undefined;
+  const wanted = String(value).trim().toLowerCase();
+  const match = ALL_SURFACES.find((surface) => surface.toLowerCase() === wanted);
+  if (!match) throw new AppError("invalid_app_surface", 400);
+  return match;
+};
 
 const assertSurfaceAccess = ({ surface, audience, access }) => {
   if (!surface) return;
@@ -52,12 +61,13 @@ const assertSurfaceAccess = ({ surface, audience, access }) => {
     return;
   }
 
-  if (access?.isPlatformAdmin) return;
-
   if (rule.minRank == null) return;
 
   const rank = MembershipRoleRank[access?.highestRole] || 0;
   if (rank < rule.minRank) {
+    throw new AppError("role_not_allowed_for_surface", 403);
+  }
+  if (rule.maxRank != null && rank > rule.maxRank) {
     throw new AppError("role_not_allowed_for_surface", 403);
   }
 };
@@ -65,5 +75,6 @@ const assertSurfaceAccess = ({ surface, audience, access }) => {
 module.exports = {
   SURFACE_RULES,
   ALL_SURFACES,
+  normalizeSurface,
   assertSurfaceAccess,
 };

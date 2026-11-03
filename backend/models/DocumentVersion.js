@@ -1,5 +1,15 @@
 const mongoose = require("mongoose");
 
+const storedFileSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, trim: true },
+    originalName: { type: String, default: "", trim: true },
+    mimeType: { type: String, default: "", trim: true },
+    sizeBytes: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false }
+);
+
 const documentVersionSchema = new mongoose.Schema(
   {
     documentId: {
@@ -9,7 +19,7 @@ const documentVersionSchema = new mongoose.Schema(
       index: true,
     },
     version: { type: Number, required: true, min: 1 },
-    fileUrl: { type: String, required: true },
+    file: { type: storedFileSchema, required: true },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

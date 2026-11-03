@@ -224,10 +224,32 @@ async function ensureModuleCatalogue() {
     );
 }
 
+async function ensureAttendanceDayIndexes() {
+    const { AttendanceDay } = require("@models/AttendanceDay");
+    try {
+        const indexes = await AttendanceDay.collection.indexes();
+        const workDateIdx = indexes.find((idx) => idx.name === "staffId_1_workDate_1");
+        if (workDateIdx?.unique) {
+            await AttendanceDay.collection.dropIndex("staffId_1_workDate_1");
+            console.log("✅ dropped unique AttendanceDay.staffId_1_workDate_1");
+        }
+    } catch (dropErr) {
+        if (dropErr?.codeName !== "IndexNotFound" && dropErr?.code !== 27) {
+            console.warn("⚠️ AttendanceDay index drop:", dropErr.message);
+        }
+    }
+    try {
+        await AttendanceDay.syncIndexes();
+    } catch (indexErr) {
+        console.warn("⚠️ AttendanceDay index sync:", indexErr.message);
+    }
+}
+
 async function runDBBootstrap() {
     try {
         await enforceOneMembershipPerOrg();
         await ensureModuleCatalogue();
+        await ensureAttendanceDayIndexes();
 
         const existing = await Bootstrap.findOne();
         if (existing?.version >= BOOTSTRAP_VERSION) {

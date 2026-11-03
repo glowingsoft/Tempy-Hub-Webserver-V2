@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { AttendanceDay } = require("@models/AttendanceDay");
+const { Shift } = require("@models/Shift");
+const { Department } = require("@models/Department");
 const { AttendanceChangeRequest } = require("@models/AttendanceChangeRequest");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -17,8 +19,16 @@ const {
   StaffProfileStatus,
   LeaveType,
   LeaveRequestStatus,
+  RosterRequestStatus,
+  ShiftStatus,
 } = require("@models/domainEnums");
-const { getActiveShift, getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
+const {
+  getActiveShift,
+  getActiveShiftForStaff,
+  getShift,
+  createScheduledShiftFromAttendance,
+} = require("@adminServices/rota/shiftService");
+const { toPublicImageUrl } = require("@utils/imageHelper");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -193,9 +203,166 @@ const getBranchSettings = async (branchId) => {
   return branch.settings || {};
 };
 
+const AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS = 3;
+const AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS = 10;
+const AUTO_CLOCK_OUT_BATCH = 200;
+
+const hoursFromSettings = (value, fallback) => {
+  const hours = Number(value);
+  return Number.isFinite(hours) && hours >= 0 ? hours : fallback;
+};
+
+const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
+  const filter = { clockOutAt: null };
+  if (staffId) filter.staffId = staffId;
+  if (branchId) filter.branchId = branchId;
+
+  const days = await AttendanceDay.find(filter)
+    .sort({ clockInAt: 1 })
+    .limit(AUTO_CLOCK_OUT_BATCH);
+  if (!days.length) return { scanned: 0, closed: 0 };
+
+  const branchIds = [...new Set(days.map((day) => String(day.branchId)))];
+  const [branches, shifts] = await Promise.all([
+    Branch.find({ _id: { $in: branchIds } }).select("settings").lean(),
+    Shift.find({
+      _id: { $in: days.map((day) => day.shiftId).filter(Boolean) },
+    })
+      .select("endsAt")
+      .lean(),
+  ]);
+  const settingsByBranch = new Map(
+    branches.map((branch) => [String(branch._id), branch.settings || {}])
+  );
+  const shiftById = new Map(shifts.map((shift) => [String(shift._id), shift]));
+
+  const now = Date.now();
+  const ops = [];
+  for (const day of days) {
+    const settings = settingsByBranch.get(String(day.branchId)) || {};
+    const afterShiftEnd = hoursFromSettings(
+      settings.autoClockOutHoursAfterShiftEnd,
+      AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS
+    );
+    const afterClockIn = hoursFromSettings(
+      settings.autoClockOutHoursAfterClockIn,
+      AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS
+    );
+
+    let dueAtMs = null;
+    if (day.shiftId) {
+      const shift = shiftById.get(String(day.shiftId));
+      if (!shift?.endsAt) continue;
+      dueAtMs = new Date(shift.endsAt).getTime() + afterShiftEnd * 3600000;
+    } else {
+      dueAtMs = new Date(day.clockInAt).getTime() + afterClockIn * 3600000;
+    }
+    if (now < dueAtMs) continue;
+
+    const clockOutAt = new Date(dueAtMs);
+    const breaks = (day.breaks || []).map((segment) => ({
+      breakInAt: segment.breakInAt,
+      breakOutAt: segment.breakOutAt || clockOutAt,
+    }));
+    const next = {
+      clockOutAt,
+      presenceStatus: PresenceStatus.CHECKED_OUT,
+      autoClosed: true,
+      breaks,
+    };
+    next.workedMinutes = computeWorkedMinutes(
+      { ...day.toObject(), ...next },
+      settings
+    );
+    ops.push({
+      updateOne: {
+        filter: { _id: day._id, clockOutAt: null },
+        update: { $set: next },
+      },
+    });
+  }
+
+  if (!ops.length) return { scanned: days.length, closed: 0 };
+  const result = await AttendanceDay.bulkWrite(ops);
+  return { scanned: days.length, closed: result.modifiedCount || 0 };
+};
+
+const normalizeClientEventId = (value) => {
+  if (value == null) return null;
+  const id = String(value).trim();
+  return id || null;
+};
+
 const findByClientEventId = async (clientEventId) => {
-  if (!clientEventId) return null;
-  return AttendanceDay.findOne({ clientEventId }).lean();
+  const id = normalizeClientEventId(clientEventId);
+  if (!id) return null;
+  return AttendanceDay.findOne({ clientEventId: id }).lean();
+};
+
+const toClockInPhotoUrl = (key) => toPublicImageUrl(key);
+
+const CLOCK_IN_TZ = "Europe/London";
+
+const greetingForHour = (hour) => {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const presentClockIn = async ({ staffId, image, day, shift }) => {
+  const photoUrl = toClockInPhotoUrl(image);
+  if (photoUrl) {
+    await StaffProfile.updateOne({ _id: staffId }, { $set: { photoUrl } });
+  }
+
+  const profile = await StaffProfile.findById(staffId)
+    .select("userId photoUrl ward locationLabel branchId")
+    .lean();
+
+  const [user, branch] = await Promise.all([
+    profile?.userId
+      ? User.findById(profile.userId).select("name").lean()
+      : null,
+    profile?.branchId
+      ? Branch.findById(profile.branchId).select("name timezone").lean()
+      : null,
+  ]);
+
+  const tz = branch?.timezone || CLOCK_IN_TZ;
+  const clockMoment = moment.tz(day.clockInAt, tz);
+  const url = photoUrl || toClockInPhotoUrl(profile?.photoUrl) || "";
+  const location =
+    profile?.ward || profile?.locationLabel || branch?.name || "";
+  const shiftLabel = shift
+    ? `${moment.tz(shift.startsAt, tz).format("HH:mm")} – ${moment
+        .tz(shift.endsAt, tz)
+        .format("HH:mm")}`
+    : null;
+
+  return {
+    ...day,
+    image: url,
+    photoUrl: url,
+    greeting: greetingForHour(clockMoment.hour()),
+    name: user?.name || "",
+    time: clockMoment.format("hh:mm a"),
+    location,
+    shift: shift
+      ? {
+          _id: shift._id,
+          startsAt: shift.startsAt,
+          endsAt: shift.endsAt,
+          status: shift.status,
+          branchId: shift.branchId,
+          label: shiftLabel,
+        }
+      : null,
+    summary: {
+      time: clockMoment.format("hh:mm a"),
+      shift: shiftLabel,
+      location,
+    },
+  };
 };
 
 const getOpenAttendanceDay = async (staffId) => {
@@ -205,6 +372,40 @@ const getOpenAttendanceDay = async (staffId) => {
   })
     .sort({ clockInAt: -1 })
     .lean();
+};
+
+const assertNotAlreadyClockedIn = async (staffId) => {
+  const openDay = await getOpenAttendanceDay(staffId);
+  if (openDay) throw new AppError("attendance_open_session_exists", 409);
+};
+
+const latestAttendanceForWorkDate = (staffId, workDate) =>
+  AttendanceDay.findOne({ staffId, workDate }).sort({ clockInAt: -1 }).lean();
+
+const assertClientEventAvailable = (existingByEvent, staffId) => {
+  if (!existingByEvent) return;
+  if (String(existingByEvent.staffId) !== String(staffId)) {
+    throw new AppError("attendance_client_event_used", 409);
+  }
+  if (existingByEvent.clockOutAt) {
+    throw new AppError("attendance_client_event_used", 409);
+  }
+};
+
+const requireOpenAttendanceDay = async (staffId) => {
+  const openDay = await AttendanceDay.findOne({
+    staffId,
+    clockOutAt: null,
+  }).sort({ clockInAt: -1 });
+
+  if (openDay) return openDay;
+
+  const last = await AttendanceDay.findOne({ staffId })
+    .select("clockOutAt")
+    .sort({ clockInAt: -1 })
+    .lean();
+  if (last?.clockOutAt) throw new AppError("attendance_already_clocked_out", 409);
+  throw new AppError("attendance_not_clocked_in", 400);
 };
 
 const staffSummary = (profile, userById) => {
@@ -264,6 +465,7 @@ const ATTENDANCE_LIST_LOOKUPS = [
             name: "$_branch.name",
             code: "$_branch.code",
             status: "$_branch.status",
+            timezone: "$_branch.timezone",
             settings: "$_branch.settings",
           },
           null,
@@ -276,6 +478,18 @@ const ATTENDANCE_LIST_LOOKUPS = [
 
 const utcDateKey = (value) => moment.utc(value).format("YYYY-MM-DD");
 
+const formatClockedHours = (clockInAt, clockOutAt, timezone) => {
+  if (!clockInAt || !clockOutAt) return null;
+  const tz = timezone || DEFAULT_TZ;
+  const start = moment.tz(clockInAt, tz);
+  const end = moment.tz(clockOutAt, tz);
+  if (!start.isValid() || !end.isValid() || end.isBefore(start)) return null;
+  const totalMinutes = end.diff(start, "minutes");
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}hrs ${minutes} m`;
+};
+
 const withComputedWorkedMinutes = (days) =>
   days.map((day) => ({
     ...day,
@@ -283,6 +497,11 @@ const withComputedWorkedMinutes = (days) =>
     workedMinutes:
       day.workedMinutes ??
       computeWorkedMinutes(day, day.branch?.settings || {}),
+    totalHours: formatClockedHours(
+      day.clockInAt,
+      day.clockOutAt,
+      day.branch?.timezone || DEFAULT_TZ
+    ),
   }));
 
 const fetchAttendanceDays = async ({ match, sort }) => {
@@ -296,20 +515,21 @@ const fetchAttendanceDays = async ({ match, sort }) => {
 
 const mergeAttendanceAndLeave = (attendanceDays, leaveDays) => {
   const keyed = new Map();
+  const attendanceDates = new Set();
   for (const day of attendanceDays) {
-    keyed.set(`${day.staffId}:${utcDateKey(day.workDate)}`, {
-      ...day,
-      kind: "attendance",
-    });
+    keyed.set(String(day._id), { ...day, kind: "attendance" });
+    attendanceDates.add(`${day.staffId}:${utcDateKey(day.workDate)}`);
   }
   for (const day of leaveDays) {
-    const key = `${day.staffId}:${utcDateKey(day.workDate)}`;
-    if (keyed.has(key)) continue;
-    keyed.set(key, { ...day, workedMinutes: 0 });
+    const dateKey = `${day.staffId}:${utcDateKey(day.workDate)}`;
+    if (attendanceDates.has(dateKey)) continue;
+    keyed.set(`leave:${dateKey}`, { ...day, workedMinutes: 0 });
   }
   return [...keyed.values()].sort((a, b) => {
     const byDate = new Date(b.workDate) - new Date(a.workDate);
     if (byDate) return byDate;
+    const byClock = new Date(b.clockInAt || 0) - new Date(a.clockInAt || 0);
+    if (byClock) return byClock;
     return String(a.staff?.name || "").localeCompare(String(b.staff?.name || ""));
   });
 };
@@ -327,9 +547,43 @@ const paginateRows = (rows, page, limit, skip) => ({
   meta: generateMeta(page, limit, rows.length),
 });
 
+const PUNCTUALITY_STATUSES = Object.values(PunctualityStatus);
+
+const emptyPunctualityStatusCounts = () =>
+  Object.fromEntries(PUNCTUALITY_STATUSES.map((status) => [status, 0]));
+
+/** Tab counts ignore `punctualityStatus` so each total stays independent of the list filter. */
+const punctualityStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    PUNCTUALITY_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, punctualityStatus: status } }, { $count: "count" }],
+    ])
+  );
+
+const punctualityStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    PUNCTUALITY_STATUSES.map((status) => [
+      status,
+      facetCount(result[`${status}Count`]),
+    ])
+  );
+
+const parsePunctualityStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!PUNCTUALITY_STATUSES.includes(value)) {
+    throw new AppError("invalid_punctuality_status", 400);
+  }
+  return value;
+};
+
 const emptySummary = {
   onTimeCount: 0,
   lateCount: 0,
+  unscheduledCount: 0,
   sickDays: 0,
   absenceDays: 0,
   attendanceRate: 0,
@@ -345,6 +599,9 @@ const registerSummary = (rows) => {
     }
     if (row.punctualityStatus === PunctualityStatus.ON_TIME) summary.onTimeCount += 1;
     if (row.punctualityStatus === PunctualityStatus.LATE) summary.lateCount += 1;
+    if (row.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
+      summary.unscheduledCount += 1;
+    }
   }
   const denom =
     summary.onTimeCount +
@@ -359,9 +616,55 @@ const registerSummary = (rows) => {
 
 const emptyRegisterPage = (page, limit) => ({
   data: [],
-  meta: generateMeta(page, limit, 0),
+  meta: {
+    ...generateMeta(page, limit, 0),
+    counts: emptyPunctualityStatusCounts(),
+  },
   summary: { ...emptySummary },
 });
+
+const summaryFromCounts = (counts, leaveDays = []) => {
+  const summary = registerSummary(leaveDays);
+  summary.onTimeCount = counts.onTime;
+  summary.lateCount = counts.late;
+  summary.unscheduledCount = counts.unscheduled || 0;
+  const denom =
+    summary.onTimeCount +
+    summary.lateCount +
+    summary.sickDays +
+    summary.absenceDays;
+  summary.attendanceRate = denom
+    ? Math.round((100 * (summary.onTimeCount + summary.lateCount)) / denom)
+    : 0;
+  return summary;
+};
+
+/** Staff in scope whose user name or email matches `keyword`. */
+const staffIdsMatchingKeyword = async (staffIds, keyword) => {
+  const term = String(keyword || "").trim();
+  if (!term || !staffIds?.length) return staffIds || [];
+
+  const regex = { $regex: escapeRegex(term), $options: "i" };
+  const rows = await StaffProfile.aggregate([
+    { $match: { _id: { $in: staffIds } } },
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "userId",
+        foreignField: "_id",
+        pipeline: [
+          { $match: { $or: [{ name: regex }, { email: regex }] } },
+          { $project: { _id: 1 } },
+        ],
+        as: "user",
+      },
+    },
+    { $match: { user: { $ne: [] } } },
+    { $project: { _id: 1 } },
+  ]);
+
+  return rows.map((row) => row._id);
+};
 
 const listStaffSummaries = async (staffIds) => {
   if (!staffIds?.length) return [];
@@ -448,11 +751,31 @@ const resolvePunctuality = (clockInAt, shiftStartsAt, graceMinutes) => {
     : PunctualityStatus.ON_TIME;
 };
 
+const clockInFromActiveShift = (active, clockInAt) => {
+  const hasRosteredShift = Boolean(active.clockInEligible && active.shift);
+  return {
+    hasRosteredShift,
+    punctualityStatus: hasRosteredShift
+      ? resolvePunctuality(
+          clockInAt,
+          active.shift.startsAt,
+          active.graceMinutes
+        )
+      : PunctualityStatus.UNSCHEDULED,
+    shiftId: hasRosteredShift ? active.shift._id : null,
+  };
+};
+
+const staffCannotClockIn = async (staffId) => {
+  await closeExpiredOpenSessions({ staffId });
+  return Boolean(await getOpenAttendanceDay(staffId));
+};
+
 const getTodayAttendance = async ({ userId, organizationId }) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const workDate = startOfUtcDay(new Date());
   const [day, activeShift] = await Promise.all([
-    AttendanceDay.findOne({ staffId: profile._id, workDate }).lean(),
+    latestAttendanceForWorkDate(profile._id, workDate),
     getActiveShift({ userId, organizationId }),
   ]);
 
@@ -471,54 +794,68 @@ const clockIn = async ({
   clientEventId,
   geo,
   occurredAt,
+  image,
 }) => {
-  const existingByEvent = await findByClientEventId(clientEventId);
-  if (existingByEvent) return existingByEvent;
-
+  const eventId = normalizeClientEventId(clientEventId);
   const profile = await requireStaffProfile(userId, organizationId);
+  await closeExpiredOpenSessions({
+    staffId: profile._id,
+    branchId: profile.branchId,
+  });
+  const existingByEvent = await findByClientEventId(eventId);
+  if (existingByEvent && !existingByEvent.clockOutAt) {
+    if (String(existingByEvent.staffId) !== String(profile._id)) {
+      throw new AppError("attendance_client_event_used", 409);
+    }
+    const activeShift = await getActiveShiftForStaff({
+      staffProfile: profile,
+      organizationId,
+    });
+    return presentClockIn({
+      staffId: existingByEvent.staffId,
+      image,
+      day: existingByEvent,
+      shift: activeShift.shift,
+    });
+  }
+  assertClientEventAvailable(existingByEvent, profile._id);
 
   if (checkInMethod === CheckInMethod.PHONE) {
     await assertPhoneCheckInAllowed(profile.branchId);
   }
 
   const active = await getActiveShift({ userId, organizationId });
-  if (!active.clockInEligible || !active.shift) {
-    throw new AppError("no_active_shift_for_clock_in", 403);
-  }
+  // Previously required an assigned shift in the clock-in window.
+  // if (!active.clockInEligible || !active.shift) {
+  //   throw new AppError("no_active_shift_for_clock_in", 403);
+  // }
 
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
   const workDate = startOfUtcDay(clockInAt);
+  await assertNotAlreadyClockedIn(profile._id);
 
-  const alreadyToday = await AttendanceDay.findOne({
-    staffId: profile._id,
-    workDate,
-  }).lean();
-
-  if (alreadyToday) throw new AppError("attendance_already_clocked_in", 409);
-
-  const openDay = await getOpenAttendanceDay(profile._id);
-  if (openDay) throw new AppError("attendance_open_session_exists", 409);
-
-  const punctualityStatus = resolvePunctuality(
-    clockInAt,
-    active.shift.startsAt,
-    active.graceMinutes
-  );
+  const rostered = clockInFromActiveShift(active, clockInAt);
 
   const day = await AttendanceDay.create({
     staffId: profile._id,
     branchId: profile.branchId,
     workDate,
+    shiftId: rostered.shiftId,
     clockInAt,
     checkInMethod,
-    punctualityStatus,
+    punctualityStatus: rostered.punctualityStatus,
     presenceStatus: PresenceStatus.ON_SITE,
-    clientEventId: clientEventId || null,
+    clientEventId: eventId,
     occurredAt: occurredAt ? new Date(occurredAt) : null,
     geo: geo || undefined,
   });
 
-  return day.toObject();
+  return presentClockIn({
+    staffId: profile._id,
+    image,
+    day: day.toObject(),
+    shift: rostered.hasRosteredShift ? active.shift : null,
+  });
 };
 
 const clockOut = async ({
@@ -527,16 +864,10 @@ const clockOut = async ({
   clientEventId,
   occurredAt,
 }) => {
-  const existingByEvent = await findByClientEventId(clientEventId);
-  if (existingByEvent) return existingByEvent;
-
+  const eventId = normalizeClientEventId(clientEventId);
   const profile = await requireStaffProfile(userId, organizationId);
-  const day = await AttendanceDay.findOne({
-    staffId: profile._id,
-    clockOutAt: null,
-  }).sort({ clockInAt: -1 });
+  const day = await requireOpenAttendanceDay(profile._id);
 
-  if (!day) throw new AppError("attendance_not_clocked_in", 400);
   if (day.presenceStatus === PresenceStatus.ON_BREAK) {
     throw new AppError("attendance_on_break", 400);
   }
@@ -546,7 +877,7 @@ const clockOut = async ({
   day.presenceStatus = PresenceStatus.CHECKED_OUT;
   const settings = await getBranchSettings(day.branchId);
   day.workedMinutes = computeWorkedMinutes(day, settings);
-  if (clientEventId && !day.clientEventId) day.clientEventId = clientEventId;
+  if (eventId && !day.clientEventId) day.clientEventId = eventId;
   await day.save();
 
   return day.toObject();
@@ -565,52 +896,52 @@ const clockInForStaff = async ({
   checkInMethod = CheckInMethod.KIOSK,
   clientEventId,
   occurredAt,
+  image,
 }) => {
-  const existingByEvent = await findByClientEventId(clientEventId);
-  if (existingByEvent) return existingByEvent;
-
   assertStaffAtBranch(staffProfile, branchId);
+  await closeExpiredOpenSessions({
+    staffId: staffProfile._id,
+    branchId,
+  });
+
+  const eventId = normalizeClientEventId(clientEventId);
+  const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
+  const workDate = startOfUtcDay(clockInAt);
+  await assertNotAlreadyClockedIn(staffProfile._id);
+
+  const existingByEvent = await findByClientEventId(eventId);
+  assertClientEventAvailable(existingByEvent, staffProfile._id);
 
   const active = await getActiveShiftForStaff({
     staffProfile,
     organizationId,
   });
-  if (!active.clockInEligible || !active.shift) {
-    throw new AppError("no_active_shift_for_clock_in", 403);
-  }
+  // Previously required an assigned shift in the clock-in window.
+  // if (!active.clockInEligible || !active.shift) {
+  //   throw new AppError("no_active_shift_for_clock_in", 403);
+  // }
 
-  const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
-  const workDate = startOfUtcDay(clockInAt);
-
-  const alreadyToday = await AttendanceDay.findOne({
-    staffId: staffProfile._id,
-    workDate,
-  }).lean();
-
-  if (alreadyToday) throw new AppError("attendance_already_clocked_in", 409);
-
-  const openDay = await getOpenAttendanceDay(staffProfile._id);
-  if (openDay) throw new AppError("attendance_open_session_exists", 409);
-
-  const punctualityStatus = resolvePunctuality(
-    clockInAt,
-    active.shift.startsAt,
-    active.graceMinutes
-  );
+  const rostered = clockInFromActiveShift(active, clockInAt);
 
   const day = await AttendanceDay.create({
     staffId: staffProfile._id,
     branchId: staffProfile.branchId,
     workDate,
+    shiftId: rostered.shiftId,
     clockInAt,
     checkInMethod,
-    punctualityStatus,
+    punctualityStatus: rostered.punctualityStatus,
     presenceStatus: PresenceStatus.ON_SITE,
-    clientEventId: clientEventId || null,
+    clientEventId: eventId,
     occurredAt: occurredAt ? new Date(occurredAt) : null,
   });
 
-  return day.toObject();
+  return presentClockIn({
+    staffId: staffProfile._id,
+    image,
+    day: day.toObject(),
+    shift: rostered.hasRosteredShift ? active.shift : null,
+  });
 };
 
 const clockOutForStaff = async ({
@@ -619,17 +950,11 @@ const clockOutForStaff = async ({
   clientEventId,
   occurredAt,
 }) => {
-  const existingByEvent = await findByClientEventId(clientEventId);
-  if (existingByEvent) return existingByEvent;
-
   assertStaffAtBranch(staffProfile, branchId);
 
-  const day = await AttendanceDay.findOne({
-    staffId: staffProfile._id,
-    clockOutAt: null,
-  }).sort({ clockInAt: -1 });
+  const eventId = normalizeClientEventId(clientEventId);
+  const day = await requireOpenAttendanceDay(staffProfile._id);
 
-  if (!day) throw new AppError("attendance_not_clocked_in", 400);
   if (day.presenceStatus === PresenceStatus.ON_BREAK) {
     throw new AppError("attendance_on_break", 400);
   }
@@ -639,13 +964,14 @@ const clockOutForStaff = async ({
   day.presenceStatus = PresenceStatus.CHECKED_OUT;
   const settings = await getBranchSettings(day.branchId);
   day.workedMinutes = computeWorkedMinutes(day, settings);
-  if (clientEventId && !day.clientEventId) day.clientEventId = clientEventId;
+  if (eventId && !day.clientEventId) day.clientEventId = eventId;
   await day.save();
 
   return day.toObject();
 };
 
 const listOnSiteForBranch = async ({ branchId, keyword, page, limit, skip }) => {
+  await closeExpiredOpenSessions({ branchId });
   const term = String(keyword ?? "").trim();
   const keywordMatch = term
     ? {
@@ -720,6 +1046,34 @@ const listOnSiteForBranch = async ({ branchId, keyword, page, limit, skip }) => 
   };
 };
 
+const breakTakenMinutes = (day, now) => {
+  let ms = 0;
+  for (const segment of day.breaks || []) {
+    if (!segment.breakInAt) continue;
+    const end = segment.breakOutAt ? new Date(segment.breakOutAt) : now;
+    ms += end - new Date(segment.breakInAt);
+  }
+  return Math.max(0, Math.round(ms / 60000));
+};
+
+const getOpenClockInSessionForStaff = async ({ staffProfile }) => {
+  await closeExpiredOpenSessions({ staffId: staffProfile._id });
+  const day = await getOpenAttendanceDay(staffProfile._id);
+  if (!day) return null;
+
+  const now = new Date();
+  return {
+    attendanceId: day._id,
+    clockInAt: day.clockInAt,
+    presenceStatus: day.presenceStatus,
+    breakTakenMinutes: breakTakenMinutes(day, now),
+    totalOnSiteMinutes: Math.max(
+      0,
+      Math.round((now - new Date(day.clockInAt)) / 60000)
+    ),
+  };
+};
+
 const getTodayAttendanceForStaff = async ({
   staffProfile,
   organizationId,
@@ -728,7 +1082,7 @@ const getTodayAttendanceForStaff = async ({
   assertStaffAtBranch(staffProfile, branchId);
   const workDate = startOfUtcDay(new Date());
   const [day, activeShift] = await Promise.all([
-    AttendanceDay.findOne({ staffId: staffProfile._id, workDate }).lean(),
+    latestAttendanceForWorkDate(staffProfile._id, workDate),
     getActiveShiftForStaff({ staffProfile, organizationId }),
   ]);
 
@@ -852,6 +1206,7 @@ const listAttendanceDays = async ({
   presenceStatus,
   leaveType,
   punctualityStatus,
+  keyword,
   actor,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -879,29 +1234,57 @@ const listAttendanceDays = async ({
     if (to) match.workDate.$lte = startOfUtcDay(to);
   }
 
-  const staffIds = await resolveScopedStaffIds({
+  if (presenceStatus) match.presenceStatus = presenceStatus;
+
+  const scopedStaffIds = await resolveScopedStaffIds({
     standing,
     actor,
     organizationId,
     staffId,
     branchId,
   });
+  const staffIds = await staffIdsMatchingKeyword(scopedStaffIds, keyword);
+  if (!staffIds.length) return emptyRegisterPage(page, limit);
+  if (String(keyword || "").trim()) match.staffId = { $in: staffIds };
 
-  const [attendanceDays, leaveDays] = await Promise.all([
-    fetchAttendanceDays({
+  const punctuality = parsePunctualityStatus(punctualityStatus);
+
+  if (leaveType && !punctuality) {
+    const leaveDays = await listLeaveRegisterDays({ staffIds, from, to });
+    const rows = filterRegisterRows(leaveDays, { leaveType });
+    return {
+      ...paginateRows(rows, page, limit, skip),
+      meta: {
+        ...generateMeta(page, limit, rows.length),
+        counts: emptyPunctualityStatusCounts(),
+      },
+      summary: registerSummary(leaveDays),
+    };
+  }
+
+  const countMatch = { ...match };
+  if (punctuality) match.punctualityStatus = punctuality;
+
+  const [{ data, meta, result }, leaveDays] = await Promise.all([
+    paginateWithFacet({
+      model: AttendanceDay,
       match,
+      page,
+      limit,
+      skip,
       sort: { workDate: -1, clockInAt: -1 },
+      extraDataStages: ATTENDANCE_LIST_LOOKUPS,
+      extraFacets: punctualityStatusCountFacets(countMatch),
     }),
-    listLeaveRegisterDays({ staffIds, from, to }),
+    punctuality ? Promise.resolve([]) : listLeaveRegisterDays({ staffIds, from, to }),
   ]);
 
-  const merged = mergeAttendanceAndLeave(attendanceDays, leaveDays);
-  const rows = filterRegisterRows(merged, {
-    presenceStatus,
-    leaveType,
-    punctualityStatus,
-  });
-  return { ...paginateRows(rows, page, limit, skip), summary: registerSummary(merged) };
+  const counts = punctualityStatusCountsFromFacet(result);
+  return {
+    data: withComputedWorkedMinutes(data),
+    meta: { ...meta, counts },
+    summary: summaryFromCounts(counts, leaveDays),
+  };
 };
 
 const resolveRotaRange = (from, to, timezone) => {
@@ -972,20 +1355,48 @@ const staffRotaTotals = (byDate) => {
     workedMinutes: 0,
     onTimeCount: 0,
     lateCount: 0,
+    unscheduledCount: 0,
     sickDays: 0,
     absenceDays: 0,
   };
-  for (const row of byDate.values()) {
-    if (row.kind === "leave") {
-      if (row.leaveType === LeaveType.SICK) totals.sickDays += 1;
-      if (row.leaveType === LeaveType.ABSENCE) totals.absenceDays += 1;
-      continue;
+  for (const cell of byDate.values()) {
+    const rows = Array.isArray(cell) ? cell : [cell];
+    for (const row of rows) {
+      if (row.kind === "leave") {
+        if (row.leaveType === LeaveType.SICK) totals.sickDays += 1;
+        if (row.leaveType === LeaveType.ABSENCE) totals.absenceDays += 1;
+        continue;
+      }
+      totals.workedMinutes += row.workedMinutes || 0;
+      if (row.punctualityStatus === PunctualityStatus.ON_TIME) {
+        totals.onTimeCount += 1;
+      }
+      if (row.punctualityStatus === PunctualityStatus.LATE) totals.lateCount += 1;
+      if (row.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
+        totals.unscheduledCount += 1;
+      }
     }
-    totals.workedMinutes += row.workedMinutes || 0;
-    if (row.punctualityStatus === PunctualityStatus.ON_TIME) totals.onTimeCount += 1;
-    if (row.punctualityStatus === PunctualityStatus.LATE) totals.lateCount += 1;
   }
   return totals;
+};
+
+const rotaCellFromRows = (rows) => {
+  const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
+  if (!list.length) return { kind: "empty" };
+  const attendance = list
+    .filter((row) => row.kind !== "leave")
+    .sort((a, b) => new Date(a.clockInAt) - new Date(b.clockInAt));
+  if (!attendance.length) return rotaCellFromRow(list[0]);
+  const latest = attendance[attendance.length - 1];
+  const cell = rotaCellFromRow(latest);
+  cell.workedMinutes = attendance.reduce(
+    (sum, row) => sum + (row.workedMinutes || 0),
+    0
+  );
+  if (attendance.length > 1) {
+    cell.sessions = attendance.map(rotaCellFromRow);
+  }
+  return cell;
 };
 
 const listAttendanceRota = async ({
@@ -995,6 +1406,7 @@ const listAttendanceRota = async ({
   from,
   to,
   timezone,
+  keyword,
   actor,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -1010,7 +1422,7 @@ const listAttendanceRota = async ({
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
       weeks: [],
-      summary: { onTimeCount: 0, lateCount: 0, sickDays: 0, absenceDays: 0, attendanceRate: 0 },
+      summary: { ...emptySummary },
     };
   }
 
@@ -1024,20 +1436,21 @@ const listAttendanceRota = async ({
     DEFAULT_TZ;
   const { fromDay, toDay } = resolveRotaRange(from, to, tz);
 
-  const staffIds = await resolveScopedStaffIds({
+  const scopedStaffIds = await resolveScopedStaffIds({
     standing,
     actor,
     organizationId,
     staffId,
     branchId,
   });
+  const staffIds = await staffIdsMatchingKeyword(scopedStaffIds, keyword);
   if (!staffIds.length) {
     return {
       timezone: tz,
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
       weeks: buildRotaWeeks(fromDay, toDay),
-      summary: { onTimeCount: 0, lateCount: 0, sickDays: 0, absenceDays: 0, attendanceRate: 0 },
+      summary: { ...emptySummary },
     };
   }
 
@@ -1063,21 +1476,19 @@ const listAttendanceRota = async ({
   for (const row of rows) {
     const sid = String(row.staffId);
     if (!byStaffDate.has(sid)) byStaffDate.set(sid, new Map());
-    byStaffDate.get(sid).set(utcDateKey(row.workDate), row);
+    const dateKey = utcDateKey(row.workDate);
+    const current = byStaffDate.get(sid).get(dateKey);
+    if (!current) byStaffDate.get(sid).set(dateKey, [row]);
+    else current.push(row);
   }
 
-  const summary = {
-    onTimeCount: 0,
-    lateCount: 0,
-    sickDays: 0,
-    absenceDays: 0,
-    attendanceRate: 0,
-  };
+  const summary = { ...emptySummary };
   const staffRows = staffList.map((staff) => {
     const byDate = byStaffDate.get(String(staff._id)) || new Map();
     const totals = staffRotaTotals(byDate);
     summary.onTimeCount += totals.onTimeCount;
     summary.lateCount += totals.lateCount;
+    summary.unscheduledCount += totals.unscheduledCount;
     summary.sickDays += totals.sickDays;
     summary.absenceDays += totals.absenceDays;
     return { staff, totals, byDate };
@@ -1097,7 +1508,7 @@ const listAttendanceRota = async ({
     staff: staffRows.map(({ staff, totals, byDate }) => {
       const days = {};
       for (const date of week.dates) {
-        days[date] = rotaCellFromRow(byDate.get(date));
+        days[date] = rotaCellFromRows(byDate.get(date));
       }
       return { staff, totals, days };
     }),
@@ -1298,9 +1709,434 @@ const rejectChangeRequest = async ({
   return request.toObject();
 };
 
+const loadAttendanceDayInOrg = async (attendanceDayId, organizationId) => {
+  const day = await AttendanceDay.findById(attendanceDayId);
+  if (!day) throw new AppError("attendance_day_not_found", 404);
+
+  const branch = await Branch.findById(day.branchId)
+    .select("organizationId")
+    .lean();
+  if (!branch || String(branch.organizationId) !== String(organizationId)) {
+    throw new AppError("attendance_day_not_found", 404);
+  }
+  return day;
+};
+
+const requestRosterForDay = async ({
+  userId,
+  organizationId,
+  attendanceDayId,
+}) => {
+  const profile = await requireStaffProfile(userId, organizationId);
+  const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
+
+  if (String(day.staffId) !== String(profile._id)) {
+    throw new AppError("attendance_day_not_found", 404);
+  }
+  if (day.punctualityStatus !== PunctualityStatus.UNSCHEDULED) {
+    throw new AppError("attendance_not_unscheduled", 400);
+  }
+  if (!day.clockOutAt) throw new AppError("attendance_not_clocked_out", 400);
+  if (day.shiftId) throw new AppError("attendance_already_rostered", 409);
+  if (day.rosterRequestStatus === RosterRequestStatus.PENDING) {
+    throw new AppError("attendance_roster_request_pending", 409);
+  }
+  if (day.rosterRequestStatus === RosterRequestStatus.APPROVED) {
+    throw new AppError("attendance_already_rostered", 409);
+  }
+
+  day.rosterRequestStatus = RosterRequestStatus.PENDING;
+  day.rosterRequestedAt = new Date();
+  await day.save();
+  return day.toObject();
+};
+
+const approveRosterForDay = async ({
+  actor,
+  organizationId,
+  attendanceDayId,
+  startsAt,
+  endsAt,
+}) => {
+  const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
+  const standing = await actorStanding(actor, organizationId);
+  assertMayManageStaff(standing, day.branchId);
+
+  if (day.rosterRequestStatus === RosterRequestStatus.APPROVED && day.shiftId) {
+    const shift = await getShift({
+      shiftId: day.shiftId,
+      organizationId,
+    });
+    return { day: day.toObject(), shift };
+  }
+
+  if (day.punctualityStatus !== PunctualityStatus.UNSCHEDULED) {
+    throw new AppError("attendance_not_unscheduled", 400);
+  }
+  if (day.shiftId) throw new AppError("attendance_already_rostered", 409);
+  if (!day.clockOutAt && !endsAt) {
+    throw new AppError("attendance_not_clocked_out", 400);
+  }
+
+  const shift = await createScheduledShiftFromAttendance({
+    organizationId,
+    branchId: day.branchId,
+    staffId: day.staffId,
+    startsAt: startsAt || day.clockInAt,
+    endsAt: endsAt || day.clockOutAt,
+  });
+
+  day.shiftId = shift._id;
+  day.rosterRequestStatus = RosterRequestStatus.APPROVED;
+  day.rosterReviewedBy = actor._id;
+  day.rosterReviewedAt = new Date();
+  await day.save();
+
+  return { day: day.toObject(), shift };
+};
+
+const rejectRosterForDay = async ({
+  actor,
+  organizationId,
+  attendanceDayId,
+}) => {
+  const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
+  const standing = await actorStanding(actor, organizationId);
+  assertMayManageStaff(standing, day.branchId);
+
+  if (day.rosterRequestStatus === RosterRequestStatus.APPROVED || day.shiftId) {
+    throw new AppError("attendance_already_rostered", 409);
+  }
+  if (day.punctualityStatus !== PunctualityStatus.UNSCHEDULED) {
+    throw new AppError("attendance_not_unscheduled", 400);
+  }
+
+  day.rosterRequestStatus = RosterRequestStatus.REJECTED;
+  day.rosterReviewedBy = actor._id;
+  day.rosterReviewedAt = new Date();
+  await day.save();
+  return day.toObject();
+};
+
+const FILLED_SHIFT_STATUSES = [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED];
+
+const emptyWeekBuckets = () =>
+  [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({
+    weekday,
+    scheduled: 0,
+    worked: 0,
+  }));
+
+const REPORT_STAFF_LOOKUPS = [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "userId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, email: 1 } }, { $limit: 1 }],
+      as: "_user",
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+      as: "_dept",
+    },
+  },
+  {
+    $addFields: {
+      name: { $ifNull: [{ $arrayElemAt: ["$_user.name", 0] }, ""] },
+      email: { $ifNull: [{ $arrayElemAt: ["$_user.email", 0] }, ""] },
+      department: { $arrayElemAt: ["$_dept", 0] },
+    },
+  },
+  {
+    $project: {
+      employeeCode: 1,
+      photoUrl: 1,
+      name: 1,
+      email: 1,
+      department: 1,
+    },
+  },
+];
+
+const shapeReportStaff = (row) => ({
+  _id: row._id,
+  employeeCode: row.employeeCode || "",
+  name: row.name || "",
+  email: row.email || "",
+  photoUrl: toPublicImageUrl(row.photoUrl) || row.photoUrl || "",
+  department: row.department
+    ? { _id: row.department._id, name: row.department.name }
+    : null,
+});
+
+const bumpWeek = (weekly, weekday, field) => {
+  if (weekday < 1 || weekday > 7) return;
+  weekly[weekday - 1][field] += 1;
+};
+
+const attendanceReport = async ({
+  actor,
+  organizationId,
+  branchId,
+  departmentId,
+  from,
+  to,
+  page,
+  limit,
+  skip,
+}) => {
+  const fromDate = from && String(from).trim() ? from : undefined;
+  const toDate = to && String(to).trim() ? to : undefined;
+
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const branchMatch = { organizationId };
+  if (scopedBranchId) branchMatch._id = scopedBranchId;
+  const branches = await Branch.find(branchMatch).select("_id timezone").lean();
+  if (!branches.length) {
+    const { tz, fromDay, toDay } = resolveRotaRange(fromDate, toDate, DEFAULT_TZ);
+    return {
+      from: fromDay.format("YYYY-MM-DD"),
+      to: toDay.format("YYYY-MM-DD"),
+      timezone: tz,
+      branchId: scopedBranchId || null,
+      kpis: {
+        workedMinutes: 0,
+        lateCount: 0,
+        sickDays: 0,
+        sicknessRate: null,
+      },
+      weekly: emptyWeekBuckets(),
+      rows: [],
+      meta: generateMeta(page, limit, 0),
+    };
+  }
+
+  const tz =
+    (scopedBranchId
+      ? branches[0].timezone
+      : branches.length === 1
+        ? branches[0].timezone
+        : DEFAULT_TZ) || DEFAULT_TZ;
+  const { fromDay, toDay } = resolveRotaRange(fromDate, toDate, tz);
+  const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
+  const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
+  const shiftEnd = moment.utc(toUtc).add(1, "day").toDate();
+  const branchOids = branches.map((row) => row._id);
+
+  let staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    branchId,
+  });
+  if (departmentId) {
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      throw new AppError("invalid_department_id", 400);
+    }
+    staffIds = await StaffProfile.find({
+      _id: { $in: staffIds },
+      departmentIds: new mongoose.Types.ObjectId(String(departmentId)),
+    }).distinct("_id");
+  }
+  if (!staffIds.length) {
+    return {
+      from: fromDay.format("YYYY-MM-DD"),
+      to: toDay.format("YYYY-MM-DD"),
+      timezone: tz,
+      branchId: scopedBranchId || null,
+      kpis: {
+        workedMinutes: 0,
+        lateCount: 0,
+        sickDays: 0,
+        sicknessRate: null,
+      },
+      weekly: emptyWeekBuckets(),
+      rows: [],
+      meta: generateMeta(page, limit, 0),
+    };
+  }
+
+  const staffOids = staffIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const dayMatch = {
+    branchId: { $in: branchOids },
+    staffId: { $in: staffOids },
+    workDate: { $gte: fromUtc, $lte: toUtc },
+  };
+
+  const [attendanceGroups, shiftGroups, leaveDays, paged] = await Promise.all([
+    AttendanceDay.aggregate([
+      { $match: dayMatch },
+      {
+        $group: {
+          _id: { staffId: "$staffId", workDate: "$workDate" },
+          workedMinutes: { $sum: { $ifNull: ["$workedMinutes", 0] } },
+          lateCount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$punctualityStatus", PunctualityStatus.LATE] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.staffId",
+          workedDays: { $sum: 1 },
+          workedMinutes: { $sum: "$workedMinutes" },
+          lateCount: { $sum: "$lateCount" },
+          days: { $push: "$_id.workDate" },
+        },
+      },
+    ]),
+    Shift.aggregate([
+      {
+        $match: {
+          organizationId: new mongoose.Types.ObjectId(String(organizationId)),
+          branchId: { $in: branchOids },
+          staffId: { $in: staffOids },
+          status: { $in: FILLED_SHIFT_STATUSES },
+          startsAt: { $gte: fromUtc, $lt: shiftEnd },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            staffId: "$staffId",
+            day: {
+              $dateToString: { format: "%Y-%m-%d", date: "$startsAt", timezone: tz },
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.staffId",
+          scheduledDays: { $sum: 1 },
+          days: { $push: "$_id.day" },
+        },
+      },
+    ]),
+    listLeaveRegisterDays({ staffIds: staffOids, from: fromUtc, to: toUtc }),
+    paginateWithFacet({
+      model: StaffProfile,
+      match: { _id: { $in: staffOids } },
+      page,
+      limit,
+      skip,
+      sort: { createdAt: -1 },
+      extraDataStages: REPORT_STAFF_LOOKUPS,
+    }),
+  ]);
+
+  const byStaff = new Map();
+  const weekly = emptyWeekBuckets();
+  let workedMinutes = 0;
+  let lateCount = 0;
+  let workedDaysTotal = 0;
+
+  for (const row of attendanceGroups) {
+    const key = String(row._id);
+    const current = byStaff.get(key) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    current.worked = row.workedDays;
+    current.lateCount = row.lateCount;
+    current.workedMinutes = row.workedMinutes;
+    byStaff.set(key, current);
+    workedMinutes += row.workedMinutes;
+    lateCount += row.lateCount;
+    workedDaysTotal += row.workedDays;
+    for (const day of row.days || []) {
+      bumpWeek(weekly, moment.utc(day).isoWeekday(), "worked");
+    }
+  }
+
+  for (const row of shiftGroups) {
+    const key = String(row._id);
+    const current = byStaff.get(key) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    current.scheduled = row.scheduledDays;
+    byStaff.set(key, current);
+    for (const day of row.days || []) {
+      bumpWeek(weekly, moment.utc(day, "YYYY-MM-DD").isoWeekday(), "scheduled");
+    }
+  }
+
+  let sickDays = 0;
+  for (const row of leaveDays) {
+    if (row.leaveType !== LeaveType.SICK) continue;
+    const key = String(row.staffId);
+    const current = byStaff.get(key) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    current.sickDays += 1;
+    byStaff.set(key, current);
+    sickDays += 1;
+  }
+
+  const denom = workedDaysTotal + sickDays;
+  const rows = paged.data.map((staff) => {
+    const stats = byStaff.get(String(staff._id)) || {
+      scheduled: 0,
+      worked: 0,
+      lateCount: 0,
+      workedMinutes: 0,
+      sickDays: 0,
+    };
+    return {
+      staff: shapeReportStaff(staff),
+      scheduled: stats.scheduled,
+      worked: stats.worked,
+      variance: stats.worked - stats.scheduled,
+      lateCount: stats.lateCount,
+      workedMinutes: stats.workedMinutes,
+    };
+  });
+
+  return {
+    from: fromDay.format("YYYY-MM-DD"),
+    to: toDay.format("YYYY-MM-DD"),
+    timezone: tz,
+    branchId: scopedBranchId || null,
+    kpis: {
+      workedMinutes,
+      lateCount,
+      sickDays,
+      sicknessRate: denom ? Math.round((1000 * sickDays) / denom) / 10 : null,
+    },
+    weekly,
+    rows,
+    meta: paged.meta,
+  };
+};
+
 module.exports = {
   getTodayAttendance,
   getTodayAttendanceForStaff,
+  getOpenClockInSessionForStaff,
   listOnSiteForBranch,
   clockIn,
   clockInForStaff,
@@ -1317,4 +2153,10 @@ module.exports = {
   listChangeRequests,
   approveChangeRequest,
   rejectChangeRequest,
+  staffCannotClockIn,
+  closeExpiredOpenSessions,
+  requestRosterForDay,
+  approveRosterForDay,
+  rejectRosterForDay,
+  attendanceReport,
 };

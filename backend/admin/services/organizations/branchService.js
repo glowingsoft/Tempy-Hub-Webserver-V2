@@ -17,29 +17,28 @@ const {
   ActiveInactiveStatus,
 } = require("@models/domainEnums");
 
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-const randomCode = (length) =>
-  Array.from(crypto.randomBytes(length))
-    .map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length])
-    .join("");
-
 /** `randomInt` rather than `randomBytes % 10`, which biases towards 0–5. */
 const randomDigits = (length) =>
   Array.from({ length }, () => crypto.randomInt(0, 10)).join("");
 
-const BRANCH_CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{0,15}$/;
+const BRANCH_CODE_LENGTH = 6;
+const BRANCH_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 
-const normalizeBranchCode = (value) => String(value).trim().toUpperCase();
+const normalizeBranchCode = (value) => String(value ?? "").trim().toUpperCase();
 
 const assertValidBranchCode = (code) => {
-  if (!BRANCH_CODE_PATTERN.test(code)) {
+  if (
+    code.length !== BRANCH_CODE_LENGTH ||
+    !BRANCH_CODE_PATTERN.test(code) ||
+    !/[A-Z]/.test(code) ||
+    !/[0-9]/.test(code)
+  ) {
     throw new AppError("invalid_branch_code", 400);
   }
 };
 
-const assertBranchCodeFree = async (organizationId, code, excludeId) => {
-  const filter = { organizationId, code };
+const assertBranchCodeFree = async (code, excludeId) => {
+  const filter = { code };
   if (excludeId) filter._id = { $ne: excludeId };
   if (await Branch.exists(filter)) throw new AppError("branch_code_taken", 409);
 };
@@ -51,28 +50,19 @@ const duplicateBranchKeyError = (error) => {
   return new AppError("branch_name_taken", 409);
 };
 
-/**
- * Branch ID shown in the UI. Unique per organization, so a collision only means
- * retrying — the unique index is what actually guarantees it.
- */
-const generateBranchCode = async (organizationId) => {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const code = `BR-${randomCode(6)}`;
-    const exists = await Branch.exists({ organizationId, code });
-    if (!exists) return code;
-  }
-  throw new AppError("branch_code_generation_failed", 500);
-};
-
-const resolveBranchCode = async (organizationId, requested) => {
-  if (requested == null || String(requested).trim() === "") {
-    return generateBranchCode(organizationId);
-  }
+const resolveBranchCode = async (requested, excludeId) => {
   const code = normalizeBranchCode(requested);
+  if (!code) throw new AppError("branch_code_required", 400);
   assertValidBranchCode(code);
-  await assertBranchCodeFree(organizationId, code);
+  await assertBranchCodeFree(code, excludeId);
   return code;
 };
+
+const NUMBER_SETTING_FIELDS = new Set([
+  "lateGraceMinutes",
+  "autoClockOutHoursAfterShiftEnd",
+  "autoClockOutHoursAfterClockIn",
+]);
 
 const SETTING_FIELDS = [
   "enableBreaks",
@@ -80,7 +70,18 @@ const SETTING_FIELDS = [
   "allowPhoneCheckIn",
   "paidBreaks",
   "enableLeaveRequests",
+  "autoClockOutHoursAfterShiftEnd",
+  "autoClockOutHoursAfterClockIn",
 ];
+
+const normalizeHoursSetting = (value, fallback) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  const hours = Number(value);
+  if (!Number.isFinite(hours) || hours < 0) {
+    throw new AppError("invalid_auto_clock_out_hours", 400);
+  }
+  return hours;
+};
 
 const normalizeBreakBands = (bands) => {
   if (!Array.isArray(bands)) {
@@ -119,6 +120,14 @@ const buildSettings = (settings) => ({
     settings?.enableLeaveRequests === undefined
       ? true
       : Boolean(settings.enableLeaveRequests),
+  autoClockOutHoursAfterShiftEnd: normalizeHoursSetting(
+    settings?.autoClockOutHoursAfterShiftEnd,
+    3
+  ),
+  autoClockOutHoursAfterClockIn: normalizeHoursSetting(
+    settings?.autoClockOutHoursAfterClockIn,
+    10
+  ),
   ...(settings?.breakBands !== undefined
     ? { breakBands: normalizeBreakBands(settings.breakBands) }
     : {}),
@@ -297,7 +306,7 @@ const createBranch = async ({
   if (!organization) throw new AppError("organization_not_found", 404);
 
   await assertBranchNameFree(organizationId, name);
-  const code = await resolveBranchCode(organizationId, requestedCode);
+  const code = await resolveBranchCode(requestedCode);
 
   const payload = {
     organizationId,
@@ -352,6 +361,35 @@ const branchStatusCountsFromFacet = (result) => {
   return counts;
 };
 
+/** Latest activation code for each branch on this page. Hash stays in the database. */
+const activationCodeLookup = (organizationId) => [
+  {
+    $lookup: {
+      from: BranchActivationCode.collection.name,
+      let: { branchId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $eq: ["$branchId", "$$branchId"] },
+            organizationId,
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+        { $project: { codeHash: 0 } },
+      ],
+      as: "activationCode",
+    },
+  },
+  {
+    $set: {
+      activationCode: {
+        $ifNull: [{ $arrayElemAt: ["$activationCode", 0] }, null],
+      },
+    },
+  },
+];
+
 const listBranches = async ({
   organizationId,
   page,
@@ -382,6 +420,7 @@ const listBranches = async ({
     limit,
     skip,
     extraFacets: branchStatusCountFacets(countMatch),
+    extraDataStages: activationCodeLookup(match.organizationId),
   });
 
   return {
@@ -426,10 +465,7 @@ const updateBranch = async ({
     update.nameKey = nameKeyOf(name);
   }
   if (requestedCode !== undefined) {
-    const code = normalizeBranchCode(requestedCode);
-    assertValidBranchCode(code);
-    await assertBranchCodeFree(organizationId, code, branchId);
-    update.code = code;
+    update.code = await resolveBranchCode(requestedCode, branchId);
   }
   if (address !== undefined) update.address = address;
   if (timezone !== undefined) update.timezone = timezone;
@@ -438,10 +474,9 @@ const updateBranch = async ({
   if (settings) {
     for (const field of SETTING_FIELDS) {
       if (settings[field] === undefined) continue;
-      update[`settings.${field}`] =
-        field === "lateGraceMinutes"
-          ? Number(settings[field])
-          : Boolean(settings[field]);
+      update[`settings.${field}`] = NUMBER_SETTING_FIELDS.has(field)
+        ? normalizeHoursSetting(settings[field], 0)
+        : Boolean(settings[field]);
     }
 
     if (settings.breakBands !== undefined) {

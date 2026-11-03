@@ -7,14 +7,65 @@ const { StaffInvitation } = require("@models/StaffInvitation");
 const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
+const { StaffProfile } = require("@models/StaffProfile");
 const {
   MembershipRole,
   ActiveInactiveStatus,
   OrganizationStatus,
   StaffInvitationStatus,
+  StaffProfileStatus,
 } = require("@models/domainEnums");
+  const {
+  parseSupervisionInterval,
+  parseAppraisalInterval,
+  orgCycleDefaults,
+  assertAppraisalAfterSupervision,
+  assertNoStaffCycleConflict,
+} = require("@adminServices/appraisal/cycle");
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
+
+/** Lean reads skip schema defaults, so older orgs omit fields they never saved. */
+const presentSettings = (settings = {}) => {
+  const defaults = orgCycleDefaults(settings || {});
+  return {
+    emergencyNotifyOffsite: Boolean(settings?.emergencyNotifyOffsite),
+    defaultSupervisionIntervalMonths: defaults.supervisionMonths,
+    defaultAppraisalIntervalMonths: defaults.appraisalMonths,
+    appraisalWriterStaffIds: Array.isArray(settings?.appraisalWriterStaffIds)
+      ? settings.appraisalWriterStaffIds
+      : [],
+  };
+};
+
+const withSettings = (organization) =>
+  organization
+    ? { ...organization, settings: presentSettings(organization.settings) }
+    : organization;
+
+const writerStaffIds = async (organizationId, value) => {
+  if (!Array.isArray(value)) throw new AppError("invalid_appraisal_writers", 400);
+  const ids = [
+    ...new Set(
+      value
+        .filter((id) => id != null && String(id).trim() !== "")
+        .map((id) => {
+          if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new AppError("invalid_staff_profile_id", 400);
+          }
+          return String(id);
+        })
+    ),
+  ].map((id) => new mongoose.Types.ObjectId(id));
+  if (!ids.length) return [];
+  const count = await StaffProfile.countDocuments({
+    _id: { $in: ids },
+    organizationId,
+    status: StaffProfileStatus.ACTIVE,
+  });
+  if (count !== ids.length) throw new AppError("staff_profile_not_found", 400);
+  return ids;
+};
 
 const ownerSummaryFromUser = (user) =>
   user
@@ -129,6 +180,29 @@ const createOrganization = async ({
     ? await normalizeModuleAccess(moduleAccess)
     : [];
 
+  const nextSettings = {
+    emergencyNotifyOffsite: Boolean(settings?.emergencyNotifyOffsite),
+    ...(settings?.defaultSupervisionIntervalMonths !== undefined
+      ? {
+          defaultSupervisionIntervalMonths: parseSupervisionInterval(
+            settings.defaultSupervisionIntervalMonths
+          ),
+        }
+      : {}),
+    ...(settings?.defaultAppraisalIntervalMonths !== undefined
+      ? {
+          defaultAppraisalIntervalMonths: parseAppraisalInterval(
+            settings.defaultAppraisalIntervalMonths
+          ),
+        }
+      : {}),
+  };
+  const createdDefaults = orgCycleDefaults(nextSettings);
+  assertAppraisalAfterSupervision(
+    createdDefaults.appraisalMonths,
+    createdDefaults.supervisionMonths
+  );
+
   let organization;
   try {
     organization = await Organization.create({
@@ -136,9 +210,7 @@ const createOrganization = async ({
       ownerUserId: null,
       status: OrganizationStatus.PENDING_ACTIVATION,
       moduleAccess: normalizedModules,
-      settings: {
-        emergencyNotifyOffsite: Boolean(settings?.emergencyNotifyOffsite),
-      },
+      settings: nextSettings,
     });
   } catch (error) {
     // The pre-check races: two requests can both pass it before either inserts.
@@ -162,7 +234,7 @@ const createOrganization = async ({
       branchId: null,
     });
 
-    return { ...organization.toObject(), ownerInvitation: invitation };
+    return { ...withSettings(organization.toObject()), ownerInvitation: invitation };
   } catch (error) {
     // An organization nobody was invited to is unreachable and unnameable, so
     // do not leave it behind holding its name.
@@ -237,7 +309,7 @@ const listOrganizations = async ({ actor, page, limit, skip, keyword, status }) 
   });
 
   return {
-    data: await attachOwnersToOrganizations(data),
+    data: (await attachOwnersToOrganizations(data)).map(withSettings),
     meta: { ...meta, counts: organizationStatusCountsFromFacet(result) },
   };
 };
@@ -246,7 +318,7 @@ const getOrganization = async (organizationId) => {
   const organization = await Organization.findById(organizationId).lean();
   if (!organization) throw new AppError("organization_not_found", 404);
   const [withOwner] = await attachOwnersToOrganizations([organization]);
-  return withOwner;
+  return withSettings(withOwner);
 };
 
 const updateOrganization = async ({ organizationId, name, settings, status }) => {
@@ -260,6 +332,41 @@ const updateOrganization = async ({ organizationId, name, settings, status }) =>
   if (settings?.emergencyNotifyOffsite !== undefined) {
     update["settings.emergencyNotifyOffsite"] = Boolean(
       settings.emergencyNotifyOffsite
+    );
+  }
+  if (
+    settings?.defaultSupervisionIntervalMonths !== undefined ||
+    settings?.defaultAppraisalIntervalMonths !== undefined
+  ) {
+    const current = await Organization.findById(organizationId)
+      .select("settings")
+      .lean();
+    if (!current) throw new AppError("organization_not_found", 404);
+    const defaults = orgCycleDefaults(current.settings);
+    const nextSup =
+      settings.defaultSupervisionIntervalMonths !== undefined
+        ? parseSupervisionInterval(settings.defaultSupervisionIntervalMonths)
+        : defaults.supervisionMonths;
+    const nextApp =
+      settings.defaultAppraisalIntervalMonths !== undefined
+        ? parseAppraisalInterval(settings.defaultAppraisalIntervalMonths)
+        : defaults.appraisalMonths;
+    await assertNoStaffCycleConflict({
+      organizationId,
+      appraisalDefault: nextApp,
+      supervisionDefault: nextSup,
+    });
+    if (settings.defaultSupervisionIntervalMonths !== undefined) {
+      update["settings.defaultSupervisionIntervalMonths"] = nextSup;
+    }
+    if (settings.defaultAppraisalIntervalMonths !== undefined) {
+      update["settings.defaultAppraisalIntervalMonths"] = nextApp;
+    }
+  }
+  if (settings?.appraisalWriterStaffIds !== undefined) {
+    update["settings.appraisalWriterStaffIds"] = await writerStaffIds(
+      organizationId,
+      settings.appraisalWriterStaffIds
     );
   }
   if (status !== undefined) {
@@ -291,7 +398,7 @@ const updateOrganization = async ({ organizationId, name, settings, status }) =>
   }
 
   if (!organization) throw new AppError("organization_not_found", 404);
-  return organization;
+  return withSettings(organization);
 };
 
 const getModuleAccess = async (organizationId) => {

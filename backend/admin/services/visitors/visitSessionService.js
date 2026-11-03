@@ -3,6 +3,7 @@ const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { paginateWithFacet } = require("@utils/paginate");
+const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
 const {
   VisitMethod,
@@ -22,6 +23,106 @@ const {
   parseStatuses,
   parseDateRange,
 } = require("./visitPresenceQuery");
+
+const VISIT_SESSION_STATUSES = Object.values(VisitSessionStatus);
+
+const emptyVisitSessionStatusCounts = () =>
+  Object.fromEntries(VISIT_SESSION_STATUSES.map((status) => [status, 0]));
+
+const visitSessionStatusCountFacets = (countMatch) => ({
+  statusCounts: [
+    { $match: countMatch },
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ],
+});
+
+const visitSessionStatusCountsFromFacet = (result) => {
+  const counts = emptyVisitSessionStatusCounts();
+  for (const row of result.statusCounts || []) {
+    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
+      counts[row._id] = row.count;
+    }
+  }
+  return counts;
+};
+
+const emptyVisitSessionList = (page, limit) => ({
+  data: [],
+  meta: {
+    page,
+    limit,
+    total: 0,
+    totalPages: 0,
+    counts: emptyVisitSessionStatusCounts(),
+  },
+});
+
+const visitDetailStages = [
+  {
+    $lookup: {
+      from: ExternalPerson.collection.name,
+      localField: "externalPersonId",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $project: {
+            name: 1,
+            email: 1,
+            phone: 1,
+            type: 1,
+            photoUrl: 1,
+            categoryId: 1,
+            carRegistration: 1,
+          },
+        },
+        { $limit: 1 },
+      ],
+      as: "_person",
+    },
+  },
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $project: {
+            name: 1,
+            code: 1,
+            timezone: 1,
+            status: 1,
+            address: 1,
+          },
+        },
+        { $limit: 1 },
+      ],
+      as: "_branch",
+    },
+  },
+  {
+    $addFields: {
+      person: { $arrayElemAt: ["$_person", 0] },
+      branch: { $arrayElemAt: ["$_branch", 0] },
+    },
+  },
+  { $project: { _person: 0, _branch: 0 } },
+];
+
+const shapeVisitRow = (row) => {
+  if (!row) return row;
+  const person = row.person || null;
+  return {
+    ...row,
+    person: person
+      ? {
+          ...person,
+          photoUrl: toPublicImageUrl(person.photoUrl),
+        }
+      : null,
+    branch: row.branch || null,
+  };
+};
 
 const parseMethod = (method) => {
   const value = method || VisitMethod.WALK_IN;
@@ -275,17 +376,13 @@ const listVisitSessions = async ({
   const branches = await Branch.find(branchFilter).select("_id").lean();
   const branchIds = branches.map((b) => b._id);
   if (!branchIds.length) {
-    return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    return emptyVisitSessionList(page, limit);
   }
 
   const match = { branchId: { $in: branchIds } };
   if (personType) {
     const types = parsePersonTypes(personType);
     match.personType = types.length === 1 ? types[0] : { $in: types };
-  }
-  if (status) {
-    const statuses = parseStatuses(status);
-    match.status = statuses.length === 1 ? statuses[0] : { $in: statuses };
   }
   if (externalPersonId) {
     match.externalPersonId = toObjectId(externalPersonId);
@@ -298,14 +395,32 @@ const listVisitSessions = async ({
     if (toDate) match.checkInAt.$lte = toDate;
   }
 
-  return paginateWithFacet({
+  const countMatch = { ...match };
+  if (status) {
+    const statuses = parseStatuses(status);
+    match.status = statuses.length === 1 ? statuses[0] : { $in: statuses };
+  }
+
+  const { data, meta, result } = await paginateWithFacet({
     model: VisitSession,
     match,
     page,
     limit,
     skip,
     sort: { checkInAt: -1 },
+    extraDataStages: visitDetailStages,
+    extraFacets: visitSessionStatusCountFacets(countMatch),
   });
+
+  return {
+    data: data.map(shapeVisitRow),
+    meta: {
+      ...meta,
+      counts: result
+        ? visitSessionStatusCountsFromFacet(result)
+        : emptyVisitSessionStatusCounts(),
+    },
+  };
 };
 
 const getVisitSession = async ({
@@ -313,7 +428,10 @@ const getVisitSession = async ({
   organizationId,
   visitSessionId,
 }) => {
-  const session = await VisitSession.findById(visitSessionId).lean();
+  const [session] = await VisitSession.aggregate([
+    { $match: { _id: toObjectId(visitSessionId) } },
+    ...visitDetailStages,
+  ]);
   if (!session) throw new AppError("visit_session_not_found", 404);
 
   await assertBranchInOrganization(session.branchId, organizationId);
@@ -323,7 +441,7 @@ const getVisitSession = async ({
     throw new AppError("outside_managed_branch", 403);
   }
 
-  return session;
+  return shapeVisitRow(session);
 };
 
 /**

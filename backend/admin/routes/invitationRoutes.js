@@ -17,7 +17,13 @@ const MANAGERS = [
   MembershipRole.OWNER,
   MembershipRole.SITE_MANAGER,
 ];
+const INVITERS = [...MANAGERS, MembershipRole.LINE_MANAGER];
 
+router.patch(
+  "/:invitationId",
+  requireRoles(INVITERS),
+  membershipController.updateInvitation
+);
 router.post(
   "/:invitationId/resend",
   requireRoles(MANAGERS),

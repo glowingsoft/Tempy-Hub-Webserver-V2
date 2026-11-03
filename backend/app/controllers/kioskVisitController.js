@@ -108,7 +108,7 @@ const checkIn = async (req, res) => {
       email: req.body.email,
       phone: req.body.phone,
       carRegistration: req.body.carRegistration,
-      photoUrl: req.body.photoUrl,
+      photoUrl: req.body.image || req.body.photoUrl,
       hostStaffId: req.body.hostStaffId,
       hostName: req.body.hostName,
       purposeOfVisit: req.body.purposeOfVisit,
@@ -151,6 +151,7 @@ const listOnSite = async (req, res) => {
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await kioskVisitService.listOnSiteVisits({
       branchId: req.branchId,
+      keyword: req.query.keyword || req.query.search,
       page,
       limit,
       skip,

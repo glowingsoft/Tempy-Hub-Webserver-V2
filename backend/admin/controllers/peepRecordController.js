@@ -39,6 +39,7 @@ const getPeepFloorSummary = async (req, res) => {
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.query.branchId || req.query.siteId,
+      keyword: req.query.keyword || req.query.search,
     });
 
     return sendResponse({

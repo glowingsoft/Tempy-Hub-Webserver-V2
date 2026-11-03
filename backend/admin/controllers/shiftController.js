@@ -133,6 +133,25 @@ const listClaims = async (req, res) => {
   }
 };
 
+const getClaim = async (req, res) => {
+  try {
+    const data = await shiftService.getClaim({
+      actor: req.user,
+      organizationId: req.orgId,
+      claimId: req.params.claimId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const approveClaim = async (req, res) => {
   try {
     const data = await shiftService.approveClaim({
@@ -179,6 +198,7 @@ module.exports = {
   getShift,
   updateShift,
   listClaims,
+  getClaim,
   approveClaim,
   rejectClaim,
   ModuleSlug,

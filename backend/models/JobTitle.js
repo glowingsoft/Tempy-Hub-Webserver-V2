@@ -16,6 +16,12 @@ const jobTitleSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+      index: true,
+    },
     name: { type: String, required: true, trim: true },
     nameKey: { type: String, required: true, trim: true },
     level: {

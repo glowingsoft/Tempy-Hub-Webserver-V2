@@ -22,8 +22,8 @@ const MembershipRoleRank = {
 
 /**
  * Which product the client is (not the same as Membership.role).
- * Login may send this so a line manager cannot enter the owner/platform portal.
- * Higher membership rank may open a lower-ranked portal.
+ * Login may send this so a line manager cannot enter the owner/platform portal
+ * and an owner cannot enter managerApp.
  */
 const AppSurface = {
   STAFF_APP: "staffApp",
@@ -52,6 +52,8 @@ const StaffInvitationStatus = {
 };
 
 const FamilyInvitationStatus = { ...StaffInvitationStatus };
+
+const VisitorAccountInvitationStatus = { ...StaffInvitationStatus };
 
 const FamilyRelationship = {
   SPOUSE: "spouse",
@@ -160,6 +162,12 @@ const FamilyJoinSource = {
   HOME: "home",
 };
 
+/** Owner Staff Dashboard Settings — which cards appear on the staff app home. */
+const StaffDashboardCard = {
+  CHECK_IN: "checkIn",
+  PENDING_LEAVE: "pendingLeave",
+};
+
 const ModuleSlug = {
   SIGN_IN_ATTENDANCE: "signInAttendance",
   ROTA_SCHEDULING: "rotaScheduling",
@@ -257,6 +265,15 @@ const CheckInMethod = {
 const PunctualityStatus = {
   ON_TIME: "onTime",
   LATE: "late",
+  UNSCHEDULED: "unscheduled",
+};
+
+/** Extra hours worked with no rota row until a manager approves. */
+const RosterRequestStatus = {
+  NONE: "none",
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
 };
 
 const PresenceStatus = {
@@ -347,6 +364,25 @@ const KioskPairingStatus = {
   CANCELLED: "cancelled",
 };
 
+const KioskWidgetType = {
+  IMAGE: "image",
+  QR: "qr",
+  TEXT: "text",
+  LINK: "link",
+};
+
+const KioskWidgetPlacement = {
+  HOME: "home",
+  CHECKOUT: "checkout",
+};
+
+/** Only used when type is text. */
+const KioskTextKind = {
+  QUOTE_OF_THE_DAY: "quoteOfTheDay",
+  GREETING: "greeting",
+  PLAIN: "plain",
+};
+
 const EvacuationType = {
   REAL: "real",
   MOCK: "mock",
@@ -386,11 +422,51 @@ const DocumentCategory = {
   OTHER: "other",
 };
 
+/** Who the document is shown to. Kiosk policies use visitor / contractor. */
+const DocumentAudience = {
+  STAFF: "staff",
+  VISITOR: "visitor",
+  CONTRACTOR: "contractor",
+};
+
 const ComplianceRecordStatus = {
   DUE: "due",
   COMPLETED: "completed",
   OVERDUE: "overdue",
   CANCELLED: "cancelled",
+};
+
+const RequirementType = {
+  TRAINING: "training",
+  COMPETENCY: "competency",
+};
+
+const RequirementAssignmentSource = {
+  JOB_TITLE: "jobTitle",
+  DEPARTMENT: "department",
+  MANUAL: "manual",
+};
+
+/** Derived from dates. Never stored on the assignment. */
+const RequirementCellStatus = {
+  VALID: "valid",
+  DUE_SOON: "due_soon",
+  EXPIRED: "expired",
+  IN_PROGRESS: "in_progress",
+  NA: "na",
+};
+
+/** Stored on a supervision or appraisal row. Due and overdue are calculated. */
+const ComplianceMeetingStatus = {
+  SCHEDULED: "scheduled",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+};
+
+/** Only `annual` drives the appraisal due date and lock. */
+const AppraisalKind = {
+  ANNUAL: "annual",
+  OTHER: "other",
 };
 
 const LeaveType = {
@@ -444,12 +520,31 @@ const PersonCategoryAppliesTo = {
   ANY: "any",
 };
 
+const VisitorSurveyQuestionType = {
+  YES_NO: "yesNo",
+  SINGLE_SELECT: "singleSelect",
+  RATING: "rating",
+  TEXT: "text",
+};
+
+const VisitorSurveyQuestionSource = {
+  SYSTEM: "system",
+  CUSTOM: "custom",
+};
+
+const VisitorSurveyResponseSource = {
+  ADMIN_MANUAL: "adminManual",
+  KIOSK: "kiosk",
+  VISITOR_APP: "visitorApp",
+};
+
 module.exports = {
   MembershipRole,
   MembershipRoleRank,
   AppSurface,
   StaffInvitationStatus,
   FamilyInvitationStatus,
+  VisitorAccountInvitationStatus,
   FamilyRelationship,
   FamilyMemberStatus,
   FamilyJoinSource,
@@ -466,6 +561,7 @@ module.exports = {
   FamilyGazetteItemStatus,
   FamilyCodeStatus,
   AuthAudience,
+  StaffDashboardCard,
   ModuleSlug,
   OrganizationStatus,
   BranchStatus,
@@ -479,6 +575,7 @@ module.exports = {
   ShiftClaimStatus,
   CheckInMethod,
   PunctualityStatus,
+  RosterRequestStatus,
   PresenceStatus,
   ChangeRequestStatus,
   AdmissionStatus,
@@ -493,13 +590,22 @@ module.exports = {
   KioskMode,
   KioskDeviceType,
   KioskPairingStatus,
+  KioskWidgetType,
+  KioskWidgetPlacement,
+  KioskTextKind,
   EvacuationType,
   EvacuationStatus,
   EvacPersonKind,
   EvacCheckStatus,
   DocumentScope,
   DocumentCategory,
+  DocumentAudience,
   ComplianceRecordStatus,
+  RequirementType,
+  RequirementAssignmentSource,
+  RequirementCellStatus,
+  ComplianceMeetingStatus,
+  AppraisalKind,
   LeaveType,
   LeaveRequestStatus,
   LeaveRequestSource,
@@ -507,4 +613,7 @@ module.exports = {
   ResidentMediaReviewStatus,
   VisitRequestStatus,
   PersonCategoryAppliesTo,
+  VisitorSurveyQuestionType,
+  VisitorSurveyQuestionSource,
+  VisitorSurveyResponseSource,
 };

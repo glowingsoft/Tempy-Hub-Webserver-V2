@@ -21,6 +21,7 @@ const listAttendanceDays = async (req, res) => {
       presenceStatus: req.query.presenceStatus,
       leaveType: req.query.leaveType,
       punctualityStatus: req.query.punctualityStatus,
+      keyword: req.query.keyword,
       actor: req.user,
     });
 
@@ -29,6 +30,42 @@ const listAttendanceDays = async (req, res) => {
       statusCode: 200,
       translationKey: "data_fetched_successfully",
       data: { days: data, summary },
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const attendanceReport = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const {
+      from,
+      to,
+      timezone,
+      branchId,
+      kpis,
+      weekly,
+      rows,
+      meta,
+    } = await attendanceService.attendanceReport({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
+      from: req.query.from,
+      to: req.query.to,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { from, to, timezone, branchId, kpis, weekly, rows },
       meta,
     });
   } catch (error) {
@@ -45,6 +82,7 @@ const listAttendanceRota = async (req, res) => {
       from: req.query.from,
       to: req.query.to,
       timezone: req.query.timezone,
+      keyword: req.query.keyword,
       actor: req.user,
     });
 
@@ -164,12 +202,55 @@ const rejectChangeRequest = async (req, res) => {
   }
 };
 
+const approveRoster = async (req, res) => {
+  try {
+    const data = await attendanceService.approveRosterForDay({
+      actor: req.user,
+      organizationId: req.orgId,
+      attendanceDayId: req.params.attendanceDayId,
+      startsAt: req.body.startsAt,
+      endsAt: req.body.endsAt,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_roster_approved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const rejectRoster = async (req, res) => {
+  try {
+    const data = await attendanceService.rejectRosterForDay({
+      actor: req.user,
+      organizationId: req.orgId,
+      attendanceDayId: req.params.attendanceDayId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "attendance_roster_rejected",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   listAttendanceDays,
   listAttendanceRota,
+  attendanceReport,
   getAttendanceDay,
   updateAttendanceDay,
   listChangeRequests,
   approveChangeRequest,
   rejectChangeRequest,
+  approveRoster,
+  rejectRoster,
 };

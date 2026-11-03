@@ -293,7 +293,7 @@ const getExternalPerson = async ({
   await assertBranchInOrganization(person.branchId, organizationId);
   const standing = await actorStanding(actor, organizationId);
   const scoped = scopeBranchFilter(standing, person.branchId);
-  if (String(scoped) !== String(person.branchId)) {
+  if (scoped && String(scoped) !== String(person.branchId)) {
     throw new AppError("outside_managed_branch", 403);
   }
 

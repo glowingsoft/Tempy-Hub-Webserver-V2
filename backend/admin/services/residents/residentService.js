@@ -14,7 +14,7 @@ const {
   scopeBranchFilter,
 } = require("./residentAccess");
 
-const PASSCODE_PATTERN = /^[A-Za-z0-9-]{4,32}$/;
+const PASSCODE_PATTERN = /^\d{4,32}$/;
 const QR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 const STATUS_ALIASES = {
@@ -143,7 +143,7 @@ const listResidents = async ({
   limit,
   skip,
   branchId,
-  status,
+  admissionStatus,
   keyword,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -161,9 +161,9 @@ const listResidents = async ({
     match.branchId = new mongoose.Types.ObjectId(String(scopedBranchId));
   }
 
-  const admissionStatus = parseAdmissionStatus(status);
+  const status = parseAdmissionStatus(admissionStatus);
   const countMatch = { ...match };
-  if (admissionStatus) match.admissionStatus = admissionStatus;
+  if (status) match.admissionStatus = status;
 
   const or = keywordOr(keyword, ["name", "email", "roomNumber", "phone"], {
     trim: true,

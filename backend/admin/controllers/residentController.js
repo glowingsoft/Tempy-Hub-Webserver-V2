@@ -52,7 +52,7 @@ const listResidents = async (req, res) => {
       limit,
       skip,
       branchId: req.query.branchId,
-      status: req.query.status,
+      admissionStatus: req.query.admissionStatus,
       keyword: req.query.keyword,
     });
 

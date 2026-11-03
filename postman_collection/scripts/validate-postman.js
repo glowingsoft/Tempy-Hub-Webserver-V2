@@ -2,7 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const collectionPath = path.join(root, "Tempy Hub API_13_10_2026.postman_collection.json");
+const { collectionFile } = require("./collectionFile");
+const collectionPath = collectionFile();
 const envPath = path.join(root, "TempyHubAPI.postman_environment.json");
 
 function readJson(file) {

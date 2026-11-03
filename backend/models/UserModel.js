@@ -129,6 +129,11 @@ const userSchema = new mongoose.Schema(
           type: Date,
           default: Date.now,
         },
+        /** Set after kiosk OTP verify; clock-in may use staffId until this time. */
+        kioskVerifiedUntil: {
+          type: Date,
+          default: null,
+        },
       },
       phoneNumberOtp: {
         otp: {

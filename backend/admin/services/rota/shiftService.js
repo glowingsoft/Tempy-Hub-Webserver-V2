@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { Shift } = require("@models/Shift");
 const { ShiftClaim } = require("@models/ShiftClaim");
+const { AttendanceDay } = require("@models/AttendanceDay");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
@@ -26,29 +27,63 @@ const {
 const EARLY_CLOCK_IN_MINUTES = 15;
 const DEFAULT_TZ = "Europe/London";
 
-const EMPTY_SHIFT_STATUS_COUNTS = { open: 0, filled: 0, cancelled: 0 };
+const SHIFT_STATUSES = Object.values(ShiftStatus);
 
-/** Tab counts ignore `status` so Open / Filled / Cancelled stay independent of the list filter. */
-const shiftStatusCountFacets = (countMatch) => ({
-  openCount: [
-    { $match: { ...countMatch, status: ShiftStatus.OPEN } },
-    { $count: "count" },
-  ],
-  filledCount: [
-    { $match: { ...countMatch, status: ShiftStatus.SCHEDULED } },
-    { $count: "count" },
-  ],
-  cancelledCount: [
-    { $match: { ...countMatch, status: ShiftStatus.CANCELLED } },
-    { $count: "count" },
-  ],
-});
+const emptyShiftStatusCounts = () =>
+  Object.fromEntries(SHIFT_STATUSES.map((status) => [status, 0]));
 
-const shiftStatusCountsFromFacet = (result) => ({
-  open: facetCount(result.openCount),
-  filled: facetCount(result.filledCount),
-  cancelled: facetCount(result.cancelledCount),
-});
+/** Tab counts ignore `status` so each status total stays independent of the list filter. */
+const shiftStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    SHIFT_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const shiftStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    SHIFT_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const parseShiftStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!SHIFT_STATUSES.includes(value)) throw new AppError("invalid_shift_status", 400);
+  return value;
+};
+
+const SHIFT_CLAIM_STATUSES = Object.values(ShiftClaimStatus);
+
+const emptyShiftClaimStatusCounts = () =>
+  Object.fromEntries(SHIFT_CLAIM_STATUSES.map((status) => [status, 0]));
+
+/** Tab counts ignore `status` so each claim-status total stays independent of the list filter. */
+const shiftClaimStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    SHIFT_CLAIM_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const shiftClaimStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    SHIFT_CLAIM_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const parseShiftClaimStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!SHIFT_CLAIM_STATUSES.includes(value)) {
+    throw new AppError("invalid_shift_claim_status", 400);
+  }
+  return value;
+};
 
 const branchTimezone = async (branchId) => {
   const branch = await Branch.findById(branchId).select("timezone").lean();
@@ -84,6 +119,74 @@ const parseShiftTimes = (
   }
 
   return { startsAt: start.toDate(), endsAt: end.toDate() };
+};
+
+const sameInstant = (a, b) => new Date(a).getTime() === new Date(b).getTime();
+
+const findLinkedAttendance = (shiftId) =>
+  AttendanceDay.findOne({ shiftId }).sort({ clockInAt: -1 }).lean();
+
+const assertNoStaffOverlap = async (shift) => {
+  if (!shift.staffId) return;
+
+  const clash = await Shift.findOne({
+    _id: { $ne: shift._id },
+    organizationId: shift.organizationId,
+    staffId: shift.staffId,
+    status: ShiftStatus.SCHEDULED,
+    startsAt: { $lt: shift.endsAt },
+    endsAt: { $gt: shift.startsAt },
+  })
+    .select("_id")
+    .lean();
+
+  if (clash) throw new AppError("shift_overlaps_existing", 409);
+};
+
+const applyShiftTimes = async (shift, { startsAt, endsAt, attendance }) => {
+  const timezone = await branchTimezone(shift.branchId);
+  const startLocked = attendance && startsAt !== undefined && !sameInstant(startsAt, shift.startsAt);
+  const sessionOpen = attendance && !attendance.clockOutAt;
+  const sessionClosed = attendance && attendance.clockOutAt;
+
+  if (sessionClosed && (startsAt !== undefined || endsAt !== undefined)) {
+    throw new AppError("shift_times_locked_after_clock_out", 400);
+  }
+  if (startLocked) throw new AppError("shift_start_locked_after_clock_in", 400);
+
+  const times = parseShiftTimes(
+    startsAt ?? shift.startsAt,
+    endsAt ?? shift.endsAt,
+    timezone,
+    { requireFutureStart: !attendance && startsAt !== undefined }
+  );
+
+  if (sessionOpen && endsAt !== undefined) {
+    const now = moment.tz(timezone);
+    if (!moment(times.endsAt).isAfter(now)) {
+      throw new AppError("shift_end_must_be_in_future", 400);
+    }
+    if (!moment(times.endsAt).isAfter(attendance.clockInAt)) {
+      throw new AppError("shift_end_before_clock_in", 400);
+    }
+  }
+
+  shift.startsAt = times.startsAt;
+  shift.endsAt = times.endsAt;
+};
+
+const assertShiftNotLockedByAttendance = (
+  attendance,
+  { open, staffId, status, currentStaffId }
+) => {
+  if (!attendance) return;
+  const cancel = status === ShiftStatus.CANCELLED;
+  const unassign = open === true || (staffId !== undefined && !staffId);
+  const reassign =
+    staffId && String(staffId) !== String(currentStaffId || "");
+  if (unassign || cancel || reassign) {
+    throw new AppError("shift_locked_after_attendance", 400);
+  }
 };
 
 const requireStaffProfile = async (userId, organizationId) => {
@@ -247,7 +350,7 @@ const listShifts = async ({
         data: [],
         meta: {
           ...generateMeta(page, limit, 0),
-          counts: { ...EMPTY_SHIFT_STATUS_COUNTS },
+          counts: emptyShiftStatusCounts(),
         },
       };
     }
@@ -266,7 +369,8 @@ const listShifts = async ({
   }
 
   const countMatch = { ...match };
-  if (status) match.status = status;
+  const shiftStatus = parseShiftStatus(status);
+  if (shiftStatus) match.status = shiftStatus;
 
   const { data, meta, result } = await paginateWithFacet({
     model: Shift,
@@ -308,16 +412,16 @@ const updateShift = async ({
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, shift.branchId);
 
+  const attendance = await findLinkedAttendance(shift._id);
+  assertShiftNotLockedByAttendance(attendance, {
+    open,
+    staffId,
+    status,
+    currentStaffId: shift.staffId,
+  });
+
   if (startsAt !== undefined || endsAt !== undefined) {
-    const timezone = await branchTimezone(shift.branchId);
-    const times = parseShiftTimes(
-      startsAt ?? shift.startsAt,
-      endsAt ?? shift.endsAt,
-      timezone,
-      { requireFutureStart: startsAt !== undefined }
-    );
-    shift.startsAt = times.startsAt;
-    shift.endsAt = times.endsAt;
+    await applyShiftTimes(shift, { startsAt, endsAt, attendance });
   }
 
   if (visibility !== undefined) shift.visibility = visibility;
@@ -361,6 +465,7 @@ const updateShift = async ({
 
   if (!shift.isModified()) throw new AppError("nothing_to_update", 400);
 
+  await assertNoStaffOverlap(shift);
   await shift.save();
   const [withDetails] = await attachShiftDetails([shift.toObject()]);
   return withDetails;
@@ -492,6 +597,73 @@ const withdrawClaim = async ({ userId, organizationId, claimId }) => {
   return claim.toObject();
 };
 
+const claimUserProject = [{ $project: { name: 1, email: 1 } }];
+
+/** Lookups run after paging, and only for ids that are set. */
+const claimDetailStages = [
+  {
+    $lookup: {
+      from: Shift.collection.name,
+      localField: "shiftId",
+      foreignField: "_id",
+      pipeline: [{ $project: { startsAt: 1, endsAt: 1, status: 1, branchId: 1 } }],
+      as: "shift",
+    },
+  },
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, code: 1, status: 1 } }],
+      as: "branch",
+    },
+  },
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      localField: "staffId",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $lookup: {
+            from: User.collection.name,
+            localField: "userId",
+            foreignField: "_id",
+            pipeline: claimUserProject,
+            as: "user",
+          },
+        },
+        {
+          $project: {
+            employeeCode: 1,
+            name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+            email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+          },
+        },
+      ],
+      as: "staff",
+    },
+  },
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "decidedBy",
+      foreignField: "_id",
+      pipeline: claimUserProject,
+      as: "decidedByUser",
+    },
+  },
+  {
+    $addFields: {
+      shift: { $ifNull: [{ $arrayElemAt: ["$shift", 0] }, null] },
+      branch: { $ifNull: [{ $arrayElemAt: ["$branch", 0] }, null] },
+      staff: { $ifNull: [{ $arrayElemAt: ["$staff", 0] }, null] },
+      decidedByUser: { $ifNull: [{ $arrayElemAt: ["$decidedByUser", 0] }, null] },
+    },
+  },
+];
+
 const listClaims = async ({
   organizationId,
   page,
@@ -505,7 +677,6 @@ const listClaims = async ({
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
   };
 
-  if (status) match.status = status;
   if (shiftId) match.shiftId = new mongoose.Types.ObjectId(String(shiftId));
 
   if (actor) {
@@ -515,16 +686,45 @@ const listClaims = async ({
     }
   }
 
-  const { data, meta } = await paginateWithFacet({
+  const countMatch = { ...match };
+  const claimStatus = parseShiftClaimStatus(status);
+  if (claimStatus) match.status = claimStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: ShiftClaim,
     match,
     page,
     limit,
     skip,
     sort: { createdAt: -1 },
+    extraDataStages: claimDetailStages,
+    extraFacets: shiftClaimStatusCountFacets(countMatch),
   });
 
-  return { data, meta };
+  return {
+    data,
+    meta: { ...meta, counts: shiftClaimStatusCountsFromFacet(result) },
+  };
+};
+
+const getClaim = async ({ actor, organizationId, claimId }) => {
+  if (!mongoose.Types.ObjectId.isValid(String(claimId))) {
+    throw new AppError("invalid_id", 400);
+  }
+
+  const match = {
+    _id: new mongoose.Types.ObjectId(String(claimId)),
+    organizationId: new mongoose.Types.ObjectId(String(organizationId)),
+  };
+  const standing = await actorStanding(actor, organizationId);
+  if (standing.branchId) match.branchId = standing.branchId;
+
+  const [claim] = await ShiftClaim.aggregate([
+    { $match: match },
+    ...claimDetailStages,
+  ]);
+  if (!claim) throw new AppError("shift_claim_not_found", 404);
+  return claim;
 };
 
 const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) => {
@@ -614,6 +814,33 @@ const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => 
   return claim.toObject();
 };
 
+const createScheduledShiftFromAttendance = async ({
+  organizationId,
+  branchId,
+  staffId,
+  startsAt,
+  endsAt,
+}) => {
+  await assertBranchInOrganization(branchId, organizationId);
+  const timezone = await branchTimezone(branchId);
+  const times = parseShiftTimes(startsAt, endsAt, timezone, {
+    requireFutureStart: false,
+  });
+
+  const shift = await Shift.create({
+    organizationId,
+    branchId,
+    staffId,
+    startsAt: times.startsAt,
+    endsAt: times.endsAt,
+    status: ShiftStatus.SCHEDULED,
+    filledAt: new Date(),
+  });
+
+  const [withDetails] = await attachShiftDetails([shift.toObject()]);
+  return withDetails;
+};
+
 module.exports = {
   createShift,
   listShifts,
@@ -626,7 +853,9 @@ module.exports = {
   createClaim,
   withdrawClaim,
   listClaims,
+  getClaim,
   approveClaim,
   rejectClaim,
+  createScheduledShiftFromAttendance,
   ModuleSlug,
 };

@@ -26,7 +26,7 @@ fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
 
 // --- Update jsconfig.json safely ---
 const jsConfig = safeReadJson(jsConfigPath) || { compilerOptions: {} };
-jsConfig.compilerOptions.baseUrl = "./";
+delete jsConfig.compilerOptions.baseUrl;
 jsConfig.compilerOptions.paths = {};
 
 Object.entries(aliases).forEach(([alias, target]) => {

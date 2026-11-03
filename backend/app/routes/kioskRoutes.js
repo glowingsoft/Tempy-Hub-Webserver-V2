@@ -32,6 +32,7 @@ router.post(
   requireMembership(),
   kioskController.scanFromPhone
 );
+router.post("/contractor/scan", auth, kioskController.scanFromContractor);
 
 // Fire drill / evacuation — gated on fireDrillEvacuation (Figma Screen 85–86).
 router.get(
@@ -69,6 +70,7 @@ router.post(
 router.use(requireKioskSession, requireKioskModule(ModuleSlug.SIGN_IN_ATTENDANCE));
 
 router.get("/me", kioskController.getMe);
+router.get("/widgets", kioskController.listWidgets);
 router.patch("/me", kioskController.updateMe);
 router.get("/qr", kioskController.getQr);
 router.get("/pairing/pending", kioskController.getPendingPairing);
@@ -93,6 +95,12 @@ router.post(
   kioskController.requestCheckInOtp
 );
 router.post("/attendance/otp/verify", otpLimiter, kioskController.verifyCheckInOtp);
+
+router.post(
+  "/attendance/verify",
+  otpLimiter,
+  kioskController.verifyStaffPin
+);
 
 router.get("/attendance/today", kioskController.getToday);
 router.get(

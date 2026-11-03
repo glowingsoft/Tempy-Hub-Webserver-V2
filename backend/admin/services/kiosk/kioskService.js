@@ -20,12 +20,16 @@ const { JobTitle } = require("@models/JobTitle");
 const { Department } = require("@models/Department");
 const { VisitSession } = require("@models/VisitSession");
 const { ExternalPerson } = require("@models/ExternalPerson");
+const { Invitation } = require("@models/Invitation");
 const { EvacuationEvent } = require("@models/EvacuationEvent");
 const { AppError } = require("@services/_errors/AppError");
 const { signKioskToken } = require("@middlewares/kioskMiddleware");
 const { verifyActivationCode, issueActivationCode } = require("@adminServices/organizations/branchService");
 const attendanceService = require("@adminServices/attendance/attendanceService");
+const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
+const { getActiveShiftForStaff } = require("@adminServices/rota/shiftService");
 const communicationService = require("@commonServices/communication/communicationService");
+const { kioskCheckInOtpEmailTemplate } = require("@utils/emailTemplates");
 const { emitKioskPairingReady } = require("@config/sockets/kiosk/kioskSocketEmitter");
 const {
   BranchStatus,
@@ -39,11 +43,15 @@ const {
   CheckInMethod,
   VisitSessionStatus,
   EvacuationStatus,
+  ExternalPersonType,
+  BadgeType,
 } = require("@models/domainEnums");
 
 const MIN_SEARCH_LENGTH = 2;
-const SCAN_TOKEN_TTL_MS = 2 * 60 * 1000;
+const SCAN_TOKEN_TTL_MINUTES = 2;
+const SCAN_TOKEN_TTL_MS = SCAN_TOKEN_TTL_MINUTES * 60 * 1000;
 const PAIRING_SESSION_TTL_MS = 3 * 60 * 1000;
+const KIOSK_OTP_CLOCK_IN_MS = 5 * 60 * 1000;
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -241,13 +249,28 @@ const searchBranchesForKiosk = async ({
 };
 
 const shapeStaffPreview = async (profile) => {
-  const [user, jobTitle, departments] = await Promise.all([
+  const [user, jobTitle, departments, active, cannotClockIn] = await Promise.all([
     User.findById(profile.userId).select("name email phoneNumber").lean(),
     JobTitle.findById(profile.jobTitleId).select("name level").lean(),
     Department.find({ _id: { $in: profile.departmentIds || [] } })
       .select("name")
       .lean(),
+    getActiveShiftForStaff({
+      staffProfile: profile,
+      organizationId: profile.organizationId,
+    }),
+    attendanceService.staffCannotClockIn(profile._id),
   ]);
+
+  const shift = active.shift
+    ? {
+        _id: active.shift._id,
+        startsAt: active.shift.startsAt,
+        endsAt: active.shift.endsAt,
+        status: active.shift.status,
+        branchId: active.shift.branchId,
+      }
+    : null;
 
   return {
     staffId: profile._id,
@@ -260,6 +283,9 @@ const shapeStaffPreview = async (profile) => {
     branchId: profile.branchId,
     hasPin: Boolean(profile.pinHash),
     hasNfc: Boolean(profile.nfcTagId),
+    shift,
+    clockInEligible: !cannotClockIn,
+    graceMinutes: active.graceMinutes ?? null,
   };
 };
 
@@ -386,6 +412,8 @@ const requestKioskCheckInOtp = async ({
   branchId,
   staffId,
 }) => {
+  if (!staffId) throw new AppError("staff_id_required", 400);
+
   const profile = await assertStaffAtKioskBranch({
     staffId,
     organizationId,
@@ -393,7 +421,7 @@ const requestKioskCheckInOtp = async ({
   });
 
   const user = await User.findById(profile.userId).select(
-    "phoneNumber otpInfo timezone accountState"
+    "email otpInfo timezone accountState"
   );
 
   if (!user) throw new AppError("user_not", 404);
@@ -401,30 +429,36 @@ const requestKioskCheckInOtp = async ({
     throw new AppError("your_account_4", 403);
   }
 
-  const phoneNumber = resolvePhoneForStaff(profile, user);
-  const otp = user.generateOtp("phoneNumber", user.timezone || "UTC");
+  const email = String(user.email || "").trim().toLowerCase();
+  if (!email) throw new AppError("staff_email_not_found", 400);
+
+  const otp = user.generateOtp("email", user.timezone || "UTC");
   if (otp?.error === "too_many_otp_requests") {
     throw new AppError("too_many_otp_requests", 400);
   }
 
   await user.save();
-  communicationService.sendSmsViaPinpointAws({ phoneNumber, otp }).catch(() => {});
+  communicationService
+    .sendEmailAws({
+      emails: [email],
+      subject: "Kiosk Check-in OTP",
+      body: kioskCheckInOtpEmailTemplate(otp),
+    })
+    .catch(() => {});
 
   return {
     staffId: profile._id,
-    phoneMasked: phoneNumber.replace(/.(?=.{4})/g, "*"),
-    expiresInMinutes: 5,
+    otp,
+    email,
+    expiresInMinutes: 10,
   };
 };
 
 const verifyKioskCheckInOtp = async ({
   organizationId,
   branchId,
-  kioskId,
   staffId,
   otp,
-  clientEventId,
-  occurredAt,
 }) => {
   const profile = await assertStaffAtKioskBranch({
     staffId,
@@ -433,11 +467,11 @@ const verifyKioskCheckInOtp = async ({
   });
 
   const user = await User.findById(profile.userId).select(
-    "otpInfo timezone phoneNumber"
+    "otpInfo timezone email"
   );
   if (!user) throw new AppError("user_not", 404);
 
-  const userOtp = user.otpInfo?.phoneNumberOtp;
+  const userOtp = user.otpInfo?.emailOtp;
   if (!userOtp?.otp || userOtp.otp !== String(otp)) {
     throw new AppError("invalid_otp", 400);
   }
@@ -447,29 +481,46 @@ const verifyKioskCheckInOtp = async ({
     throw new AppError("otp_has", 400);
   }
 
+  const clockInExpiresAt = new Date(Date.now() + KIOSK_OTP_CLOCK_IN_MS);
   userOtp.otp = "";
   userOtp.otpExpires = "";
   userOtp.otpUsed = true;
+  userOtp.kioskVerifiedUntil = clockInExpiresAt;
   await user.save();
 
-  const attendance = await attendanceService.clockInForStaff({
-    staffProfile: profile,
-    organizationId,
-    branchId,
-    checkInMethod: CheckInMethod.PHONE,
-    clientEventId,
-    occurredAt,
-  });
+  const [staff, branch, organization, session] = await Promise.all([
+    shapeStaffPreview(profile),
+    Branch.findById(branchId)
+      .select("name code timezone status address organizationId")
+      .lean(),
+    publicOrganization(organizationId),
+    attendanceService.getOpenClockInSessionForStaff({ staffProfile: profile }),
+  ]);
 
-  touchLastCheckIn(kioskId);
-  return attendance;
+  return {
+    verified: true,
+    clockedIn: Boolean(session),
+    clockInExpiresAt,
+    staff,
+    branch: branch
+      ? {
+          _id: branch._id,
+          name: branch.name,
+          code: branch.code,
+          timezone: branch.timezone,
+          status: branch.status,
+          address: publicAddress(branch.address),
+        }
+      : null,
+    organization,
+    session: session || null,
+  };
 };
 
 const randomScanToken = () => crypto.randomBytes(24).toString("hex");
 
-const getKioskQr = async ({ kioskId }) => {
-  const kiosk = await Kiosk.findById(kioskId).lean();
-  if (!kiosk) throw new AppError("kiosk_not_found", 404);
+const getKioskQr = async ({ kiosk, organizationId }) => {
+  if (!kiosk?._id) throw new AppError("kiosk_not_found", 404);
 
   const now = Date.now();
   const stillValid =
@@ -484,14 +535,24 @@ const getKioskQr = async ({ kioskId }) => {
     scanToken = randomScanToken();
     scanTokenExpiresAt = new Date(now + SCAN_TOKEN_TTL_MS);
     await Kiosk.updateOne(
-      { _id: kioskId },
+      { _id: kiosk._id },
       { $set: { scanToken, scanTokenExpiresAt } }
     );
   }
 
+  const remainingMs = Math.max(
+    0,
+    new Date(scanTokenExpiresAt).getTime() - now
+  );
+
   return {
+    kioskId: kiosk._id,
+    branchId: kiosk.branchId,
+    organizationId,
     scanToken,
     expiresAt: scanTokenExpiresAt,
+    expiresInMinutes: SCAN_TOKEN_TTL_MINUTES,
+    remainingMinutes: Math.max(0, Math.ceil(remainingMs / 60000)),
     qrPayload: `tempyhub://kiosk?token=${scanToken}`,
   };
 };
@@ -575,6 +636,91 @@ const scanKioskFromPhone = async ({
   };
 };
 
+const scanContractorFromPhone = async ({ scanToken, userId }) => {
+  const kiosk = await Kiosk.findOne({
+    scanToken: String(scanToken || "").trim(),
+    scanTokenExpiresAt: { $gt: new Date() },
+    setupStatus: KioskSetupStatus.REGISTERED,
+  }).lean();
+
+  if (!kiosk) throw new AppError("kiosk_scan_token_invalid", 400);
+  if (kiosk.kioskMode === KioskMode.LOCKED) throw new AppError("kiosk_locked", 403);
+
+  const branch = await Branch.findById(kiosk.branchId)
+    .select("organizationId status")
+    .lean();
+  if (!branch || branch.status !== BranchStatus.ACTIVE) {
+    throw new AppError("branch_not_active", 403);
+  }
+
+  const person = await ExternalPerson.findOne({
+    userId,
+    branchId: kiosk.branchId,
+    type: ExternalPersonType.CONTRACTOR,
+  }).lean();
+  if (!person) throw new AppError("contractor_not_at_kiosk_branch", 403);
+
+  const email = String(person.email || "").trim().toLowerCase();
+  const invitation = email
+    ? await Invitation.findOne({
+        branchId: kiosk.branchId,
+        visitorEmail: email,
+        badgeType: BadgeType.CONTRACTOR,
+        status: { $in: visitorInvitationService.OPEN_INVITE_STATUSES },
+        visitingUntil: { $gte: new Date() },
+      })
+        .sort({ arrivalAt: 1 })
+        .lean()
+    : null;
+  if (!invitation) throw new AppError("contractor_invitation_required", 403);
+
+  const openVisit = await VisitSession.exists({
+    branchId: kiosk.branchId,
+    externalPersonId: person._id,
+    status: {
+      $in: [VisitSessionStatus.ON_SITE, VisitSessionStatus.AWAITING_APPROVAL],
+    },
+    checkOutAt: null,
+  });
+  if (openVisit) throw new AppError("visit_already_on_site", 409);
+
+  await expireStalePairingSessions(kiosk._id);
+  await KioskPairingSession.updateMany(
+    {
+      kioskId: kiosk._id,
+      status: KioskPairingStatus.PENDING_CONFIRMATION,
+    },
+    { $set: { status: KioskPairingStatus.CANCELLED } }
+  );
+
+  const session = await KioskPairingSession.create({
+    kioskId: kiosk._id,
+    branchId: kiosk.branchId,
+    organizationId: branch.organizationId,
+    externalPersonId: person._id,
+    invitationId: invitation._id,
+    scanToken: kiosk.scanToken,
+    status: KioskPairingStatus.PENDING_CONFIRMATION,
+    expiresAt: new Date(Date.now() + PAIRING_SESSION_TTL_MS),
+  });
+
+  emitKioskPairingReady({ kioskId: kiosk._id, session });
+
+  return {
+    sessionId: session._id,
+    kind: "contractor",
+    kioskId: kiosk._id,
+    branchId: kiosk.branchId,
+    expiresAt: session.expiresAt,
+    contractor: {
+      externalPersonId: person._id,
+      name: person.name,
+      photoUrl: person.photoUrl || "",
+    },
+    invitationId: invitation._id,
+  };
+};
+
 const getPendingPairing = async ({ kioskId }) => {
   await expireStalePairingSessions(kioskId);
 
@@ -586,21 +732,79 @@ const getPendingPairing = async ({ kioskId }) => {
     .sort({ createdAt: -1 })
     .lean();
 
-  if (!session) return { session: null, staff: null };
+  if (!session) return { session: null, staff: null, contractor: null };
+
+  const pending = {
+    sessionId: session._id,
+    status: session.status,
+    expiresAt: session.expiresAt,
+    kind: session.externalPersonId ? "contractor" : "staff",
+  };
+
+  if (session.externalPersonId) {
+    const [person, invitation] = await Promise.all([
+      ExternalPerson.findById(session.externalPersonId)
+        .select("name photoUrl email phone type branchId")
+        .lean(),
+      Invitation.findById(session.invitationId)
+        .select(
+          "visitorName visitorEmail badgeType arrivalAt visitingUntil hostStaffId instructions status branchId"
+        )
+        .lean(),
+    ]);
+    if (!person) return { session: null, staff: null, contractor: null };
+
+    let hostName = "";
+    if (invitation?.hostStaffId) {
+      const host = await StaffProfile.findById(invitation.hostStaffId)
+        .select("userId")
+        .lean();
+      if (host?.userId) {
+        const hostUser = await User.findById(host.userId).select("name").lean();
+        hostName = hostUser?.name || "";
+      }
+    }
+
+    return {
+      session: pending,
+      staff: null,
+      contractor: {
+        externalPersonId: person._id,
+        name: person.name,
+        email: person.email || "",
+        phone: person.phone || "",
+        photoUrl: person.photoUrl || "",
+        type: person.type,
+        branchId: person.branchId,
+        invitation: invitation
+          ? {
+              invitationId: invitation._id,
+              visitorName: invitation.visitorName,
+              visitorEmail: invitation.visitorEmail,
+              badgeType: invitation.badgeType,
+              status: invitation.status,
+              arrivalAt: invitation.arrivalAt,
+              visitingUntil: invitation.visitingUntil,
+              instructions: invitation.instructions || "",
+              hostStaffId: invitation.hostStaffId || null,
+              hostName,
+              branchId: invitation.branchId,
+            }
+          : null,
+      },
+    };
+  }
 
   const profile = await StaffProfile.findById(session.staffId)
     .select("+pinHash")
     .lean();
-  if (!profile) return { session: null, staff: null };
+  if (!profile) return { session: null, staff: null, contractor: null };
 
   const staff = await shapeStaffPreview(profile);
   return {
-    session: {
-      sessionId: session._id,
-      status: session.status,
-      expiresAt: session.expiresAt,
-    },
+    session: pending,
     staff,
+    contractor: null,
   };
 };
 
@@ -611,6 +815,7 @@ const confirmPairingAndClockIn = async ({
   sessionId,
   clientEventId,
   occurredAt,
+  image,
 }) => {
   const session = await KioskPairingSession.findOne({
     _id: sessionId,
@@ -620,6 +825,29 @@ const confirmPairingAndClockIn = async ({
   }).lean();
 
   if (!session) throw new AppError("kiosk_pairing_not_found", 404);
+
+  if (session.externalPersonId) {
+    const kioskVisitService = require("@adminServices/kiosk/kioskVisitService");
+    const visit = await kioskVisitService.confirmContractorQrCheckIn({
+      organizationId,
+      branchId,
+      kioskId,
+      externalPersonId: session.externalPersonId,
+      invitationId: session.invitationId,
+      photoUrl: image,
+    });
+    await KioskPairingSession.updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          status: KioskPairingStatus.CONFIRMED,
+          confirmedAt: new Date(),
+        },
+      }
+    );
+    touchLastCheckIn(kioskId);
+    return { kind: "contractor", visit };
+  }
 
   const profile = await assertStaffAtKioskBranch({
     staffId: session.staffId,
@@ -634,6 +862,7 @@ const confirmPairingAndClockIn = async ({
     checkInMethod: CheckInMethod.QR,
     clientEventId,
     occurredAt,
+    image,
   });
 
   await KioskPairingSession.updateOne(
@@ -703,6 +932,26 @@ const deviceKioskFlags = async (kiosk) => ({
   ),
 });
 
+const publicOrganization = async (organizationId) => {
+  if (!organizationId) return null;
+  const org = await Organization.findById(organizationId)
+    .select("name status")
+    .lean();
+  if (!org) return null;
+  return { _id: org._id, name: org.name || "", status: org.status };
+};
+
+const organizationForKiosk = async (kiosk, branch) => {
+  let organizationId = branch?.organizationId;
+  if (!organizationId && kiosk?.branchId) {
+    const row = await Branch.findById(kiosk.branchId)
+      .select("organizationId")
+      .lean();
+    organizationId = row?.organizationId;
+  }
+  return publicOrganization(organizationId);
+};
+
 const sanitizeKiosk = (kiosk) => ({
   _id: kiosk._id,
   branchId: kiosk.branchId,
@@ -723,10 +972,14 @@ const sanitizeKiosk = (kiosk) => ({
 const kioskAuthPayload = async (kiosk) => {
   const row = kiosk.toObject ? kiosk.toObject() : kiosk;
   const shaped = sanitizeKiosk(row);
-  const flags = await deviceKioskFlags(row);
+  const [flags, organization] = await Promise.all([
+    deviceKioskFlags(row),
+    organizationForKiosk(row),
+  ]);
   return {
     token: signKioskToken(row),
     kiosk: shaped,
+    organization,
     receptionIdentifier: shaped.receptionIdentifier || null,
     ...flags,
   };
@@ -760,12 +1013,12 @@ const resolveStaffForKiosk = async ({
       employeeCode: String(employeeCode).trim(),
     }).lean();
 
+    if (!profile) throw new AppError("staff_identification_failed", 401);
     if (
-      !profile ||
       !profile.pinHash ||
       !(await bcrypt.compare(String(pin), profile.pinHash))
     ) {
-      throw new AppError("staff_identification_failed", 401);
+      throw new AppError("staff_pin_incorrect", 401);
     }
   } else if (
     staffId &&
@@ -778,19 +1031,34 @@ const resolveStaffForKiosk = async ({
       _id: staffId,
     }).lean();
 
+    if (!profile) throw new AppError("staff_identification_failed", 401);
     if (
-      !profile ||
       !profile.pinHash ||
       !(await bcrypt.compare(String(pin), profile.pinHash))
     ) {
-      throw new AppError("staff_identification_failed", 401);
+      throw new AppError("staff_pin_incorrect", 401);
     }
     checkInMethod = CheckInMethod.KIOSK;
-  } else if (staffId && process.env.NODE_ENV !== "prod") {
+  } else if (staffId) {
     profile = await StaffProfile.findOne({
       ...baseQuery,
       _id: staffId,
     }).lean();
+    if (!profile) throw new AppError("staff_identification_failed", 401);
+
+    const owner = await User.findById(profile.userId)
+      .select("otpInfo.emailOtp.kioskVerifiedUntil")
+      .lean();
+    const verifiedUntil = owner?.otpInfo?.emailOtp?.kioskVerifiedUntil;
+    if (verifiedUntil && new Date(verifiedUntil).getTime() > Date.now()) {
+      checkInMethod = CheckInMethod.PHONE;
+      await User.updateOne(
+        { _id: profile.userId },
+        { $set: { "otpInfo.emailOtp.kioskVerifiedUntil": null } }
+      );
+    } else if (process.env.NODE_ENV === "prod") {
+      throw new AppError("staff_identification_required", 400);
+    }
   } else {
     throw new AppError("staff_identification_required", 400);
   }
@@ -934,9 +1202,13 @@ const assertKioskUnlocked = async (kioskOrId) => {
 
 const getKioskSession = async ({ kiosk, branch }) => {
   const shaped = sanitizeKiosk(kiosk);
-  const flags = await deviceKioskFlags(kiosk);
+  const [flags, organization] = await Promise.all([
+    deviceKioskFlags(kiosk),
+    organizationForKiosk(kiosk, branch),
+  ]);
   return {
     kiosk: shaped,
+    organization,
     branch: {
       _id: branch._id,
       name: branch.name,
@@ -993,6 +1265,54 @@ const touchLastCheckIn = (kioskId) =>
     () => {}
   );
 
+const verifyStaffPinAtKiosk = async ({
+  organizationId,
+  branchId,
+  kioskId,
+  staffId,
+  nfcTagId,
+  employeeCode,
+  pin,
+}) => {
+  await assertKioskUnlocked(kioskId);
+  if (pin == null || String(pin) === "") {
+    throw new AppError("staff_identification_required", 400);
+  }
+
+  const { profile } = await resolveStaffForKiosk({
+    organizationId,
+    branchId,
+    staffId,
+    nfcTagId,
+    employeeCode,
+    pin,
+  });
+  if (
+    !profile.pinHash ||
+    !(await bcrypt.compare(String(pin), profile.pinHash))
+  ) {
+    throw new AppError("staff_pin_incorrect", 401);
+  }
+
+  const [session, user] = await Promise.all([
+    attendanceService.getOpenClockInSessionForStaff({
+      staffProfile: profile,
+    }),
+    User.findById(profile.userId).select("name").lean(),
+  ]);
+
+  return {
+    clockedIn: Boolean(session),
+    staff: {
+      staffId: profile._id,
+      employeeCode: profile.employeeCode,
+      name: user?.name || "",
+      photoUrl: profile.photoUrl || "",
+    },
+    session,
+  };
+};
+
 const clockInAtKiosk = async ({
   organizationId,
   branchId,
@@ -1003,6 +1323,7 @@ const clockInAtKiosk = async ({
   pin,
   clientEventId,
   occurredAt,
+  image,
 }) => {
   await assertKioskUnlocked(kioskId);
   const { profile, checkInMethod } = await resolveStaffForKiosk({
@@ -1021,6 +1342,7 @@ const clockInAtKiosk = async ({
     checkInMethod,
     clientEventId,
     occurredAt,
+    image,
   });
 
   touchLastCheckIn(kioskId);
@@ -1096,11 +1418,12 @@ const getTodayAtKiosk = async ({
 const HEARTBEAT_ONLINE_MS = 2 * 60 * 1000;
 
 const parseSetupStatus = (value) => {
-  if (value == null || value === "") return undefined;
-  if (!Object.values(KioskSetupStatus).includes(value)) {
+  if (value == null || String(value).trim() === "") return undefined;
+  const status = String(value).trim().toLowerCase();
+  if (!Object.values(KioskSetupStatus).includes(status)) {
     throw new AppError("invalid_kiosk_setup_status", 400);
   }
-  return value;
+  return status;
 };
 
 const parseDeviceType = (value) => {
@@ -1256,6 +1579,7 @@ const emptyKioskList = (page, limit) => ({
     offline: 0,
     locked: 0,
     pending: 0,
+    registered: 0,
   },
 });
 
@@ -1320,6 +1644,12 @@ const listKiosksForAdmin = async ({
         },
         { $count: "count" },
       ],
+      registeredCount: [
+        {
+          $match: { ...countMatch, setupStatus: KioskSetupStatus.REGISTERED },
+        },
+        { $count: "count" },
+      ],
     },
   });
 
@@ -1334,6 +1664,7 @@ const listKiosksForAdmin = async ({
       offline: Math.max(0, total - online),
       locked: facetCount(result.lockedCount),
       pending: facetCount(result.pendingCount),
+      registered: facetCount(result.registeredCount),
     },
   };
 };
@@ -1538,6 +1869,7 @@ const toggleKioskLockForAdmin = async ({ actor, organizationId, kioskId }) => {
 };
 
 module.exports = {
+  publicOrganization,
   searchBranchesForKiosk,
   searchStaffForKiosk,
   getStaffPreviewForKiosk,
@@ -1545,6 +1877,7 @@ module.exports = {
   verifyKioskCheckInOtp,
   getKioskQr,
   scanKioskFromPhone,
+  scanContractorFromPhone,
   getPendingPairing,
   confirmPairingAndClockIn,
   cancelPairing,
@@ -1554,6 +1887,7 @@ module.exports = {
   updateKioskSettings,
   assertKioskFireEvacuationEnabled,
   verifyKioskEmergencyPin,
+  verifyStaffPinAtKiosk,
   clockInAtKiosk,
   clockOutAtKiosk,
   getTodayAtKiosk,

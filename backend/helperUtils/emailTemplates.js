@@ -101,6 +101,57 @@ const forgotPasswordOtpEmailTemplate = (otp) => `
     </body>
   </html>
 `;
+
+const kioskCheckInOtpEmailTemplate = (otp) => `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        .email-container {
+          font-family: Arial, sans-serif;
+          line-height: 1.5;
+          color: #333;
+        }
+        .email-header {
+          background-color: #118A01;
+          color: white;
+          text-align: center;
+          padding: 10px 0;
+        }
+        .email-body {
+          margin: 20px;
+        }
+        .otp {
+          font-size: 1.5em;
+          color: #118A01;
+        }
+        .footer {
+          text-align: center;
+          margin-top: 20px;
+          color: #888;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="email-header">
+          <h2>Kiosk Check-in Code</h2>
+        </div>
+        <div class="email-body">
+          <p>Hello,</p>
+          <p>We received a request to check in at a ${APP_NAME} kiosk. Please use the OTP below to complete your check-in:</p>
+          <p class="otp"><strong>${otp}</strong></p>
+          <p>This code expires in 10 minutes.</p>
+          <p>If you didn't request this check-in, please ignore this email.</p>
+        </div>
+        <div class="footer">
+          &copy; ${currentYear} ${APP_NAME}. All rights reserved.
+        </div>
+      </div>
+    </body>
+  </html>
+`;
+
 const stripeEmailTemplate = ({ name, link }) => `
   <!DOCTYPE html>
   <html>
@@ -309,6 +360,46 @@ const familyInvitationEmailTemplate = ({
   </html>
 `;
 
+const visitorAccountInvitationEmailTemplate = ({
+  name,
+  organizationName,
+  branchName,
+  personType,
+  acceptUrl,
+  expiresInDays,
+}) => `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <style>
+        .email-container { font-family: Arial, sans-serif; line-height: 1.5; color: #333; }
+        .email-header { background-color: #118A01; color: white; text-align: center; padding: 10px 0; }
+        .email-body { margin: 20px; }
+        .cta { display: inline-block; background: #118A01; color: white; padding: 10px 16px; text-decoration: none; }
+        .footer { text-align: center; margin-top: 20px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <div class="email-header">
+          <h2>Your ${APP_NAME} ${personType} account</h2>
+        </div>
+        <div class="email-body">
+          <p>Hello${name ? ` ${name}` : ""},</p>
+          <p>
+            <strong>${organizationName}</strong> invited you to sign in to the
+            visitor and contractor app${branchName ? ` for <strong>${branchName}</strong>` : ""}.
+          </p>
+          <p><a class="cta" href="${acceptUrl}">Set your password</a></p>
+          <p>Or paste this link into your browser: ${acceptUrl}</p>
+          <p>This invitation expires in ${expiresInDays} days.</p>
+        </div>
+        <div class="footer">&copy; ${currentYear} ${APP_NAME}. All rights reserved.</div>
+      </div>
+    </body>
+  </html>
+`;
+
 const visitorInvitationEmailTemplate = ({
   visitorName,
   organizationName,
@@ -354,8 +445,10 @@ const visitorInvitationEmailTemplate = ({
 module.exports = {
   registrationOtpEmailTemplate,
   forgotPasswordOtpEmailTemplate,
+  kioskCheckInOtpEmailTemplate,
   stripeEmailTemplate,
   staffInvitationEmailTemplate,
   familyInvitationEmailTemplate,
   visitorInvitationEmailTemplate,
+  visitorAccountInvitationEmailTemplate,
 };

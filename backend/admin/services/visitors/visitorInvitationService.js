@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { Invitation } = require("@models/Invitation");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { visitorInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
@@ -13,6 +13,7 @@ const {
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./visitorAccess");
+const { toObjectId } = require("./visitPresenceQuery");
 
 const INVITE_CODE_LENGTH = 6;
 const OPEN_INVITE_STATUSES = [
@@ -20,6 +21,67 @@ const OPEN_INVITE_STATUSES = [
   InvitationStatus.AWAITING_GUEST,
   InvitationStatus.ACCEPTED,
 ];
+
+const VISITOR_INVITATION_STATUSES = Object.values(InvitationStatus);
+
+const emptyVisitorInvitationStatusCounts = () =>
+  Object.fromEntries(VISITOR_INVITATION_STATUSES.map((status) => [status, 0]));
+
+const visitorInvitationStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    VISITOR_INVITATION_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const visitorInvitationStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    VISITOR_INVITATION_STATUSES.map((status) => [
+      status,
+      facetCount(result[`${status}Count`]),
+    ])
+  );
+
+const invitationBranchStages = [
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [
+        {
+          $project: {
+            name: 1,
+            code: 1,
+            timezone: 1,
+            status: 1,
+            address: 1,
+          },
+        },
+        { $limit: 1 },
+      ],
+      as: "_branch",
+    },
+  },
+  {
+    $addFields: {
+      branch: { $arrayElemAt: ["$_branch", 0] },
+    },
+  },
+  { $project: { _branch: 0 } },
+];
+
+const parseVisitorInvitationStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!VISITOR_INVITATION_STATUSES.includes(value)) {
+    throw new AppError("invalid_invitation_status", 400);
+  }
+  return value;
+};
 
 const randomInviteCode = () => {
   const max = 10 ** INVITE_CODE_LENGTH;
@@ -149,18 +211,33 @@ const listVisitorInvitations = async ({
     await assertBranchInOrganization(scopedBranchId, organizationId);
   }
 
-  const match = { organizationId };
-  if (scopedBranchId) match.branchId = scopedBranchId;
-  if (status) match.status = status;
+  const match = { organizationId: toObjectId(organizationId) };
+  if (scopedBranchId) match.branchId = toObjectId(scopedBranchId);
 
-  return paginateWithFacet({
+  const countMatch = { ...match };
+  const invitationStatus = parseVisitorInvitationStatus(status);
+  if (invitationStatus) match.status = invitationStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
     model: Invitation,
     match,
     page,
     limit,
     skip,
     sort: { createdAt: -1 },
+    extraDataStages: invitationBranchStages,
+    extraFacets: visitorInvitationStatusCountFacets(countMatch),
   });
+
+  return {
+    data,
+    meta: {
+      ...meta,
+      counts: result
+        ? visitorInvitationStatusCountsFromFacet(result)
+        : emptyVisitorInvitationStatusCounts(),
+    },
+  };
 };
 
 const resendVisitorInvitation = async ({

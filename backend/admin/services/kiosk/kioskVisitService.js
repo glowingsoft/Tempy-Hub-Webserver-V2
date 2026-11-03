@@ -1,19 +1,18 @@
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { VisitSession } = require("@models/VisitSession");
-const { PersonCategory } = require("@models/PersonCategory");
 const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const { Invitation } = require("@models/Invitation");
 const { paginateWithFacet } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
   VisitMethod,
   VisitSessionStatus,
   ExternalPersonType,
-  DocumentCategory,
+  DocumentAudience,
   InvitationStatus,
   BadgeType,
-  PersonCategoryAppliesTo,
   KioskMode,
 } = require("@models/domainEnums");
 const visitSessionService = require("@adminServices/visitors/visitSessionService");
@@ -22,76 +21,88 @@ const {
   parsePersonType,
 } = require("@adminServices/visitors/externalPersonService");
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
+const { toPublicImageUrl } = require("@utils/imageHelper");
+const { Branch } = require("@models/Branch");
+const { Kiosk } = require("@models/Kiosk");
+const moment = require("moment-timezone");
+const { versionFile } = require("@adminServices/documents/documentService");
+const {
+  policyCategoryIds,
+} = require("@adminServices/documents/documentCategoryService");
+const {
+  listVisitCategories,
+} = require("@adminServices/visitors/personCategoryService");
 
 const MIN_SEARCH_LENGTH = 2;
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const POLICY_CATEGORIES = [
-  DocumentCategory.HEALTH_AND_SAFETY,
-  DocumentCategory.POLICY,
-  DocumentCategory.CONTRACTORS,
-];
-
-const shapeVisit = ({ session, person, kiosk, invitation }) => ({
-  session,
-  person: person
-    ? {
-        _id: person._id,
-        name: person.name,
-        type: person.type,
-        photoUrl: person.photoUrl || "",
-      }
-    : null,
-  locationLabel: kiosk?.locationLabel || "",
-  receptionIdentifier: kiosk?.receptionIdentifier || "",
-  arrivalWindow: invitation
-    ? { from: invitation.arrivalAt, until: invitation.visitingUntil }
-    : null,
-});
-
-const DEFAULT_CATEGORIES = [
-  { name: "Family / Friend", appliesTo: PersonCategoryAppliesTo.VISITOR },
-  { name: "Contractor", appliesTo: PersonCategoryAppliesTo.CONTRACTOR },
-  { name: "Professional", appliesTo: PersonCategoryAppliesTo.ANY },
-];
-
-const listVisitCategories = async ({ organizationId, branchId }) => {
-  let categories = await PersonCategory.find({
-    active: true,
-    $or: [
-      { branchId },
-      { organizationId, branchId: null },
-      { organizationId: null, branchId: null },
-    ],
-  })
-    .sort({ name: 1 })
-    .lean();
-
-  if (!categories.length) {
-    await PersonCategory.insertMany(
-      DEFAULT_CATEGORIES.map((row) => ({
-        ...row,
-        organizationId: null,
-        branchId: null,
-        active: true,
-      }))
-    );
-    categories = await PersonCategory.find({
-      organizationId: null,
-      branchId: null,
-      active: true,
-    })
-      .sort({ name: 1 })
-      .lean();
+const applyPersonPhoto = async (person, image) => {
+  if (!person?._id) return person;
+  const photoUrl = toPublicImageUrl(image);
+  if (photoUrl) {
+    await ExternalPerson.updateOne({ _id: person._id }, { $set: { photoUrl } });
+    return { ...person, photoUrl };
   }
+  return { ...person, photoUrl: toPublicImageUrl(person.photoUrl) };
+};
 
-  return categories.map((row) => ({
-    _id: row._id,
-    name: row.name,
-    appliesTo: row.appliesTo,
-  }));
+const CLOCK_IN_TZ = "Europe/London";
+
+const greetingForHour = (hour) => {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+};
+
+const shapeVisit = async ({ session, person, kiosk, invitation }) => {
+  const url = toPublicImageUrl(person?.photoUrl);
+  const branch = session?.branchId
+    ? await Branch.findById(session.branchId).select("timezone name").lean()
+    : null;
+  const tz = branch?.timezone || CLOCK_IN_TZ;
+  const clockMoment = moment.tz(session?.arrivedAt || new Date(), tz);
+  const shiftLabel =
+    invitation?.arrivalAt && invitation?.visitingUntil
+      ? `${moment.tz(invitation.arrivalAt, tz).format("HH:mm")} – ${moment
+          .tz(invitation.visitingUntil, tz)
+          .format("HH:mm")}`
+      : null;
+  const location = kiosk?.locationLabel || branch?.name || "";
+  const name = person?.name || "";
+  const time = clockMoment.format("hh:mm a");
+
+  return {
+    session,
+    person: person
+      ? {
+          _id: person._id,
+          name: person.name,
+          type: person.type,
+          photoUrl: url,
+          image: url,
+        }
+      : null,
+    image: url,
+    photoUrl: url,
+    greeting: greetingForHour(clockMoment.hour()),
+    name,
+    time,
+    location,
+    shift: shiftLabel,
+    summary: {
+      name,
+      time,
+      shift: shiftLabel,
+      location,
+    },
+    locationLabel: location,
+    receptionIdentifier: kiosk?.receptionIdentifier || "",
+    arrivalWindow: invitation
+      ? { from: invitation.arrivalAt, until: invitation.visitingUntil }
+      : null,
+  };
 };
 
 const searchVisitPeople = async ({
@@ -132,18 +143,37 @@ const searchVisitPeople = async ({
 };
 
 const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
-  const categories = [...POLICY_CATEGORIES];
-  if (personType === ExternalPersonType.CONTRACTOR) {
-    categories.push(DocumentCategory.CONTRACTORS);
-  }
+  const audience =
+    personType === ExternalPersonType.CONTRACTOR
+      ? DocumentAudience.CONTRACTOR
+      : DocumentAudience.VISITOR;
+
+  const categoryIds = await policyCategoryIds(organizationId);
 
   const docs = await Document.aggregate([
     {
       $match: {
         organizationId,
         requiresSignature: true,
-        category: { $in: [...new Set(categories)] },
         $or: [{ branchId }, { branchId: null }],
+        $and: [
+          {
+            $or: [
+              { audiences: audience },
+              {
+                $and: [
+                  {
+                    $or: [
+                      { audiences: { $exists: false } },
+                      { audiences: { $size: 0 } },
+                    ],
+                  },
+                  { categoryId: { $in: categoryIds } },
+                ],
+              },
+            ],
+          },
+        ],
       },
     },
     { $sort: { title: 1 } },
@@ -155,18 +185,30 @@ const listVisitPolicies = async ({ organizationId, branchId, personType }) => {
         as: "version",
       },
     },
-    { $unwind: { path: "$version", preserveNullAndEmptyArrays: true } },
     {
-      $project: {
-        title: 1,
-        category: 1,
-        currentVersionId: 1,
-        body: "$version.fileUrl",
+      $lookup: {
+        from: "documentcategories",
+        localField: "categoryId",
+        foreignField: "_id",
+        as: "category",
       },
     },
   ]);
 
-  return docs;
+  return docs.map((row) => {
+    const file = versionFile(row.version?.[0] || null);
+    const category = row.category?.[0] || null;
+    return {
+      _id: row._id,
+      title: row.title,
+      categoryId: row.categoryId || null,
+      category: category?.legacyKey || category?.title || "",
+      categoryTitle: category?.title || "",
+      currentVersionId: row.currentVersionId,
+      file,
+      body: file?.url || "",
+    };
+  });
 };
 
 const applySignatures = async ({
@@ -203,7 +245,7 @@ const applySignatures = async ({
   );
 
   return policies.map((policy) => ({
-    type: policy.category,
+    type: policy.category || policy.title,
     signedAt: now,
     signatureUrl: byDoc.get(String(policy._id))?.signatureUrl || "",
   }));
@@ -257,9 +299,11 @@ const checkInByInvitation = async ({
           : ExternalPersonType.VISITOR,
       name: invitation.visitorName,
       email: invitation.visitorEmail,
-      photoUrl,
+      photoUrl: toPublicImageUrl(photoUrl),
     });
   }
+
+  person = await applyPersonPhoto(person, photoUrl);
 
   const session = await visitSessionService.createVisitSession({
     organizationId,
@@ -279,6 +323,57 @@ const checkInByInvitation = async ({
     visitSessionId: session._id,
   });
 
+  return shapeVisit({ session, person, kiosk, invitation });
+};
+
+const confirmContractorQrCheckIn = async ({
+  organizationId,
+  branchId,
+  kioskId,
+  externalPersonId,
+  invitationId,
+  photoUrl,
+}) => {
+  let person = await ExternalPerson.findOne({
+    _id: externalPersonId,
+    branchId,
+    type: ExternalPersonType.CONTRACTOR,
+  }).lean();
+  if (!person) throw new AppError("contractor_not_at_kiosk_branch", 403);
+  person = await applyPersonPhoto(person, photoUrl);
+
+  const invitation = await Invitation.findOne({
+    _id: invitationId,
+    branchId,
+    badgeType: BadgeType.CONTRACTOR,
+    status: { $in: visitorInvitationService.OPEN_INVITE_STATUSES },
+  });
+  if (!invitation) throw new AppError("contractor_invitation_required", 403);
+  if (invitation.visitingUntil && invitation.visitingUntil.getTime() < Date.now()) {
+    invitation.status = InvitationStatus.EXPIRED;
+    await invitation.save();
+    throw new AppError("invitation_expired", 400);
+  }
+
+  const session = await visitSessionService.createVisitSession({
+    organizationId,
+    branchId,
+    externalPersonId: person._id,
+    personType: person.type,
+    method: VisitMethod.INVITATION,
+    hostStaffId: invitation.hostStaffId,
+    hostName: "",
+    kioskId,
+    invitationId: invitation._id,
+    status: VisitSessionStatus.ON_SITE,
+  });
+
+  await visitorInvitationService.markInvitationCheckedIn({
+    invitation,
+    visitSessionId: session._id,
+  });
+
+  const kiosk = await Kiosk.findById(kioskId).select("locationLabel").lean();
   return shapeVisit({ session, person, kiosk, invitation });
 };
 
@@ -316,11 +411,13 @@ const checkInWalkIn = async ({
       name,
       email,
       phone,
-      photoUrl,
+      photoUrl: toPublicImageUrl(photoUrl),
       carRegistration,
       categoryId,
     });
   }
+
+  person = await applyPersonPhoto(person, photoUrl);
 
   const isContractor = person.type === ExternalPersonType.CONTRACTOR;
   const policies = firstVisit || isContractor
@@ -435,14 +532,29 @@ const checkOutAtKiosk = async ({
   return session.toObject();
 };
 
-const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
-  paginateWithFacet({
-    model: VisitSession,
-    match: {
+const listOnSiteVisits = async ({ branchId, keyword, page, limit, skip }) => {
+  const match = {
+    branchId,
+    status: VisitSessionStatus.ON_SITE,
+    checkOutAt: null,
+  };
+
+  const term = String(keyword || "").trim();
+  if (term) {
+    const regex = { $regex: escapeRegex(term), $options: "i" };
+    const personIds = await ExternalPerson.find({
       branchId,
-      status: VisitSessionStatus.ON_SITE,
-      checkOutAt: null,
-    },
+      $or: [{ name: regex }, { email: regex }],
+    }).distinct("_id");
+    if (!personIds.length) {
+      return { data: [], meta: generateMeta(page, limit, 0) };
+    }
+    match.externalPersonId = { $in: personIds };
+  }
+
+  return paginateWithFacet({
+    model: VisitSession,
+    match,
     page,
     limit,
     skip,
@@ -450,7 +562,7 @@ const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
     extraDataStages: [
       {
         $lookup: {
-          from: "externalpeople",
+          from: ExternalPerson.collection.name,
           localField: "externalPersonId",
           foreignField: "_id",
           as: "person",
@@ -459,6 +571,7 @@ const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
       { $unwind: { path: "$person", preserveNullAndEmptyArrays: true } },
       {
         $addFields: {
+          sessionId: "$_id",
           person: {
             _id: "$person._id",
             name: { $ifNull: ["$person.name", ""] },
@@ -469,6 +582,7 @@ const listOnSiteVisits = async ({ branchId, page, limit, skip }) =>
       },
     ],
   });
+};
 
 module.exports = {
   listVisitCategories,
@@ -477,6 +591,7 @@ module.exports = {
   verifyInvite,
   resendInvite,
   checkInAtKiosk,
+  confirmContractorQrCheckIn,
   checkOutAtKiosk,
   listOnSiteVisits,
 };

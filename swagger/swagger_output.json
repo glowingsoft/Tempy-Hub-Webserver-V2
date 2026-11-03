@@ -8390,6 +8390,18 @@
           "allowPhoneCheckIn": {
             "type": "boolean",
             "description": "Allows staff to clock in from their phone instead of a kiosk."
+          },
+          "autoClockOutHoursAfterShiftEnd": {
+            "type": "number",
+            "minimum": 0,
+            "example": 3,
+            "description": "Close a rostered open session this many hours after shift.endsAt."
+          },
+          "autoClockOutHoursAfterClockIn": {
+            "type": "number",
+            "minimum": 0,
+            "example": 10,
+            "description": "Close an unscheduled open session this many hours after clockInAt."
           }
         }
       },

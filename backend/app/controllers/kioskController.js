@@ -1,6 +1,7 @@
-const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
+const { sendResponse, parsePaginationParams, validateParams } = require("@utils/responseUtil");
 
 const kioskService = require("@adminServices/kiosk/kioskService");
+const kioskWidgetService = require("@adminServices/kiosk/kioskWidgetService");
 
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
@@ -139,6 +140,9 @@ const getStaffPreview = async (req, res) => {
 
 
 const requestCheckInOtp = async (req, res) => {
+  if (!validateParams(req, res, { formFields: ["staffId"], objectIdFields: ["staffId"] })) {
+    return;
+  }
 
   try {
 
@@ -181,35 +185,17 @@ const verifyCheckInOtp = async (req, res) => {
   try {
 
     const data = await kioskService.verifyKioskCheckInOtp({
-
       organizationId: req.orgId,
-
       branchId: req.branchId,
-
-      kioskId: req.kiosk._id,
-
       staffId: req.body.staffId,
-
       otp: req.body.otp,
-
-      clientEventId: req.body.clientEventId,
-
-      occurredAt: req.body.occurredAt,
-
     });
 
-
-
     return sendResponse({
-
       res,
-
-      statusCode: 201,
-
-      translationKey: "attendance_clock_in_success",
-
+      statusCode: 200,
+      translationKey: "otp_verified",
       data,
-
     });
 
   } catch (error) {
@@ -226,7 +212,10 @@ const getQr = async (req, res) => {
 
   try {
 
-    const data = await kioskService.getKioskQr({ kioskId: req.kiosk._id });
+    const data = await kioskService.getKioskQr({
+      kiosk: req.kiosk,
+      organizationId: req.orgId,
+    });
 
 
 
@@ -300,9 +289,20 @@ const confirmPairing = async (req, res) => {
 
       occurredAt: req.body.occurredAt,
 
+      image: req.body.image || req.body.photoUrl,
+
     });
 
 
+
+    if (data?.kind === "contractor") {
+      return sendResponse({
+        res,
+        statusCode: 201,
+        translationKey: "visit_checked_in_successfully",
+        data: data.visit,
+      });
+    }
 
     return sendResponse({
 
@@ -361,6 +361,23 @@ const cancelPairing = async (req, res) => {
 };
 
 
+
+const scanFromContractor = async (req, res) => {
+  try {
+    const data = await kioskService.scanContractorFromPhone({
+      scanToken: req.body.scanToken,
+      userId: req.user._id,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "kiosk_scan_successful",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
 
 const scanFromPhone = async (req, res) => {
 
@@ -499,6 +516,27 @@ const getMe = async (req, res) => {
 
 };
 
+const listWidgets = async (req, res) => {
+  try {
+    const [widgets, organization] = await Promise.all([
+      kioskWidgetService.listKioskWidgetsForDevice({
+        kiosk: req.kiosk,
+        organizationId: req.orgId,
+      }),
+      kioskService.publicOrganization(req.orgId),
+    ]);
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { ...widgets, organization },
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
+
 const updateMe = async (req, res) => {
   try {
     const data = await kioskService.updateKioskSettings({
@@ -534,9 +572,31 @@ const staffBody = (body) => ({
 
   occurredAt: body.occurredAt,
 
+  image: body.image || body.photoUrl,
+
 });
 
 
+
+const verifyStaffPin = async (req, res) => {
+  try {
+    const data = await kioskService.verifyStaffPinAtKiosk({
+      organizationId: req.orgId,
+      branchId: req.branchId,
+      kioskId: req.kiosk._id,
+      ...staffBody(req.body),
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "staff_pin_verified",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
 
 const clockIn = async (req, res) => {
 
@@ -701,14 +761,19 @@ module.exports = {
 
   scanFromPhone,
 
+  scanFromContractor,
+
   register,
 
   verifyAdminPin,
 
   getMe,
 
+  listWidgets,
+
   updateMe,
 
+  verifyStaffPin,
   clockIn,
 
   clockOut,

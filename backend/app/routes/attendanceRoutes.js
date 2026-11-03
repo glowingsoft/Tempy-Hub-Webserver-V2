@@ -19,5 +19,6 @@ router.post("/break-in", attendanceController.startBreak);
 router.post("/break-out", attendanceController.endBreak);
 router.get("/", attendanceController.listMyAttendance);
 router.post("/change-requests", attendanceController.createChangeRequest);
+router.post("/:dayId/roster-request", attendanceController.requestRoster);
 
 module.exports = router;

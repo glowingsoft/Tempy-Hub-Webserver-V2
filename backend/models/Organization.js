@@ -36,6 +36,40 @@ const organizationSchema = new mongoose.Schema(
     moduleAccess: { type: [moduleAccessSchema], default: [] },
     settings: {
       emergencyNotifyOffsite: { type: Boolean, default: false },
+      /** Null on a staff profile means this interval. */
+      defaultSupervisionIntervalMonths: { type: Number, default: 3, min: 1 },
+      /** Null on a staff profile means this interval. */
+      defaultAppraisalIntervalMonths: { type: Number, default: 12, min: 1 },
+      /** Line managers allowed to write appraisals. Empty means site managers only. */
+      appraisalWriterStaffIds: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "StaffProfile",
+        },
+      ],
+      /** Null until Philip confirms a default (Q1). Per-requirement override wins. */
+      amberDays: { type: Number, default: null, min: 1 },
+      staffDashboardCards: {
+        checkIn: { type: Boolean, default: false },
+        pendingLeave: { type: Boolean, default: false },
+      },
+      visitorSurvey: {
+        enabled: { type: Boolean, default: false },
+        notifyVia: {
+          email: { type: Boolean, default: true },
+          inApp: { type: Boolean, default: true },
+        },
+        recipients: {
+          siteManager: { type: Boolean, default: true },
+          lineManager: { type: Boolean, default: false },
+        },
+        include: {
+          ratingSummary: { type: Boolean, default: true },
+          visitDuration: { type: Boolean, default: true },
+          whoTheyVisited: { type: Boolean, default: true },
+          freeText: { type: Boolean, default: true },
+        },
+      },
     },
   },
   { timestamps: true },

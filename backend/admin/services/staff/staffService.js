@@ -27,6 +27,10 @@ const {
   resolveSubordinateStaffIds,
   assertRoleMayHaveStaffProfile,
 } = require("./staffAccess");
+const {
+  hasComplianceFields,
+  applyComplianceFields,
+} = require("./complianceSettings");
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -49,7 +53,16 @@ const branchSummary = (branch) =>
       }
     : null;
 
-const formatScopedRow = (row, organizationById, branchById) => ({
+const departmentSummary = (department) =>
+  department
+    ? {
+        _id: department._id,
+        name: department.name,
+        active: department.active,
+      }
+    : null;
+
+const formatScopedRow = (row, organizationById, branchById, departmentById) => ({
   ...row,
   organization: organizationSummary(
     organizationById.get(String(row.organizationId))
@@ -57,6 +70,13 @@ const formatScopedRow = (row, organizationById, branchById) => ({
   branch: row.branchId
     ? branchSummary(branchById.get(String(row.branchId)))
     : null,
+  ...(row.departmentId !== undefined
+    ? {
+        department: row.departmentId
+          ? departmentSummary(departmentById.get(String(row.departmentId)))
+          : null,
+      }
+    : {}),
 });
 
 const attachOrgAndBranchDetails = async (rows) => {
@@ -70,14 +90,26 @@ const attachOrgAndBranchDetails = async (rows) => {
       rows.filter((row) => row.branchId).map((row) => String(row.branchId))
     ),
   ];
+  const departmentIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.departmentId)
+        .map((row) => String(row.departmentId))
+    ),
+  ];
 
-  const [organizations, branches] = await Promise.all([
+  const [organizations, branches, departments] = await Promise.all([
     Organization.find({ _id: { $in: organizationIds } })
       .select("_id name status")
       .lean(),
     branchIds.length
       ? Branch.find({ _id: { $in: branchIds } })
           .select("_id name code status")
+          .lean()
+      : [],
+    departmentIds.length
+      ? Department.find({ _id: { $in: departmentIds } })
+          .select("_id name active")
           .lean()
       : [],
   ]);
@@ -88,8 +120,13 @@ const attachOrgAndBranchDetails = async (rows) => {
   const branchById = new Map(
     branches.map((branch) => [String(branch._id), branch])
   );
+  const departmentById = new Map(
+    departments.map((department) => [String(department._id), department])
+  );
 
-  return rows.map((row) => formatScopedRow(row, organizationById, branchById));
+  return rows.map((row) =>
+    formatScopedRow(row, organizationById, branchById, departmentById)
+  );
 };
 
 const randomToken = (bytes = 24) => crypto.randomBytes(bytes).toString("hex");
@@ -141,11 +178,16 @@ const assertDepartmentsInScope = async ({
   const rows = await Department.find({
     _id: { $in: unique },
     organizationId,
-    active: true,
-  }).lean();
+  })
+    .select("_id active branchId")
+    .lean();
 
-  if (rows.length !== unique.length) {
+  const byId = new Map(rows.map((row) => [String(row._id), row]));
+  if (unique.some((id) => !byId.has(id))) {
     throw new AppError("department_not_found", 404);
+  }
+  if (rows.some((row) => !row.active)) {
+    throw new AppError("department_inactive", 400);
   }
 
   for (const row of rows) {
@@ -155,6 +197,22 @@ const assertDepartmentsInScope = async ({
   }
 
   return unique;
+};
+
+const resolveJobTitleDepartmentId = async ({
+  departmentId,
+  organizationId,
+  branchId,
+}) => {
+  if (departmentId === undefined) return undefined;
+  if (!departmentId) return null;
+
+  const [resolved] = await assertDepartmentsInScope({
+    departmentIds: [departmentId],
+    organizationId,
+    branchId: branchId || undefined,
+  });
+  return resolved;
 };
 
 /**
@@ -453,6 +511,7 @@ const createJobTitle = async ({
   organizationId,
   name,
   branchId,
+  departmentId,
   level,
 }) => {
   const standing = await actorStanding(actor, organizationId);
@@ -465,10 +524,17 @@ const createJobTitle = async ({
     throw new AppError("invalid_job_title_level", 400);
   }
 
+  const nextDepartmentId = await resolveJobTitleDepartmentId({
+    departmentId,
+    organizationId,
+    branchId: scopedBranchId,
+  });
+
   try {
     const jobTitle = await JobTitle.create({
       organizationId,
       branchId: scopedBranchId,
+      departmentId: nextDepartmentId ?? null,
       name,
       level: level || JobTitleLevel.OPERATIONAL,
     });
@@ -487,6 +553,7 @@ const listJobTitles = async ({
   skip,
   keyword,
   branchId,
+  departmentId,
   active,
   status,
   level,
@@ -498,6 +565,12 @@ const listJobTitles = async ({
   if (branchId !== undefined) {
     match.branchId = branchId
       ? new mongoose.Types.ObjectId(String(branchId))
+      : null;
+  }
+
+  if (departmentId !== undefined) {
+    match.departmentId = departmentId
+      ? new mongoose.Types.ObjectId(String(departmentId))
       : null;
   }
 
@@ -544,6 +617,7 @@ const updateJobTitle = async ({
   name,
   level,
   branchId,
+  departmentId,
   active,
 }) => {
   const jobTitle = await JobTitle.findOne({ _id: jobTitleId, organizationId });
@@ -571,6 +645,20 @@ const updateJobTitle = async ({
     jobTitle.branchId = nextBranchId;
   }
 
+  if (departmentId !== undefined) {
+    jobTitle.departmentId = await resolveJobTitleDepartmentId({
+      departmentId,
+      organizationId,
+      branchId: jobTitle.branchId,
+    });
+  } else if (jobTitle.departmentId && branchId !== undefined) {
+    await resolveJobTitleDepartmentId({
+      departmentId: jobTitle.departmentId,
+      organizationId,
+      branchId: jobTitle.branchId,
+    });
+  }
+
   if (!jobTitle.isModified()) throw new AppError("nothing_to_update", 400);
 
   try {
@@ -585,34 +673,6 @@ const updateJobTitle = async ({
 
 // --- Staff profiles ---
 
-const staffListStages = [
-  {
-    $lookup: {
-      from: "users",
-      localField: "userId",
-      foreignField: "_id",
-      as: "user",
-    },
-  },
-  { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-  {
-    $lookup: {
-      from: "jobtitles",
-      localField: "jobTitleId",
-      foreignField: "_id",
-      as: "jobTitle",
-    },
-  },
-  { $unwind: { path: "$jobTitle", preserveNullAndEmptyArrays: true } },
-  {
-    $project: {
-      pinHash: 0,
-      "user.password": 0,
-      "user.resetToken": 0,
-    },
-  },
-];
-
 const COUNTED_STAFF_ROLES = [
   MembershipRole.STAFF,
   MembershipRole.LINE_MANAGER,
@@ -625,29 +685,152 @@ const emptyStaffRoleCounts = () => ({
   siteManager: 0,
 });
 
-/** Same filters as the list. Role comes from Membership, not StaffProfile. */
-const countStaffProfilesByRole = async (match) => {
-  const rows = await StaffProfile.aggregate([
-    { $match: match },
-    {
-      $lookup: {
-        from: Membership.collection.name,
-        localField: "userId",
-        foreignField: "userId",
-        as: "_mem",
-      },
-    },
-    { $unwind: "$_mem" },
-    {
-      $match: {
-        "_mem.organizationId": match.organizationId,
-        "_mem.status": ActiveInactiveStatus.ACTIVE,
-        "_mem.role": { $in: COUNTED_STAFF_ROLES },
-      },
-    },
-    { $group: { _id: "$_mem.role", count: { $sum: 1 } } },
-  ]);
+const emptyStaffList = (page, limit) => ({
+  data: [],
+  meta: { ...generateMeta(page, limit, 0), counts: emptyStaffRoleCounts() },
+});
 
+const parseStaffListRole = (role) => {
+  if (role == null || String(role).trim() === "") return null;
+  const value = String(role).trim();
+  if (!COUNTED_STAFF_ROLES.includes(value)) {
+    throw new AppError("invalid_membership_role", 400);
+  }
+  return value;
+};
+
+const objectId = (value) => new mongoose.Types.ObjectId(String(value));
+
+/** Join one related document. Runs only on the current page. */
+const joinOne = (from, localField, as, project) => {
+  const lookup = {
+    $lookup: { from, localField, foreignField: "_id", as },
+  };
+  if (project) {
+    lookup.$lookup.pipeline = [{ $project: project }, { $limit: 1 }];
+  }
+  return [
+    lookup,
+    { $unwind: { path: `$${as}`, preserveNullAndEmptyArrays: true } },
+  ];
+};
+
+/** Linked StaffProfile + user name. Original id field is kept. */
+const joinLinkedStaff = (localField, as) => [
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      localField,
+      foreignField: "_id",
+      pipeline: [
+        {
+          $lookup: {
+            from: User.collection.name,
+            localField: "userId",
+            foreignField: "_id",
+            pipeline: [
+              {
+                $project: {
+                  name: 1,
+                  email: 1,
+                  image: { $ifNull: ["$profileIcon", ""] },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "user",
+          },
+        },
+        {
+          $project: {
+            employeeCode: 1,
+            name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+            email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+            image: { $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""] },
+          },
+        },
+        { $limit: 1 },
+      ],
+      as,
+    },
+  },
+  { $addFields: { [as]: { $arrayElemAt: [`$${as}`, 0] } } },
+];
+
+/**
+ * Active staff / lineManager / siteManager membership for this organisation.
+ * Profiles with no matching membership are dropped by the following $unwind.
+ */
+const joinStaffMembership = (organizationId) => ({
+  $lookup: {
+    from: Membership.collection.name,
+    localField: "userId",
+    foreignField: "userId",
+    pipeline: [
+      {
+        $match: {
+          organizationId,
+          status: ActiveInactiveStatus.ACTIVE,
+          role: { $in: COUNTED_STAFF_ROLES },
+        },
+      },
+      { $limit: 1 },
+    ],
+    as: "membership",
+  },
+});
+
+/**
+ * All related collections for a staff row. Used after skip/limit on list
+ * and as the body of get-by-id — one pipeline, no extra finds.
+ */
+const staffLookups = [
+  ...joinOne(User.collection.name, "userId", "user", {
+    name: 1,
+    email: 1,
+    image: { $ifNull: ["$profileIcon", ""] },
+  }),
+  ...joinOne(JobTitle.collection.name, "jobTitleId", "jobTitle", {
+    name: 1,
+    level: 1,
+  }),
+  ...joinOne(Branch.collection.name, "branchId", "branch", {
+    name: 1,
+    code: 1,
+    status: 1,
+    address: 1,
+    timezone: 1,
+    assemblyPoint: 1,
+  }),
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, branchId: 1 } }],
+      as: "departments",
+    },
+  },
+  ...joinLinkedStaff("supervisorStaffId", "supervisor"),
+  ...joinLinkedStaff("reportsToStaffId", "reportsTo"),
+  {
+    $addFields: {
+      role: { $ifNull: ["$membership.role", null] },
+      supervisorStaffId: { $ifNull: ["$supervisorStaffId", null] },
+      reportsToStaffId: { $ifNull: ["$reportsToStaffId", null] },
+      supervisionIntervalMonths: { $ifNull: ["$supervisionIntervalMonths", null] },
+      appraisalIntervalMonths: { $ifNull: ["$appraisalIntervalMonths", null] },
+    },
+  },
+  {
+    $project: {
+      pinHash: 0,
+      membership: 0,
+    },
+  },
+];
+
+const countsFromRoleRows = (rows = []) => {
   const counts = emptyStaffRoleCounts();
   for (const row of rows) {
     if (counts[row._id] !== undefined) counts[row._id] = row.count;
@@ -757,14 +940,10 @@ const createStaffProfile = async ({
       await profile.save();
     }
 
-    const populated = await StaffProfile.findById(profile._id)
-      .select("-pinHash")
-      .populate("userId", "name email")
-      .populate("jobTitleId", "name level")
-      .populate("departmentIds", "name")
-      .lean();
-
-    return populated;
+    return getStaffProfile({
+      staffProfileId: profile._id,
+      organizationId,
+    });
   } catch (error) {
     if (duplicateKey(error)) {
       if (error.keyPattern?.employeeCode) {
@@ -784,63 +963,83 @@ const createStaffProfile = async ({
   }
 };
 
-const listStaffProfiles = async ({
+const lineManagerDirectoryMatch = async ({ actor, organizationId, match }) => {
+  const manager = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId,
+  })
+    .select("_id branchId")
+    .lean();
+  if (!manager) return false;
+
+  const reports = await StaffProfile.find({
+    organizationId,
+    $or: [
+      { reportsToStaffId: manager._id },
+      { supervisorStaffId: manager._id },
+    ],
+  })
+    .select("_id")
+    .lean();
+
+  if (reports.length) {
+    match._id = { $in: [manager._id, ...reports.map((row) => row._id)] };
+    return true;
+  }
+
+  if (manager.branchId) {
+    match.branchId = manager.branchId;
+    return true;
+  }
+
+  match._id = manager._id;
+  return true;
+};
+
+const buildStaffListMatch = async ({
   organizationId,
-  page,
-  limit,
-  skip,
-  keyword,
+  actor,
   branchId,
   departmentId,
   jobTitleId,
   status,
-  actor,
+  keyword,
 }) => {
-  const match = {
-    organizationId: new mongoose.Types.ObjectId(String(organizationId)),
-  };
+  const match = { organizationId: objectId(organizationId) };
 
   if (actor) {
     const standing = await actorStanding(actor, organizationId);
-    const scopedBranchId = scopeBranchFilter(standing, branchId);
-    if (scopedBranchId) {
-      match.branchId = new mongoose.Types.ObjectId(String(scopedBranchId));
-    } else if (branchId) {
-      match.branchId = new mongoose.Types.ObjectId(String(branchId));
-    }
+    if (standing.role === MembershipRole.LINE_MANAGER) {
+      const inDirectory = await lineManagerDirectoryMatch({
+        actor,
+        organizationId,
+        match,
+      });
+      if (!inDirectory) return null;
+    } else {
+      const scopedBranchId = scopeBranchFilter(standing, branchId);
+      if (scopedBranchId) match.branchId = objectId(scopedBranchId);
+      else if (branchId) match.branchId = objectId(branchId);
 
-    const inScope = await applyLineManagerStaffScope({
-      match,
-      standing,
-      actor,
-      organizationId,
-      staffIdField: "_id",
-    });
-    if (!inScope) {
-      return {
-        data: [],
-        meta: {
-          ...generateMeta(page, limit, 0),
-          counts: emptyStaffRoleCounts(),
-        },
-      };
+      const inScope = await applyLineManagerStaffScope({
+        match,
+        standing,
+        actor,
+        organizationId,
+        staffIdField: "_id",
+      });
+      if (!inScope) return null;
     }
   } else if (branchId) {
-    match.branchId = new mongoose.Types.ObjectId(String(branchId));
+    match.branchId = objectId(branchId);
   }
 
-  if (departmentId) {
-    match.departmentIds = new mongoose.Types.ObjectId(String(departmentId));
-  }
-
-  if (jobTitleId) {
-    match.jobTitleId = new mongoose.Types.ObjectId(String(jobTitleId));
-  }
-
+  if (departmentId) match.departmentIds = objectId(departmentId);
+  if (jobTitleId) match.jobTitleId = objectId(jobTitleId);
   if (status) match.status = status;
 
-  if (keyword && String(keyword).trim()) {
-    const trimmed = String(keyword).trim();
+  const trimmed = keyword && String(keyword).trim();
+  if (trimmed) {
     const users = await User.find({
       $or: [
         { name: { $regex: trimmed, $options: "i" } },
@@ -852,41 +1051,66 @@ const listStaffProfiles = async ({
 
     match.$or = [
       { employeeCode: { $regex: trimmed, $options: "i" } },
-      { userId: { $in: users.map((u) => u._id) } },
+      { userId: { $in: users.map((user) => user._id) } },
     ];
   }
 
-  const memberUserIds = await Membership.distinct("userId", {
-    organizationId: match.organizationId,
-    status: ActiveInactiveStatus.ACTIVE,
-    role: { $in: COUNTED_STAFF_ROLES },
-  });
-  if (!memberUserIds.length) {
-    return {
-      data: [],
-      meta: { ...generateMeta(page, limit, 0), counts: emptyStaffRoleCounts() },
-    };
-  }
-  match.userId = { $in: memberUserIds };
+  return match;
+};
 
-  const [pageResult, counts, totalRecords] = await Promise.all([
-    paginateWithFacet({
-      model: StaffProfile,
-      match,
-      page,
-      limit,
-      skip,
-      extraDataStages: staffListStages,
-    }),
-    countStaffProfilesByRole(match),
-    StaffProfile.countDocuments(match),
-  ]);
+const listStaffProfiles = async ({
+  organizationId,
+  page,
+  limit,
+  skip,
+  keyword,
+  branchId,
+  departmentId,
+  jobTitleId,
+  status,
+  role,
+  actor,
+}) => {
+  const listRole = parseStaffListRole(role);
+  const match = await buildStaffListMatch({
+    organizationId,
+    actor,
+    branchId,
+    departmentId,
+    jobTitleId,
+    status,
+    keyword,
+  });
+  if (!match) return emptyStaffList(page, limit);
+
+  const roleFilter = listRole ? [{ $match: { "membership.role": listRole } }] : [];
+
+  const pipeline = [
+    { $match: match },
+    joinStaffMembership(match.organizationId),
+    { $unwind: "$membership" },
+    {
+      $facet: {
+        counts: [{ $group: { _id: "$membership.role", count: { $sum: 1 } } }],
+        totalCount: [...roleFilter, { $count: "count" }],
+        data: [
+          ...roleFilter,
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          ...staffLookups,
+        ],
+      },
+    },
+  ];
+
+  const [result] = await StaffProfile.aggregate(pipeline);
 
   return {
-    data: pageResult.data,
+    data: result?.data || [],
     meta: {
-      ...generateMeta(page, limit, totalRecords),
-      counts,
+      ...generateMeta(page, limit, facetCount(result?.totalCount)),
+      counts: countsFromRoleRows(result?.counts),
     },
   };
 };
@@ -900,28 +1124,27 @@ const listDirectReports = async ({ actor, organizationId }) => {
 
   if (!ids.length) return [];
 
-  return StaffProfile.find({
-    _id: { $in: ids },
-    organizationId,
-  })
-    .select("-pinHash")
-    .populate("userId", "name email")
-    .populate("jobTitleId", "name level")
-    .populate("departmentIds", "name")
-    .lean();
+  return StaffProfile.aggregate([
+    { $match: { _id: { $in: ids }, organizationId: objectId(organizationId) } },
+    joinStaffMembership(objectId(organizationId)),
+    { $unwind: { path: "$membership", preserveNullAndEmptyArrays: true } },
+    ...staffLookups,
+  ]);
 };
 
 const getStaffProfile = async ({ staffProfileId, organizationId }) => {
-  const profile = await StaffProfile.findOne({
-    _id: staffProfileId,
-    organizationId,
-  })
-    .select("-pinHash")
-    .populate("userId", "name email")
-    .populate("jobTitleId", "name level")
-    .populate("departmentIds", "name")
-    .populate("reportsToStaffId", "employeeCode userId")
-    .lean();
+  const orgOid = objectId(organizationId);
+  const [profile] = await StaffProfile.aggregate([
+    {
+      $match: {
+        _id: objectId(staffProfileId),
+        organizationId: orgOid,
+      },
+    },
+    joinStaffMembership(orgOid),
+    { $unwind: { path: "$membership", preserveNullAndEmptyArrays: true } },
+    ...staffLookups,
+  ]);
 
   if (!profile) throw new AppError("staff_profile_not_found", 404);
   return profile;
@@ -946,6 +1169,9 @@ const updateStaffProfile = async ({
   pin,
   nfcTagId,
   status,
+  supervisorStaffId,
+  supervisionIntervalMonths,
+  appraisalIntervalMonths,
 }) => {
   const profile = await StaffProfile.findOne({
     _id: staffProfileId,
@@ -1046,6 +1272,21 @@ const updateStaffProfile = async ({
       profile.inactiveAt =
         status === StaffProfileStatus.INACTIVE ? new Date() : null;
     }
+  }
+
+  if (
+    hasComplianceFields({
+      supervisorStaffId,
+      supervisionIntervalMonths,
+      appraisalIntervalMonths,
+    })
+  ) {
+    await applyComplianceFields(profile, {
+      organizationId,
+      supervisorStaffId,
+      supervisionIntervalMonths,
+      appraisalIntervalMonths,
+    });
   }
 
   if (!profile.isModified()) throw new AppError("nothing_to_update", 400);

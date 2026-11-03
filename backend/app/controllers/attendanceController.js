@@ -29,6 +29,7 @@ const clockIn = async (req, res) => {
       clientEventId: req.body.clientEventId,
       geo: req.body.geo,
       occurredAt: req.body.occurredAt,
+      image: req.body.image,
     });
 
     return sendResponse({
@@ -145,6 +146,25 @@ const createChangeRequest = async (req, res) => {
   }
 };
 
+const requestRoster = async (req, res) => {
+  try {
+    const data = await attendanceService.requestRosterForDay({
+      userId: req.user._id,
+      organizationId: req.orgId,
+      attendanceDayId: req.params.dayId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 201,
+      translationKey: "attendance_roster_request_created",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   getTodayAttendance,
   clockIn,
@@ -153,4 +173,5 @@ module.exports = {
   endBreak,
   listMyAttendance,
   createChangeRequest,
+  requestRoster,
 };

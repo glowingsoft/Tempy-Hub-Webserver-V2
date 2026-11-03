@@ -29,7 +29,7 @@ const createLeaveRequest = async (req, res) => {
 const listMyLeaveRequests = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);
-    const { data, meta } = await leaveService.listMyLeaveRequests({
+    const { data, meta, summary } = await leaveService.listMyLeaveRequests({
       userId: req.user._id,
       organizationId: req.orgId,
       page,
@@ -43,7 +43,7 @@ const listMyLeaveRequests = async (req, res) => {
       res,
       statusCode: 200,
       translationKey: "data_fetched_successfully",
-      data,
+      data: { requests: data, summary },
       meta,
     });
   } catch (error) {

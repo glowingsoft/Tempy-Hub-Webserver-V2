@@ -462,6 +462,18 @@ scoped.get(
   attendanceController.attendanceReport
 );
 scoped.get(
+  "/reports/visitor-check-ins",
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_VIEW),
+  visitSessionController.visitorCheckInsReport
+);
+scoped.get(
+  "/reports/staff-hours-summary",
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  requirePermission(ATTENDANCE_VIEW),
+  attendanceController.staffHoursSummary
+);
+scoped.get(
   "/attendance/rota",
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_VIEW),

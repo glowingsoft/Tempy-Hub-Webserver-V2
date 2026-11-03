@@ -240,6 +240,44 @@ const getVisitAnalytics = async (req, res) => {
   }
 };
 
+const visitorCheckInsReport = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const {
+      from,
+      to,
+      timezone,
+      branchId,
+      kpis,
+      rows,
+      meta,
+    } = await visitSessionService.visitorCheckInsReport({
+      actor: req.user,
+      organizationId: req.orgId,
+      page,
+      limit,
+      skip,
+      branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
+      personType: req.query.personType || req.query.type,
+      status: req.query.status,
+      keyword: req.query.keyword,
+      from: req.query.from,
+      to: req.query.to,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { from, to, timezone, branchId, kpis, rows },
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   checkIn,
   registerAndCheckIn,
@@ -250,4 +288,5 @@ module.exports = {
   getVisitSession,
   getOnSiteCounts,
   getVisitAnalytics,
+  visitorCheckInsReport,
 };

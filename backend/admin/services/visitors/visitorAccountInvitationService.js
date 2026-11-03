@@ -22,6 +22,10 @@ const {
   scopeBranchFilter,
 } = require("./visitorAccess");
 const { toObjectId } = require("./visitPresenceQuery");
+const {
+  findPersonByBranchEmail,
+  resolveExternalPersonAtBranch,
+} = require("./externalPersonService");
 
 const INVITE_TTL_DAYS = Number(process.env.VISITOR_ACCOUNT_INVITE_TTL_DAYS || 7);
 const ACCOUNT_TYPES = [ExternalPersonType.VISITOR, ExternalPersonType.CONTRACTOR];
@@ -49,15 +53,6 @@ const parseAccountType = (type) => {
     throw new AppError("invalid_external_person_type", 400);
   }
   return value;
-};
-
-const findPersonByEmail = async ({ branchId, email, session }) => {
-  const query = ExternalPerson.findOne({
-    branchId,
-    email: { $regex: `^${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
-  });
-  if (session) query.session(session);
-  return query;
 };
 
 const sendInviteEmail = async ({ invitation, token, organizationName, branchName }) => {
@@ -109,8 +104,20 @@ const createVisitorAccountInvitation = async ({
     throw new AppError("email_used_by_staff", 409);
   }
 
-  const person = await findPersonByEmail({ branchId, email: normalisedEmail });
+  let person = await findPersonByBranchEmail({
+    branchId,
+    email: normalisedEmail,
+  });
   if (person?.userId) throw new AppError("visitor_account_already_linked", 409);
+  if (!person) {
+    const resolved = await resolveExternalPersonAtBranch({
+      branchId,
+      type: personType,
+      name: name ? String(name).trim() : normalisedEmail,
+      email: normalisedEmail,
+    });
+    person = resolved.person;
+  }
 
   if (
     await VisitorAccountInvitation.exists({
@@ -401,37 +408,20 @@ const acceptVisitorAccountInvitation = async ({ token, name, password, timezone 
         user = created;
       }
 
-      person = await findPersonByEmail({
+      const resolved = await resolveExternalPersonAtBranch({
         branchId: invitation.branchId,
+        type: invitation.personType,
+        name: name || invitation.name || invitation.email,
         email: invitation.email,
         session: dbSession,
       });
+      person = resolved.person;
 
-      if (person?.userId && String(person.userId) !== String(user._id)) {
+      if (person.userId && String(person.userId) !== String(user._id)) {
         throw new AppError("visitor_account_already_linked", 409);
       }
 
-      const linkedElsewhere = await ExternalPerson.findOne({
-        userId: user._id,
-        _id: { $ne: person?._id || null },
-      }).session(dbSession);
-      if (linkedElsewhere) throw new AppError("visitor_account_already_linked", 409);
-
-      if (!person) {
-        const [created] = await ExternalPerson.create(
-          [
-            {
-              branchId: invitation.branchId,
-              type: invitation.personType,
-              name: name || invitation.name || invitation.email,
-              email: invitation.email,
-              userId: user._id,
-            },
-          ],
-          { session: dbSession }
-        );
-        person = created;
-      } else if (!person.userId) {
+      if (!person.userId) {
         person.userId = user._id;
         if (!person.type) person.type = invitation.personType;
         await person.save({ session: dbSession });

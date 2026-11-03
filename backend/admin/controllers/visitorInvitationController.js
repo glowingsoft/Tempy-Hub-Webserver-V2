@@ -9,7 +9,7 @@ const { handleServiceError } = require("@services/_errors/handleServiceError");
 const createVisitorInvitation = async (req, res) => {
   if (
     !validateParams(req, res, {
-      formFields: ["branchId", "visitorName", "visitorEmail", "arrivalAt", "visitingUntil"],
+      formFields: ["branchId", "arrivalAt", "visitingUntil"],
     })
   ) {
     return;
@@ -20,6 +20,7 @@ const createVisitorInvitation = async (req, res) => {
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.body.branchId,
+      externalPersonId: req.body.externalPersonId,
       visitorName: req.body.visitorName,
       visitorEmail: req.body.visitorEmail,
       hostStaffId: req.body.hostStaffId,

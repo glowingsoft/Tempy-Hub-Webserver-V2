@@ -17,8 +17,9 @@ const {
 } = require("@models/domainEnums");
 const visitSessionService = require("@adminServices/visitors/visitSessionService");
 const {
-  createExternalPersonAtBranch,
   parsePersonType,
+  resolveExternalPersonAtBranch,
+  toPersonObject,
 } = require("@adminServices/visitors/externalPersonService");
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
 const { toPublicImageUrl } = require("@utils/imageHelper");
@@ -285,13 +286,15 @@ const checkInByInvitation = async ({
     inviteCode,
   });
 
-  let person = await ExternalPerson.findOne({
-    branchId,
-    email: invitation.visitorEmail,
-  }).lean();
-
+  let person = null;
+  if (invitation.externalPersonId) {
+    person = await ExternalPerson.findOne({
+      _id: invitation.externalPersonId,
+      branchId,
+    }).lean();
+  }
   if (!person) {
-    person = await createExternalPersonAtBranch({
+    const resolved = await resolveExternalPersonAtBranch({
       branchId,
       type:
         invitation.badgeType === BadgeType.CONTRACTOR
@@ -301,6 +304,8 @@ const checkInByInvitation = async ({
       email: invitation.visitorEmail,
       photoUrl: toPublicImageUrl(photoUrl),
     });
+    person = toPersonObject(resolved.person);
+    invitation.externalPersonId = person._id;
   }
 
   person = await applyPersonPhoto(person, photoUrl);
@@ -355,6 +360,10 @@ const confirmContractorQrCheckIn = async ({
     throw new AppError("invitation_expired", 400);
   }
 
+  if (!invitation.externalPersonId) {
+    invitation.externalPersonId = person._id;
+  }
+
   const session = await visitSessionService.createVisitSession({
     organizationId,
     branchId,
@@ -404,8 +413,7 @@ const checkInWalkIn = async ({
     }).lean();
     if (!person) throw new AppError("external_person_not_found", 404);
   } else {
-    firstVisit = true;
-    person = await createExternalPersonAtBranch({
+    const resolved = await resolveExternalPersonAtBranch({
       branchId,
       type: parsePersonType(type || ExternalPersonType.VISITOR),
       name,
@@ -415,6 +423,8 @@ const checkInWalkIn = async ({
       carRegistration,
       categoryId,
     });
+    person = toPersonObject(resolved.person);
+    firstVisit = resolved.created;
   }
 
   person = await applyPersonPhoto(person, photoUrl);

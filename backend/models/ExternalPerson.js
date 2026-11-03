@@ -61,13 +61,27 @@ const externalPersonSchema = new mongoose.Schema(
 externalPersonSchema.index({ branchId: 1, type: 1, createdAt: -1 });
 externalPersonSchema.index({ branchId: 1, departmentId: 1, createdAt: -1 });
 
-// Optional identity links — sparse so many nulls are allowed; unique only when set.
-externalPersonSchema.index({ userId: 1 }, { unique: true, sparse: true });
+// Same email may exist on different branches; not globally unique.
+externalPersonSchema.index(
+  { branchId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { email: { $gt: "" } } }
+);
+// One login per person-at-site (same User may link at Maple and Willow).
+externalPersonSchema.index(
+  { userId: 1, branchId: 1 },
+  { unique: true, partialFilterExpression: { userId: { $type: "objectId" } } }
+);
 externalPersonSchema.index({ qrToken: 1 }, { unique: true, sparse: true });
 externalPersonSchema.index({ nfcTagId: 1 }, { unique: true, sparse: true });
 
 const ExternalPerson =
   mongoose.models.ExternalPerson ||
   mongoose.model("ExternalPerson", externalPersonSchema);
+
+const dropLegacyUserIdIndex = () => {
+  ExternalPerson.collection.dropIndex("userId_1").catch(() => {});
+};
+if (mongoose.connection.readyState === 1) dropLegacyUserIdIndex();
+else mongoose.connection.once("open", dropLegacyUserIdIndex);
 
 module.exports = { ExternalPerson };

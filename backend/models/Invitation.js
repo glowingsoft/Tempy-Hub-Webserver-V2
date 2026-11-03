@@ -23,6 +23,13 @@ const invitationSchema = new mongoose.Schema(
     },
     visitorName: { type: String, required: true, trim: true },
     visitorEmail: { type: String, required: true, trim: true },
+    /** Directory person this visit ticket belongs to (same branch). */
+    externalPersonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ExternalPerson",
+      default: null,
+      index: true,
+    },
     hostStaffId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "StaffProfile",

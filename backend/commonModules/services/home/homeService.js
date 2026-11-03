@@ -57,20 +57,24 @@ const getStaffHome = async ({ userId, organizationId, userName }) => {
       organizationId,
       from: todayStart.toDate(),
       to: rangeEnd.toDate(),
+      page: 1,
+      limit: 50,
+      skip: 0,
     }),
     attendanceService.getTodayAttendance({ userId, organizationId }),
   ]);
 
-  const todaysShifts = shifts
+  const todaysShifts = shifts.data
     .filter((shift) => moment(shift.startsAt).tz(tz).isSame(todayStart, "day"))
     .slice(0, HOME_SHIFT_LIMIT);
 
-  const nextAssignedShifts = shifts
+  const nextAssignedShifts = shifts.data
     .filter((shift) => moment(shift.startsAt).tz(tz).isAfter(todayEnd))
     .slice(0, HOME_SHIFT_LIMIT);
 
   const nextAssignedShift =
-    shifts.find((shift) => moment(shift.endsAt).tz(tz).isSameOrAfter(now)) || null;
+    shifts.data.find((shift) => moment(shift.endsAt).tz(tz).isSameOrAfter(now)) ||
+    null;
 
   const presence = today?.attendance?.presenceStatus;
   const clockInEligible =

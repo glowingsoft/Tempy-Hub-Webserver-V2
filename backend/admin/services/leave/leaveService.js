@@ -538,19 +538,44 @@ const listMyLeaveRequests = async ({
 }) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const match = { staffId: profile._id };
-  if (status) match.status = status;
   if (leaveType) match.leaveType = leaveType;
 
-  const { data, meta } = await paginateWithFacet({
-    model: LeaveRequest,
-    match,
-    page,
-    limit,
-    skip,
-    sort: { startDate: -1 },
-  });
+  const leaveStatus = parseLeaveRequestStatus(status);
+  const countMatch = { ...match };
+  if (leaveStatus) match.status = leaveStatus;
 
-  return { data: await attachLeaveRequestDetails(data), meta };
+  const year = entitlementYearFromDate();
+  const { start, end } = leaveYearBounds(year);
+
+  const [{ data, meta, result }, entitlement] = await Promise.all([
+    paginateWithFacet({
+      model: LeaveRequest,
+      match,
+      page,
+      limit,
+      skip,
+      sort: { startDate: -1 },
+      extraFacets: {
+        ...leaveStatusCountFacets(countMatch),
+        ...leaveYearScoreFacets(profile._id, start, end),
+      },
+    }),
+    LeaveEntitlement.findOne({
+      staffId: profile._id,
+      year,
+      leaveType: LeaveType.ANNUAL,
+    }).lean(),
+  ]);
+
+  return {
+    data: await attachLeaveRequestDetails(data),
+    meta: { ...meta, counts: leaveStatusCountsFromFacet(result) },
+    summary: {
+      year,
+      remainingHolidayAllowance: remainingDays(entitlement),
+      ...leaveYearScoresFromFacet(result),
+    },
+  };
 };
 
 const getMyLeaveRequest = async ({ userId, organizationId, requestId }) => {
@@ -717,6 +742,36 @@ const leaveStatusCountsFromFacet = (result) =>
   Object.fromEntries(
     LEAVE_REQUEST_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
   );
+
+/** Current leave-year sick / absence totals; independent of list filters. */
+const leaveYearScoreFacets = (staffId, from, to) => ({
+  leaveYearScores: [
+    { $match: scoreMatch([staffId], from, to) },
+    {
+      $group: {
+        _id: null,
+        sickDaysTaken: {
+          $sum: {
+            $cond: [{ $eq: ["$leaveType", LeaveType.SICK] }, "$totalDays", 0],
+          },
+        },
+        absenceDays: {
+          $sum: {
+            $cond: [{ $eq: ["$leaveType", LeaveType.ABSENCE] }, "$totalDays", 0],
+          },
+        },
+      },
+    },
+  ],
+});
+
+const leaveYearScoresFromFacet = (result) => {
+  const row = result.leaveYearScores?.[0];
+  return {
+    sickDaysTaken: row?.sickDaysTaken || 0,
+    absenceDays: row?.absenceDays || 0,
+  };
+};
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

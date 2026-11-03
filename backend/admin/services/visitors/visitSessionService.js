@@ -2,12 +2,15 @@ const { VisitSession } = require("@models/VisitSession");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
-const { paginateWithFacet } = require("@utils/paginate");
+const moment = require("moment-timezone");
+const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
 const {
   VisitMethod,
   VisitSessionStatus,
+  ExternalPersonType,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -72,6 +75,7 @@ const visitDetailStages = [
             type: 1,
             photoUrl: 1,
             categoryId: 1,
+            departmentId: 1,
             carRegistration: 1,
           },
         },
@@ -508,6 +512,252 @@ const getVisitAnalytics = async ({
   });
 };
 
+const emptyVisitorCheckInKpis = () => ({
+  onSite: 0,
+  visitors: 0,
+  contractors: 0,
+});
+
+const emptyVisitorCheckInsReport = ({
+  page,
+  limit,
+  from,
+  to,
+  timezone,
+  branchId,
+}) => ({
+  from,
+  to,
+  timezone,
+  branchId: branchId || null,
+  kpis: emptyVisitorCheckInKpis(),
+  rows: [],
+  meta: {
+    ...generateMeta(page, limit, 0),
+    counts: emptyVisitSessionStatusCounts(),
+  },
+});
+
+const resolveVisitorReportRange = ({ from, to, timezone }) => {
+  const fromRaw = from && String(from).trim();
+  const toRaw = to && String(to).trim();
+  if (fromRaw || toRaw) {
+    const range = parseDateRange({
+      from: fromRaw,
+      to: toRaw,
+      timezone,
+    });
+    const tz = range.timezone;
+    return {
+      ...range,
+      from: range.fromDate
+        ? moment(range.fromDate).tz(tz).format("YYYY-MM-DD")
+        : null,
+      to: range.toDate
+        ? moment(range.toDate).tz(tz).format("YYYY-MM-DD")
+        : null,
+    };
+  }
+
+  const tz = timezone || "Europe/London";
+  const fromDay = moment.tz(tz).startOf("month");
+  const toDay = moment.tz(tz).endOf("month");
+  return {
+    fromDate: fromDay.toDate(),
+    toDate: toDay.toDate(),
+    timezone: tz,
+    from: fromDay.format("YYYY-MM-DD"),
+    to: toDay.format("YYYY-MM-DD"),
+  };
+};
+
+const visitorCheckInsReport = async ({
+  actor,
+  organizationId,
+  page,
+  limit,
+  skip,
+  branchId,
+  departmentId,
+  personType,
+  status,
+  keyword,
+  from,
+  to,
+}) => {
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+
+  parsePersonTypes(personType);
+  parseStatuses(status);
+
+  const branchFilter = { organizationId };
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+    branchFilter._id = scopedBranchId;
+  }
+
+  const branches = await Branch.find(branchFilter)
+    .select("_id timezone")
+    .lean();
+  const tz =
+    (scopedBranchId
+      ? branches[0]?.timezone
+      : branches.length === 1
+        ? branches[0].timezone
+        : "Europe/London") || "Europe/London";
+  const range = resolveVisitorReportRange({ from, to, timezone: tz });
+
+  if (!branches.length) {
+    return emptyVisitorCheckInsReport({
+      page,
+      limit,
+      from: range.from,
+      to: range.to,
+      timezone: range.timezone,
+      branchId: scopedBranchId || null,
+    });
+  }
+
+  const match = {
+    branchId: { $in: branches.map((row) => row._id) },
+  };
+  if (personType) {
+    const types = parsePersonTypes(personType);
+    match.personType = types.length === 1 ? types[0] : { $in: types };
+  }
+  if (range.fromDate || range.toDate) {
+    match.checkInAt = {};
+    if (range.fromDate) match.checkInAt.$gte = range.fromDate;
+    if (range.toDate) match.checkInAt.$lte = range.toDate;
+  }
+
+  const personMatch = {};
+  if (departmentId) {
+    personMatch["person.departmentId"] = toObjectId(
+      departmentId,
+      "invalid_department_id"
+    );
+  }
+  const search = keywordOr(keyword, ["person.name", "person.email"], {
+    trim: true,
+  });
+  if (search) personMatch.$or = search;
+
+  const needsPerson = Boolean(departmentId || search);
+  const personStages = needsPerson
+    ? [
+        {
+          $lookup: {
+            from: ExternalPerson.collection.name,
+            localField: "externalPersonId",
+            foreignField: "_id",
+            pipeline: [
+              {
+                $project: {
+                  name: 1,
+                  email: 1,
+                  departmentId: 1,
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "_personFilter",
+          },
+        },
+        {
+          $addFields: {
+            person: { $arrayElemAt: ["$_personFilter", 0] },
+          },
+        },
+        { $match: personMatch },
+        { $project: { _personFilter: 0, person: 0 } },
+      ]
+    : [];
+
+  const listMatch = [];
+  if (status) {
+    const statuses = parseStatuses(status);
+    listMatch.push({
+      $match: {
+        status: statuses.length === 1 ? statuses[0] : { $in: statuses },
+      },
+    });
+  }
+
+  const [result] = await VisitSession.aggregate([
+    { $match: match },
+    ...personStages,
+    {
+      $facet: {
+        kpis: [
+          {
+            $group: {
+              _id: null,
+              onSite: {
+                $sum: {
+                  $cond: [
+                    { $eq: ["$status", VisitSessionStatus.ON_SITE] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              visitors: {
+                $sum: {
+                  $cond: [
+                    { $eq: ["$personType", ExternalPersonType.VISITOR] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              contractors: {
+                $sum: {
+                  $cond: [
+                    { $eq: ["$personType", ExternalPersonType.CONTRACTOR] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ],
+        statusCounts: [
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ],
+        totalCount: [...listMatch, { $count: "count" }],
+        data: [
+          ...listMatch,
+          { $sort: { checkInAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          ...visitDetailStages,
+        ],
+      },
+    },
+  ]);
+
+  const kpiRow = result?.kpis?.[0];
+  return {
+    from: range.from,
+    to: range.to,
+    timezone: range.timezone,
+    branchId: scopedBranchId || null,
+    kpis: {
+      onSite: kpiRow?.onSite || 0,
+      visitors: kpiRow?.visitors || 0,
+      contractors: kpiRow?.contractors || 0,
+    },
+    rows: (result?.data || []).map(shapeVisitRow),
+    meta: {
+      ...generateMeta(page, limit, facetCount(result?.totalCount)),
+      counts: visitSessionStatusCountsFromFacet(result || {}),
+    },
+  };
+};
+
 module.exports = {
   parseMethod,
   createVisitSession,
@@ -520,4 +770,5 @@ module.exports = {
   getVisitSession,
   getOnSiteCounts,
   getVisitAnalytics,
+  visitorCheckInsReport,
 };

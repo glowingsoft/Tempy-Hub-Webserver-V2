@@ -13,13 +13,20 @@ const { LeaveRequest } = require("@models/LeaveRequest");
 const { Department } = require("@models/Department");
 const { PeepRecord } = require("@models/PeepRecord");
 const { EvacuationEvent } = require("@models/EvacuationEvent");
-const { CompetencyRecord } = require("@models/CompetencyRecord");
+const { Requirement } = require("@models/Requirement");
+const { RequirementAssignment } = require("@models/RequirementAssignment");
+const { RequirementRecord } = require("@models/RequirementRecord");
+const { cellFromDates } = require("@adminServices/requirements/requirementDates");
+const { DEFAULT_TZ, supervisionStanding } = require("@adminServices/supervision/supervisionSchedule");
+const { effectiveIntervals } = require("@adminServices/appraisal/cycle");
 const { SupervisionRecord } = require("@models/SupervisionRecord");
 const { AppraisalRecord } = require("@models/AppraisalRecord");
 const {
   AdmissionStatus,
   CareLevel,
-  ComplianceRecordStatus,
+  AppraisalKind,
+  ComplianceMeetingStatus,
+  RequirementType,
   EvacuationStatus,
   EvacuationType,
   ExternalPersonType,
@@ -326,64 +333,114 @@ const fireDrills = async ({ branchIds, now }) => {
   };
 };
 
-const complianceOf = async (model, branchIds, now) => {
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-  const monthEnd = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
-  );
-  const { DUE, OVERDUE, COMPLETED, CANCELLED } = ComplianceRecordStatus;
-  const [row] = await model.aggregate([
-    { $match: { branchId: { $in: branchIds }, status: { $ne: CANCELLED } } },
-    {
-      $group: {
-        _id: null,
-        completed: { $sum: { $cond: [{ $eq: ["$status", COMPLETED] }, 1, 0] } },
-        overdue: {
-          $sum: {
-            $cond: [
-              {
-                $or: [
-                  { $eq: ["$status", OVERDUE] },
-                  {
-                    $and: [{ $eq: ["$status", DUE] }, { $lt: ["$dueAt", now] }],
-                  },
-                ],
-              },
-              1,
-              0,
-            ],
-          },
-        },
-        pending: {
-          $sum: { $cond: [{ $in: ["$status", [DUE, OVERDUE]] }, 1, 0] },
-        },
-        dueThisMonth: {
-          $sum: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ["$status", DUE] },
-                  { $gte: ["$dueAt", monthStart] },
-                  { $lt: ["$dueAt", monthEnd] },
-                ],
-              },
-              1,
-              0,
-            ],
-          },
+const latestRecord = (records) =>
+  records.reduce((latest, record) => (!latest || record.completedAt > latest.completedAt ? record : latest), null);
+
+const requirementScores = (cells) => {
+  const byName = new Map();
+  cells.forEach(({ name, cell }) => {
+    if (!cell.expected) return;
+    const row = byName.get(name) || { done: 0, expected: 0 };
+    row.expected += 1;
+    if (cell.met) row.done += 1;
+    byName.set(name, row);
+  });
+  const rows = [...byName];
+  const done = rows.reduce((sum, [, row]) => sum + row.done, 0);
+  const expected = rows.reduce((sum, [, row]) => sum + row.expected, 0);
+  return {
+    compliantPercent: percentOf(done, expected),
+    items: rows
+      .map(([name, row]) => ({ name, compliantPercent: percentOf(row.done, row.expected) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+};
+
+const meetingScores = (standings, now) => {
+  const monthEnd = moment.tz(now, TZ).endOf("month");
+  const count = (badges) => standings.filter((standing) => badges.includes(standing.badge)).length;
+  return {
+    required: standings.reduce((sum, standing) => sum + standing.required, 0),
+    completed: standings.reduce((sum, standing) => sum + Math.min(standing.completed, standing.required), 0),
+    pending: count(["booked", "dueSoon"]),
+    overdue: count(["overdue"]),
+    dueThisMonth: standings.filter((standing) => standing.badge !== "overdue" && moment(standing.nextDueAt).isSameOrBefore(monthEnd)).length,
+  };
+};
+
+const complianceSnapshot = async ({ organization, branchZones, now }) => {
+  const [staff, [org], supervisions, appraisals, assignments] = await Promise.all([
+    StaffProfile.aggregate([
+      { $match: { organizationId: organization, status: StaffProfileStatus.ACTIVE } },
+      { $project: { branchId: 1, startDate: 1, supervisionIntervalMonths: 1, appraisalIntervalMonths: 1 } },
+    ]),
+    Organization.aggregate([{ $match: { _id: organization } }, { $project: { settings: 1 } }]),
+    SupervisionRecord.aggregate([
+      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED } } },
+      { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1 } },
+    ]),
+    AppraisalRecord.aggregate([
+      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED } } },
+      { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1, kind: 1 } },
+    ]),
+    RequirementAssignment.aggregate([
+      { $match: { organizationId: organization } },
+      { $lookup: { from: Requirement.collection.name, localField: "requirementId", foreignField: "_id", as: "requirement" } },
+      { $unwind: "$requirement" },
+      { $lookup: { from: RequirementRecord.collection.name, localField: "_id", foreignField: "assignmentId", as: "records" } },
+      {
+        $project: {
+          staffId: 1,
+          assignedAt: 1,
+          dueDate: 1,
+          requirement: { name: 1, type: 1, createdAt: 1, firstCompletionDays: 1, amberDaysOverride: 1 },
+          records: { completedAt: 1, expiresAt: 1 },
         },
       },
-    },
+    ]),
   ]);
-  const {
-    completed = 0,
-    overdue = 0,
-    pending = 0,
-    dueThisMonth = 0,
-  } = row || {};
-  return { completed, overdue, pending, dueThisMonth };
+
+  const settings = org?.settings || {};
+  const amberDays = settings.amberDays ?? null;
+  const active = new Set(staff.map((member) => String(member._id)));
+  const cells = assignments
+    .filter((row) => active.has(String(row.staffId)))
+    .map((row) => ({
+      name: row.requirement.name,
+      type: row.requirement.type,
+      cell: cellFromDates({ assignment: row, latest: latestRecord(row.records), requirement: row.requirement, orgAmberDays: amberDays, today: now }),
+    }));
+
+  const standingOf = (member, intervalMonths, meetings) =>
+    supervisionStanding({
+      startDate: member.startDate,
+      intervalMonths,
+      meetings: meetings.filter((row) => String(row.staffId) === String(member._id)),
+      timezone: branchZones.get(String(member.branchId)) || DEFAULT_TZ,
+      checkDate: now,
+    });
+  const countsAsAppraisal = (row) =>
+    row.status === ComplianceMeetingStatus.SCHEDULED ||
+    (row.status === ComplianceMeetingStatus.COMPLETED && row.kind !== AppraisalKind.OTHER);
+  const appraisalMeetings = appraisals.filter(countsAsAppraisal);
+  const supervisionStandings = staff.map((member) =>
+    standingOf(member, effectiveIntervals(member, settings).supervisionMonths, supervisions),
+  );
+  const appraisalStandings = staff.map((member) =>
+    standingOf(member, effectiveIntervals(member, settings).appraisalMonths, appraisalMeetings),
+  );
+
+  const supervision = meetingScores(supervisionStandings, now);
+  const appraisal = meetingScores(appraisalStandings, now);
+  return {
+    competency: requirementScores(cells.filter((cell) => cell.type === RequirementType.COMPETENCY)),
+    training: requirementScores(cells.filter((cell) => cell.type === RequirementType.TRAINING)),
+    supervisionAppraisal: {
+      compliantPercent: percentOf(supervision.completed + appraisal.completed, supervision.required + appraisal.required),
+      supervisions: { pending: supervision.pending, overdue: supervision.overdue },
+      appraisals: { dueThisMonth: appraisal.dueThisMonth, overdue: appraisal.overdue },
+    },
+  };
 };
 
 const workforceUtilisation = async ({ organization, branchIds, now }) => {
@@ -454,9 +511,10 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
   const own = { organizationId: organization };
   const branches = await Branch.aggregate([
     { $match: own },
-    { $project: { _id: 1 } },
+    { $project: { timezone: 1 } },
   ]);
   const branchIds = branches.map((branch) => branch._id);
+  const branchZones = new Map(branches.map((branch) => [String(branch._id), branch.timezone]));
   const today = moment.tz(now, TZ);
 
   const [
@@ -470,9 +528,7 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
     risk,
     modules,
     drills,
-    training,
-    supervisions,
-    appraisals,
+    standing,
     utilisation,
     shifts,
     retention,
@@ -503,21 +559,13 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
     evacuationRisk({ organization }),
     activeModules({ organization, now }),
     fireDrills({ branchIds, now }),
-    complianceOf(CompetencyRecord, branchIds, now),
-    complianceOf(SupervisionRecord, branchIds, now),
-    complianceOf(AppraisalRecord, branchIds, now),
+    complianceSnapshot({ organization, branchZones, now }),
     workforceUtilisation({ organization, branchIds, now }),
     openShifts({ organization, now }),
     getWorkforcePeriod(own, resolvePeriod("thisMonth", now)),
   ]);
 
   const departments = await staffByDepartment({ organization, totalStaff });
-  const trainingPercent = percentOf(
-    training.completed,
-    training.completed + training.overdue,
-  );
-  const reviewDone = supervisions.completed + appraisals.completed;
-  const reviewLate = supervisions.overdue + appraisals.overdue;
 
   return {
     summary: {
@@ -532,8 +580,8 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
     staffByDepartment: departments,
     workforceOverview: {
       attendance: utilisation.attendance,
-      compliance: null,
-      training: trainingPercent,
+      compliance: standing.competency.compliantPercent,
+      training: standing.training.compliantPercent,
       retention: Math.round(retention.retentionRate),
       utilization: utilisation.utilization,
       satisfaction: null,
@@ -541,20 +589,9 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
     evacuationRisk: risk,
     activeModules: modules,
     fireDrills: drills,
-    compliance: { compliantPercent: null, items: [] },
-    staffTraining: { compliantPercent: trainingPercent, items: [] },
-    supervisionAppraisal: {
-      compliantPercent: percentOf(reviewDone, reviewDone + reviewLate),
-      supervisions: {
-        pending: supervisions.pending,
-        overdue: supervisions.overdue,
-      },
-      appraisals: {
-        dueThisMonth: appraisals.dueThisMonth,
-        overdue: appraisals.overdue,
-      },
-      items: [],
-    },
+    compliance: standing.competency,
+    staffTraining: standing.training,
+    supervisionAppraisal: standing.supervisionAppraisal,
     openShifts: shifts,
   };
 };

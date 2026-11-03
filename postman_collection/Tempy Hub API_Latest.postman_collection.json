@@ -25441,386 +25441,6 @@
           ]
         },
         {
-          "name": "Owner Dashboard",
-          "description": "The owner home screen.",
-          "item": [
-            {
-              "name": "owner dashboard",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Dashboard fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.include.keys(\"summary\", \"attendance\", \"leaveBreakdown\", \"staffByDepartment\", \"workforceOverview\", \"evacuationRisk\", \"activeModules\", \"fireDrills\", \"compliance\", \"staffTraining\", \"supervisionAppraisal\", \"openShifts\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/dashboard",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "organizations",
-                    "{{organizationId}}",
-                    "dashboard"
-                  ]
-                },
-                "description": "The owner dashboard in one call. Owner or super admin of the organization in x-org-id (platform admin passes); site managers, line managers and staff get 403. No query. summary: totalStaff (active), totalResidents (admitted), todayVisitors (checked in today, denied left out), totalContractors, totalProfessionals. attendance: Mon to Sun (London time) of {day, present, absent}; present is staff with an attendance record, absent is staff on a shift that already started with none; days still to come are null. leaveBreakdown: this year's approved or closed leave as {label, percent} for Annual leave, Sick leave, Unpaid leave and Other. staffByDepartment: totalStaff and departments {name, count}, biggest first (staff with none are Unassigned). workforceOverview (this month, whole percents): attendance, training, retention, utilization; compliance and satisfaction are null. evacuationRisk: high, medium, low and notSet (admitted residents without a PEEP record). activeModules: active, total and modules {slug, name, active}. fireDrills: completed (closed mock evacuations this quarter) and overdueSites (no drill in 90 days). compliance: compliantPercent null and items []. staffTraining: compliantPercent and items []. supervisionAppraisal: compliantPercent, supervisions {pending, overdue}, appraisals {dueThisMonth, overdue}, items []. openShifts: the five soonest upcoming open shifts {siteName, startsAt, endsAt, urgentCover}."
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Super Admin Dashboard",
-          "description": "The Super Admin home screen.",
-          "item": [
-            {
-              "name": "super admin dashboard",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Dashboard fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.include.keys(\"summary\", \"onboardingGrowth\", \"topOrganizations\", \"organizationOverview\", \"dataUsage\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{url}}/admin/platform/dashboard",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "platform",
-                    "dashboard"
-                  ],
-                  "query": [
-                    {
-                      "key": "year",
-                      "value": "2026",
-                      "description": "The year of the onboarding and data usage charts (the current year by default)",
-                      "disabled": true
-                    },
-                    {
-                      "key": "organizationId",
-                      "value": "{{organizationId}}",
-                      "description": "The organization shown in Organizational Overview (the one with the most modules by default)",
-                      "disabled": true
-                    }
-                  ]
-                },
-                "description": "The Super Admin dashboard in one call. Platform admin only (Admin Login, no x-org-id): anyone else gets 403. Query: year (the year of the two charts, the current year by default; 400 invalid_statistics_year outside 2000 to 2100) and organizationId (the Select organization dropdown of Organizational Overview; the organization with the most modules by default; 404 organization_not_found). summary (the cards, over every organization): organizations, sites (branches), pendingInvitations (staff and owner invitations that are still pending and not expired), professionals (professional people records), siteAndLineManagers (active site and line manager memberships), staff (active staff profiles), residents (admitted) and totalMonthlyRevenueGbp (the Total Monthly Revenue card). onboardingGrowth (Onboarding Growth): year, months (Jan to Dec), organizations and sites (running totals at the end of each month; null for months still to come) and changePercent, the growth of organizations plus sites against a year ago (null when there were none then). topOrganizations (Top Organizations, five at most, most modules first): organizationId, name, status and modules (enabled modules that have not expired); organizations lists them all for the dropdown. revenueByOrganization (Revenue by Organization): organizationId, name and monthlyRevenueGbp for every organization. organizationOverview (the bars for the selected organization, null when there are none): organizationId, name, sites, staff, residents, modules, siteManagers and lineManagers. dataUsage (Data Usage & Images Shared): year, usedGb, planQuotaGb (the one plan limit times the number of organizations, null until the limit is set), quotaPercent, images and files {gb, percentOfUsed} and months, one per month with imagesGb, filesGb and totalGb. A past month shows what the nightly measurement recorded on its last run that month, so months before recording began are null; the current month shows today's numbers. Blank for now: totalMonthlyRevenueGbp and every monthlyRevenueGbp are null, because nothing stores revenue yet; the frontend shows them empty. Not included: Sites by Region, because nothing stores a branch's region."
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "All Settings",
-          "description": "Billing, family and visit settings in one call.",
-          "item": [
-            {
-              "name": "all settings",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Settings fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    pm.expect(pm.response.json().data).to.have.property(\"access\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/settings/all",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "settings",
-                    "all"
-                  ],
-                  "query": [
-                    {
-                      "key": "branchId",
-                      "value": "{{branchId}}",
-                      "description": "The site for visits (an owner, super admin or platform admin picks one)",
-                      "disabled": true
-                    }
-                  ]
-                },
-                "description": "All the settings in one call: billing {planLimitGb, baseTierGbp, overageGbpPerGb}, family {configured, gazette {issueEveryDays, messageCap, anchorDate}, updatedAt} and visits (the visiting rules of one site: branchId, timezone, visitingHours {start, end}, protectedTimes, daysAhead, maxPartySize, paused, pausedReason, pausedAt). access says which sections the caller may use: billing is for a platform admin only; family is for an owner or super admin of the organization; visits is for an owner, super admin, site manager, line manager or staff member who holds familyEngagement.view (an owner or super admin needs no stored permission). A section the caller may not use is left out, and so are family and visits when the Family Engagement module is off or no x-org-id is sent. A platform admin sends x-org-id only to also get family and visits. Query branchId picks the site for visits: an owner, super admin or platform admin must send it, and visits is null until they do; a site manager, line manager or staff member always gets their own site."
-              },
-              "response": []
-            },
-            {
-              "name": "update all settings",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Settings saved\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "PUT",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/settings/all",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "settings",
-                    "all"
-                  ]
-                },
-                "description": "Saves any of the three sections in one call. Send only the sections you want to change, and inside a section only what changes. billing {planLimitGb (a number above 0 up to 1000000, or null to clear it), baseTierGbp and overageGbpPerGb (0 to 100000)}: platform admin only; it changes the one limit and prices every organization shares (400 invalid_plan_limit, invalid_billing_price or invalid_billing_settings). family {gazette {issueEveryDays 1-90, messageCap 1-100, anchorDate YYYY-MM-DD}}: owner or super admin; it changes the organization in x-org-id, and the first save needs anchorDate and switches the gazette schedule on. visits {branchId, visitingHours {start, end} (HH:mm, at least half an hour apart), protectedTimes [{start, end, label}], daysAhead 1-60, maxPartySize 1-20, paused, pausedReason}: needs familyEngagement.manage; it changes one site (400 invalid_visit_settings), and pausing cancels the visits still to come and tells the families. Every section is checked for access first and nothing is saved if any is refused (403 insufficient_role). Then the sections are saved in the order billing, family, visits, so a section that fails validation (400) stops the rest: sections before it are already saved. Returns the saved sections. 400 nothing_to_update when no section is sent, 400 invalid_settings_section when one is not an object.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"family\": {\n    \"gazette\": {\n      \"issueEveryDays\": 14,\n      \"messageCap\": 30,\n      \"anchorDate\": \"2026-10-01\"\n    }\n  },\n  \"visits\": {\n    \"branchId\": \"{{branchId}}\",\n    \"daysAhead\": 14,\n    \"maxPartySize\": 6,\n    \"paused\": false\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "update billing settings",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Billing settings saved\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    pm.expect(pm.response.json().data.billing).to.have.keys(\"planLimitGb\", \"baseTierGbp\", \"overageGbpPerGb\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "PUT",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/settings/all",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "settings",
-                    "all"
-                  ]
-                },
-                "description": "Billing & Usage settings, sent as the billing section of the all settings call. Platform admin only (403 insufficient_role for anyone else); an x-org-id is not needed. They are the one plan limit every organization shares and the prices on the Billing Readiness card. planLimitGb is a number above 0 up to 1000000, or null to clear it (400 invalid_plan_limit); baseTierGbp and overageGbpPerGb are numbers from 0 to 100000 (400 invalid_billing_price). Send only what changes; a billing section with none of the three is 400 invalid_billing_settings. Returns all three values. Read them with all settings.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"billing\": {\n    \"planLimitGb\": 750,\n    \"baseTierGbp\": 380,\n    \"overageGbpPerGb\": 0.15\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "response": []
-            }
-          ]
-        },
-        {
-          "name": "Billing & Usage",
-          "description": "Storage used by each organization against one shared plan limit. Everyone sees the screen: a platform admin every organization, an owner their organization and its branches, a site manager, line manager or staff member their own branch. The pencil edits the organization (update organization, in the Organizations folder); only a platform admin changes the billing settings.",
-          "item": [
-            {
-              "name": "usage",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Usage fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    const json = pm.response.json();",
-                      "    pm.expect(json.data).to.be.an(\"array\");",
-                      "    pm.expect(json.meta.summary).to.include.keys(\"activeOrganizations\", \"totalUsedGb\", \"quotaPercent\", \"images\", \"files\", \"billing\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/billing/usage?page=1&limit=10",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "billing",
-                    "usage"
-                  ],
-                  "query": [
-                    {
-                      "key": "page",
-                      "value": "1"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "10"
-                    },
-                    {
-                      "key": "organizationId",
-                      "value": "{{organizationId}}",
-                      "description": "Platform admin only: one organization (the Filter by Organization dropdown)",
-                      "disabled": true
-                    },
-                    {
-                      "key": "keyword",
-                      "value": "bluebell",
-                      "description": "Organization name, owner name or owner email",
-                      "disabled": true
-                    },
-                    {
-                      "key": "sort",
-                      "value": "usedDesc",
-                      "description": "usedDesc (default), usedAsc, percentDesc or name",
-                      "disabled": true
-                    }
-                  ]
-                },
-                "description": "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. Who sees what: a Super Admin (platform admin, Admin Login, no x-org-id) gets one row per active organization, and passes organizationId (clicking an organization, or the Filter by Organization dropdown) to get that organization's branches the way its owner sees them: one row per branch, the cards of that organization and the organization itself in meta.organization. An owner (or an organization's super admin) sends x-org-id and gets one row per branch of their organization, with their organization itself in meta.organization. A site manager, line manager or staff member sends x-org-id and gets only their own branch. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email for a platform admin; branch name or owner name or email for the others), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization for a platform admin: organizationId, name, owner {name, email}, usedGb, planLimitGb (the same for every organization; null until the platform admin sets it), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit when no limit is set) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), emergencyNotifyOffsite, measuredAt, measuring, unmeasured and canEdit. A branch row (owner, site manager, line manager, staff) has branchId, organizationId, name, owner {name, email} (the organization's owner), usedGb, planLimitGb (the organization's limit, shared by its branches), usagePercent (the branch's share of that limit) with status and statusLabel, images, files, measuredAt, unmeasured and canEdit (always false). The pencil opens Edit Organization: show it on an organization row when canEdit is true (a platform admin, an owner or a super admin) and fill the dialog from the row (name, owner name and email, which cannot be changed, and emergencyNotifyOffsite); Save Changes is update organization (PUT /admin/organizations/:organizationId with name and settings.emergencyNotifyOffsite). meta.summary is the four cards for everything in scope, ignoring the search (all organizations for a platform admin, the organization for an owner, the one branch for a site manager, line manager or staff member): activeOrganizations, totalUsedGb with quotaPercent (used against planLimitGb for each organization, which is totalPlanGb), planLimitGb, images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket every night, so measuredAt says how fresh it is."
-              },
-              "response": []
-            },
-            {
-              "name": "usage detail",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"Usage detail fetched\", function () {",
-                      "    pm.response.to.have.status(200);",
-                      "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.include.keys(\"organization\", \"storage\", \"categories\", \"branches\", \"billing\", \"record\");",
-                      "    pm.expect(data.categories).to.be.an(\"array\");",
-                      "});"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}",
-                    "description": "Organization scope for admin routes.",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/admin/billing/usage/{{organizationId}}",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "billing",
-                    "usage",
-                    "{{organizationId}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "branchId",
-                      "value": "{{branchId}}",
-                      "description": "One branch of the organization: its own usage detail",
-                      "disabled": true
-                    }
-                  ]
-                },
-                "description": "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts. Add the query branchId to get the usage detail of one branch of that organization instead (click a branch row on the organization's branch list). A branch detail has scope {type: branch, branchId}, organization {organizationId, name, owner {name, email}, status}, branch {branchId, name, status} and the same storage, categories, billing and record sections for that branch only; planQuotaGb is the organization's shared limit, and branches is just that one. A branch that is not in the organization is 404 branch_not_found. The branch's category figures are filled by the next measurement after a restart or the nightly run; until then every category shows 0."
-              },
-              "response": []
-            }
-          ]
-        },
-        {
           "name": "Visitor Survey",
           "item": [
             {
@@ -27632,6 +27252,386 @@
                     }
                   ]
                 }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Owner Dashboard",
+          "description": "The owner home screen.",
+          "item": [
+            {
+              "name": "owner dashboard",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Dashboard fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"summary\", \"attendance\", \"leaveBreakdown\", \"staffByDepartment\", \"workforceOverview\", \"evacuationRisk\", \"activeModules\", \"fireDrills\", \"compliance\", \"staffTraining\", \"supervisionAppraisal\", \"openShifts\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/dashboard",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "dashboard"
+                  ]
+                },
+                "description": "The owner dashboard in one call. Owner or super admin of the organization in x-org-id (platform admin passes); site managers, line managers and staff get 403. No query. summary: totalStaff (active), totalResidents (admitted), todayVisitors (checked in today, denied left out), totalContractors, totalProfessionals. attendance: Mon to Sun (London time) of {day, present, absent}; present is staff with an attendance record, absent is staff on a shift that already started with none; days still to come are null. leaveBreakdown: this year's approved or closed leave as {label, percent} for Annual leave, Sick leave, Unpaid leave and Other. staffByDepartment: totalStaff and departments {name, count}, biggest first (staff with none are Unassigned). workforceOverview (this month, whole percents): attendance, training, retention, utilization; compliance and satisfaction are null. evacuationRisk: high, medium, low and notSet (admitted residents without a PEEP record). activeModules: active, total and modules {slug, name, active}. fireDrills: completed (closed mock evacuations this quarter) and overdueSites (no drill in 90 days). compliance: compliantPercent and items {name, compliantPercent} for competency requirements. staffTraining: the same for training requirements. Both use the requirement schema: an assigned requirement is met when its latest record has not expired, and staff are the active ones. supervisionAppraisal: compliantPercent (meetings done against meetings due so far, supervisions and appraisals together, using each staff member's own interval and start date), supervisions {pending (booked or due within 30 days), overdue (staff behind)} and appraisals {dueThisMonth, overdue}. openShifts: the five soonest upcoming open shifts {siteName, startsAt, endsAt, urgentCover}."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Super Admin Dashboard",
+          "description": "The Super Admin home screen.",
+          "item": [
+            {
+              "name": "super admin dashboard",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Dashboard fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"summary\", \"onboardingGrowth\", \"topOrganizations\", \"organizationOverview\", \"dataUsage\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/platform/dashboard",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "platform",
+                    "dashboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "year",
+                      "value": "2026",
+                      "description": "The year of the onboarding and data usage charts (the current year by default)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "organizationId",
+                      "value": "{{organizationId}}",
+                      "description": "The organization shown in Organizational Overview (the one with the most modules by default)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The Super Admin dashboard in one call. Platform admin only (Admin Login, no x-org-id): anyone else gets 403. Query: year (the year of the two charts, the current year by default; 400 invalid_statistics_year outside 2000 to 2100) and organizationId (the Select organization dropdown of Organizational Overview; the organization with the most modules by default; 404 organization_not_found). summary (the cards, over every organization): organizations, sites (branches), pendingInvitations (staff and owner invitations that are still pending and not expired), professionals (professional people records), siteAndLineManagers (active site and line manager memberships), staff (active staff profiles), residents (admitted) and totalMonthlyRevenueGbp (the Total Monthly Revenue card). onboardingGrowth (Onboarding Growth): year, months (Jan to Dec), organizations and sites (running totals at the end of each month; null for months still to come) and changePercent, the growth of organizations plus sites against a year ago (null when there were none then). topOrganizations (Top Organizations, five at most, most modules first): organizationId, name, status and modules (enabled modules that have not expired); organizations lists them all for the dropdown. revenueByOrganization (Revenue by Organization): organizationId, name and monthlyRevenueGbp for every organization. organizationOverview (the bars for the selected organization, null when there are none): organizationId, name, sites, staff, residents, modules, siteManagers and lineManagers. dataUsage (Data Usage & Images Shared): year, usedGb, planQuotaGb (the one plan limit times the number of organizations, null until the limit is set), quotaPercent, images and files {gb, percentOfUsed} and months, one per month with imagesGb, filesGb and totalGb. A past month shows what the nightly measurement recorded on its last run that month, so months before recording began are null; the current month shows today's numbers. Blank for now: totalMonthlyRevenueGbp and every monthlyRevenueGbp are null, because nothing stores revenue yet; the frontend shows them empty. Not included: Sites by Region, because nothing stores a branch's region."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "All Settings",
+          "description": "Billing, family and visit settings in one call.",
+          "item": [
+            {
+              "name": "all settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Settings fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data).to.have.property(\"access\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/settings/all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "all"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "The site for visits (an owner, super admin or platform admin picks one)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "All the settings in one call: billing {planLimitGb, baseTierGbp, overageGbpPerGb}, family {configured, gazette {issueEveryDays, messageCap, anchorDate}, updatedAt} and visits (the visiting rules of one site: branchId, timezone, visitingHours {start, end}, protectedTimes, daysAhead, maxPartySize, paused, pausedReason, pausedAt). access says which sections the caller may use: billing is for a platform admin only; family is for an owner or super admin of the organization; visits is for an owner, super admin, site manager, line manager or staff member who holds familyEngagement.view (an owner or super admin needs no stored permission). A section the caller may not use is left out, and so are family and visits when the Family Engagement module is off or no x-org-id is sent. A platform admin sends x-org-id only to also get family and visits. Query branchId picks the site for visits: an owner, super admin or platform admin must send it, and visits is null until they do; a site manager, line manager or staff member always gets their own site."
+              },
+              "response": []
+            },
+            {
+              "name": "update all settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/settings/all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "all"
+                  ]
+                },
+                "description": "Saves any of the three sections in one call. Send only the sections you want to change, and inside a section only what changes. billing {planLimitGb (a number above 0 up to 1000000, or null to clear it), baseTierGbp and overageGbpPerGb (0 to 100000)}: platform admin only; it changes the one limit and prices every organization shares (400 invalid_plan_limit, invalid_billing_price or invalid_billing_settings). family {gazette {issueEveryDays 1-90, messageCap 1-100, anchorDate YYYY-MM-DD}}: owner or super admin; it changes the organization in x-org-id, and the first save needs anchorDate and switches the gazette schedule on. visits {branchId, visitingHours {start, end} (HH:mm, at least half an hour apart), protectedTimes [{start, end, label}], daysAhead 1-60, maxPartySize 1-20, paused, pausedReason}: needs familyEngagement.manage; it changes one site (400 invalid_visit_settings), and pausing cancels the visits still to come and tells the families. Every section is checked for access first and nothing is saved if any is refused (403 insufficient_role). Then the sections are saved in the order billing, family, visits, so a section that fails validation (400) stops the rest: sections before it are already saved. Returns the saved sections. 400 nothing_to_update when no section is sent, 400 invalid_settings_section when one is not an object.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"family\": {\n    \"gazette\": {\n      \"issueEveryDays\": 14,\n      \"messageCap\": 30,\n      \"anchorDate\": \"2026-10-01\"\n    }\n  },\n  \"visits\": {\n    \"branchId\": \"{{branchId}}\",\n    \"daysAhead\": 14,\n    \"maxPartySize\": 6,\n    \"paused\": false\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update billing settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Billing settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.billing).to.have.keys(\"planLimitGb\", \"baseTierGbp\", \"overageGbpPerGb\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/settings/all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "settings",
+                    "all"
+                  ]
+                },
+                "description": "Billing & Usage settings, sent as the billing section of the all settings call. Platform admin only (403 insufficient_role for anyone else); an x-org-id is not needed. They are the one plan limit every organization shares and the prices on the Billing Readiness card. planLimitGb is a number above 0 up to 1000000, or null to clear it (400 invalid_plan_limit); baseTierGbp and overageGbpPerGb are numbers from 0 to 100000 (400 invalid_billing_price). Send only what changes; a billing section with none of the three is 400 invalid_billing_settings. Returns all three values. Read them with all settings.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"billing\": {\n    \"planLimitGb\": 750,\n    \"baseTierGbp\": 380,\n    \"overageGbpPerGb\": 0.15\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Billing & Usage",
+          "description": "Storage used by each organization against one shared plan limit. Everyone sees the screen: a platform admin every organization, an owner their organization and its branches, a site manager, line manager or staff member their own branch. The pencil edits the organization (update organization, in the Organizations folder); only a platform admin changes the billing settings.",
+          "item": [
+            {
+              "name": "usage",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Usage fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.data).to.be.an(\"array\");",
+                      "    pm.expect(json.meta.summary).to.include.keys(\"activeOrganizations\", \"totalUsedGb\", \"quotaPercent\", \"images\", \"files\", \"billing\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/billing/usage?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "billing",
+                    "usage"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "organizationId",
+                      "value": "{{organizationId}}",
+                      "description": "Platform admin only: one organization (the Filter by Organization dropdown)",
+                      "disabled": true
+                    },
+                    {
+                      "key": "keyword",
+                      "value": "bluebell",
+                      "description": "Organization name, owner name or owner email",
+                      "disabled": true
+                    },
+                    {
+                      "key": "sort",
+                      "value": "usedDesc",
+                      "description": "usedDesc (default), usedAsc, percentDesc or name",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. Who sees what: a Super Admin (platform admin, Admin Login, no x-org-id) gets one row per active organization, and passes organizationId (clicking an organization, or the Filter by Organization dropdown) to get that organization's branches the way its owner sees them: one row per branch, the cards of that organization and the organization itself in meta.organization. An owner (or an organization's super admin) sends x-org-id and gets one row per branch of their organization, with their organization itself in meta.organization. A site manager, line manager or staff member sends x-org-id and gets only their own branch. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email for a platform admin; branch name or owner name or email for the others), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization for a platform admin: organizationId, name, owner {name, email}, usedGb, planLimitGb (the same for every organization; null until the platform admin sets it), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit when no limit is set) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), emergencyNotifyOffsite, measuredAt, measuring, unmeasured and canEdit. A branch row (owner, site manager, line manager, staff) has branchId, organizationId, name, owner {name, email} (the organization's owner), usedGb, planLimitGb (the organization's limit, shared by its branches), usagePercent (the branch's share of that limit) with status and statusLabel, images, files, measuredAt, unmeasured and canEdit (always false). The pencil opens Edit Organization: show it on an organization row when canEdit is true (a platform admin, an owner or a super admin) and fill the dialog from the row (name, owner name and email, which cannot be changed, and emergencyNotifyOffsite); Save Changes is update organization (PUT /admin/organizations/:organizationId with name and settings.emergencyNotifyOffsite). meta.summary is the four cards for everything in scope, ignoring the search (all organizations for a platform admin, the organization for an owner, the one branch for a site manager, line manager or staff member): activeOrganizations, totalUsedGb with quotaPercent (used against planLimitGb for each organization, which is totalPlanGb), planLimitGb, images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket every night, so measuredAt says how fresh it is."
+              },
+              "response": []
+            },
+            {
+              "name": "usage detail",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Usage detail fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"organization\", \"storage\", \"categories\", \"branches\", \"billing\", \"record\");",
+                      "    pm.expect(data.categories).to.be.an(\"array\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/billing/usage/{{organizationId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "billing",
+                    "usage",
+                    "{{organizationId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "One branch of the organization: its own usage detail",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts. Add the query branchId to get the usage detail of one branch of that organization instead (click a branch row on the organization's branch list). A branch detail has scope {type: branch, branchId}, organization {organizationId, name, owner {name, email}, status}, branch {branchId, name, status} and the same storage, categories, billing and record sections for that branch only; planQuotaGb is the organization's shared limit, and branches is just that one. A branch that is not in the organization is 404 branch_not_found. The branch's category figures are filled by the next measurement after a restart or the nightly run; until then every category shows 0."
               },
               "response": []
             }

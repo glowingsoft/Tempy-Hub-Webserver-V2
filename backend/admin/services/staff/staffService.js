@@ -749,7 +749,11 @@ const createStaffProfile = async ({
       if (bannerUrl) profile.bannerUrl = bannerUrl;
       if (ward) profile.ward = ward;
       if (locationLabel) profile.locationLabel = locationLabel;
-      if (status) profile.status = status;
+      if (status) {
+        profile.status = status;
+        profile.inactiveAt =
+          status === StaffProfileStatus.INACTIVE ? new Date() : null;
+      }
       await profile.save();
     }
 
@@ -1037,7 +1041,11 @@ const updateStaffProfile = async ({
     if (!Object.values(StaffProfileStatus).includes(status)) {
       throw new AppError("invalid_staff_profile_status", 400);
     }
-    profile.status = status;
+    if (status !== profile.status) {
+      profile.status = status;
+      profile.inactiveAt =
+        status === StaffProfileStatus.INACTIVE ? new Date() : null;
+    }
   }
 
   if (!profile.isModified()) throw new AppError("nothing_to_update", 400);

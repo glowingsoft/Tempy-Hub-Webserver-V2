@@ -25293,6 +25293,53 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Statistics",
+          "description": "Statistics screen data for an organization or site. Requires a signed-in owner, site manager or super admin and x-org-id. Owners and super admins see the whole organization by default and can pass branchId to filter to one site. Site managers are always limited to their membership site. Returns summary, employeesByRole, employeesOverTime for the requested year, and workforceMovement. workforceMovement has retentionRate, newStarters and leavers; each is {value, change, previousValue}, where change compares the selected period with the immediately previous period. Retention is a percentage and its change is in percentage points. period accepts thisMonth, thisQuarter (default) or thisYear.",
+          "item": [
+            {
+              "name": "statistic",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope."
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/statistics?year=2026&period=thisQuarter&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "statistics"
+                  ],
+                  "query": [
+                    {
+                      "key": "year",
+                      "value": "2026",
+                      "description": "Year shown in the monthly employee chart."
+                    },
+                    {
+                      "key": "period",
+                      "value": "thisQuarter",
+                      "description": "Workforce summary period: thisMonth, thisQuarter or thisYear."
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Optional site filter for owner and super admin. Site managers are automatically restricted to their membership site."
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },

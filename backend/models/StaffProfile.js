@@ -56,6 +56,8 @@ const staffProfileSchema = new mongoose.Schema(
       enum: Object.values(StaffProfileStatus),
       default: StaffProfileStatus.ACTIVE,
     },
+    /** Date the staff profile was last marked inactive, for workforce movement reporting. */
+    inactiveAt: { type: Date, default: null, index: true },
     indicators: { type: [mongoose.Schema.Types.Mixed], default: [] },
     lastSeenAt: { type: Date, default: null },
   },

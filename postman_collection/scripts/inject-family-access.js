@@ -2267,7 +2267,26 @@ const siteDashboardRequests = [
   }),
 ];
 
-adminFolder.item = adminFolder.item.filter((i) => !["Billing & Usage", "All Settings", "Super Admin Dashboard", "Owner Dashboard", "Site Manager Dashboard"].includes(i.name));
+const lineDashboardRequests = [
+  req("line manager dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "line-dashboard"], {
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.have.all.keys("summary", "teamAttendance");',
+      "    pm.expect(data.teamAttendance).to.have.lengthOf(7);",
+      "});",
+    ],
+    description: "The line manager dashboard in one call. Line manager only, and always their own site; everyone else gets 403. No query. Attendance figures cover the last 7 days (ending today, London time) at the line manager's site. summary (the cards): shiftsLogged (attendance records of those 7 days), onTime, late, attendanceRate (the same figure as Team Attendance: on time plus late against on time, late, sick and absence), familyUploadsWaiting (pending family uploads), wallPostsThisWeek (published wall posts, Monday onwards) and messagesSent (messages sent from the site this week, a message to many families counts once). teamAttendance (the Team attendance chart): one entry per day for the last 7 days, oldest first, {date, onTime, late}.",
+  }),
+];
+
+adminFolder.item = adminFolder.item.filter((i) => !["Billing & Usage", "All Settings", "Super Admin Dashboard", "Owner Dashboard", "Site Manager Dashboard", "Line Manager Dashboard"].includes(i.name));
+adminFolder.item.push({
+  name: "Line Manager Dashboard",
+  description: "The line manager home screen.",
+  item: lineDashboardRequests,
+});
 adminFolder.item.push({
   name: "Site Manager Dashboard",
   description: "The site manager home screen.",

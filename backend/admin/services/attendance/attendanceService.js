@@ -72,13 +72,14 @@ const startOfUtcDay = (date) => {
 
 const unpaidBreakMinutesFromRules = (shiftHours, settings = {}) => {
   if (settings.paidBreaks) return 0;
-  const bands = (settings.breakBands?.length
-    ? settings.breakBands
-    : DEFAULT_UNPAID_BREAK_BANDS
+  const bands = (
+    settings.breakBands?.length
+      ? settings.breakBands
+      : DEFAULT_UNPAID_BREAK_BANDS
   ).filter((band) => Number(band.minShiftHours) <= shiftHours);
   if (!bands.length) return 0;
   const best = bands.reduce((a, b) =>
-    Number(a.minShiftHours) >= Number(b.minShiftHours) ? a : b
+    Number(a.minShiftHours) >= Number(b.minShiftHours) ? a : b,
   );
   return Math.round(Number(best.unpaidBreakHours) * 60);
 };
@@ -113,7 +114,10 @@ const expandLeaveToRegisterDays = (requests, from, to) => {
     let cursor = startOfUtcDay(request.startDate);
     const last = startOfUtcDay(request.endDate);
     while (cursor <= last) {
-      if ((!rangeStart || cursor >= rangeStart) && (!rangeEnd || cursor <= rangeEnd)) {
+      if (
+        (!rangeStart || cursor >= rangeStart) &&
+        (!rangeEnd || cursor <= rangeEnd)
+      ) {
         days.push({
           kind: "leave",
           workDate: new Date(cursor),
@@ -141,8 +145,10 @@ const listLeaveRegisterDays = async ({ staffIds, from, to }) => {
   };
 
   if (from || to) {
-    if (from) match.endDate = { ...(match.endDate || {}), $gte: startOfUtcDay(from) };
-    if (to) match.startDate = { ...(match.startDate || {}), $lte: startOfUtcDay(to) };
+    if (from)
+      match.endDate = { ...(match.endDate || {}), $gte: startOfUtcDay(from) };
+    if (to)
+      match.startDate = { ...(match.startDate || {}), $lte: startOfUtcDay(to) };
   }
 
   const requests = await LeaveRequest.aggregate([
@@ -224,7 +230,9 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
 
   const branchIds = [...new Set(days.map((day) => String(day.branchId)))];
   const [branches, shifts] = await Promise.all([
-    Branch.find({ _id: { $in: branchIds } }).select("settings").lean(),
+    Branch.find({ _id: { $in: branchIds } })
+      .select("settings")
+      .lean(),
     Shift.find({
       _id: { $in: days.map((day) => day.shiftId).filter(Boolean) },
     })
@@ -232,7 +240,7 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
       .lean(),
   ]);
   const settingsByBranch = new Map(
-    branches.map((branch) => [String(branch._id), branch.settings || {}])
+    branches.map((branch) => [String(branch._id), branch.settings || {}]),
   );
   const shiftById = new Map(shifts.map((shift) => [String(shift._id), shift]));
 
@@ -242,11 +250,11 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
     const settings = settingsByBranch.get(String(day.branchId)) || {};
     const afterShiftEnd = hoursFromSettings(
       settings.autoClockOutHoursAfterShiftEnd,
-      AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS
+      AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
     );
     const afterClockIn = hoursFromSettings(
       settings.autoClockOutHoursAfterClockIn,
-      AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS
+      AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
     );
 
     let dueAtMs = null;
@@ -272,7 +280,7 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
     };
     next.workedMinutes = computeWorkedMinutes(
       { ...day.toObject(), ...next },
-      settings
+      settings,
     );
     ops.push({
       updateOne: {
@@ -404,7 +412,8 @@ const requireOpenAttendanceDay = async (staffId) => {
     .select("clockOutAt")
     .sort({ clockInAt: -1 })
     .lean();
-  if (last?.clockOutAt) throw new AppError("attendance_already_clocked_out", 409);
+  if (last?.clockOutAt)
+    throw new AppError("attendance_already_clocked_out", 409);
   throw new AppError("attendance_not_clocked_in", 400);
 };
 
@@ -500,7 +509,7 @@ const withComputedWorkedMinutes = (days) =>
     totalHours: formatClockedHours(
       day.clockInAt,
       day.clockOutAt,
-      day.branch?.timezone || DEFAULT_TZ
+      day.branch?.timezone || DEFAULT_TZ,
     ),
   }));
 
@@ -530,15 +539,21 @@ const mergeAttendanceAndLeave = (attendanceDays, leaveDays) => {
     if (byDate) return byDate;
     const byClock = new Date(b.clockInAt || 0) - new Date(a.clockInAt || 0);
     if (byClock) return byClock;
-    return String(a.staff?.name || "").localeCompare(String(b.staff?.name || ""));
+    return String(a.staff?.name || "").localeCompare(
+      String(b.staff?.name || ""),
+    );
   });
 };
 
-const filterRegisterRows = (rows, { presenceStatus, leaveType, punctualityStatus } = {}) =>
+const filterRegisterRows = (
+  rows,
+  { presenceStatus, leaveType, punctualityStatus } = {},
+) =>
   rows.filter((row) => {
     if (presenceStatus && row.presenceStatus !== presenceStatus) return false;
     if (leaveType && row.leaveType !== leaveType) return false;
-    if (punctualityStatus && row.punctualityStatus !== punctualityStatus) return false;
+    if (punctualityStatus && row.punctualityStatus !== punctualityStatus)
+      return false;
     return true;
   });
 
@@ -557,8 +572,11 @@ const punctualityStatusCountFacets = (countMatch) =>
   Object.fromEntries(
     PUNCTUALITY_STATUSES.map((status) => [
       `${status}Count`,
-      [{ $match: { ...countMatch, punctualityStatus: status } }, { $count: "count" }],
-    ])
+      [
+        { $match: { ...countMatch, punctualityStatus: status } },
+        { $count: "count" },
+      ],
+    ]),
   );
 
 const punctualityStatusCountsFromFacet = (result) =>
@@ -566,11 +584,15 @@ const punctualityStatusCountsFromFacet = (result) =>
     PUNCTUALITY_STATUSES.map((status) => [
       status,
       facetCount(result[`${status}Count`]),
-    ])
+    ]),
   );
 
 const parsePunctualityStatus = (status) => {
-  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+  if (
+    status == null ||
+    String(status).trim() === "" ||
+    String(status).trim() === "all"
+  ) {
     return undefined;
   }
   const value = String(status).trim();
@@ -597,8 +619,10 @@ const registerSummary = (rows) => {
       if (row.leaveType === LeaveType.ABSENCE) summary.absenceDays += 1;
       continue;
     }
-    if (row.punctualityStatus === PunctualityStatus.ON_TIME) summary.onTimeCount += 1;
-    if (row.punctualityStatus === PunctualityStatus.LATE) summary.lateCount += 1;
+    if (row.punctualityStatus === PunctualityStatus.ON_TIME)
+      summary.onTimeCount += 1;
+    if (row.punctualityStatus === PunctualityStatus.LATE)
+      summary.lateCount += 1;
     if (row.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
       summary.unscheduledCount += 1;
     }
@@ -671,7 +695,9 @@ const listStaffSummaries = async (staffIds) => {
   return StaffProfile.aggregate([
     {
       $match: {
-        _id: { $in: staffIds.map((id) => new mongoose.Types.ObjectId(String(id))) },
+        _id: {
+          $in: staffIds.map((id) => new mongoose.Types.ObjectId(String(id))),
+        },
         status: StaffProfileStatus.ACTIVE,
       },
     },
@@ -731,7 +757,7 @@ const attachAttendanceDetails = async (days) => {
       day.workedMinutes ??
       computeWorkedMinutes(
         day,
-        branchById.get(String(day.branchId))?.settings || {}
+        branchById.get(String(day.branchId))?.settings || {},
       ),
   }));
 };
@@ -759,7 +785,7 @@ const clockInFromActiveShift = (active, clockInAt) => {
       ? resolvePunctuality(
           clockInAt,
           active.shift.startsAt,
-          active.graceMinutes
+          active.graceMinutes,
         )
       : PunctualityStatus.UNSCHEDULED,
     shiftId: hasRosteredShift ? active.shift._id : null,
@@ -970,13 +996,21 @@ const clockOutForStaff = async ({
   return day.toObject();
 };
 
-const listOnSiteForBranch = async ({ branchId, keyword, page, limit, skip }) => {
+const listOnSiteForBranch = async ({
+  branchId,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
   await closeExpiredOpenSessions({ branchId });
   const term = String(keyword ?? "").trim();
   const keywordMatch = term
     ? {
         $or: [
-          { "staff.employeeCode": { $regex: escapeRegex(term), $options: "i" } },
+          {
+            "staff.employeeCode": { $regex: escapeRegex(term), $options: "i" },
+          },
           { "user.name": { $regex: escapeRegex(term), $options: "i" } },
         ],
       }
@@ -1069,7 +1103,7 @@ const getOpenClockInSessionForStaff = async ({ staffProfile }) => {
     breakTakenMinutes: breakTakenMinutes(day, now),
     totalOnSiteMinutes: Math.max(
       0,
-      Math.round((now - new Date(day.clockInAt)) / 60000)
+      Math.round((now - new Date(day.clockInAt)) / 60000),
     ),
   };
 };
@@ -1276,7 +1310,9 @@ const listAttendanceDays = async ({
       extraDataStages: ATTENDANCE_LIST_LOOKUPS,
       extraFacets: punctualityStatusCountFacets(countMatch),
     }),
-    punctuality ? Promise.resolve([]) : listLeaveRegisterDays({ staffIds, from, to }),
+    punctuality
+      ? Promise.resolve([])
+      : listLeaveRegisterDays({ staffIds, from, to }),
   ]);
 
   const counts = punctualityStatusCountsFromFacet(result);
@@ -1371,7 +1407,8 @@ const staffRotaTotals = (byDate) => {
       if (row.punctualityStatus === PunctualityStatus.ON_TIME) {
         totals.onTimeCount += 1;
       }
-      if (row.punctualityStatus === PunctualityStatus.LATE) totals.lateCount += 1;
+      if (row.punctualityStatus === PunctualityStatus.LATE)
+        totals.lateCount += 1;
       if (row.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
         totals.unscheduledCount += 1;
       }
@@ -1391,7 +1428,7 @@ const rotaCellFromRows = (rows) => {
   const cell = rotaCellFromRow(latest);
   cell.workedMinutes = attendance.reduce(
     (sum, row) => sum + (row.workedMinutes || 0),
-    0
+    0,
   );
   if (attendance.length > 1) {
     cell.sessions = attendance.map(rotaCellFromRow);
@@ -1527,7 +1564,9 @@ const getAttendanceDay = async ({ attendanceDayId, organizationId, actor }) => {
   const day = await AttendanceDay.findById(attendanceDayId).lean();
   if (!day) throw new AppError("attendance_day_not_found", 404);
 
-  const branch = await Branch.findById(day.branchId).select("organizationId").lean();
+  const branch = await Branch.findById(day.branchId)
+    .select("organizationId")
+    .lean();
   if (!branch || String(branch.organizationId) !== String(organizationId)) {
     throw new AppError("attendance_day_not_found", 404);
   }
@@ -1552,7 +1591,9 @@ const updateAttendanceDay = async ({
   const day = await AttendanceDay.findById(attendanceDayId);
   if (!day) throw new AppError("attendance_day_not_found", 404);
 
-  const branch = await Branch.findById(day.branchId).select("organizationId").lean();
+  const branch = await Branch.findById(day.branchId)
+    .select("organizationId")
+    .lean();
   if (!branch || String(branch.organizationId) !== String(organizationId)) {
     throw new AppError("attendance_day_not_found", 404);
   }
@@ -1561,10 +1602,15 @@ const updateAttendanceDay = async ({
   assertMayManageStaff(standing, day.branchId);
 
   if (clockInAt !== undefined) day.clockInAt = new Date(clockInAt);
-  if (clockOutAt !== undefined) day.clockOutAt = clockOutAt ? new Date(clockOutAt) : null;
+  if (clockOutAt !== undefined)
+    day.clockOutAt = clockOutAt ? new Date(clockOutAt) : null;
   if (breaks !== undefined) day.breaks = breaks;
 
-  if (clockInAt !== undefined || clockOutAt !== undefined || breaks !== undefined) {
+  if (
+    clockInAt !== undefined ||
+    clockOutAt !== undefined ||
+    breaks !== undefined
+  ) {
     day.checkInMethod = CheckInMethod.MANUAL;
     const settings = await getBranchSettings(day.branchId);
     day.workedMinutes = computeWorkedMinutes(day, settings);
@@ -1641,7 +1687,9 @@ const approveChangeRequest = async ({
   const day = await AttendanceDay.findById(request.attendanceDayId);
   if (!day) throw new AppError("attendance_day_not_found", 404);
 
-  const branch = await Branch.findById(day.branchId).select("organizationId").lean();
+  const branch = await Branch.findById(day.branchId)
+    .select("organizationId")
+    .lean();
   if (!branch || String(branch.organizationId) !== String(organizationId)) {
     throw new AppError("attendance_change_request_not_found", 404);
   }
@@ -1687,7 +1735,9 @@ const rejectChangeRequest = async ({
   const day = await AttendanceDay.findById(request.attendanceDayId).lean();
   if (!day) throw new AppError("attendance_day_not_found", 404);
 
-  const branch = await Branch.findById(day.branchId).select("organizationId").lean();
+  const branch = await Branch.findById(day.branchId)
+    .select("organizationId")
+    .lean();
   if (!branch || String(branch.organizationId) !== String(organizationId)) {
     throw new AppError("attendance_change_request_not_found", 404);
   }
@@ -1900,7 +1950,11 @@ const attendanceReport = async ({
   if (scopedBranchId) branchMatch._id = scopedBranchId;
   const branches = await Branch.find(branchMatch).select("_id timezone").lean();
   if (!branches.length) {
-    const { tz, fromDay, toDay } = resolveRotaRange(fromDate, toDate, DEFAULT_TZ);
+    const { tz, fromDay, toDay } = resolveRotaRange(
+      fromDate,
+      toDate,
+      DEFAULT_TZ,
+    );
     return {
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
@@ -1963,7 +2017,9 @@ const attendanceReport = async ({
     };
   }
 
-  const staffOids = staffIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const staffOids = staffIds.map(
+    (id) => new mongoose.Types.ObjectId(String(id)),
+  );
   const dayMatch = {
     branchId: { $in: branchOids },
     staffId: { $in: staffOids },
@@ -2013,7 +2069,11 @@ const attendanceReport = async ({
           _id: {
             staffId: "$staffId",
             day: {
-              $dateToString: { format: "%Y-%m-%d", date: "$startsAt", timezone: tz },
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$startsAt",
+                timezone: tz,
+              },
             },
           },
         },
@@ -2159,4 +2219,6 @@ module.exports = {
   approveRosterForDay,
   rejectRosterForDay,
   attendanceReport,
+  listLeaveRegisterDays,
+  summaryFromCounts,
 };

@@ -28,6 +28,7 @@ const {
   scopeBranchFilter,
   MANAGER_ROLES,
 } = require("./evacuationAccess");
+const { notifyFamilies } = require("./evacuationNotify");
 
 const ON_SITE_PRESENCE = [PresenceStatus.ON_SITE, PresenceStatus.ON_BREAK];
 
@@ -663,6 +664,7 @@ const startEvacuation = async ({
   });
 
   await seedRollcallChecks(event);
+  if (evacuationType === EvacuationType.REAL) notifyFamilies({ event });
 
   return loadEventWithBranchAndStats({
     match: { _id: event._id },

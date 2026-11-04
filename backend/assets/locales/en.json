@@ -237,6 +237,7 @@
   "handover_not_pending": "This handover request is no longer open",
   "handover_no_longer_valid": "This handover is no longer valid. Ask again.",
   "next_of_kin_must_hand_over": "Hand over as next of kin before you leave this family",
+  "next_of_kin_must_hand_over_to_delete": "Hand over as next of kin before you delete your account",
   "handover_requested": "Handover request sent",
   "handover_accepted": "You are now the next of kin",
   "handover_declined": "Handover declined",

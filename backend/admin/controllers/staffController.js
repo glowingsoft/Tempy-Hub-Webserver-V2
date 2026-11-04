@@ -145,6 +145,7 @@ const listJobTitles = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await staffService.listJobTitles({
+      actor: req.user,
       organizationId: req.orgId,
       page,
       limit,

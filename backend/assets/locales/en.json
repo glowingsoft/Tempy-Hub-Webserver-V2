@@ -287,6 +287,7 @@
   "job_title_updated_successfully": "Job title updated successfully",
   "job_title_not_found": "Job title not found",
   "job_title_name_taken": "A job title with this name already exists in this scope",
+  "job_title_outside_managed_branch": "You can only manage job titles in your own branch",
   "job_title_not_in_branch": "This job title does not belong to the selected branch",
   "invalid_job_title_level": "Invalid job title level",
   "staff_profile_created_successfully": "Staff profile created successfully",

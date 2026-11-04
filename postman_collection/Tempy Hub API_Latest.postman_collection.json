@@ -13816,7 +13816,8 @@
                     "{{organizationId}}",
                     "job-titles"
                   ]
-                }
+                },
+                "description": "A site manager is always saved in their own branch, so do not send branchId. Sending their own is accepted; another branch, null or an empty value returns 403 job_title_outside_managed_branch and nothing is created. Owner and super admin may send branchId; without one the title is organization-wide."
               },
               "response": []
             },
@@ -13858,7 +13859,8 @@
                     "{{organizationId}}",
                     "job-titles"
                   ]
-                }
+                },
+                "description": "A site manager is always saved in their own branch, so do not send branchId. Sending their own is accepted; another branch, null or an empty value returns 403 job_title_outside_managed_branch and nothing is created. Owner and super admin may send branchId; without one the title is organization-wide."
               },
               "response": []
             },
@@ -13904,7 +13906,39 @@
                       "value": "10"
                     }
                   ]
-                }
+                },
+                "description": "Site manager and line manager: only the titles of their own branch plus the organization-wide ones; a branchId in the query is ignored (before, every branch came back). Owner and super admin see every title and can filter by branchId. Other filters: keyword, departmentId, level, active or status."
+              },
+              "response": []
+            },
+            {
+              "name": "update job title",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Head Chef\",\n  \"level\": \"siteManagement\",\n  \"active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/job-titles/{{jobTitleId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "job-titles",
+                    "{{jobTitleId}}"
+                  ]
+                },
+                "description": "Send only the fields that change: name, level, active, departmentId, branchId. A site manager can edit only titles of their own branch, and cannot send another branch or null as branchId (403 job_title_outside_managed_branch, nothing saved). Owner and super admin can move a title or send branchId null to make it organization-wide."
               },
               "response": []
             },

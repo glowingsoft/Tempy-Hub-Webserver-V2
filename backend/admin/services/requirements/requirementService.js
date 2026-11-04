@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { notifyStaff, dayOf } = require("../staff/staffNotify");
 const { Requirement } = require("@models/Requirement");
 const { RequirementAssignment } = require("@models/RequirementAssignment");
 const { RequirementRecord } = require("@models/RequirementRecord");
@@ -571,6 +572,22 @@ const createAssignments = async ({
     requirementId: requirement._id,
     staffId: { $in: ids },
   }).lean();
+
+  await Promise.all(
+    assignments
+      .filter((row) => new Date(row.assignedAt).getTime() === assignedAt.getTime())
+      .map((row) =>
+      notifyStaff({
+        staffId: row.staffId,
+        subjectId: actor._id,
+        type: "requirementAssigned",
+        objectId: row._id,
+        objectType: "requirementAssignment",
+        title: `New ${requirement.type} assigned`,
+        body: `${requirement.name} is due by ${dayOf(row.dueDate)}.`,
+      })
+    )
+  );
 
   return {
     requirementId: requirement._id,

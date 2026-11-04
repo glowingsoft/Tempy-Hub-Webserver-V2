@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
+const { notifyStaff, dayOf } = require("../staff/staffNotify");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { LeaveEntitlement } = require("@models/LeaveEntitlement");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -901,6 +902,16 @@ const approveLeaveRequest = async ({
     session.endSession();
   }
 
+  await notifyStaff({
+    staffId: request.staffId,
+    subjectId: actor._id,
+    type: "leaveRequestUpdate",
+    objectId: request._id,
+    objectType: "leaveRequest",
+    title: "Leave request approved",
+    body: `Your ${request.leaveType} leave from ${dayOf(request.startDate)} to ${dayOf(request.endDate)} was approved.`,
+  });
+
   const [enriched] = await attachLeaveRequestDetails([request.toObject()]);
   return enriched;
 };
@@ -936,6 +947,16 @@ const rejectLeaveRequest = async ({
   request.decidedAt = new Date();
   request.decisionNote = decisionNote || "";
   await request.save();
+
+  await notifyStaff({
+    staffId: request.staffId,
+    subjectId: actor._id,
+    type: "leaveRequestUpdate",
+    objectId: request._id,
+    objectType: "leaveRequest",
+    title: "Leave request rejected",
+    body: `Your ${request.leaveType} leave from ${dayOf(request.startDate)} to ${dayOf(request.endDate)} was not approved.`,
+  });
 
   const [enriched] = await attachLeaveRequestDetails([request.toObject()]);
   return enriched;

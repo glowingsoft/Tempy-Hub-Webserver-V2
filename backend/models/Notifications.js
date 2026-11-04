@@ -24,6 +24,10 @@ const NotificationTypes = {
   BOOKING_PICKED: "bookingPicked",
   BOOKING_COMPLETED: "bookingCompleted",
   BOOKING_CANCELED: "bookingCanceled",
+  LEAVE_REQUEST_UPDATE: "leaveRequestUpdate",
+  SHIFT_CLAIM_UPDATE: "shiftClaimUpdate",
+  REQUIREMENT_ASSIGNED: "requirementAssigned",
+  MEETING_BOOKED: "meetingBooked",
 };
 
 // Define the NotificationSchema

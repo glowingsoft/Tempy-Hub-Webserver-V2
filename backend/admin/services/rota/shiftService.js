@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
+const { notifyStaff, whenOf } = require("../staff/staffNotify");
 const { Shift } = require("@models/Shift");
 const { ShiftClaim } = require("@models/ShiftClaim");
 const { AttendanceDay } = require("@models/AttendanceDay");
@@ -788,6 +789,17 @@ const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) =>
     session.endSession();
   }
 
+
+  await notifyStaff({
+    staffId: claim.staffId,
+    subjectId: actor._id,
+    type: "shiftClaimUpdate",
+    objectId: claim._id,
+    objectType: "shiftClaim",
+    title: "Shift claim approved",
+    body: `Your claim for the shift on ${whenOf(shift.startsAt)} was approved.`,
+  });
+
   const [shiftDetails] = await attachShiftDetails([shift.toObject()]);
   return { claim: claim.toObject(), shift: shiftDetails };
 };
@@ -801,7 +813,7 @@ const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => 
 
   if (!claim) throw new AppError("shift_claim_not_found", 404);
 
-  const shift = await Shift.findById(claim.shiftId).select("branchId").lean();
+  const shift = await Shift.findById(claim.shiftId).select("branchId startsAt").lean();
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, shift?.branchId);
 
@@ -810,6 +822,18 @@ const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => 
   claim.decidedAt = new Date();
   claim.decisionNote = decisionNote || "";
   await claim.save();
+
+  await notifyStaff({
+    staffId: claim.staffId,
+    subjectId: actor._id,
+    type: "shiftClaimUpdate",
+    objectId: claim._id,
+    objectType: "shiftClaim",
+    title: "Shift claim rejected",
+    body: shift?.startsAt
+      ? `Your claim for the shift on ${whenOf(shift.startsAt)} was not approved.`
+      : "Your shift claim was not approved.",
+  });
 
   return claim.toObject();
 };

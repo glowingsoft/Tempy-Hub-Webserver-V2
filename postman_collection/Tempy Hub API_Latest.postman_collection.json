@@ -27258,6 +27258,57 @@
           ]
         },
         {
+          "name": "Staff Dashboard",
+          "description": "The staff home screen.",
+          "item": [
+            {
+              "name": "staff dashboard",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Dashboard fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"summary\", \"quickActions\", \"weeklyHours\", \"nextShifts\", \"communication\", \"compliance\", \"training\", \"supervisionAppraisal\", \"openShifts\");",
+                      "    pm.expect(data.weeklyHours.days).to.have.lengthOf(7);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/staff-dashboard",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "staff-dashboard"
+                  ],
+                  "query": [
+                    {
+                      "key": "weekStart",
+                      "value": "2026-11-02",
+                      "description": "Any day of the week shown in Next Assigned shifts (the current week by default)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The staff dashboard in one call. Staff only; the figures are the signed-in staff member's own, at their own site. Everyone else gets 403 (404 staff_profile_not_found without an active staff profile). Query: weekStart (optional YYYY-MM-DD; any day picks that Monday to Sunday week for Next Assigned shifts, the current week by default; 400 invalid_week_start). The weekly hours chart is always the current week (Monday to Sunday, London time). summary (the cards): onSiteTodayMinutes (minutes worked today, counting an open session up to now; null when not clocked in today), hoursThisWeek, hourlyRate and earnedThisWeek (null because no pay rate is stored), pendingLeave (own pending leave requests) and complianceDue (competency and training requirements overdue, due soon or not yet done, plus supervision and appraisal overdue or due soon). quickActions (the Quick Actions cards): shiftClaims (the badge, open shifts the staff member can claim), documents (documents still waiting for their signature, from their site and the whole organization) and myAttendance (the member's own attendance change requests still pending review). weeklyHours (My weekly hours): workedHours, targetHours (hours of scheduled shifts) and days {day, date, workedHours, targetHours} Monday to Sunday. nextShifts (Next Assigned shifts): from, to, scheduledHours and days {day, date, shifts [{startsAt, endsAt}]}; the shift location is not stored so it is not returned. communication (Communication): the five latest notifications {title, body, isRead, timeSince}; View all uses /notifications. A notification is created for the staff member when their leave request is approved or rejected, a shift claim is approved or rejected, a training or competency requirement is assigned, or a supervision or appraisal is booked. compliance (table): compliantPercent and items, and training (table): trainingPercent and items, one row per requirement of the member, most urgent first, {assignmentId, name, status (overdue, dueSoon, pending or valid), dueAt, completedAt}, from the requirement schema. supervisionAppraisal (table): supervisionAppraisalPercent (meetings done against meetings expected so far) and two rows, Supervision and Appraisal, {name, status (the standing badge: overdue, dueSoon, booked, onTrack or notYetDue), completed, expected, dueAt (null when overdue)}. openShifts (Open shifts to claim): up to five upcoming open shifts visible to the staff member {siteName, startsAt, endsAt, urgentCover, openedAt}."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Line Manager Dashboard",
           "description": "The line manager home screen.",
           "item": [

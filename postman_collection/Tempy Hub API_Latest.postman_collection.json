@@ -25647,7 +25647,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-responses?page=1&limit=10&branchId={{branchId}}",
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/visitor-survey-responses?page=1&limit=10&branchId={{branchId}}&search=",
                   "host": [
                     "{{url}}"
                   ],
@@ -25669,6 +25669,10 @@
                     {
                       "key": "branchId",
                       "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
                     }
                   ]
                 }
@@ -25702,7 +25706,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"visitorName\": \"Jane Visitor\",\n  \"stayDuration\": \"45 minutes\",\n  \"answers\": [\n    {\n      \"questionId\": \"{{visitorSurveyQuestionId}}\",\n      \"value\": \"Yes\"\n    }\n  ]\n}",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"hostStaffId\": \"{{staffId}}\",\n  \"visitorName\": \"Jane Visitor\",\n  \"stayDuration\": \"45 minutes\",\n  \"answers\": [\n    {\n      \"questionId\": \"{{visitorSurveyQuestionId}}\",\n      \"value\": \"Yes\"\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"

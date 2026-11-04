@@ -39,6 +39,11 @@ const visitorSurveyResponseSchema = new mongoose.Schema(
       ref: "ExternalPerson",
       default: null,
     },
+    hostStaffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "StaffProfile",
+      default: null,
+    },
     visitorName: { type: String, required: true, trim: true },
     stayDuration: { type: String, default: "", trim: true },
     answers: { type: [answerSchema], default: [] },

@@ -93,11 +93,12 @@ upsertFolder(adminPanel, "Visitor Survey", [
     },
   }),
   req("GET visitor survey responses", "GET", [...base, "visitor-survey-responses"], {
-    query: "page=1&limit=10&branchId={{branchId}}",
+    query: "page=1&limit=10&branchId={{branchId}}&search=",
   }),
   req("POST visitor survey response", "POST", [...base, "visitor-survey-responses"], {
     body: {
       branchId: "{{branchId}}",
+      hostStaffId: "{{staffId}}",
       visitorName: "Jane Visitor",
       stayDuration: "45 minutes",
       answers: [{ questionId: "{{visitorSurveyQuestionId}}", value: "Yes" }],

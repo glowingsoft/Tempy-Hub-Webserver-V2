@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 const { Organization } = require("@models/Organization");
 const { Membership } = require("@models/Membership");
 const { User } = require("@models/UserModel");
+const { Branch } = require("@models/Branch");
+const { StaffProfile } = require("@models/StaffProfile");
+const { VisitSession } = require("@models/VisitSession");
 const { VisitorSurveyQuestion } = require("@models/VisitorSurveyQuestion");
 const { VisitorSurveyResponse } = require("@models/VisitorSurveyResponse");
 const { NotificationExp, NotificationTypes } = require("@models/Notifications");
@@ -428,12 +431,39 @@ const notifyManagers = async ({
   return new Date();
 };
 
+const resolveHostStaffId = async ({
+  organizationId,
+  branchId,
+  visitSessionId,
+  hostStaffId,
+}) => {
+  if (hostStaffId) {
+    const staff = await StaffProfile.findOne({
+      _id: toOid(hostStaffId, "invalid_staff_profile_id"),
+      organizationId,
+    })
+      .select("_id")
+      .lean();
+    if (!staff) throw new AppError("invalid_staff_profile_id", 400);
+    return staff._id;
+  }
+  if (!visitSessionId) return null;
+  const visit = await VisitSession.findOne({
+    _id: toOid(visitSessionId, "invalid_visit_session_id"),
+    branchId,
+  })
+    .select("hostStaffId")
+    .lean();
+  return visit?.hostStaffId || null;
+};
+
 const createVisitorSurveyResponse = async ({
   actor,
   organizationId,
   branchId,
   visitSessionId,
   externalPersonId,
+  hostStaffId,
   visitorName,
   stayDuration,
   answers,
@@ -488,6 +518,12 @@ const createVisitorSurveyResponse = async ({
 
   const organization = await loadOrganization(organizationId);
   const settings = presentSettings(organization.settings?.visitorSurvey);
+  const hostId = await resolveHostStaffId({
+    organizationId: orgId,
+    branchId: toOid(branchId, "invalid_branch_id"),
+    visitSessionId,
+    hostStaffId,
+  });
 
   const row = await VisitorSurveyResponse.create({
     organizationId: orgId,
@@ -498,6 +534,7 @@ const createVisitorSurveyResponse = async ({
     externalPersonId: externalPersonId
       ? toOid(externalPersonId, "invalid_external_person_id")
       : null,
+    hostStaffId: hostId,
     visitorName: name,
     stayDuration: stayDuration ? String(stayDuration).trim() : "",
     answers: storedAnswers,
@@ -531,10 +568,95 @@ const createVisitorSurveyResponse = async ({
   return row.toObject();
 };
 
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const firstFilled = (candidates) => ({
+  $ifNull: [
+    {
+      $arrayElemAt: [
+        {
+          $filter: {
+            input: candidates,
+            as: "candidate",
+            cond: {
+              $and: [
+                { $ne: ["$$candidate", null] },
+                { $ne: ["$$candidate", ""] },
+              ],
+            },
+          },
+        },
+        0,
+      ],
+    },
+    "",
+  ],
+});
+
+const feedbackRowStages = () => [
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      as: "branch",
+    },
+  },
+  {
+    $lookup: {
+      from: VisitSession.collection.name,
+      localField: "visitSessionId",
+      foreignField: "_id",
+      as: "visit",
+    },
+  },
+  {
+    $addFields: {
+      hostId: {
+        $ifNull: [
+          "$hostStaffId",
+          { $arrayElemAt: ["$visit.hostStaffId", 0] },
+          null,
+        ],
+      },
+    },
+  },
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      localField: "hostId",
+      foreignField: "_id",
+      as: "host",
+    },
+  },
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "host.userId",
+      foreignField: "_id",
+      as: "hostUser",
+    },
+  },
+  {
+    $addFields: {
+      branchName: { $ifNull: [{ $arrayElemAt: ["$branch.name", 0] }, ""] },
+      hostName: firstFilled([
+        { $arrayElemAt: ["$hostUser.name", 0] },
+        { $arrayElemAt: ["$visit.hostName", 0] },
+        "$whoVisited",
+      ]),
+      submittedAt: "$createdAt",
+    },
+  },
+  { $project: { branch: 0, visit: 0, host: 0, hostUser: 0 } },
+];
+
 const listVisitorSurveyResponses = async ({
   actor,
   organizationId,
   branchId,
+  search,
   page,
   limit,
   skip,
@@ -548,6 +670,8 @@ const listVisitorSurveyResponses = async ({
     await assertBranchInOrganization(branchId, organizationId);
     match.branchId = toOid(branchId, "invalid_branch_id");
   }
+  const term = String(search || "").trim();
+  if (term) match.visitorName = { $regex: escapeRegex(term), $options: "i" };
   return paginateWithFacet({
     model: VisitorSurveyResponse,
     match,
@@ -555,6 +679,7 @@ const listVisitorSurveyResponses = async ({
     limit,
     skip,
     sort: { createdAt: -1 },
+    extraDataStages: feedbackRowStages(),
   });
 };
 

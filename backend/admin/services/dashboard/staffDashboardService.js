@@ -364,15 +364,15 @@ const getStaffDashboard = async ({
       }),
     ),
     compliance: {
-      compliantPercent: competency.compliantPercent,
+      percentage: competency.compliantPercent,
       items: competency.items,
     },
     training: {
-      trainingPercent: training.compliantPercent,
+      percentage: training.compliantPercent,
       items: training.items,
     },
     supervisionAppraisal: {
-      supervisionAppraisalPercent: meetings.compliantPercent,
+      percentage: meetings.compliantPercent,
       items: meetings.items,
     },
     openShifts: openShifts.slice(0, OPEN_SHIFTS_SHOWN).map((shift) => ({

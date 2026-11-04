@@ -436,6 +436,11 @@ scoped.post(
   shiftController.createShift,
 );
 scoped.get(
+  "/rota/board",
+  requireModule(ModuleSlug.ROTA_SCHEDULING),
+  shiftController.getRotaBoard
+);
+scoped.get(
   "/shifts",
   requireModule(ModuleSlug.ROTA_SCHEDULING),
   shiftController.listShifts,
@@ -472,6 +477,12 @@ scoped.get(
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_VIEW),
   attendanceController.staffHoursSummary
+);
+scoped.get(
+  "/reports/late-check-ins",
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  requirePermission(ATTENDANCE_VIEW),
+  attendanceController.lateCheckInsReport
 );
 scoped.get(
   "/attendance/rota",

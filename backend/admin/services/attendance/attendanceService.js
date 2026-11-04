@@ -2409,6 +2409,188 @@ const staffHoursSummary = async ({
   };
 };
 
+const PRESENCE_STATUSES = Object.values(PresenceStatus);
+
+const emptyPresenceStatusCounts = () =>
+  Object.fromEntries(PRESENCE_STATUSES.map((status) => [status, 0]));
+
+const parsePresenceStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!PRESENCE_STATUSES.includes(value)) {
+    throw new AppError("invalid_presence_status", 400);
+  }
+  return value;
+};
+
+const presenceStatusCountsFromFacet = (result) => {
+  const counts = emptyPresenceStatusCounts();
+  for (const row of result.presenceCounts || []) {
+    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
+      counts[row._id] = row.count;
+    }
+  }
+  return counts;
+};
+
+const shapeLateCheckInRow = (row) => {
+  const staff = row.staff || null;
+  return {
+    ...row,
+    kind: "attendance",
+    type: "staff",
+    staff: staff
+      ? { ...staff, photoUrl: toPublicImageUrl(staff.photoUrl) }
+      : null,
+  };
+};
+
+const lateCheckInsReport = async ({
+  actor,
+  organizationId,
+  branchId,
+  departmentId,
+  from,
+  to,
+  keyword,
+  presenceStatus,
+  page,
+  limit,
+  skip,
+}) => {
+  const fromDate = from && String(from).trim() ? from : undefined;
+  const toDate = to && String(to).trim() ? to : undefined;
+  const presence = parsePresenceStatus(presenceStatus);
+
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const branchMatch = { organizationId };
+  if (scopedBranchId) branchMatch._id = scopedBranchId;
+  const branches = await Branch.find(branchMatch).select("_id timezone").lean();
+
+  const empty = (fromLabel, toLabel, timezone) => ({
+    from: fromLabel,
+    to: toLabel,
+    timezone,
+    branchId: scopedBranchId || null,
+    kpis: { onSite: 0, staff: 0, late: 0 },
+    rows: [],
+    meta: {
+      ...generateMeta(page, limit, 0),
+      counts: emptyPresenceStatusCounts(),
+    },
+  });
+
+  if (!branches.length) {
+    const { tz, fromDay, toDay } = resolveReportRange(
+      fromDate,
+      toDate,
+      DEFAULT_TZ
+    );
+    return empty(
+      fromDay.format("YYYY-MM-DD"),
+      toDay.format("YYYY-MM-DD"),
+      tz
+    );
+  }
+
+  const tz =
+    (scopedBranchId
+      ? branches[0].timezone
+      : branches.length === 1
+        ? branches[0].timezone
+        : DEFAULT_TZ) || DEFAULT_TZ;
+  const { fromDay, toDay } = resolveReportRange(fromDate, toDate, tz);
+  const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
+  const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
+  const branchOids = branches.map((row) => row._id);
+
+  let staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    branchId,
+  });
+  if (departmentId) {
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      throw new AppError("invalid_department_id", 400);
+    }
+    staffIds = await StaffProfile.find({
+      _id: { $in: staffIds },
+      departmentIds: new mongoose.Types.ObjectId(String(departmentId)),
+    }).distinct("_id");
+  }
+  staffIds = await staffIdsMatchingKeyword(staffIds, keyword);
+  if (!staffIds.length) {
+    return empty(
+      fromDay.format("YYYY-MM-DD"),
+      toDay.format("YYYY-MM-DD"),
+      tz
+    );
+  }
+
+  const staffOids = staffIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const rangeMatch = {
+    branchId: { $in: branchOids },
+    staffId: { $in: staffOids },
+    workDate: { $gte: fromUtc, $lte: toUtc },
+  };
+  const lateMatch = {
+    ...rangeMatch,
+    punctualityStatus: PunctualityStatus.LATE,
+  };
+  const listMatch = presence
+    ? { ...lateMatch, presenceStatus: presence }
+    : lateMatch;
+
+  const liveOnSiteMatch = {
+    branchId: { $in: branchOids },
+    staffId: { $in: staffOids },
+    presenceStatus: { $in: ON_SITE_PRESENCE },
+    clockOutAt: null,
+  };
+
+  const [{ data, meta, result }, staffCount, onSiteCount] = await Promise.all([
+    paginateWithFacet({
+      model: AttendanceDay,
+      match: listMatch,
+      page,
+      limit,
+      skip,
+      sort: { clockInAt: -1 },
+      extraDataStages: ATTENDANCE_LIST_LOOKUPS,
+      extraFacets: {
+        presenceCounts: [
+          { $match: lateMatch },
+          { $group: { _id: "$presenceStatus", count: { $sum: 1 } } },
+        ],
+        lateCount: [{ $match: lateMatch }, { $count: "count" }],
+      },
+    }),
+    AttendanceDay.countDocuments(rangeMatch),
+    AttendanceDay.countDocuments(liveOnSiteMatch),
+  ]);
+
+  return {
+    from: fromDay.format("YYYY-MM-DD"),
+    to: toDay.format("YYYY-MM-DD"),
+    timezone: tz,
+    branchId: scopedBranchId || null,
+    kpis: {
+      onSite: onSiteCount,
+      staff: staffCount,
+      late: facetCount(result?.lateCount),
+    },
+    rows: withComputedWorkedMinutes(data).map(shapeLateCheckInRow),
+    meta: {
+      ...meta,
+      counts: presenceStatusCountsFromFacet(result || {}),
+    },
+  };
+};
+
 module.exports = {
   getTodayAttendance,
   getTodayAttendanceForStaff,
@@ -2436,4 +2618,5 @@ module.exports = {
   rejectRosterForDay,
   attendanceReport,
   staffHoursSummary,
+  lateCheckInsReport,
 };

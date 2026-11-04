@@ -62,6 +62,8 @@ const NUMBER_SETTING_FIELDS = new Set([
   "lateGraceMinutes",
   "autoClockOutHoursAfterShiftEnd",
   "autoClockOutHoursAfterClockIn",
+  "visitorAutoCheckoutHoursAfterVisitUntil",
+  "visitorAutoCheckoutHoursAfterCheckIn",
 ]);
 
 const SETTING_FIELDS = [
@@ -72,6 +74,8 @@ const SETTING_FIELDS = [
   "enableLeaveRequests",
   "autoClockOutHoursAfterShiftEnd",
   "autoClockOutHoursAfterClockIn",
+  "visitorAutoCheckoutHoursAfterVisitUntil",
+  "visitorAutoCheckoutHoursAfterCheckIn",
 ];
 
 const normalizeHoursSetting = (value, fallback) => {
@@ -126,6 +130,14 @@ const buildSettings = (settings) => ({
   ),
   autoClockOutHoursAfterClockIn: normalizeHoursSetting(
     settings?.autoClockOutHoursAfterClockIn,
+    10
+  ),
+  visitorAutoCheckoutHoursAfterVisitUntil: normalizeHoursSetting(
+    settings?.visitorAutoCheckoutHoursAfterVisitUntil,
+    1
+  ),
+  visitorAutoCheckoutHoursAfterCheckIn: normalizeHoursSetting(
+    settings?.visitorAutoCheckoutHoursAfterCheckIn,
     10
   ),
   ...(settings?.breakBands !== undefined
@@ -440,7 +452,10 @@ const getBranch = async ({ branchId, organizationId }) => {
     organizationId,
   }).lean();
   if (!branch) throw new AppError("branch_not_found", 404);
-  return branch;
+  return {
+    ...branch,
+    settings: buildSettings(branch.settings),
+  };
 };
 
 const updateBranch = async ({

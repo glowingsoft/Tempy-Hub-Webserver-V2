@@ -53,6 +53,7 @@ const shiftSchema = new mongoose.Schema(
 );
 
 shiftSchema.index({ branchId: 1, startsAt: 1 });
+shiftSchema.index({ branchId: 1, staffId: 1, startsAt: 1 });
 shiftSchema.index({ organizationId: 1, status: 1, visibility: 1, startsAt: 1 });
 
 const Shift = mongoose.models.Shift || mongoose.model("Shift", shiftSchema);

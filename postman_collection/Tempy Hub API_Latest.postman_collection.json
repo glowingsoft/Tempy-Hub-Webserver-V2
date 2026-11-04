@@ -14351,6 +14351,52 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "get rota board",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/rota/board?branchId={{branchId}}&period=week&scope=all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "rota",
+                    "board"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "period",
+                      "value": "week"
+                    },
+                    {
+                      "key": "scope",
+                      "value": "all"
+                    }
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -14449,6 +14495,44 @@
                     "organizations",
                     "{{organizationId}}",
                     "attendance-change-requests"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get attendance rota",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/attendance/rota?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "attendance",
+                    "rota"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
                   ]
                 }
               },
@@ -27572,6 +27656,195 @@
                     {
                       "key": "status",
                       "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reports",
+          "item": [
+            {
+              "name": "attendance report",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/attendance?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "attendance"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "visitor check-ins report",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/visitor-check-ins?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "visitor-check-ins"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "staff hours summary",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/staff-hours-summary?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "staff-hours-summary"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "late check-ins report",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/late-check-ins?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "late-check-ins"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
                     },
                     {
                       "key": "page",

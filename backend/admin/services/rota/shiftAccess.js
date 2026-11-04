@@ -1,11 +1,14 @@
 const { permissionKey, PermissionVerb } = require("@adminServices/organizations/permissionCatalogue");
 const { ModuleSlug } = require("@models/domainEnums");
 const {
+  MANAGER_ROLES,
+  TEAM_APPROVER_ROLES,
   actorStanding,
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
   applyLineManagerStaffScope,
+  resolveSubordinateStaffIds,
 } = require("@adminServices/staff/staffAccess");
 
 const ROTA_VIEW = permissionKey(ModuleSlug.ROTA_SCHEDULING, PermissionVerb.VIEW);
@@ -16,9 +19,12 @@ module.exports = {
   ROTA_VIEW,
   ROTA_MANAGE,
   ROTA_APPROVE,
+  MANAGER_ROLES,
+  TEAM_APPROVER_ROLES,
   actorStanding,
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
   applyLineManagerStaffScope,
+  resolveSubordinateStaffIds,
 };

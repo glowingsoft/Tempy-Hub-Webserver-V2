@@ -44,6 +44,30 @@ const normalizeSurface = (value) => {
   return match;
 };
 
+/** Portal for this account when the client does not send `surface`. */
+const surfaceFromAccess = ({ audience, access }) => {
+  if (audience === AuthAudience.FAMILY) return AppSurface.FAMILY_APP;
+  if (audience === AuthAudience.RESIDENT) return AppSurface.RESIDENT_APP;
+  if (audience === AuthAudience.VISITOR) return AppSurface.VISITOR_APP;
+  if (audience !== AuthAudience.STAFF) return undefined;
+
+  if (access?.isPlatformAdmin) return AppSurface.PLATFORM_ADMIN;
+
+  const role = access?.highestRole;
+  if (role === MembershipRole.OWNER || role === MembershipRole.SUPER_ADMIN) {
+    return AppSurface.OWNER_ADMIN;
+  }
+  if (
+    role === MembershipRole.SITE_MANAGER ||
+    role === MembershipRole.LINE_MANAGER
+  ) {
+    return AppSurface.MANAGER_APP;
+  }
+  if (role === MembershipRole.STAFF) return AppSurface.STAFF_APP;
+
+  throw new AppError("no_membership_for_scope", 403);
+};
+
 const assertSurfaceAccess = ({ surface, audience, access }) => {
   if (!surface) return;
 
@@ -76,5 +100,6 @@ module.exports = {
   SURFACE_RULES,
   ALL_SURFACES,
   normalizeSurface,
+  surfaceFromAccess,
   assertSurfaceAccess,
 };

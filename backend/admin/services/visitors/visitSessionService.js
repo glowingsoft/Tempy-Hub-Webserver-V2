@@ -29,6 +29,109 @@ const {
 
 const VISIT_SESSION_STATUSES = Object.values(VisitSessionStatus);
 
+const VISITOR_AUTO_CHECKOUT_AFTER_VISIT_UNTIL_HOURS = 1;
+const VISITOR_AUTO_CHECKOUT_AFTER_CHECK_IN_HOURS = 10;
+const VISITOR_AUTO_CHECKOUT_BATCH = 200;
+
+const closeExpiredVisitSessions = async ({ branchId } = {}) => {
+  const match = {
+    status: VisitSessionStatus.ON_SITE,
+    checkOutAt: null,
+  };
+  if (branchId) match.branchId = toObjectId(branchId) || branchId;
+
+  const now = new Date();
+  const sessions = await VisitSession.aggregate([
+    { $match: match },
+    {
+      $lookup: {
+        from: "branches",
+        localField: "branchId",
+        foreignField: "_id",
+        as: "_branch",
+      },
+    },
+    { $unwind: { path: "$_branch", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "invitations",
+        localField: "invitationId",
+        foreignField: "_id",
+        as: "_invitation",
+      },
+    },
+    {
+      $unwind: { path: "$_invitation", preserveNullAndEmptyArrays: true },
+    },
+    {
+      $addFields: {
+        dueAt: {
+          $cond: [
+            { $ifNull: ["$_invitation.visitingUntil", false] },
+            {
+              $add: [
+                "$_invitation.visitingUntil",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$_branch.settings.visitorAutoCheckoutHoursAfterVisitUntil",
+                        VISITOR_AUTO_CHECKOUT_AFTER_VISIT_UNTIL_HOURS,
+                      ],
+                    },
+                    3600000,
+                  ],
+                },
+              ],
+            },
+            {
+              $add: [
+                "$checkInAt",
+                {
+                  $multiply: [
+                    {
+                      $ifNull: [
+                        "$_branch.settings.visitorAutoCheckoutHoursAfterCheckIn",
+                        VISITOR_AUTO_CHECKOUT_AFTER_CHECK_IN_HOURS,
+                      ],
+                    },
+                    3600000,
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    { $match: { dueAt: { $lte: now } } },
+    { $sort: { checkInAt: 1 } },
+    { $limit: VISITOR_AUTO_CHECKOUT_BATCH },
+    { $project: { _id: 1, dueAt: 1 } },
+  ]);
+  if (!sessions.length) return { scanned: 0, closed: 0 };
+
+  const result = await VisitSession.bulkWrite(
+    sessions.map((session) => ({
+      updateOne: {
+        filter: {
+          _id: session._id,
+          status: VisitSessionStatus.ON_SITE,
+          checkOutAt: null,
+        },
+        update: {
+          $set: {
+            status: VisitSessionStatus.CHECKED_OUT,
+            checkOutAt: session.dueAt,
+            autoClosed: true,
+          },
+        },
+      },
+    }))
+  );
+  return { scanned: sessions.length, closed: result.modifiedCount || 0 };
+};
+
 const emptyVisitSessionStatusCounts = () =>
   Object.fromEntries(VISIT_SESSION_STATUSES.map((status) => [status, 0]));
 
@@ -771,4 +874,5 @@ module.exports = {
   getOnSiteCounts,
   getVisitAnalytics,
   visitorCheckInsReport,
+  closeExpiredVisitSessions,
 };

@@ -16,6 +16,11 @@ const { EvacuationEvent } = require("@models/EvacuationEvent");
 const { Requirement } = require("@models/Requirement");
 const { RequirementAssignment } = require("@models/RequirementAssignment");
 const { RequirementRecord } = require("@models/RequirementRecord");
+const {
+  requirementRows,
+  trainingRows,
+  meetingRows,
+} = require("./complianceRows");
 const { cellFromDates } = require("@adminServices/requirements/requirementDates");
 const { DEFAULT_TZ, supervisionStanding } = require("@adminServices/supervision/supervisionSchedule");
 const { effectiveIntervals } = require("@adminServices/appraisal/cycle");
@@ -407,6 +412,8 @@ const complianceSnapshot = async ({ organization, branchZones, now, branchId = n
   const cells = assignments
     .filter((row) => active.has(String(row.staffId)))
     .map((row) => ({
+      assignmentId: row._id,
+      staffId: row.staffId,
       name: row.requirement.name,
       type: row.requirement.type,
       cell: cellFromDates({ assignment: row, latest: latestRecord(row.records), requirement: row.requirement, orgAmberDays: amberDays, today: now }),
@@ -591,9 +598,18 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
     evacuationRisk: risk,
     activeModules: modules,
     fireDrills: drills,
-    compliance: standing.competency,
-    staffTraining: standing.training,
-    supervisionAppraisal: standing.supervisionAppraisal,
+    compliance: {
+      percentage: standing.competency.compliantPercent,
+      items: requirementRows(standing.detail.cells, "competency"),
+    },
+    staffTraining: {
+      percentage: standing.training.compliantPercent,
+      items: await trainingRows(standing.detail),
+    },
+    supervisionAppraisal: {
+      percentage: standing.supervisionAppraisal.compliantPercent,
+      items: await meetingRows(standing.detail),
+    },
     openShifts: shifts,
   };
 };

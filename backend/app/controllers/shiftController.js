@@ -1,14 +1,19 @@
-const { sendResponse } = require("@utils/responseUtil");
+const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const shiftService = require("@adminServices/rota/shiftService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const listMyShifts = async (req, res) => {
   try {
-    const data = await shiftService.listMyShifts({
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await shiftService.listMyShifts({
       userId: req.user._id,
       organizationId: req.orgId,
       from: req.query.from,
       to: req.query.to,
+      status: req.query.status,
+      page,
+      limit,
+      skip,
     });
 
     return sendResponse({
@@ -16,6 +21,7 @@ const listMyShifts = async (req, res) => {
       statusCode: 200,
       translationKey: "data_fetched_successfully",
       data,
+      meta,
     });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");

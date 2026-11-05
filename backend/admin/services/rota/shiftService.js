@@ -56,6 +56,101 @@ const parseShiftStatus = (status) => {
   return value;
 };
 
+const MY_SHIFT_STATUSES = [
+  ShiftStatus.SCHEDULED,
+  ShiftStatus.CANCELLED,
+  ShiftStatus.COMPLETED,
+];
+
+const emptyMyShiftStatusCounts = () =>
+  Object.fromEntries(MY_SHIFT_STATUSES.map((status) => [status, 0]));
+
+const myShiftStatusCountFacets = (countMatch) =>
+  Object.fromEntries(
+    MY_SHIFT_STATUSES.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, status } }, { $count: "count" }],
+    ])
+  );
+
+const myShiftStatusCountsFromFacet = (result) =>
+  Object.fromEntries(
+    MY_SHIFT_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
+  );
+
+const parseMyShiftStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!MY_SHIFT_STATUSES.includes(value)) {
+    throw new AppError("invalid_shift_status", 400);
+  }
+  return value;
+};
+
+const MY_SHIFT_LOOKUPS = [
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, code: 1, status: 1 } }, { $limit: 1 }],
+      as: "_branch",
+    },
+  },
+  {
+    $lookup: {
+      from: StaffProfile.collection.name,
+      localField: "staffId",
+      foreignField: "_id",
+      pipeline: [
+        { $project: { userId: 1, employeeCode: 1 } },
+        { $limit: 1 },
+      ],
+      as: "_staff",
+    },
+  },
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "_staff.userId",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1, email: 1 } }, { $limit: 1 }],
+      as: "_user",
+    },
+  },
+  {
+    $addFields: {
+      branch: {
+        $cond: [
+          { $ifNull: [{ $arrayElemAt: ["$_branch._id", 0] }, false] },
+          {
+            _id: { $arrayElemAt: ["$_branch._id", 0] },
+            name: { $arrayElemAt: ["$_branch.name", 0] },
+            code: { $arrayElemAt: ["$_branch.code", 0] },
+            status: { $arrayElemAt: ["$_branch.status", 0] },
+          },
+          null,
+        ],
+      },
+      staff: {
+        $cond: [
+          { $ifNull: [{ $arrayElemAt: ["$_staff._id", 0] }, false] },
+          {
+            _id: { $arrayElemAt: ["$_staff._id", 0] },
+            employeeCode: { $arrayElemAt: ["$_staff.employeeCode", 0] },
+            name: { $ifNull: [{ $arrayElemAt: ["$_user.name", 0] }, ""] },
+            email: { $ifNull: [{ $arrayElemAt: ["$_user.email", 0] }, ""] },
+          },
+          null,
+        ],
+      },
+    },
+  },
+  { $unset: ["_branch", "_staff", "_user"] },
+];
+
 const SHIFT_CLAIM_STATUSES = Object.values(ShiftClaimStatus);
 
 const emptyShiftClaimStatusCounts = () =>
@@ -472,12 +567,21 @@ const updateShift = async ({
   return withDetails;
 };
 
-const listMyShifts = async ({ userId, organizationId, from, to }) => {
+const listMyShifts = async ({
+  userId,
+  organizationId,
+  from,
+  to,
+  status,
+  page,
+  limit,
+  skip,
+}) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const match = {
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
     staffId: profile._id,
-    status: { $in: [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED] },
+    status: { $in: MY_SHIFT_STATUSES },
   };
 
   if (from || to) {
@@ -486,8 +590,25 @@ const listMyShifts = async ({ userId, organizationId, from, to }) => {
     if (to) match.startsAt.$lte = new Date(to);
   }
 
-  const shifts = await Shift.find(match).sort({ startsAt: 1 }).lean();
-  return attachShiftDetails(shifts);
+  const countMatch = { ...match };
+  const shiftStatus = parseMyShiftStatus(status);
+  if (shiftStatus) match.status = shiftStatus;
+
+  const { data, meta, result } = await paginateWithFacet({
+    model: Shift,
+    match,
+    page,
+    limit,
+    skip,
+    sort: { startsAt: 1 },
+    extraDataStages: MY_SHIFT_LOOKUPS,
+    extraFacets: myShiftStatusCountFacets(countMatch),
+  });
+
+  return {
+    data,
+    meta: { ...meta, counts: myShiftStatusCountsFromFacet(result) },
+  };
 };
 
 const openShiftMatch = (profile, organizationId) => ({

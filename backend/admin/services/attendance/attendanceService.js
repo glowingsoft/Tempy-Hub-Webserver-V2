@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { AttendanceDay } = require("@models/AttendanceDay");
+const { VisitSession } = require("@models/VisitSession");
+const { ExternalPerson } = require("@models/ExternalPerson");
 const { Shift } = require("@models/Shift");
 const { Department } = require("@models/Department");
 const { AttendanceChangeRequest } = require("@models/AttendanceChangeRequest");
@@ -21,6 +23,7 @@ const {
   LeaveRequestStatus,
   RosterRequestStatus,
   ShiftStatus,
+  ExternalPersonType,
 } = require("@models/domainEnums");
 const {
   getActiveShift,
@@ -1175,6 +1178,7 @@ const listMyAttendance = async ({
   skip,
   from,
   to,
+  punctualityStatus,
 }) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const match = { staffId: profile._id };
@@ -1185,17 +1189,31 @@ const listMyAttendance = async ({
     if (to) match.workDate.$lte = startOfUtcDay(to);
   }
 
-  const attendanceDays = await fetchAttendanceDays({
-    match,
-    sort: { workDate: -1 },
+  const punctuality = parsePunctualityStatus(punctualityStatus);
+  const listMatch = punctuality
+    ? { ...match, punctualityStatus: punctuality }
+    : match;
+
+  const { data, meta, result } = await paginateWithFacet({
+    model: AttendanceDay,
+    match: listMatch,
+    page,
+    limit,
+    skip,
+    sort: { createdAt: -1, clockInAt: -1 },
+    extraDataStages: ATTENDANCE_LIST_LOOKUPS,
+    extraFacets: punctualityStatusCountFacets(match),
   });
-  const leaveDays = await listLeaveRegisterDays({
-    staffIds: [profile._id],
-    from,
-    to,
-  });
-  const rows = mergeAttendanceAndLeave(attendanceDays, leaveDays);
-  return paginateRows(rows, page, limit, skip);
+
+  const counts = result
+    ? punctualityStatusCountsFromFacet(result)
+    : emptyPunctualityStatusCounts();
+
+  return {
+    data: withComputedWorkedMinutes(data),
+    meta: { ...meta, counts },
+    summary: summaryFromCounts(counts, []),
+  };
 };
 
 const createChangeRequest = async ({
@@ -1323,16 +1341,16 @@ const listAttendanceDays = async ({
   };
 };
 
-const resolveRotaRange = (from, to, timezone) => {
+const resolveDayRange = (from, to, timezone, { defaultFrom, defaultTo }) => {
   const tz = timezone || DEFAULT_TZ;
   const fromDay = from
     ? moment.tz(String(from).slice(0, 10), "YYYY-MM-DD", tz).startOf("day")
-    : moment.tz(tz).startOf("isoWeek");
+    : defaultFrom(tz);
   const toDay = to
     ? moment.tz(String(to).slice(0, 10), "YYYY-MM-DD", tz).startOf("day")
     : from
       ? fromDay.clone()
-      : moment.tz(tz).endOf("isoWeek").startOf("day");
+      : defaultTo(tz);
 
   if (!fromDay.isValid() || !toDay.isValid() || toDay.isBefore(fromDay)) {
     throw new AppError("invalid_date_range", 400);
@@ -1343,6 +1361,19 @@ const resolveRotaRange = (from, to, timezone) => {
 
   return { tz, fromDay, toDay };
 };
+
+const resolveRotaRange = (from, to, timezone) =>
+  resolveDayRange(from, to, timezone, {
+    defaultFrom: (tz) => moment.tz(tz).startOf("isoWeek"),
+    defaultTo: (tz) => moment.tz(tz).endOf("isoWeek").startOf("day"),
+  });
+
+/** Reports default to the current calendar month when from/to are omitted. */
+const resolveReportRange = (from, to, timezone) =>
+  resolveDayRange(from, to, timezone, {
+    defaultFrom: (tz) => moment.tz(tz).startOf("month"),
+    defaultTo: (tz) => moment.tz(tz).endOf("month").startOf("day"),
+  });
 
 const buildRotaWeeks = (fromDay, toDay) => {
   const weeks = [];
@@ -1950,11 +1981,7 @@ const attendanceReport = async ({
   if (scopedBranchId) branchMatch._id = scopedBranchId;
   const branches = await Branch.find(branchMatch).select("_id timezone").lean();
   if (!branches.length) {
-    const { tz, fromDay, toDay } = resolveRotaRange(
-      fromDate,
-      toDate,
-      DEFAULT_TZ,
-    );
+    const { tz, fromDay, toDay } = resolveReportRange(fromDate, toDate, DEFAULT_TZ);
     return {
       from: fromDay.format("YYYY-MM-DD"),
       to: toDay.format("YYYY-MM-DD"),
@@ -1978,7 +2005,7 @@ const attendanceReport = async ({
       : branches.length === 1
         ? branches[0].timezone
         : DEFAULT_TZ) || DEFAULT_TZ;
-  const { fromDay, toDay } = resolveRotaRange(fromDate, toDate, tz);
+  const { fromDay, toDay } = resolveReportRange(fromDate, toDate, tz);
   const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
   const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
   const shiftEnd = moment.utc(toUtc).add(1, "day").toDate();
@@ -2193,6 +2220,433 @@ const attendanceReport = async ({
   };
 };
 
+const emptyCheckInMethodCounts = () =>
+  Object.fromEntries(Object.values(CheckInMethod).map((method) => [method, 0]));
+
+const emptyStaffHoursSummary = ({ from, to, timezone, branchId }) => ({
+  from,
+  to,
+  timezone,
+  branchId: branchId || null,
+  kpis: {
+    workedMinutes: 0,
+    visitorSignIns: 0,
+    lateCount: 0,
+    sicknessRate: null,
+  },
+  hoursByPersonType: {
+    staff: 0,
+    visitor: 0,
+    contractor: 0,
+  },
+  checkInMethod: emptyCheckInMethodCounts(),
+});
+
+const staffHoursSummary = async ({
+  actor,
+  organizationId,
+  branchId,
+  departmentId,
+  from,
+  to,
+}) => {
+  const fromDate = from && String(from).trim() ? from : undefined;
+  const toDate = to && String(to).trim() ? to : undefined;
+
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const branchMatch = { organizationId };
+  if (scopedBranchId) branchMatch._id = scopedBranchId;
+  const branches = await Branch.find(branchMatch).select("_id timezone").lean();
+  const tzFallback = DEFAULT_TZ;
+
+  if (!branches.length) {
+    const { tz, fromDay, toDay } = resolveReportRange(
+      fromDate,
+      toDate,
+      tzFallback
+    );
+    return emptyStaffHoursSummary({
+      from: fromDay.format("YYYY-MM-DD"),
+      to: toDay.format("YYYY-MM-DD"),
+      timezone: tz,
+      branchId: scopedBranchId || null,
+    });
+  }
+
+  const tz =
+    (scopedBranchId
+      ? branches[0].timezone
+      : branches.length === 1
+        ? branches[0].timezone
+        : DEFAULT_TZ) || DEFAULT_TZ;
+  const { fromDay, toDay } = resolveReportRange(fromDate, toDate, tz);
+  const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
+  const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
+  const sessionFrom = fromDay.toDate();
+  const sessionTo = toDay.clone().endOf("day").toDate();
+  const branchOids = branches.map((row) => row._id);
+
+  let staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    branchId,
+  });
+  let departmentOid = null;
+  if (departmentId) {
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      throw new AppError("invalid_department_id", 400);
+    }
+    departmentOid = new mongoose.Types.ObjectId(String(departmentId));
+    staffIds = await StaffProfile.find({
+      _id: { $in: staffIds },
+      departmentIds: departmentOid,
+    }).distinct("_id");
+  }
+
+  const staffOids = staffIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const dayMatch =
+    staffOids.length > 0
+      ? {
+          branchId: { $in: branchOids },
+          staffId: { $in: staffOids },
+          workDate: { $gte: fromUtc, $lte: toUtc },
+        }
+      : null;
+
+  const visitMatch = {
+    branchId: { $in: branchOids },
+    checkInAt: { $gte: sessionFrom, $lte: sessionTo },
+  };
+
+  const visitPersonStages = departmentOid
+    ? [
+        {
+          $lookup: {
+            from: ExternalPerson.collection.name,
+            localField: "externalPersonId",
+            foreignField: "_id",
+            pipeline: [
+              { $project: { departmentId: 1 } },
+              { $limit: 1 },
+            ],
+            as: "_person",
+          },
+        },
+        {
+          $addFields: {
+            person: { $arrayElemAt: ["$_person", 0] },
+          },
+        },
+        { $match: { "person.departmentId": departmentOid } },
+      ]
+    : [];
+
+  const [attendanceFacet, leaveDays, visitFacet] = await Promise.all([
+    dayMatch
+      ? AttendanceDay.aggregate([
+          { $match: dayMatch },
+          {
+            $facet: {
+              totals: [
+                {
+                  $group: {
+                    _id: null,
+                    workedMinutes: {
+                      $sum: { $ifNull: ["$workedMinutes", 0] },
+                    },
+                    lateCount: {
+                      $sum: {
+                        $cond: [
+                          {
+                            $eq: [
+                              "$punctualityStatus",
+                              PunctualityStatus.LATE,
+                            ],
+                          },
+                          1,
+                          0,
+                        ],
+                      },
+                    },
+                    workedDays: { $sum: 1 },
+                  },
+                },
+              ],
+              methods: [
+                { $group: { _id: "$checkInMethod", count: { $sum: 1 } } },
+              ],
+            },
+          },
+        ])
+      : Promise.resolve([
+          { totals: [], methods: [] },
+        ]),
+    staffOids.length
+      ? listLeaveRegisterDays({
+          staffIds: staffOids,
+          from: fromUtc,
+          to: toUtc,
+        })
+      : Promise.resolve([]),
+    VisitSession.aggregate([
+      { $match: visitMatch },
+      ...visitPersonStages,
+      {
+        $facet: {
+          signIns: [{ $count: "count" }],
+          hours: [
+            { $match: { checkOutAt: { $ne: null } } },
+            {
+              $group: {
+                _id: "$personType",
+                minutes: {
+                  $sum: {
+                    $divide: [
+                      { $subtract: ["$checkOutAt", "$checkInAt"] },
+                      60000,
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]),
+  ]);
+
+  const totals = attendanceFacet[0]?.totals?.[0] || {};
+  const workedMinutes = totals.workedMinutes || 0;
+  const lateCount = totals.lateCount || 0;
+  const workedDaysTotal = totals.workedDays || 0;
+  const checkInMethod = emptyCheckInMethodCounts();
+  for (const row of attendanceFacet[0]?.methods || []) {
+    if (Object.prototype.hasOwnProperty.call(checkInMethod, row._id)) {
+      checkInMethod[row._id] = row.count;
+    }
+  }
+
+  let sickDays = 0;
+  for (const row of leaveDays) {
+    if (row.leaveType === LeaveType.SICK) sickDays += 1;
+  }
+  const denom = workedDaysTotal + sickDays;
+
+  const visitRow = visitFacet[0] || {};
+  const visitorSignIns = visitRow.signIns?.[0]?.count || 0;
+  const hoursByPersonType = { staff: workedMinutes, visitor: 0, contractor: 0 };
+  for (const row of visitRow.hours || []) {
+    const minutes = Math.round(row.minutes || 0);
+    if (row._id === ExternalPersonType.VISITOR) {
+      hoursByPersonType.visitor = minutes;
+    }
+    if (row._id === ExternalPersonType.CONTRACTOR) {
+      hoursByPersonType.contractor = minutes;
+    }
+  }
+
+  return {
+    from: fromDay.format("YYYY-MM-DD"),
+    to: toDay.format("YYYY-MM-DD"),
+    timezone: tz,
+    branchId: scopedBranchId || null,
+    kpis: {
+      workedMinutes,
+      visitorSignIns,
+      lateCount,
+      sicknessRate: denom
+        ? Math.round((1000 * sickDays) / denom) / 10
+        : null,
+    },
+    hoursByPersonType,
+    checkInMethod,
+  };
+};
+
+const PRESENCE_STATUSES = Object.values(PresenceStatus);
+
+const emptyPresenceStatusCounts = () =>
+  Object.fromEntries(PRESENCE_STATUSES.map((status) => [status, 0]));
+
+const parsePresenceStatus = (status) => {
+  if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
+    return undefined;
+  }
+  const value = String(status).trim();
+  if (!PRESENCE_STATUSES.includes(value)) {
+    throw new AppError("invalid_presence_status", 400);
+  }
+  return value;
+};
+
+const presenceStatusCountsFromFacet = (result) => {
+  const counts = emptyPresenceStatusCounts();
+  for (const row of result.presenceCounts || []) {
+    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
+      counts[row._id] = row.count;
+    }
+  }
+  return counts;
+};
+
+const shapeLateCheckInRow = (row) => {
+  const staff = row.staff || null;
+  return {
+    ...row,
+    kind: "attendance",
+    type: "staff",
+    staff: staff
+      ? { ...staff, photoUrl: toPublicImageUrl(staff.photoUrl) }
+      : null,
+  };
+};
+
+const lateCheckInsReport = async ({
+  actor,
+  organizationId,
+  branchId,
+  departmentId,
+  from,
+  to,
+  keyword,
+  presenceStatus,
+  page,
+  limit,
+  skip,
+}) => {
+  const fromDate = from && String(from).trim() ? from : undefined;
+  const toDate = to && String(to).trim() ? to : undefined;
+  const presence = parsePresenceStatus(presenceStatus);
+
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const branchMatch = { organizationId };
+  if (scopedBranchId) branchMatch._id = scopedBranchId;
+  const branches = await Branch.find(branchMatch).select("_id timezone").lean();
+
+  const empty = (fromLabel, toLabel, timezone) => ({
+    from: fromLabel,
+    to: toLabel,
+    timezone,
+    branchId: scopedBranchId || null,
+    kpis: { onSite: 0, staff: 0, late: 0 },
+    rows: [],
+    meta: {
+      ...generateMeta(page, limit, 0),
+      counts: emptyPresenceStatusCounts(),
+    },
+  });
+
+  if (!branches.length) {
+    const { tz, fromDay, toDay } = resolveReportRange(
+      fromDate,
+      toDate,
+      DEFAULT_TZ
+    );
+    return empty(
+      fromDay.format("YYYY-MM-DD"),
+      toDay.format("YYYY-MM-DD"),
+      tz
+    );
+  }
+
+  const tz =
+    (scopedBranchId
+      ? branches[0].timezone
+      : branches.length === 1
+        ? branches[0].timezone
+        : DEFAULT_TZ) || DEFAULT_TZ;
+  const { fromDay, toDay } = resolveReportRange(fromDate, toDate, tz);
+  const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
+  const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
+  const branchOids = branches.map((row) => row._id);
+
+  let staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    branchId,
+  });
+  if (departmentId) {
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      throw new AppError("invalid_department_id", 400);
+    }
+    staffIds = await StaffProfile.find({
+      _id: { $in: staffIds },
+      departmentIds: new mongoose.Types.ObjectId(String(departmentId)),
+    }).distinct("_id");
+  }
+  staffIds = await staffIdsMatchingKeyword(staffIds, keyword);
+  if (!staffIds.length) {
+    return empty(
+      fromDay.format("YYYY-MM-DD"),
+      toDay.format("YYYY-MM-DD"),
+      tz
+    );
+  }
+
+  const staffOids = staffIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const rangeMatch = {
+    branchId: { $in: branchOids },
+    staffId: { $in: staffOids },
+    workDate: { $gte: fromUtc, $lte: toUtc },
+  };
+  const lateMatch = {
+    ...rangeMatch,
+    punctualityStatus: PunctualityStatus.LATE,
+  };
+  const listMatch = presence
+    ? { ...lateMatch, presenceStatus: presence }
+    : lateMatch;
+
+  const liveOnSiteMatch = {
+    branchId: { $in: branchOids },
+    staffId: { $in: staffOids },
+    presenceStatus: { $in: ON_SITE_PRESENCE },
+    clockOutAt: null,
+  };
+
+  const [{ data, meta, result }, staffCount, onSiteCount] = await Promise.all([
+    paginateWithFacet({
+      model: AttendanceDay,
+      match: listMatch,
+      page,
+      limit,
+      skip,
+      sort: { clockInAt: -1 },
+      extraDataStages: ATTENDANCE_LIST_LOOKUPS,
+      extraFacets: {
+        presenceCounts: [
+          { $match: lateMatch },
+          { $group: { _id: "$presenceStatus", count: { $sum: 1 } } },
+        ],
+        lateCount: [{ $match: lateMatch }, { $count: "count" }],
+      },
+    }),
+    AttendanceDay.countDocuments(rangeMatch),
+    AttendanceDay.countDocuments(liveOnSiteMatch),
+  ]);
+
+  return {
+    from: fromDay.format("YYYY-MM-DD"),
+    to: toDay.format("YYYY-MM-DD"),
+    timezone: tz,
+    branchId: scopedBranchId || null,
+    kpis: {
+      onSite: onSiteCount,
+      staff: staffCount,
+      late: facetCount(result?.lateCount),
+    },
+    rows: withComputedWorkedMinutes(data).map(shapeLateCheckInRow),
+    meta: {
+      ...meta,
+      counts: presenceStatusCountsFromFacet(result || {}),
+    },
+  };
+};
+
 module.exports = {
   getTodayAttendance,
   getTodayAttendanceForStaff,
@@ -2221,4 +2675,6 @@ module.exports = {
   attendanceReport,
   listLeaveRegisterDays,
   summaryFromCounts,
+  staffHoursSummary,
+  lateCheckInsReport,
 };

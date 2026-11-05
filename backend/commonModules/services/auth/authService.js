@@ -33,7 +33,11 @@ const {
   FamilyMemberStatus,
   MembershipRole,
 } = require("@models/domainEnums");
-const { assertSurfaceAccess, normalizeSurface } = require("./surfaceAccess");
+  const {
+    assertSurfaceAccess,
+    normalizeSurface,
+    surfaceFromAccess,
+  } = require("./surfaceAccess");
 
 const register = async ({
   email,
@@ -376,8 +380,12 @@ const login = async ({
   }
 
   const access = await assertAudienceAccess(user, audience);
-  const resolvedSurface = normalizeSurface(surface);
-  assertSurfaceAccess({ surface: resolvedSurface, audience, access });
+  let resolvedSurface = normalizeSurface(surface);
+  if (resolvedSurface) {
+    assertSurfaceAccess({ surface: resolvedSurface, audience, access });
+  } else {
+    resolvedSurface = surfaceFromAccess({ audience, access });
+  }
 
   user.timezone = timezone;
 
@@ -386,8 +394,7 @@ const login = async ({
   const response = formatUserResponse(user, token, [], ["resetToken"]);
   response.audience = audience;
   response.surface = resolvedSurface || null;
-  // Without this the client cannot tell an owner from a staff member, since the
-  // rest of the payload is identical for every account.
+  response.role = access?.highestRole || null;
   response.access = access;
 
   createOrSkipDevice(user._id, deviceId, deviceType);

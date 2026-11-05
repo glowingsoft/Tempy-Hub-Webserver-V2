@@ -10890,6 +10890,60 @@
               "response": []
             },
             {
+              "name": "app visit capacity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit capacity fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"date\", \"spaces\", \"protectedTimes\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/capacity?date=2026-10-26",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "capacity"
+                  ],
+                  "query": [
+                    {
+                      "key": "date",
+                      "value": "2026-10-26"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "The site (an owner picks one)",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "The capacity card (Lounge On Sun 26 Oct). Query: date (YYYY-MM-DD, today when left out). spaces has one entry for each place with a limit: place, capacity and slots with start, end, booked, capacity and full (14:00 3/4, 15:00 4/4). Waiting requests hold their seats as well as confirmed visits. protectedTimes lists the closed windows with a ready note: 'Protected mealtime 12:00 - 13:30 isn't bookable.' Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+              },
+              "response": []
+            },
+            {
               "name": "app approve visit request",
               "event": [
                 {
@@ -14330,6 +14384,52 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "get rota board",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/rota/board?branchId={{branchId}}&period=week&scope=all",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "rota",
+                    "board"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "period",
+                      "value": "week"
+                    },
+                    {
+                      "key": "scope",
+                      "value": "all"
+                    }
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -14428,6 +14528,44 @@
                     "organizations",
                     "{{organizationId}}",
                     "attendance-change-requests"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get attendance rota",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/attendance/rota?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "attendance",
+                    "rota"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
                   ]
                 }
               },
@@ -25424,6 +25562,196 @@
                   ]
                 }
               ]
+            },
+            {
+              "name": "family settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Settings fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"configured\", \"gazette\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "settings"
+                  ]
+                },
+                "description": "Family settings for the organization (the x-org-id header). gazette.issueEveryDays (days between issues, default 14), gazette.messageCap (most family messages in one resident's gazette, default 30) and gazette.anchorDate (the first day of an issue, such as 2026-10-01; every later issue starts a whole number of cycles after it). configured is false until the settings are saved; nothing runs on a schedule before that, and the values shown are the defaults. Owners and super admins only. Needs familyEngagement.view."
+              },
+              "response": []
+            },
+            {
+              "name": "update family settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.configured).to.eql(true);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "settings"
+                  ]
+                },
+                "description": "Saves the gazette settings; only what is sent changes. gazette.issueEveryDays is a whole number from 1 to 90, gazette.messageCap from 1 to 100 and gazette.anchorDate a day like 2026-10-01. The first save must include anchorDate, because saving is what starts the schedule: the first issue begins on that day and each later one follows without a gap, in whole days in each site's timezone. 400 gazette_setting_invalid or gazette_anchor_invalid for a bad value. Owners and super admins only. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"gazette\": {\n    \"anchorDate\": \"2026-10-01\",\n    \"issueEveryDays\": 14,\n    \"messageCap\": 30\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "visit settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit settings fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data).to.include.keys(\"slots\", \"places\", \"daysAhead\", \"maxPartySize\", \"paused\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/visit-settings?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "visit-settings"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                },
+                "description": "What a site offers on Book A Visit and whether visiting is paused: slots, places (name and capacity), protectedTimes, daysAhead, maxPartySize, paused, pausedReason and pausedAt, plus the site's timezone. Until the site saves its own, the defaults apply. A site or line manager uses their own site. Needs familyEngagement.view. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted."
+              },
+              "response": []
+            },
+            {
+              "name": "update visit settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Visit settings saved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data).to.have.property(\"paused\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}",
+                    "description": "Organization scope for admin routes.",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/visit-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "visit-settings"
+                  ]
+                },
+                "description": "Saves what the site offers, and pauses or resumes visiting. Body: branchId, then any of slots [{start, end}] (HH:mm, up to 12, no repeats), places (up to 20, each a name or {name, capacity}: capacity is the most people at once for one time slot, empty for no limit), protectedTimes [{start, end, label}] (up to 6 daily windows nobody can book, such as a mealtime; a slot that overlaps one is not offered), daysAhead (1 to 60), maxPartySize (1 to 20) and paused (true or false) with an optional pausedReason (up to 200 characters). Pausing stops new requests at once (403 visiting_paused), cancels every visit still to come at the site, withdraws their kiosk codes and notifies the families; the response has cancelled, the number of visits cancelled. Anything left out stays as it was. Needs familyEngagement.manage. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"paused\": true,\n  \"pausedReason\": \"Visiting is paused on Maple floor while we deal with a flu outbreak\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -27296,6 +27624,195 @@
           ]
         },
         {
+          "name": "Reports",
+          "item": [
+            {
+              "name": "attendance report",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/attendance?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "attendance"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "visitor check-ins report",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/visitor-check-ins?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "visitor-check-ins"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "staff hours summary",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/staff-hours-summary?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "staff-hours-summary"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "late check-ins report",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/reports/late-check-ins?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "reports",
+                    "late-check-ins"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Staff Dashboard",
           "description": "The staff home screen.",
           "item": [
@@ -28773,6 +29290,16 @@
       "type": "string"
     },
     {
+      "key": "visitSlot",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitPlace",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "familyVisitId",
       "value": "",
       "type": "string"
@@ -28794,11 +29321,6 @@
     },
     {
       "key": "notificationId",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "visitTime",
       "value": "",
       "type": "string"
     },
@@ -28834,6 +29356,11 @@
     },
     {
       "key": "assignmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "visitTime",
       "value": "",
       "type": "string"
     }

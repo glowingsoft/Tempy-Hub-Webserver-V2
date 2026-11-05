@@ -71,6 +71,8 @@ const visitSessionSchema = new mongoose.Schema(
     arrivedAt: { type: Date, default: null },
     checkInAt: { type: Date, default: null },
     checkOutAt: { type: Date, default: null },
+    /** True when closed by auto-checkout, not a kiosk/staff punch. */
+    autoClosed: { type: Boolean, default: false },
     /** Set when the resident requires a visitor passcode and it was verified. */
     residentPasscodeVerified: { type: Boolean, default: false },
     residentPasscodeVerifiedAt: { type: Date, default: null },
@@ -80,6 +82,7 @@ const visitSessionSchema = new mongoose.Schema(
 );
 
 visitSessionSchema.index({ branchId: 1, status: 1, checkOutAt: 1 });
+visitSessionSchema.index({ status: 1, checkOutAt: 1, checkInAt: 1 });
 visitSessionSchema.index({ branchId: 1, personType: 1, checkInAt: -1 });
 visitSessionSchema.index({
   branchId: 1,

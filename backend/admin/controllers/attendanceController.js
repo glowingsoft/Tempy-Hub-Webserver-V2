@@ -242,10 +242,64 @@ const rejectRoster = async (req, res) => {
   }
 };
 
+const lateCheckInsReport = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { from, to, timezone, branchId, kpis, rows, meta } =
+      await attendanceService.lateCheckInsReport({
+        actor: req.user,
+        organizationId: req.orgId,
+        branchId: req.query.branchId,
+        departmentId: req.query.departmentId,
+        from: req.query.from,
+        to: req.query.to,
+        keyword: req.query.keyword,
+        presenceStatus: req.query.presenceStatus,
+        page,
+        limit,
+        skip,
+      });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { from, to, timezone, branchId, kpis, rows },
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const staffHoursSummary = async (req, res) => {
+  try {
+    const data = await attendanceService.staffHoursSummary({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
+      from: req.query.from,
+      to: req.query.to,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   listAttendanceDays,
   listAttendanceRota,
   attendanceReport,
+  staffHoursSummary,
+  lateCheckInsReport,
   getAttendanceDay,
   updateAttendanceDay,
   listChangeRequests,

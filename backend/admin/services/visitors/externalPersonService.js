@@ -62,7 +62,20 @@ const parseSiteStatus = (value) => {
   return value;
 };
 
-const createExternalPersonAtBranch = async ({
+const normalizeVisitorEmail = (email) => String(email || "").trim().toLowerCase();
+
+const toPersonObject = (person) =>
+  person && typeof person.toObject === "function" ? person.toObject() : person;
+
+const findPersonByBranchEmail = async ({ branchId, email, session }) => {
+  const normalised = normalizeVisitorEmail(email);
+  if (!branchId || !normalised) return null;
+  const query = ExternalPerson.findOne({ branchId, email: normalised });
+  if (session) query.session(session);
+  return query;
+};
+
+const resolveExternalPersonAtBranch = async ({
   branchId,
   type,
   name,
@@ -73,24 +86,59 @@ const createExternalPersonAtBranch = async ({
   departmentId,
   categoryId,
   visitorCategory,
+  session,
 }) => {
   if (!branchId) throw new AppError("branch_required", 400);
-  if (!name || !String(name).trim()) throw new AppError("name_required", 400);
+  const trimmedName = name ? String(name).trim() : "";
+  const normalisedEmail = normalizeVisitorEmail(email);
 
-  const person = await ExternalPerson.create({
+  if (normalisedEmail) {
+    const existing = await findPersonByBranchEmail({
+      branchId,
+      email: normalisedEmail,
+      session,
+    });
+    if (existing) return { person: existing, created: false };
+  }
+
+  if (!trimmedName) throw new AppError("name_required", 400);
+
+  const fields = {
     branchId,
     type: parsePersonType(type),
-    name: String(name).trim(),
-    email: email ? String(email).trim().toLowerCase() : "",
+    name: trimmedName,
+    email: normalisedEmail,
     phone: phone ? String(phone).trim() : "",
     photoUrl: photoUrl || "",
     carRegistration: carRegistration || "",
     departmentId: departmentId || null,
     categoryId: categoryId || null,
     visitorCategory: visitorCategory || "",
-  });
+  };
 
-  return person.toObject();
+  try {
+    if (session) {
+      const [created] = await ExternalPerson.create([fields], { session });
+      return { person: created, created: true };
+    }
+    const created = await ExternalPerson.create(fields);
+    return { person: created, created: true };
+  } catch (error) {
+    if (error.code === 11000 && normalisedEmail) {
+      const existing = await findPersonByBranchEmail({
+        branchId,
+        email: normalisedEmail,
+        session,
+      });
+      if (existing) return { person: existing, created: false };
+    }
+    throw error;
+  }
+};
+
+const createExternalPersonAtBranch = async (payload) => {
+  const { person } = await resolveExternalPersonAtBranch(payload);
+  return toPersonObject(person);
 };
 
 const createExternalPerson = async ({
@@ -326,7 +374,19 @@ const updateExternalPerson = async ({
     if (!String(name).trim()) throw new AppError("name_required", 400);
     update.name = String(name).trim();
   }
-  if (email !== undefined) update.email = String(email).trim().toLowerCase();
+  if (email !== undefined) {
+    const nextEmail = normalizeVisitorEmail(email);
+    if (nextEmail && nextEmail !== person.email) {
+      const clash = await findPersonByBranchEmail({
+        branchId: person.branchId,
+        email: nextEmail,
+      });
+      if (clash && String(clash._id) !== String(person._id)) {
+        throw new AppError("duplicate_external_person_email", 409);
+      }
+    }
+    update.email = nextEmail;
+  }
   if (phone !== undefined) update.phone = String(phone).trim();
   if (photoUrl !== undefined) update.photoUrl = photoUrl || "";
   if (carRegistration !== undefined) {
@@ -349,6 +409,10 @@ const updateExternalPerson = async ({
 module.exports = {
   DIRECTORY_TYPES,
   parsePersonType,
+  normalizeVisitorEmail,
+  toPersonObject,
+  findPersonByBranchEmail,
+  resolveExternalPersonAtBranch,
   createExternalPersonAtBranch,
   createExternalPerson,
   listExternalPeople,

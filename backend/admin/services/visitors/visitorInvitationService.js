@@ -2,11 +2,16 @@ const crypto = require("crypto");
 const { Invitation } = require("@models/Invitation");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
+const { ExternalPerson } = require("@models/ExternalPerson");
 const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { visitorInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
-const { InvitationStatus, BadgeType } = require("@models/domainEnums");
+const {
+  InvitationStatus,
+  BadgeType,
+  ExternalPersonType,
+} = require("@models/domainEnums");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -14,6 +19,11 @@ const {
   scopeBranchFilter,
 } = require("./visitorAccess");
 const { toObjectId } = require("./visitPresenceQuery");
+const {
+  normalizeVisitorEmail,
+  resolveExternalPersonAtBranch,
+  toPersonObject,
+} = require("./externalPersonService");
 
 const INVITE_CODE_LENGTH = 6;
 const OPEN_INVITE_STATUSES = [
@@ -70,7 +80,35 @@ const invitationBranchStages = [
     },
   },
   { $project: { _branch: 0 } },
+  {
+    $lookup: {
+      from: ExternalPerson.collection.name,
+      localField: "externalPersonId",
+      foreignField: "_id",
+      pipeline: [
+        { $project: { name: 1, email: 1, type: 1, userId: 1 } },
+        { $limit: 1 },
+      ],
+      as: "_person",
+    },
+  },
+  {
+    $addFields: {
+      person: { $arrayElemAt: ["$_person", 0] },
+    },
+  },
+  { $project: { _person: 0 } },
 ];
+
+const personTypeFromBadge = (badgeType) =>
+  badgeType === BadgeType.CONTRACTOR
+    ? ExternalPersonType.CONTRACTOR
+    : ExternalPersonType.VISITOR;
+
+const badgeFromPersonType = (type) =>
+  type === ExternalPersonType.CONTRACTOR
+    ? BadgeType.CONTRACTOR
+    : BadgeType.GUEST;
 
 const parseVisitorInvitationStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -142,6 +180,7 @@ const createVisitorInvitation = async ({
   organizationId,
   organizationName,
   branchId,
+  externalPersonId,
   visitorName,
   visitorEmail,
   hostStaffId,
@@ -151,12 +190,6 @@ const createVisitorInvitation = async ({
   instructions,
 }) => {
   if (!branchId) throw new AppError("branch_required", 400);
-  if (!visitorName || !String(visitorName).trim()) {
-    throw new AppError("name_required", 400);
-  }
-  if (!visitorEmail || !String(visitorEmail).trim()) {
-    throw new AppError("email_required", 400);
-  }
   if (!arrivalAt || !visitingUntil) {
     throw new AppError("visit_window_required", 400);
   }
@@ -168,17 +201,50 @@ const createVisitorInvitation = async ({
   const branch = await Branch.findById(branchId).select("name").lean();
   if (!branch) throw new AppError("branch_not_found", 404);
 
-  let inviteCode = await uniqueInviteCode();
+  let person;
+  const resolvedBadge =
+    badgeType && Object.values(BadgeType).includes(badgeType)
+      ? badgeType
+      : null;
+
+  if (externalPersonId) {
+    person = await ExternalPerson.findOne({
+      _id: toObjectId(externalPersonId),
+      branchId,
+    });
+    if (!person) throw new AppError("external_person_not_found", 404);
+    const personEmail = normalizeVisitorEmail(person.email);
+    if (!personEmail) throw new AppError("person_email_required", 400);
+    const bodyEmail = normalizeVisitorEmail(visitorEmail);
+    if (bodyEmail && bodyEmail !== personEmail) {
+      throw new AppError("email_mismatch", 400);
+    }
+  } else {
+    const name = visitorName ? String(visitorName).trim() : "";
+    const email = normalizeVisitorEmail(visitorEmail);
+    if (!name) throw new AppError("name_required", 400);
+    if (!email) throw new AppError("email_required", 400);
+    const resolved = await resolveExternalPersonAtBranch({
+      branchId,
+      type: personTypeFromBadge(resolvedBadge || BadgeType.GUEST),
+      name,
+      email,
+    });
+    person = resolved.person;
+  }
+
+  const personObj = toPersonObject(person);
+  const inviteCode = await uniqueInviteCode();
 
   const invitation = await Invitation.create({
     organizationId,
     branchId,
-    visitorName: String(visitorName).trim(),
-    visitorEmail: String(visitorEmail).trim().toLowerCase(),
+    externalPersonId: personObj._id,
+    visitorName: personObj.name,
+    visitorEmail: normalizeVisitorEmail(personObj.email),
     hostStaffId: hostStaffId || null,
-    badgeType: badgeType && Object.values(BadgeType).includes(badgeType)
-      ? badgeType
-      : BadgeType.GUEST,
+    badgeType:
+      resolvedBadge || badgeFromPersonType(personObj.type) || BadgeType.GUEST,
     arrivalAt: new Date(arrivalAt),
     visitingUntil: new Date(visitingUntil),
     instructions: instructions || "",
@@ -193,7 +259,7 @@ const createVisitorInvitation = async ({
     organizationName: await loadOrgName(organizationId, organizationName),
   });
 
-  return invitation.toObject();
+  return { ...invitation.toObject(), person: personObj };
 };
 
 const listVisitorInvitations = async ({

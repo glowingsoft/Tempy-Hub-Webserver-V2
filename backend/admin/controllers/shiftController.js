@@ -4,6 +4,7 @@ const {
   parsePaginationParams,
 } = require("@utils/responseUtil");
 const shiftService = require("@adminServices/rota/shiftService");
+const rotaBoardService = require("@adminServices/rota/rotaBoardService");
 const { ROTA_MANAGE, ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { ModuleSlug } = require("@models/domainEnums");
@@ -29,6 +30,31 @@ const createShift = async (req, res) => {
       res,
       statusCode: 201,
       translationKey: "shift_created_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getRotaBoard = async (req, res) => {
+  try {
+    const data = await rotaBoardService.getRotaBoard({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
+      date: req.query.date,
+      period: req.query.period,
+      scope: req.query.scope,
+      from: req.query.from,
+      to: req.query.to,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
       data,
     });
   } catch (error) {
@@ -194,6 +220,7 @@ const rejectClaim = async (req, res) => {
 
 module.exports = {
   createShift,
+  getRotaBoard,
   listShifts,
   getShift,
   updateShift,

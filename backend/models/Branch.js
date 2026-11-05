@@ -37,6 +37,18 @@ const branchSchema = new mongoose.Schema(
       autoClockOutHoursAfterShiftEnd: { type: Number, default: 3, min: 0 },
       /** Hours after clockInAt before an unscheduled open session is closed. */
       autoClockOutHoursAfterClockIn: { type: Number, default: 10, min: 0 },
+      /** Hours after invitation.visitingUntil before an open visit is closed. */
+      visitorAutoCheckoutHoursAfterVisitUntil: {
+        type: Number,
+        default: 1,
+        min: 0,
+      },
+      /** Hours after visit checkInAt when there is no visit window. */
+      visitorAutoCheckoutHoursAfterCheckIn: {
+        type: Number,
+        default: 10,
+        min: 0,
+      },
       /**
        * Unpaid break bands, e.g. 6h shift → 0.5h, 12h → 1h.
        * Longest matching minShiftHours wins.

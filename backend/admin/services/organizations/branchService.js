@@ -210,7 +210,12 @@ const revokeBranchSiteManagerScope = async ({
       role: MembershipRole.SITE_MANAGER,
       status: ActiveInactiveStatus.ACTIVE,
     },
-    { $set: { status: ActiveInactiveStatus.INACTIVE } }
+    {
+      $set: {
+        status: ActiveInactiveStatus.INACTIVE,
+        deactivatedAt: new Date(),
+      },
+    }
   );
 };
 
@@ -232,7 +237,10 @@ const revokeOtherBranchSiteManagers = async ({
   if (keepUserId) filter.userId = { $ne: keepUserId };
 
   await Membership.updateMany(filter, {
-    $set: { status: ActiveInactiveStatus.INACTIVE },
+    $set: {
+      status: ActiveInactiveStatus.INACTIVE,
+      deactivatedAt: new Date(),
+    },
   });
 };
 

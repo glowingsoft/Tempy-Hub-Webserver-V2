@@ -218,6 +218,15 @@ const membershipDetailStages = [
   { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
   {
     $lookup: {
+      from: Organization.collection.name,
+      localField: "organizationId",
+      foreignField: "_id",
+      as: "_organization",
+      pipeline: [{ $project: { name: 1 } }],
+    },
+  },
+  {
+    $lookup: {
       from: Branch.collection.name,
       localField: "branchId",
       foreignField: "_id",
@@ -315,6 +324,17 @@ const membershipDetailStages = [
   {
     $addFields: {
       jobTitle: { $arrayElemAt: ["$_jobTitle", 0] },
+      employeeCode: { $ifNull: ["$_staff.employeeCode", null] },
+      organizationName: {
+        $ifNull: [{ $arrayElemAt: ["$_organization.name", 0] }, null],
+      },
+      deactivatedAt: {
+        $cond: [
+          { $eq: ["$status", ActiveInactiveStatus.INACTIVE] },
+          { $ifNull: ["$deactivatedAt", "$updatedAt"] },
+          null,
+        ],
+      },
       staffProfile: {
         $cond: [
           { $ifNull: ["$_staff._id", false] },
@@ -346,6 +366,7 @@ const membershipDetailStages = [
   {
     $project: {
       _branch: 0,
+      _organization: 0,
       _staff: 0,
       _jobTitle: 0,
       _branchDepartments: 0,
@@ -592,7 +613,11 @@ const updateMembership = async ({
   membership.role = nextRole;
   membership.branchId = nextBranchId;
   if (permissions !== undefined) membership.permissions = permissions;
-  if (status !== undefined) membership.status = status;
+  if (status !== undefined && status !== membership.status) {
+    membership.status = status;
+    membership.deactivatedAt =
+      status === ActiveInactiveStatus.INACTIVE ? new Date() : null;
+  }
 
   try {
     await membership.save();
@@ -619,6 +644,7 @@ const deactivateMembership = async ({ actor, membershipId, organizationId }) => 
   await assertNotLastOwner(membership);
 
   membership.status = ActiveInactiveStatus.INACTIVE;
+  membership.deactivatedAt = new Date();
   await membership.save();
   return membership.toObject();
 };
@@ -815,6 +841,28 @@ const invitationDetailStages = [
   },
 ];
 
+const userNameStage = (userIdField, as) => [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: userIdField,
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }],
+      as,
+    },
+  },
+  {
+    $addFields: {
+      [as]: { $ifNull: [{ $arrayElemAt: [`$${as}.name`, 0] }, null] },
+    },
+  },
+];
+
+const invitationUserNameStages = [
+  ...userNameStage("invitedByUserId", "invitedByUserName"),
+  ...userNameStage("acceptedByUserId", "acceptedByUserName"),
+];
+
 const listInvitations = async ({
   organizationId,
   page,
@@ -861,6 +909,7 @@ const getInvitation = async ({ invitationId, organizationId }) => {
       },
     },
     ...invitationDetailStages,
+    ...invitationUserNameStages,
   ]);
 
   if (!invitation) throw new AppError("invitation_not_found", 404);
@@ -1337,7 +1386,12 @@ const redeemInvitation = async ({
             status: ActiveInactiveStatus.ACTIVE,
             userId: { $ne: user._id },
           },
-          { $set: { status: ActiveInactiveStatus.INACTIVE } },
+          {
+            $set: {
+              status: ActiveInactiveStatus.INACTIVE,
+              deactivatedAt: new Date(),
+            },
+          },
           { session }
         );
 

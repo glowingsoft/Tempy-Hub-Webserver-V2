@@ -90,7 +90,7 @@ adminPanel.item.push({
       test: saveId201("jobTitleId"),
     }),
     req("create job title (Helper)", "POST", ["admin", "organizations", "{{organizationId}}", "job-titles"], {
-      body: { name: "Helper", level: "operational" },
+      body: { name: "Helper", level: "staff" },
       test: {
         listen: "test",
         script: {

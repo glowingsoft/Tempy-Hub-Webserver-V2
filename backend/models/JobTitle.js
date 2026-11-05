@@ -27,7 +27,7 @@ const jobTitleSchema = new mongoose.Schema(
     level: {
       type: String,
       enum: Object.values(JobTitleLevel),
-      default: JobTitleLevel.OPERATIONAL,
+      default: JobTitleLevel.STAFF,
     },
     active: { type: Boolean, default: true },
   },

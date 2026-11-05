@@ -12,7 +12,7 @@ const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const {
   actorStanding,
   assertMayAccessResidents,
-} = require("@adminServices/family/familyScope");
+} = require("@adminServices/residents/residentAccess");
 const { blurAreas, validateAreas } = require("@appServices/family/familyImage");
 const {
   rejectedDeleteAfter,

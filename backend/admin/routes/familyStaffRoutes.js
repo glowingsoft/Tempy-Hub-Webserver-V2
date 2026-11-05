@@ -13,7 +13,6 @@ const {
   FAMILY_STAFF_ROLES,
 } = require("@adminServices/family/familyAccess");
 const { receivePhoto, receivePhotos } = require("@middlewares/familyPhotoMiddleware");
-const { MembershipRole } = require("@models/domainEnums");
 const createRateLimiter = require("@utils/rateLimiter");
 const familyStaffController = require("../controllers/familyStaffController");
 const familyVisitStaffController = require("../controllers/familyVisitStaffController");
@@ -36,10 +35,6 @@ router.use(
   requireFamilyModule,
   requireRoles(FAMILY_STAFF_ROLES)
 );
-
-const ORG_ADMIN_ROLES = [MembershipRole.OWNER, MembershipRole.SUPER_ADMIN];
-router.get("/settings", requireRoles(ORG_ADMIN_ROLES), requirePermission(FAMILY_VIEW), familyStaffController.getSettings);
-router.put("/settings", requireRoles(ORG_ADMIN_ROLES), requirePermission(FAMILY_MANAGE), familyStaffController.updateSettings);
 
 router.put("/members/:memberId", requirePermission(FAMILY_MANAGE), familyStaffController.updateMember);
 router.put("/members/:memberId/access", requirePermission(FAMILY_MANAGE), familyStaffController.updateMemberAccess);
@@ -78,8 +73,6 @@ router.delete("/newsletters/:id", requirePermission(FAMILY_MANAGE), familyStaffC
 
 router.get("/handovers", requirePermission(FAMILY_VIEW), familyStaffController.listHandovers);
 
-router.get("/visit-settings", requirePermission(FAMILY_VIEW), familyVisitStaffController.getSettings);
-router.put("/visit-settings", requirePermission(FAMILY_MANAGE), familyVisitStaffController.updateSettings);
 router.post("/visits", visitLimiter, requirePermission(FAMILY_MANAGE), familyVisitStaffController.inviteFamily);
 router.put("/visits/:id", requirePermission(FAMILY_APPROVE), familyVisitStaffController.updateVisit);
 

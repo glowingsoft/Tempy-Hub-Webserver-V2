@@ -11,7 +11,7 @@ const breakSegmentSchema = new mongoose.Schema(
     breakInAt: { type: Date, required: true },
     breakOutAt: { type: Date, default: null },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const attendanceDaySchema = new mongoose.Schema(
@@ -77,7 +77,7 @@ const attendanceDaySchema = new mongoose.Schema(
       accuracy: { type: Number, default: null },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 attendanceDaySchema.index({ staffId: 1, workDate: 1 });
@@ -87,12 +87,12 @@ attendanceDaySchema.index(
     unique: true,
     name: "staffId_1_openSession",
     partialFilterExpression: { clockOutAt: null },
-  }
+  },
 );
 attendanceDaySchema.index({ clientEventId: 1 }, { unique: true, sparse: true });
 attendanceDaySchema.index(
   { shiftId: 1 },
-  { sparse: true, partialFilterExpression: { shiftId: { $type: "objectId" } } }
+  { sparse: true, partialFilterExpression: { shiftId: { $type: "objectId" } } },
 );
 
 const AttendanceDay =

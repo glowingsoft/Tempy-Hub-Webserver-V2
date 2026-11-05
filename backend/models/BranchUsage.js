@@ -18,6 +18,7 @@ const branchUsageSchema = new mongoose.Schema(
     imageCount: { type: Number, default: 0, min: 0 },
     fileBytes: { type: Number, default: 0, min: 0 },
     fileCount: { type: Number, default: 0, min: 0 },
+    categories: { type: mongoose.Schema.Types.Mixed, default: {} },
     measuredAt: { type: Date, default: null },
   },
   { timestamps: true },

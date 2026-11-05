@@ -7,7 +7,6 @@ const billingController = require("../controllers/billingController");
 const router = express.Router();
 
 const readLimiter = createRateLimiter("billing-reads", 10, 120);
-const writeLimiter = createRateLimiter("billing-writes", 10, 30);
 
 /** A platform admin works above any organization; everyone else needs the x-org-id header and a membership in it. */
 const billingAccess = (req, res, next) =>
@@ -16,6 +15,6 @@ const billingAccess = (req, res, next) =>
 router.use(auth, billingAccess);
 
 router.get("/usage", readLimiter, billingController.listUsage);
-router.put("/settings", writeLimiter, billingController.updateSettings);
+router.get("/usage/:organizationId", readLimiter, billingController.getUsageDetail);
 
 module.exports = router;

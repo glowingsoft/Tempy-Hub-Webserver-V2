@@ -574,7 +574,7 @@ requests.push(
       "});",
     ],
     description:
-      "My Visits. Query: residentId (required), tab (upcoming or past; 400 invalid_visit_tab for anything else), page, limit (default 20, max 50). Upcoming is soonest first, past is newest first and includes declined and cancelled ones. A row is either my own request or an invitation From The Home (fromTheHome true): id, source (family or home), status (requested, confirmed, declined, cancelled; for an invitation invited until I answer, then going or cantMakeIt), startAt, endAt, place, partySize, note, decisionNote (the home's reply to a request), canCancel (my request, not yet over), canReply (an invitation I can still answer) and hasPass (Visit Pass available). meta.counts has the two tab totals; meta.visiting.paused, reason and since drive the Visiting is paused notice. A request is only visible to the person who made it; invitations from the home are visible to the whole family of the resident.",
+      "My Visits. Query: residentId (required), tab (upcoming or past; 400 invalid_visit_tab for anything else), page, limit (default 20, max 50). Upcoming is soonest first, past is newest first and includes declined and cancelled ones. A row is either my own request or an invitation From The Home (fromTheHome true): id, source (family or home), status (requested, confirmed, declined, cancelled; for an invitation invited until I answer, then going or cantMakeIt), startAt, endAt, partySize, note, decisionNote (the home's reply to a request), canCancel (my request, not yet over), canReply (an invitation I can still answer) and hasPass (Visit Pass available). meta.counts has the two tab totals; meta.visiting.paused, reason and since drive the Visiting is paused notice. A request is only visible to the person who made it; invitations from the home are visible to the whole family of the resident.",
   }),
   req("next visit", "GET", ["app", "family", "visits", "next"], {
     query: "residentId={{residentId}}",
@@ -594,16 +594,15 @@ requests.push(
       'pm.test("Visit options fetched", function () {',
       "    pm.response.to.have.status(200);",
       "    const data = pm.response.json().data;",
-      '    pm.expect(data).to.include.keys("days", "slots", "places", "maxPartySize", "visiting");',
-      "    if (data.days.length && data.slots.length) {",
+      '    pm.expect(data).to.include.keys("days", "visitingHours", "maxPartySize", "visiting");',
+      "    if (data.days.length) {",
       '        pm.collectionVariables.set("visitDate", data.days[Math.min(1, data.days.length - 1)].date);',
-      '        pm.collectionVariables.set("visitSlot", data.slots[0].id);',
-      '        pm.collectionVariables.set("visitPlace", data.places[0]);',
+      '        pm.collectionVariables.set("visitTime", data.visitingHours.start);',
       "    }",
       "});",
     ],
     description:
-      "Book A Visit: what the home offers. days (the next few days, date and weekday; today is left out once no slot remains), slots (id such as 10:00-12:00, start, end), places (for example Garden Lounge), maxPartySize, timezone and the visiting notice. Slots that fall in a protected time are left out. The home sets these per site; until it does, the defaults are three slots, two places, 14 days ahead and up to 6 people. Sets visitDate, visitSlot and visitPlace for the request below.",
+      "Book A Visit: what the home offers. days (the next few days, date and weekday; today is left out once no time remains), visitingHours {start, end}, protectedTimes [{start, end, label}], maxPartySize, timezone and the visiting notice. The app builds the time to pick itself, from the visiting hours, a start every half hour; the server checks the time it sends. The home sets these per site; until it does, the defaults are visiting hours of 12:00 to 18:00, 14 days ahead and up to 6 people. Sets visitDate and visitTime (the opening time) for the request below.",
   }),
   withBody(
     req("request a visit", "POST", ["app", "family", "visits"], {
@@ -616,13 +615,12 @@ requests.push(
         "});",
       ],
       description:
-        "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), slot (a slot id), place (one of the places), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). It is a request until the home confirms it. Errors: 403 visiting_paused, 400 for a slot, place, date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 409 visit_slot_full when the place has no room left for that many people at that time (waiting requests hold their seats), 400 visit_protected_time for a closed time, 429 once five requests are waiting.",
+        "Book A Visit, the Request button. Body: residentId, date (YYYY-MM-DD from visit options), time (HH:mm on the half hour, inside the visiting hours with at least half an hour before closing, and not in a protected time), totalPeople (1 to maxPartySize) and an optional note (up to 500 characters). The visit runs from that time until the visiting hours end. It is a request until the home confirms it. Errors: 403 visiting_paused, 400 invalid_visit_time for a time that isn't offered, 400 visit_protected_time for a closed time, 400 for a date or number that isn't offered or a day that has passed, 409 visit_already_requested for the same time, 429 once five requests are waiting.",
     }),
     {
       residentId: "{{residentId}}",
       date: "{{visitDate}}",
-      slot: "{{visitSlot}}",
-      place: "{{visitPlace}}",
+      time: "{{visitTime}}",
       totalPeople: 2,
       note: "Birthday tea",
     }
@@ -1161,18 +1159,6 @@ const staffRequests = [
     description:
       "Family Groups, the group page (the eye icon). The id is the resident's id. Resident details: residentName, photoUrl, roomNumber, homeName (Care site / Branch), branchId and status (active, invitePending, noFamily). primaryNextOfKin: name, photoUrl, relationship, email and phone (from their account); an invited next of kin who has not accepted yet shows with status invited and a null memberId; null when there is none. members: the Family Members (n) table, next of kin first then in the order they joined, each with memberId, name, photoUrl, email, phone, relationship, isNextOfKin (the NOK badge), status (active or inactive) and joinedAt. pendingInvitations lists invitations still waiting. summary: totalLinkedMembers, activePortalUsers (active members), pendingInvites and groupId. 404 resident_not_found for another organization's, a discharged or an unknown resident. Needs familyEngagement.view.",
   }),
-  req("family settings", "GET", ["admin", "family", "settings"], {
-    header: orgHeader,
-    tests: [
-      'pm.test("Settings fetched", function () {',
-      "    pm.response.to.have.status(200);",
-      "    const data = pm.response.json().data;",
-      '    pm.expect(data).to.include.keys("configured", "gazette");',
-      "});",
-    ],
-    description:
-      "Family settings for the organization (the x-org-id header). gazette.issueEveryDays (days between issues, default 14), gazette.messageCap (most family messages in one resident's gazette, default 30) and gazette.anchorDate (the first day of an issue, such as 2026-10-01; every later issue starts a whole number of cycles after it). configured is false until the settings are saved; nothing runs on a schedule before that, and the values shown are the defaults. Owners and super admins only. Needs familyEngagement.view.",
-  }),
   req("family groups", "GET", ["admin", "organizations", "{{organizationId}}", "family-groups"], {
     query: "page=1&limit=10",
     optional: {
@@ -1469,20 +1455,6 @@ const adminActions = [
   },
 
   {
-    name: "update family settings",
-    method: "PUT",
-    path: ["admin", "family", "settings"],
-    body: { gazette: { anchorDate: "2026-10-01", issueEveryDays: 14, messageCap: 30 } },
-    tests: [
-      'pm.test("Settings saved", function () {',
-      "    pm.response.to.have.status(200);",
-      '    pm.expect(pm.response.json().data.configured).to.eql(true);',
-      "});",
-    ],
-    description:
-      "Saves the gazette settings; only what is sent changes. gazette.issueEveryDays is a whole number from 1 to 90, gazette.messageCap from 1 to 100 and gazette.anchorDate a day like 2026-10-01. The first save must include anchorDate, because saving is what starts the schedule: the first issue begins on that day and each later one follows without a gap, in whole days in each site's timezone. 400 gazette_setting_invalid or gazette_anchor_invalid for a bad value. Owners and super admins only. Needs familyEngagement.manage.",
-  },
-  {
     name: "update family member",
     method: "PUT",
     path: ["admin", "family", "members", "{{memberId}}"],
@@ -1666,7 +1638,7 @@ staffRequests.push(
       "});",
     ],
     description:
-      "Visit requests and invitations for the organization in the path, soonest first. Optional query: status, source, range, branchId, residentId, page, limit. A site or line manager sees their own site. Each row has the resident, source, status, startAt, endAt, place, partySize, note, decisionNote, requestedBy (name, photo and email for a request) and answers {going, cantMakeIt} for an invitation. Needs familyEngagement.view; 404 when the module is off.",
+      "Visit requests and invitations for the organization in the path, soonest first. Optional query: status, source, range, branchId, residentId, page, limit. A site or line manager sees their own site. Each row has the resident, source, status, startAt, endAt, partySize, note, decisionNote, requestedBy (name, photo and email for a request) and answers {going, cantMakeIt} for an invitation. Needs familyEngagement.view; 404 when the module is off.",
   }),
   withBody(
     staff("invite family to a visit", "POST", ["admin", "family", "visits"], {
@@ -1678,9 +1650,9 @@ staffRequests.push(
         "});",
       ],
       description:
-        "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional place (up to 60 characters) and note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage.",
+        "Invite a resident's family to a visit (it shows as From The Home in My Visits). Body: residentId, date (YYYY-MM-DD), startTime and endTime (HH:mm, in the site's timezone), optional note (up to 500). Every family member answers for themselves. Needs familyEngagement.manage.",
     }),
-    { residentId: "{{residentId}}", date: "{{visitDate}}", startTime: "14:00", endTime: "16:00", place: "Garden Lounge", note: "Afternoon tea with the residents" }
+    { residentId: "{{residentId}}", date: "{{visitDate}}", startTime: "14:00", endTime: "16:00", note: "Afternoon tea with the residents" }
   ),
   withBody(
     staff("confirm visit request", "PUT", ["admin", "family", "visits", "{{familyVisitId}}"], {
@@ -1721,31 +1693,6 @@ staffRequests.push(
     }),
     { action: "cancel" }
   ),
-  staff("visit settings", "GET", ["admin", "family", "visit-settings"], {
-    query: "branchId={{branchId}}",
-    tests: [
-      'pm.test("Visit settings fetched", function () {',
-      "    pm.response.to.have.status(200);",
-      "    const data = pm.response.json().data;",
-      '    pm.expect(data).to.include.keys("slots", "places", "daysAhead", "maxPartySize", "paused");',
-      "});",
-    ],
-    description:
-      "What a site offers on Book A Visit and whether visiting is paused: slots, places (name and capacity), protectedTimes, daysAhead, maxPartySize, paused, pausedReason and pausedAt, plus the site's timezone. Until the site saves its own, the defaults apply. A site or line manager uses their own site. Needs familyEngagement.view.",
-  }),
-  withBody(
-    staff("update visit settings", "PUT", ["admin", "family", "visit-settings"], {
-      tests: [
-        'pm.test("Visit settings saved", function () {',
-        "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data).to.have.property("paused");',
-        "});",
-      ],
-      description:
-        "Saves what the site offers, and pauses or resumes visiting. Body: branchId, then any of slots [{start, end}] (HH:mm, up to 12, no repeats), places (up to 20, each a name or {name, capacity}: capacity is the most people at once for one time slot, empty for no limit), protectedTimes [{start, end, label}] (up to 6 daily windows nobody can book, such as a mealtime; a slot that overlaps one is not offered), daysAhead (1 to 60), maxPartySize (1 to 20) and paused (true or false) with an optional pausedReason (up to 200 characters). Pausing stops new requests at once (403 visiting_paused), cancels every visit still to come at the site, withdraws their kiosk codes and notifies the families; the response has cancelled, the number of visits cancelled. Anything left out stays as it was. Needs familyEngagement.manage.",
-    }),
-    { branchId: "{{branchId}}", paused: true, pausedReason: "Visiting is paused on Maple floor while we deal with a flu outbreak" }
-  )
 );
 
 // ---------------------------------------------------------------- Chat: messages from the home (one-way)
@@ -2002,19 +1949,6 @@ const managerRequests = [
     description:
       "Visit Requests screen of the site manager and line manager apps: the requests waiting for an answer, soonest first. meta.totalRecords is the Requests (2) count and meta.visiting {paused, reason, since} drives the Pause Visiting card. Each row has the resident (residentName), requestedBy {name, photoUrl, email}, startAt, endAt, place, partySize and note: 'Sarah Hughes for Margaret Hughes, 3 people, Bringing a birthday cake'. A site or line manager sees their own site. Send the x-org-id header.",
   }),
-  staff("app visit capacity", "GET", ["app", "family-visits", "capacity"], {
-    query: "date=2026-10-26",
-    optional: { branchId: ["{{branchId}}", "The site (an owner picks one)"] },
-    tests: [
-      'pm.test("Visit capacity fetched", function () {',
-      "    pm.response.to.have.status(200);",
-      "    const data = pm.response.json().data;",
-      '    pm.expect(data).to.include.keys("date", "spaces", "protectedTimes");',
-      "});",
-    ],
-    description:
-      "The capacity card (Lounge On Sun 26 Oct). Query: date (YYYY-MM-DD, today when left out). spaces has one entry for each place with a limit: place, capacity and slots with start, end, booked, capacity and full (14:00 3/4, 15:00 4/4). Waiting requests hold their seats as well as confirmed visits. protectedTimes lists the closed windows with a ready note: 'Protected mealtime 12:00 - 13:30 isn't bookable.'",
-  }),
   withBody(
     staff("app approve visit request", "PUT", ["app", "family-visits", "{{familyVisitId}}"], {
       tests: [
@@ -2222,23 +2156,179 @@ const billingRequests = [
       '    pm.expect(json.meta.summary).to.include.keys("activeOrganizations", "totalUsedGb", "quotaPercent", "images", "files", "billing");',
       "});",
     ],
-    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. Who sees what: a Super Admin (platform admin, Admin Login, no x-org-id) gets one row per active organization. An owner (or an organization's super admin) sends x-org-id and gets one row per branch of their organization, with their organization itself in meta.organization. A site manager, line manager or staff member sends x-org-id and gets only their own branch. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email for a platform admin; branch name or manager name or email for the others), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization for a platform admin: organizationId, name, owner {name, email}, usedGb, planLimitGb (the same for every organization; null until the platform admin sets it), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit when no limit is set) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), emergencyNotifyOffsite, measuredAt, measuring, unmeasured and canEdit. A branch row (owner, site manager, line manager, staff) has branchId, organizationId, name, manager {name, email}, usedGb, planLimitGb (the organization's limit, shared by its branches), usagePercent (the branch's share of that limit) with status and statusLabel, images, files, measuredAt, unmeasured and canEdit (always false). The pencil opens Edit Organization: show it on an organization row when canEdit is true (a platform admin, an owner or a super admin) and fill the dialog from the row (name, owner name and email, which cannot be changed, and emergencyNotifyOffsite); Save Changes is update organization (PUT /admin/organizations/:organizationId with name and settings.emergencyNotifyOffsite). meta.summary is the four cards for everything in scope, ignoring the search (all organizations for a platform admin, the organization for an owner, the one branch for a site manager, line manager or staff member): activeOrganizations, totalUsedGb with quotaPercent (used against planLimitGb for each organization, which is totalPlanGb), planLimitGb, images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket every night, so measuredAt says how fresh it is.",
+    description: "The Billing & Usage screen in one call. Any signed-in role may call it: Super Admin (platform admin), owner, site manager, line manager or staff. Who sees what: a Super Admin (platform admin, Admin Login, no x-org-id) gets one row per active organization, and passes organizationId (clicking an organization, or the Filter by Organization dropdown) to get that organization's branches the way its owner sees them: one row per branch, the cards of that organization and the organization itself in meta.organization. An owner (or an organization's super admin) sends x-org-id and gets one row per branch of their organization, with their organization itself in meta.organization. A site manager, line manager or staff member sends x-org-id and gets only their own branch. Query: organizationId (platform admin only: the Filter by Organization dropdown), keyword (organization name, owner name or owner email for a platform admin; branch name or owner name or email for the others), sort (usedDesc is the default, usedAsc, percentDesc or name), page, limit (default 10). data has one row per organization for a platform admin: organizationId, name, owner {name, email}, usedGb, planLimitGb (the same for every organization; null until the platform admin sets it), usagePercent, status (normal below 60%, moderate from 60%, high from 90%, overPlan above 100%, noLimit when no limit is set) with statusLabel, images {gb, percentOfUsed, count}, files {gb, percentOfUsed, count} (PDFs, documents and records), emergencyNotifyOffsite, measuredAt, measuring, unmeasured and canEdit. A branch row (owner, site manager, line manager, staff) has branchId, organizationId, name, owner {name, email} (the organization's owner), usedGb, planLimitGb (the organization's limit, shared by its branches), usagePercent (the branch's share of that limit) with status and statusLabel, images, files, measuredAt, unmeasured and canEdit (always false). The pencil opens Edit Organization: show it on an organization row when canEdit is true (a platform admin, an owner or a super admin) and fill the dialog from the row (name, owner name and email, which cannot be changed, and emergencyNotifyOffsite); Save Changes is update organization (PUT /admin/organizations/:organizationId with name and settings.emergencyNotifyOffsite). meta.summary is the four cards for everything in scope, ignoring the search (all organizations for a platform admin, the organization for an owner, the one branch for a site manager, line manager or staff member): activeOrganizations, totalUsedGb with quotaPercent (used against planLimitGb for each organization, which is totalPlanGb), planLimitGb, images {gb, percentOfTotal, count}, files {gb, percentOfTotal, count} and billing {status withinPlan or overPlan, label, organizationsOver, overageGb, overageChargeGbp, baseTierGbp, overageGbpPerGb}. A platform admin also gets meta.organizations for the dropdown. GB here are 1024 x 1024 x 1024 bytes. Usage is measured from the storage bucket every night, so measuredAt says how fresh it is.",
+  }),
+  req("usage detail", "GET", ["admin", "billing", "usage", "{{organizationId}}"], {
+    header: billingHeader,
+    optional: {
+      branchId: ["{{branchId}}", "One branch of the organization: its own usage detail"],
+    },
+    tests: [
+      'pm.test("Usage detail fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("organization", "storage", "categories", "branches", "billing", "record");',
+      '    pm.expect(data.categories).to.be.an("array");',
+      "});",
+    ],
+    description: "The usage detail page of one organization (click a row on the Billing & Usage table). The id in the path is organizationId. Only a Super Admin (platform admin, no x-org-id) or the owner or super admin of that organization (send x-org-id with the same id) can open it; a site manager, line manager or staff member gets 403 insufficient_role, and an owner asking for another organization gets 404 organization_not_found. organization: organizationId, name, owner {name, email} and status. storage (the Storage Usage card): totalUsedGb, planQuotaGb (the one limit every organization shares, null until it is set), quotaPercent, status with statusLabel, images {gb, count, percentOfTotal} and files {gb, count, percentOfTotal} (PDFs, documents and records), measuredAt and unmeasured. categories (the Category Breakdown card): one entry each for residents (Resident Photos & Media), staff (Staff Profile Photos), floorPlans (PEEP & Floor Plans), documents (Documents, Signatures & Leave Attachments), family (Family Photos, Newsletters & Gazettes), visitors (Visitor Photos & Signatures) and profiles (Profile Pictures), each with label, gb, percentOfUsed, images {gb, count} and files {gb, count}; they add up to totalUsedGb. Show images.count for a photo category and files.count for a document category. branches (Sites & Operating Branches): one per branch, biggest first, with usedGb, images {gb, count} and files {gb, count}. billing (Billing & Pricing): planLimitGb, monthlyBaseGbp, overageGbpPerGb, status (withinPlan or overPlan) with label, overageGb and projectedOverageGbp (overageGb times the overage price). record: createdAt and updatedAt of the organization. GB are 1024 x 1024 x 1024 bytes, rounded to four decimals (4.5 MB is 0.0044 GB). The figures are the last nightly measurement, so a new organization shows 0 until it is first measured, which happens when the server starts. Add the query branchId to get the usage detail of one branch of that organization instead (click a branch row on the organization's branch list). A branch detail has scope {type: branch, branchId}, organization {organizationId, name, owner {name, email}, status}, branch {branchId, name, status} and the same storage, categories, billing and record sections for that branch only; planQuotaGb is the organization's shared limit, and branches is just that one. A branch that is not in the organization is 404 branch_not_found. The branch's category figures are filled by the next measurement after a restart or the nightly run; until then every category shows 0.",
+  }),
+];
+
+const allSettingsRequests = [
+  req("all settings", "GET", ["admin", "settings", "all"], {
+    header: orgHeader,
+    optional: {
+      branchId: ["{{branchId}}", "The site for visits (an owner, super admin or platform admin picks one)"],
+    },
+    tests: [
+      'pm.test("Settings fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      '    pm.expect(pm.response.json().data).to.have.property("access");',
+      "});",
+    ],
+    description: "All the settings in one call: billing {planLimitGb, baseTierGbp, overageGbpPerGb}, family {configured, gazette {issueEveryDays, messageCap, anchorDate}, updatedAt} and visits (the visiting rules of one site: branchId, timezone, visitingHours {start, end}, protectedTimes, daysAhead, maxPartySize, paused, pausedReason, pausedAt). access says which sections the caller may use: billing is for a platform admin only; family is for an owner or super admin of the organization; visits is for an owner, super admin, site manager, line manager or staff member who holds familyEngagement.view (an owner or super admin needs no stored permission). A section the caller may not use is left out, and so are family and visits when the Family Engagement module is off or no x-org-id is sent. A platform admin sends x-org-id only to also get family and visits. Query branchId picks the site for visits: an owner, super admin or platform admin must send it, and visits is null until they do; a site manager, line manager or staff member always gets their own site.",
   }),
   withBody(
-    req("update billing settings", "PUT", ["admin", "billing", "settings"], {
-      header: billingHeader,
+    req("update all settings", "PUT", ["admin", "settings", "all"], {
+      header: orgHeader,
       tests: [
         'pm.test("Settings saved", function () {',
         "    pm.response.to.have.status(200);",
-        '    pm.expect(pm.response.json().data).to.have.keys("planLimitGb", "baseTierGbp", "overageGbpPerGb");',
+        "});",
+      ],
+      description: "Saves any of the three sections in one call. Send only the sections you want to change, and inside a section only what changes. billing {planLimitGb (a number above 0 up to 1000000, or null to clear it), baseTierGbp and overageGbpPerGb (0 to 100000)}: platform admin only; it changes the one limit and prices every organization shares (400 invalid_plan_limit, invalid_billing_price or invalid_billing_settings). family {gazette {issueEveryDays 1-90, messageCap 1-100, anchorDate YYYY-MM-DD}}: owner or super admin; it changes the organization in x-org-id, and the first save needs anchorDate and switches the gazette schedule on. visits {branchId, visitingHours {start, end} (HH:mm, at least half an hour apart), protectedTimes [{start, end, label}], daysAhead 1-60, maxPartySize 1-20, paused, pausedReason}: needs familyEngagement.manage; it changes one site (400 invalid_visit_settings), and pausing cancels the visits still to come and tells the families. Every section is checked for access first and nothing is saved if any is refused (403 insufficient_role). Then the sections are saved in the order billing, family, visits, so a section that fails validation (400) stops the rest: sections before it are already saved. Returns the saved sections. 400 nothing_to_update when no section is sent, 400 invalid_settings_section when one is not an object.",
+    }),
+    {
+      family: { gazette: { issueEveryDays: 14, messageCap: 30, anchorDate: "2026-10-01" } },
+      visits: { branchId: "{{branchId}}", daysAhead: 14, maxPartySize: 6, paused: false },
+    }
+  ),
+  withBody(
+    req("update billing settings", "PUT", ["admin", "settings", "all"], {
+      header: orgHeader,
+      tests: [
+        'pm.test("Billing settings saved", function () {',
+        "    pm.response.to.have.status(200);",
+        '    pm.expect(pm.response.json().data.billing).to.have.keys("planLimitGb", "baseTierGbp", "overageGbpPerGb");',
         "});",
       ],
       description:
-        "The billing settings for the whole platform: one plan limit that every organization shares, and the prices on the Billing Readiness card. Platform admin only (403 insufficient_role for anyone else). Body: planLimitGb (the storage in GB every organization's plan includes: a number above 0 up to 1000000, or null to clear it; 400 invalid_plan_limit otherwise), baseTierGbp (the monthly base tier, 380 by default) and overageGbpPerGb (0.15 by default; each a number from 0 to 100000, 400 invalid_billing_price otherwise). Send any of the three; none at all is 400 invalid_billing_settings. Returns all three. The limit stays empty (No limit set on every row) until it is set here.",
+        "Billing & Usage settings, sent as the billing section of the all settings call. Platform admin only (403 insufficient_role for anyone else); an x-org-id is not needed. They are the one plan limit every organization shares and the prices on the Billing Readiness card. planLimitGb is a number above 0 up to 1000000, or null to clear it (400 invalid_plan_limit); baseTierGbp and overageGbpPerGb are numbers from 0 to 100000 (400 invalid_billing_price). Send only what changes; a billing section with none of the three is 400 invalid_billing_settings. Returns all three values. Read them with all settings.",
     }),
-    { planLimitGb: 750, baseTierGbp: 380, overageGbpPerGb: 0.15 }
+    { billing: { planLimitGb: 750, baseTierGbp: 380, overageGbpPerGb: 0.15 } }
   ),
 ];
+
+const dashboardRequests = [
+  req("super admin dashboard", "GET", ["admin", "platform", "dashboard"], {
+    optional: {
+      year: ["2026", "The year of the onboarding and data usage charts (the current year by default)"],
+      organizationId: ["{{organizationId}}", "The organization shown in Organizational Overview (the one with the most modules by default)"],
+    },
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("summary", "onboardingGrowth", "topOrganizations", "organizationOverview", "dataUsage");',
+      "});",
+    ],
+    description: "The Super Admin dashboard in one call. Platform admin only (Admin Login, no x-org-id): anyone else gets 403. Query: year (the year of the two charts, the current year by default; 400 invalid_statistics_year outside 2000 to 2100) and organizationId (the Select organization dropdown of Organizational Overview; the organization with the most modules by default; 404 organization_not_found). summary (the cards, over every organization): organizations, sites (branches), pendingInvitations (staff and owner invitations that are still pending and not expired), professionals (professional people records), siteAndLineManagers (active site and line manager memberships), staff (active staff profiles), residents (admitted) and totalMonthlyRevenueGbp (the Total Monthly Revenue card). onboardingGrowth (Onboarding Growth): year, months (Jan to Dec), organizations and sites (running totals at the end of each month; null for months still to come) and changePercent, the growth of organizations plus sites against a year ago (null when there were none then). topOrganizations (Top Organizations, five at most, most modules first): organizationId, name, status and modules (enabled modules that have not expired); organizations lists them all for the dropdown. revenueByOrganization (Revenue by Organization): organizationId, name and monthlyRevenueGbp for every organization. organizationOverview (the bars for the selected organization, null when there are none): organizationId, name, sites, staff, residents, modules, siteManagers and lineManagers. dataUsage (Data Usage & Images Shared): year, usedGb, planQuotaGb (the one plan limit times the number of organizations, null until the limit is set), quotaPercent, images and files {gb, percentOfUsed} and months, one per month with imagesGb, filesGb and totalGb. A past month shows what the nightly measurement recorded on its last run that month, so months before recording began are null; the current month shows today's numbers. Blank for now: totalMonthlyRevenueGbp and every monthlyRevenueGbp are null, because nothing stores revenue yet; the frontend shows them empty. Not included: Sites by Region, because nothing stores a branch's region.",
+  }),
+];
+
+const ownerDashboardRequests = [
+  req("owner dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "dashboard"], {
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("summary", "attendance", "leaveBreakdown", "staffByDepartment", "workforceOverview", "evacuationRisk", "activeModules", "fireDrills", "compliance", "staffTraining", "supervisionAppraisal", "openShifts");',
+      "});",
+    ],
+    description: "The owner dashboard in one call. Owner or super admin of the organization in x-org-id (platform admin passes); site managers, line managers and staff get 403. No query. summary: totalStaff (active), totalResidents (admitted), todayVisitors (checked in today, denied left out), totalContractors, totalProfessionals. attendance: Mon to Sun (London time) of {day, present, absent}; present is staff with an attendance record, absent is staff on a shift that already started with none; days still to come are null. leaveBreakdown: this year's approved or closed leave as {label, percent} for Annual leave, Sick leave, Unpaid leave and Other. staffByDepartment: totalStaff and departments {name, count}, biggest first (staff with none are Unassigned). workforceOverview (this month, whole percents): attendance, training, retention, utilization; compliance and satisfaction are null. evacuationRisk: high, medium, low and notSet (admitted residents without a PEEP record). activeModules: active, total and modules {slug, name, active}. fireDrills: completed (closed mock evacuations this quarter) and overdueSites (no drill in 90 days). compliance (table): percentage and items, one row per competency requirement of the organization, most urgent first, {name, total (number of staff holding it), complete, dueSoon, pending, overdue (each the percentage of those staff in that state, whole numbers), dueAt (earliest due among those not yet met)}. staffTraining (table): percentage and items, one row per training assignment of the organization's staff, most urgent first, {assignmentId, staffName, name, status (overdue, dueSoon, pending or valid), dueAt, completedAt}. Both use the requirement schema: an assigned requirement is met when its latest record has not expired, and staff are the active ones. supervisionAppraisal (table): percentage (meetings done against meetings due so far, supervisions and appraisals together, using each staff member's own interval and start date) and items, one row per staff member for supervision and for appraisal, overdue first, {type (supervision or appraisal), staffName, status (overdue, dueSoon, booked, onTrack or notYetDue), completed, expected, dueAt (null when overdue)}. openShifts: the five soonest upcoming open shifts {siteName, startsAt, endsAt, urgentCover}.",
+  }),
+];
+
+const siteDashboardRequests = [
+  req("site dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "site-dashboard"], {
+    optional: {
+      people: ["all", "People on site now filter: all, staff, resident, visitor, contractor or professional"],
+      period: ["thisMonth", "Visitor and contractor activity: thisWeek, thisMonth (default) or thisYear"],
+    },
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("summary", "peopleOnSite", "activityFeed", "visitorAndContractorActivity", "compliance", "staffTraining", "supervisionAppraisal", "openShifts");',
+      "});",
+    ],
+    description: "The site manager dashboard in one call. Site manager only, and always their own site; everyone else gets 403. Query: people (the People filter of People on site now: all, staff, resident, visitor, contractor or professional; 400 invalid_people_filter) and period (the Visitor and contractor activity dropdown: thisWeek, thisMonth, which is the default, or thisYear; 400 invalid_activity_period). summary (the cards): visitorsOnSite, staffOnSite, residentsPresent (admitted), pendingApprovals (visits waiting for approval), contractorsOnSite, professionalsOnSite and residentsOutOfHome (null because nothing stores it). peopleOnSite: total and the five latest check-ins {name, email, photoUrl, type (staff, resident, visitor, contractor or professional; All lists staff, visitors, contractors and professionals, residents only with the Residents filter), checkInAt, status (onSite or onBreak)}. activityFeed: the six latest events of the site (the same items as Site Live activity, View all uses site-live/activity). visitorAndContractorActivity (for the period): visitorVisits, contractorProfessionalVisits, averageVisitMinutes (null when no visit has checked out) and topReasons {reason, count}, three at most. compliance (table): percentage (compliant share) for the site team and items, one row per competency requirement, most urgent first, {name, total (number of staff at the site holding it), complete, dueSoon, pending, overdue (each the percentage of those staff in that state, whole numbers), dueAt (earliest due among those not yet met)}. staffTraining (table): percentage and items, one row per training assignment of the site's staff, most urgent first, {assignmentId, staffName, name, status (overdue, dueSoon, pending or valid), dueAt, completedAt}. supervisionAppraisal (table): percentage and items, one row per staff member and type of the site, overdue first, {type (supervision or appraisal), staffName, status (overdue, dueSoon, booked, onTrack or notYetDue), completed, expected, dueAt (null when overdue)}. openShifts: the site's upcoming open shifts, soonest first, five at most {startsAt, endsAt, urgentCover, openedAt}.",
+  }),
+];
+
+const lineDashboardRequests = [
+  req("line manager dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "line-dashboard"], {
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.have.all.keys("summary", "teamAttendance");',
+      "    pm.expect(data.teamAttendance).to.have.lengthOf(7);",
+      "});",
+    ],
+    description: "The line manager dashboard in one call. Line manager only, and always their own site; everyone else gets 403. No query. Attendance figures cover the last 7 days (ending today, London time) at the line manager's site. summary (the cards): shiftsLogged (attendance records of those 7 days), onTime, late, attendanceRate (the same figure as Team Attendance: on time plus late against on time, late, sick and absence), familyUploadsWaiting (pending family uploads), wallPostsThisWeek (published wall posts, Monday onwards) and messagesSent (messages sent from the site this week, a message to many families counts once). teamAttendance (the Team attendance chart): one entry per day for the last 7 days, oldest first, {date, onTime, late}.",
+  }),
+];
+
+const staffDashboardRequests = [
+  req("staff dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "staff-dashboard"], {
+    optional: {
+      weekStart: ["2026-11-02", "Any day of the week shown in Next Assigned shifts (the current week by default)"],
+    },
+    tests: [
+      'pm.test("Dashboard fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("summary", "quickActions", "weeklyHours", "nextShifts", "communication", "compliance", "training", "supervisionAppraisal", "openShifts");',
+      "    pm.expect(data.weeklyHours.days).to.have.lengthOf(7);",
+      "});",
+    ],
+    description: "The staff dashboard in one call. Staff only; the figures are the signed-in staff member's own, at their own site. Everyone else gets 403 (404 staff_profile_not_found without an active staff profile). Query: weekStart (optional YYYY-MM-DD; any day picks that Monday to Sunday week for Next Assigned shifts, the current week by default; 400 invalid_week_start). The weekly hours chart is always the current week (Monday to Sunday, London time). summary (the cards): onSiteTodayMinutes (minutes worked today, counting an open session up to now; null when not clocked in today), hoursThisWeek, hourlyRate and earnedThisWeek (null because no pay rate is stored), pendingLeave (own pending leave requests) and complianceDue (competency and training requirements overdue, due soon or not yet done, plus supervision and appraisal overdue or due soon). quickActions (the Quick Actions cards): shiftClaims (the badge, open shifts the staff member can claim), documents (documents still waiting for their signature, from their site and the whole organization) and myAttendance (the member's own attendance change requests still pending review). weeklyHours (My weekly hours): workedHours, targetHours (hours of scheduled shifts) and days {day, date, workedHours, targetHours} Monday to Sunday. nextShifts (Next Assigned shifts): from, to, scheduledHours and days {day, date, shifts [{startsAt, endsAt}]}; the shift location is not stored so it is not returned. communication (Communication): the five latest notifications {title, body, isRead, timeSince}; View all uses /notifications. A notification is created for the staff member when their leave request is approved or rejected, a shift claim is approved or rejected, a training or competency requirement is assigned, or a supervision or appraisal is booked. compliance (table): percentage and items, and training (table): percentage and items, one row per requirement of the member, most urgent first, {assignmentId, name, status (overdue, dueSoon, pending or valid), dueAt, completedAt}, from the requirement schema. supervisionAppraisal (table): percentage (meetings done against meetings expected so far) and two rows, Supervision and Appraisal, {name, status (the standing badge: overdue, dueSoon, booked, onTrack or notYetDue), completed, expected, dueAt (null when overdue)}. openShifts (Open shifts to claim): up to five upcoming open shifts visible to the staff member {siteName, startsAt, endsAt, urgentCover, openedAt}.",
+  }),
+];
+
+adminFolder.item = adminFolder.item.filter((i) => !["Billing & Usage", "All Settings", "Super Admin Dashboard", "Owner Dashboard", "Site Manager Dashboard", "Line Manager Dashboard", "Staff Dashboard"].includes(i.name));
+adminFolder.item.push({
+  name: "Staff Dashboard",
+  description: "The staff home screen.",
+  item: staffDashboardRequests,
+});
+adminFolder.item.push({
+  name: "Line Manager Dashboard",
+  description: "The line manager home screen.",
+  item: lineDashboardRequests,
+});
+adminFolder.item.push({
+  name: "Site Manager Dashboard",
+  description: "The site manager home screen.",
+  item: siteDashboardRequests,
+});
+adminFolder.item.push({
+  name: "Owner Dashboard",
+  description: "The owner home screen.",
+  item: ownerDashboardRequests,
+});
+adminFolder.item.push({
+  name: "Super Admin Dashboard",
+  description: "The Super Admin home screen.",
+  item: dashboardRequests,
+});
+adminFolder.item.push({
+  name: "All Settings",
+  description: "Billing, family and visit settings in one call.",
+  item: allSettingsRequests,
+});
 
 adminFolder.item = adminFolder.item.filter((i) => i.name !== "Billing & Usage");
 adminFolder.item.push({
@@ -2333,7 +2423,7 @@ const noteDecider = (item) => {
 noteDecider(collection);
 
 const vars = collection.variable || [];
-for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitSlot", "visitPlace", "familyVisitId", "conversationId", "broadcastId", "recipientId", "notificationId"]) {
+for (const key of ["familyCode", "joinRequestId", "memberId", "handoverId", "mediaId", "mediaIds", "uploadId", "postId", "newsletterId", "visitId", "visitDate", "visitTime", "familyVisitId", "conversationId", "broadcastId", "recipientId", "notificationId"]) {
   if (!vars.find((v) => v.key === key)) {
     vars.push({ key, value: "", type: "string" });
   }

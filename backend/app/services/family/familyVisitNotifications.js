@@ -14,8 +14,10 @@ const detailsOf = async (visit) => {
   return {
     resident,
     home,
-    place: visit.place,
-    when: `${start.format("ddd D MMM")}, ${start.format(TIME)} - ${end.format(TIME)}`,
+    when:
+      visit.source === FamilyVisitSource.HOME
+        ? `${start.format("ddd D MMM")}, ${start.format(TIME)} - ${end.format(TIME)}`
+        : `${start.format("ddd D MMM")}, ${start.format(TIME)}`,
   };
 };
 
@@ -27,26 +29,26 @@ const about = (visit) => ({
 
 const notifyVisitRequested = ({ visit, requesterName }) =>
   quietly(async () => {
-    const { resident, when, place } = await detailsOf(visit);
+    const { resident, when } = await detailsOf(visit);
     const people = visit.partySize === 1 ? "1 person" : `${visit.partySize} people`;
     await notify({
       ...about(visit),
       receivers: await managersOf(visit),
       subjectId: visit.requestedBy,
       title: "New visit request",
-      body: `${requesterName} asked to visit ${resident} on ${when} (${people}, ${place}).`,
+      body: `${requesterName} asked to visit ${resident} on ${when} (${people}).`,
     });
   });
 
 const notifyVisitInvited = ({ visit }) =>
   quietly(async () => {
-    const { resident, home, when, place } = await detailsOf(visit);
+    const { resident, home, when } = await detailsOf(visit);
     await notify({
       ...about(visit),
       receivers: await familyOf(visit),
       subjectId: visit.invitedBy,
       title: "Visit invitation",
-      body: `${home} invited you to visit ${resident} on ${when} in ${place}.`,
+      body: `${home} invited you to visit ${resident} on ${when}.`,
     });
   });
 
@@ -95,7 +97,6 @@ const notifyVisitReply = ({ visitId, user, response }) =>
           residentId: 1,
           startAt: 1,
           endAt: 1,
-          place: 1,
         },
       },
     ]);

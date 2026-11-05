@@ -506,6 +506,16 @@ const updateDepartment = async ({
 
 // --- Job titles ---
 
+const assertOwnBranchOnly = (standing, branchId) => {
+  if (
+    standing.role === MembershipRole.SITE_MANAGER &&
+    branchId !== undefined &&
+    String(branchId || "") !== String(standing.branchId)
+  ) {
+    throw new AppError("job_title_outside_managed_branch", 403);
+  }
+};
+
 const createJobTitle = async ({
   actor,
   organizationId,
@@ -516,6 +526,7 @@ const createJobTitle = async ({
 }) => {
   const standing = await actorStanding(actor, organizationId);
   const scopedBranchId = scopeBranchFilter(standing, branchId);
+  assertOwnBranchOnly(standing, branchId);
   assertMayManageStaff(standing, scopedBranchId);
   await assertOrganizationExists(organizationId);
   await assertBranchInOrganization(scopedBranchId, organizationId);
@@ -547,6 +558,7 @@ const createJobTitle = async ({
 };
 
 const listJobTitles = async ({
+  actor,
   organizationId,
   page,
   limit,
@@ -558,11 +570,24 @@ const listJobTitles = async ({
   status,
   level,
 }) => {
+  const standing = await actorStanding(actor, organizationId);
   const match = {
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
   };
 
-  if (branchId !== undefined) {
+  if (
+    standing.role === MembershipRole.SITE_MANAGER ||
+    standing.role === MembershipRole.LINE_MANAGER
+  ) {
+    match.branchId = {
+      $in: [
+        ...(standing.branchId
+          ? [new mongoose.Types.ObjectId(String(standing.branchId))]
+          : []),
+        null,
+      ],
+    };
+  } else if (branchId !== undefined) {
     match.branchId = branchId
       ? new mongoose.Types.ObjectId(String(branchId))
       : null;
@@ -625,6 +650,7 @@ const updateJobTitle = async ({
 
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, jobTitle.branchId);
+  assertOwnBranchOnly(standing, branchId);
 
   if (name !== undefined) jobTitle.name = name;
   if (level !== undefined) {
@@ -932,7 +958,11 @@ const createStaffProfile = async ({
       if (bannerUrl) profile.bannerUrl = bannerUrl;
       if (ward) profile.ward = ward;
       if (locationLabel) profile.locationLabel = locationLabel;
-      if (status) profile.status = status;
+      if (status) {
+        profile.status = status;
+        profile.inactiveAt =
+          status === StaffProfileStatus.INACTIVE ? new Date() : null;
+      }
       await profile.save();
     }
 
@@ -1263,7 +1293,11 @@ const updateStaffProfile = async ({
     if (!Object.values(StaffProfileStatus).includes(status)) {
       throw new AppError("invalid_staff_profile_status", 400);
     }
-    profile.status = status;
+    if (status !== profile.status) {
+      profile.status = status;
+      profile.inactiveAt =
+        status === StaffProfileStatus.INACTIVE ? new Date() : null;
+    }
   }
 
   if (

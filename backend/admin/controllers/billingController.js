@@ -22,15 +22,14 @@ const listUsage = respond(
   { paged: true },
 );
 
-const updateSettings = respond(
-  (req) =>
-    billingUsageService.updateSettings({
-      actor: req.user,
-      planLimitGb: req.body?.planLimitGb,
-      baseTierGbp: req.body?.baseTierGbp,
-      overageGbpPerGb: req.body?.overageGbpPerGb,
-    }),
-  { translationKey: "billing_settings_saved" },
+const getUsageDetail = respond((req) =>
+  billingUsageService.getUsageDetail({
+    actor: req.user,
+    role: req.membership?.role,
+    organizationId: req.params.organizationId,
+    branchId: queryId(req.query.branchId, "branchId"),
+    scopeOrganizationId: req.orgId,
+  }),
 );
 
-module.exports = { listUsage, updateSettings };
+module.exports = { listUsage, getUsageDetail };

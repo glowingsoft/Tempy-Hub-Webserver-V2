@@ -11,7 +11,7 @@ const {
   runFamilyGazetteRecoveryCron,
   runFamilyGazetteSchedulerCron,
 } = require("./family/familyGazettes.cron");
-const { runStorageUsageCron } = require("./billing/storageUsage.cron");
+const { runStorageUsageCron, runStorageUsageCatchUp } = require("./billing/storageUsage.cron");
 
 const envFlag = (key, fallback = true) => {
   const raw = process.env[key];
@@ -107,6 +107,10 @@ const startCrons = () => {
     enabled: envFlag("CRON_STORAGE_USAGE", true),
     run: runStorageUsageCron,
   });
+
+  runStorageUsageCatchUp().catch((err) =>
+    console.error("Storage usage catch-up error:", err),
+  );
 };
 
 module.exports = { startCrons };

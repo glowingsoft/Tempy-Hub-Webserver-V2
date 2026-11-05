@@ -69,7 +69,6 @@ const familyVisitSchema = new mongoose.Schema(
     startAt: { type: Date, required: true },
     endAt: { type: Date, required: true },
     partySize: { type: Number, default: 1, min: 1 },
-    place: { type: String, default: "", trim: true },
     note: { type: String, default: "", trim: true },
     status: {
       type: String,

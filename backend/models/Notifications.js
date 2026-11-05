@@ -13,6 +13,7 @@ const NotificationTypes = {
   FAMILY_JOIN_REQUEST: "familyJoinRequest",
   FAMILY_UPLOAD_PENDING: "familyUploadPending",
   FAMILY_ACCESS: "familyAccess",
+  FAMILY_EMERGENCY: "familyEmergency",
   VISITOR_SURVEY: "visitorSurvey",
   SYSTEM: "system",
   REMINDER: "reminder",
@@ -24,6 +25,10 @@ const NotificationTypes = {
   BOOKING_PICKED: "bookingPicked",
   BOOKING_COMPLETED: "bookingCompleted",
   BOOKING_CANCELED: "bookingCanceled",
+  LEAVE_REQUEST_UPDATE: "leaveRequestUpdate",
+  SHIFT_CLAIM_UPDATE: "shiftClaimUpdate",
+  REQUIREMENT_ASSIGNED: "requirementAssigned",
+  MEETING_BOOKED: "meetingBooked",
 };
 
 // Define the NotificationSchema

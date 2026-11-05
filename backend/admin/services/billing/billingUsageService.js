@@ -3,6 +3,7 @@ const { User } = require("@models/UserModel");
 const { Branch } = require("@models/Branch");
 const { OrganizationUsage } = require("@models/OrganizationUsage");
 const { BranchUsage } = require("@models/BranchUsage");
+const { UsageSnapshot } = require("@models/UsageSnapshot");
 const { PlatformBilling, SETTINGS_KEY } = require("@models/PlatformBilling");
 const { MembershipRole, OrganizationStatus } = require("@models/domainEnums");
 const { searchText } = require("@utils/familyQuery");
@@ -10,7 +11,7 @@ const { generateMeta } = require("@utils/responseUtil");
 const { facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("@appServices/family/familyPipeline");
-const { measureOrganization } = require("./storageMeasure");
+const { CATEGORIES, MEASUREMENT_VERSION, measureOrganization } = require("./storageMeasure");
 
 const GB = 1024 ** 3;
 const MAX_PLAN_LIMIT_GB = 1000000;
@@ -28,6 +29,16 @@ const USAGE_LABELS = {
 const MODERATE_FROM_PERCENT = 60;
 const HIGH_FROM_PERCENT = 90;
 
+const CATEGORY_LABELS = {
+  residents: "Resident Photos & Media",
+  staff: "Staff Profile Photos",
+  floorPlans: "PEEP & Floor Plans",
+  documents: "Documents, Signatures & Leave Attachments",
+  family: "Family Photos, Newsletters & Gazettes",
+  visitors: "Visitor Photos & Signatures",
+  profiles: "Profile Pictures",
+};
+
 const SORTS = {
   usedDesc: { usedBytes: -1, name: 1, _id: 1 },
   usedAsc: { usedBytes: 1, name: 1, _id: 1 },
@@ -43,7 +54,7 @@ const requirePlatformAdmin = (actor) => {
   if (!isPlatformAdmin(actor)) throw new AppError("insufficient_role", 403);
 };
 
-const toGb = (bytes) => Math.round((bytes / GB) * 100) / 100;
+const toGb = (bytes) => Math.round((bytes / GB) * 10000) / 10000;
 const percent = (part, whole) =>
   whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0;
 
@@ -149,7 +160,7 @@ const branchRowOf = (row) => ({
   branchId: row._id,
   organizationId: row.organizationId,
   name: row.name,
-  manager: { name: row.managerName || "", email: row.managerEmail || "" },
+  owner: { name: row.ownerName || "", email: row.ownerEmail || "" },
   ...figuresOf(row),
   canEdit: false,
 });
@@ -231,9 +242,10 @@ const organizationStages = (planLimitGb) => [
 ];
 
 const branchStages = (planLimitGb) => [
-  ...joinOne({ from: User, localField: "managerUserId", as: "manager", optional: true }),
+  ...joinOne({ from: Organization, localField: "organizationId", as: "organization", optional: true }),
+  ...joinOne({ from: User, localField: "organization.ownerUserId", as: "owner", optional: true }),
   ...usageStages(planLimitGb, { usageModel: BranchUsage, foreignField: "branchId" }),
-  { $addFields: { managerName: "$manager.name", managerEmail: "$manager.email" } },
+  { $addFields: { ownerName: "$owner.name", ownerEmail: "$owner.email" } },
 ];
 
 const FIGURES = {
@@ -262,6 +274,11 @@ const pageOf = async ({ model, scope, stages, search, sort, skip, limit, project
   return result;
 };
 
+const requireOrganizationExists = async (organization) => {
+  const found = await Organization.aggregate([{ $match: { _id: organization } }, { $project: { _id: 1 } }]);
+  if (!found.length) throw new AppError("organization_not_found", 404);
+};
+
 const listUsage = async ({
   actor,
   role,
@@ -288,30 +305,37 @@ const listUsage = async ({
     emergencyNotifyOffsite: { $ifNull: ["$settings.emergencyNotifyOffsite", false] } };
   const paging = { sort, skip, limit };
 
-  if (platform) {
-    const scope = { status: OrganizationStatus.ACTIVE };
-    const listed = { ...scope };
-    if (filterOrganizationId) listed._id = toObjectId(filterOrganizationId);
+  const options = platform
+    ? await Organization.aggregate([
+        { $match: { status: OrganizationStatus.ACTIVE } },
+        { $sort: { name: 1 } },
+        { $project: { name: 1 } },
+      ])
+    : [];
+  const organizations = options.map((org) => ({ organizationId: org._id, name: org.name }));
+  const targetOrganization = platform ? filterOrganizationId || organizationId : organizationId;
 
-    const [result, totals, options] = await Promise.all([
+  if (platform && !targetOrganization) {
+    const scope = { status: OrganizationStatus.ACTIVE };
+    const [result, totals] = await Promise.all([
       pageOf({
-        model: Organization, scope: listed, stages: orgStages, project: orgProject, ...paging,
+        model: Organization, scope, stages: orgStages, project: orgProject, ...paging,
         search: searchOn(text, ["name", "ownerName", "ownerEmail"]),
       }),
       totalsOf(Organization, scope, orgStages),
-      Organization.aggregate([{ $match: scope }, { $sort: { name: 1 } }, { $project: { name: 1 } }]),
     ]);
     return {
       data: result.data.map((row) => rowOf(row, { canEdit: true })),
       meta: {
         ...generateMeta(page, limit, facetCount(result.totalCount)),
         summary: summaryOf(totals, prices, planLimitGb),
-        organizations: options.map((org) => ({ organizationId: org._id, name: org.name })),
+        organizations,
       },
     };
   }
 
-  const organization = toObjectId(organizationId);
+  const organization = toObjectId(targetOrganization);
+  if (platform) await requireOrganizationExists(organization);
   const stages = branchStages(planLimitGb);
   const scope = orgWide
     ? { organizationId: organization }
@@ -319,8 +343,8 @@ const listUsage = async ({
 
   const [result, branchTotals, organizationTotals, [organizationRow]] = await Promise.all([
     pageOf({
-      model: Branch, scope, stages, project: { ...FIGURES, organizationId: 1, managerName: 1, managerEmail: 1 }, ...paging,
-      search: searchOn(text, ["name", "managerName", "managerEmail"]),
+      model: Branch, scope, stages, project: { ...FIGURES, organizationId: 1, ownerName: 1, ownerEmail: 1 }, ...paging,
+      search: searchOn(text, ["name", "ownerName", "ownerEmail"]),
     }),
     orgWide ? null : totalsOf(Branch, scope, stages),
     orgWide ? totalsOf(Organization, { _id: organization }, orgStages) : null,
@@ -335,8 +359,174 @@ const listUsage = async ({
       ...generateMeta(page, limit, facetCount(result.totalCount)),
       summary: summaryOf(branchTotals || organizationTotals, prices, planLimitGb),
       ...(organizationRow ? { organization: rowOf(organizationRow, { canEdit: true }) } : {}),
+      ...(platform ? { organizations } : {}),
     },
   };
+};
+
+const sharesOf = (figures, used) => ({
+  gb: toGb(figures.imageBytes + figures.fileBytes),
+  percentOfUsed: percent(figures.imageBytes + figures.fileBytes, used),
+  images: { gb: toGb(figures.imageBytes), count: figures.imageCount },
+  files: { gb: toGb(figures.fileBytes), count: figures.fileCount },
+});
+
+const DETAIL_PROJECT = {
+  ...FIGURES, status: 1, createdAt: 1, updatedAt: 1, limitBytes: 1, categories: "$usage.categories",
+};
+
+const detailOf = ({ row, branches, prices, head }) => {
+  const figures = figuresOf(row);
+  const overageBytes = row.limitBytes > 0 ? Math.max(0, row.usedBytes - row.limitBytes) : 0;
+  const overageGb = toGb(overageBytes);
+
+  return {
+    ...head,
+    storage: {
+      totalUsedGb: figures.usedGb,
+      planQuotaGb: row.planLimitGb,
+      quotaPercent: figures.usagePercent,
+      status: figures.status,
+      statusLabel: figures.statusLabel,
+      images: { ...figures.images, percentOfTotal: figures.images.percentOfUsed },
+      files: { ...figures.files, percentOfTotal: figures.files.percentOfUsed },
+      measuredAt: row.measuredAt,
+      unmeasured: row.unmeasured,
+    },
+    categories: CATEGORIES.map((category) => ({
+      key: category,
+      label: CATEGORY_LABELS[category],
+      ...sharesOf(
+        { imageBytes: 0, imageCount: 0, fileBytes: 0, fileCount: 0, ...row.categories?.[category] },
+        row.usedBytes,
+      ),
+    })),
+    branches: branches
+      .sort(
+        (a, b) =>
+          b.imageBytes + b.fileBytes - (a.imageBytes + a.fileBytes) || a.name.localeCompare(b.name),
+      )
+      .map((branch) => {
+        const { gb, images, files } = sharesOf(branch, row.usedBytes);
+        return { branchId: branch._id, name: branch.name, usedGb: gb, images, files };
+      }),
+    billing: {
+      planLimitGb: row.planLimitGb,
+      monthlyBaseGbp: prices.baseTierGbp,
+      overageGbpPerGb: prices.overageGbpPerGb,
+      status: overageBytes > 0 ? "overPlan" : "withinPlan",
+      label: overageBytes > 0 ? "Over Plan" : "Within Plan",
+      overageGb,
+      projectedOverageGbp: Math.round(overageGb * prices.overageGbpPerGb * 100) / 100,
+    },
+    record: { createdAt: row.createdAt, updatedAt: row.updatedAt },
+  };
+};
+
+const requireDetailAccess = ({ actor, role, organizationId, scopeOrganizationId }) => {
+  if (!isValidObjectId(organizationId)) throw new AppError("organization_not_found", 404);
+  if (isPlatformAdmin(actor)) return;
+  if (!MAY_EDIT_ORGANIZATION.includes(role)) throw new AppError("insufficient_role", 403);
+  if (String(organizationId) !== String(scopeOrganizationId))
+    throw new AppError("organization_not_found", 404);
+};
+
+const getOrganizationUsageDetail = async (access) => {
+  const target = toObjectId(access.organizationId);
+  const { planLimitGb, ...prices } = await getBilling();
+  const [[row], branches] = await Promise.all([
+    Organization.aggregate([
+      { $match: { _id: target } },
+      ...organizationStages(planLimitGb),
+      { $project: { ...DETAIL_PROJECT, ownerName: 1, ownerEmail: 1 } },
+    ]),
+    Branch.aggregate([
+      { $match: { organizationId: target } },
+      {
+        $lookup: {
+          from: BranchUsage.collection.name,
+          localField: "_id",
+          foreignField: "branchId",
+          as: "usage",
+        },
+      },
+      { $unwind: { path: "$usage", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          name: 1,
+          imageBytes: { $ifNull: ["$usage.imageBytes", 0] },
+          imageCount: { $ifNull: ["$usage.imageCount", 0] },
+          fileBytes: { $ifNull: ["$usage.fileBytes", 0] },
+          fileCount: { $ifNull: ["$usage.fileCount", 0] },
+        },
+      },
+    ]),
+  ]);
+  if (!row) throw new AppError("organization_not_found", 404);
+
+  return detailOf({
+    row,
+    branches,
+    prices,
+    head: {
+      scope: { type: "organization" },
+      organization: {
+        organizationId: row._id,
+        name: row.name,
+        owner: { name: row.ownerName || "", email: row.ownerEmail || "" },
+        status: row.status,
+      },
+    },
+  });
+};
+
+const getBranchUsageDetail = async ({ branchId, ...access }) => {
+  const target = toObjectId(access.organizationId);
+  const { planLimitGb, ...prices } = await getBilling();
+  const [[organization], [row]] = await Promise.all([
+    Organization.aggregate([
+      { $match: { _id: target } },
+      ...joinOne({ from: User, localField: "ownerUserId", as: "owner", optional: true }),
+      { $project: { name: 1, status: 1, ownerName: "$owner.name", ownerEmail: "$owner.email" } },
+    ]),
+    isValidObjectId(branchId)
+      ? Branch.aggregate([
+          { $match: { _id: toObjectId(branchId), organizationId: target } },
+          ...branchStages(planLimitGb),
+          { $project: DETAIL_PROJECT },
+        ])
+      : [],
+  ]);
+  if (!organization) throw new AppError("organization_not_found", 404);
+  if (!row) throw new AppError("branch_not_found", 404);
+
+  return detailOf({
+    row,
+    branches: [{ _id: row._id, name: row.name, imageBytes: row.imageBytes, imageCount: row.imageCount, fileBytes: row.fileBytes, fileCount: row.fileCount }],
+    prices,
+    head: {
+      scope: { type: "branch", branchId: row._id },
+      organization: {
+        organizationId: organization._id,
+        name: organization.name,
+        owner: { name: organization.ownerName || "", email: organization.ownerEmail || "" },
+        status: organization.status,
+      },
+      branch: { branchId: row._id, name: row.name, status: row.status },
+    },
+  });
+};
+
+const getUsageDetail = async ({ branchId, ...access }) => {
+  requireDetailAccess(access);
+  return branchId
+    ? getBranchUsageDetail({ branchId, ...access })
+    : getOrganizationUsageDetail(access);
+};
+
+const getSettings = async ({ actor }) => {
+  requirePlatformAdmin(actor);
+  return getBilling();
 };
 
 const updateSettings = async ({ actor, planLimitGb, baseTierGbp, overageGbpPerGb }) => {
@@ -391,7 +581,7 @@ const runClaimedMeasurement = async (organizationId, now) => {
     const { branches, ...totals } = await measureOrganization(organizationId);
     await OrganizationUsage.updateOne(
       { organizationId: toObjectId(organizationId) },
-      { $set: { ...totals, measuredAt: now, measuringSince: null } },
+      { $set: { ...totals, version: MEASUREMENT_VERSION, measuredAt: now, measuringSince: null } },
     );
     if (branches.length)
       await BranchUsage.bulkWrite(
@@ -422,9 +612,49 @@ const recalculateOrganization = async (organizationId, now = new Date()) => {
   return true;
 };
 
-const recalculateAll = async () => {
+const recordUsageSnapshot = async (now = new Date()) => {
+  const [totals] = await OrganizationUsage.aggregate([
+    { $group: { _id: null, imageBytes: { $sum: "$imageBytes" }, fileBytes: { $sum: "$fileBytes" }, organizations: { $sum: 1 } } },
+  ]);
+  const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  await UsageSnapshot.updateOne(
+    { month },
+    {
+      $set: {
+        imageBytes: totals?.imageBytes ?? 0,
+        fileBytes: totals?.fileBytes ?? 0,
+        organizations: totals?.organizations ?? 0,
+        capturedAt: now,
+      },
+    },
+    { upsert: true },
+  );
+};
+
+const recalculateAll = async ({ unmeasuredOnly = false } = {}) => {
   const organizations = await Organization.aggregate([
     { $match: { status: OrganizationStatus.ACTIVE } },
+    ...(unmeasuredOnly
+      ? [
+          {
+            $lookup: {
+              from: OrganizationUsage.collection.name,
+              localField: "_id",
+              foreignField: "organizationId",
+              as: "usage",
+            },
+          },
+          {
+            $match: {
+              usage: {
+                $not: {
+                  $elemMatch: { measuredAt: { $ne: null }, version: { $gte: MEASUREMENT_VERSION } },
+                },
+              },
+            },
+          },
+        ]
+      : []),
     { $project: { _id: 1 } },
   ]);
   for (const { _id } of organizations) {
@@ -434,11 +664,21 @@ const recalculateAll = async () => {
       console.error("usage measurement failed", String(_id), error.message);
     }
   }
+  try {
+    await recordUsageSnapshot();
+  } catch (error) {
+    console.error("usage snapshot failed", error.message);
+  }
   return organizations.length;
 };
 
 module.exports = {
+  toGb,
+  getBilling,
+  recordUsageSnapshot,
   listUsage,
+  getUsageDetail,
+  getSettings,
   updateSettings,
   recalculateOrganization,
   recalculateAll,

@@ -33,7 +33,6 @@ const inviteFamily = respond(
       date: req.body.date,
       startTime: req.body.startTime,
       endTime: req.body.endTime,
-      place: req.body.place,
       note: req.body.note,
     }),
   { statusCode: 201, translationKey: "visit_invited" },
@@ -62,27 +61,8 @@ const updateVisit = respondByAction({
   [VisitDecision.CANCEL]: decide(VisitDecision.CANCEL, "visit_cancelled"),
 });
 
-const getSettings = respond((req) =>
-  familyVisitStaffService.getSettings({
-    ...withScope(req),
-    branchId: queryId(req.query.branchId, "branchId"),
-  }),
-);
-
-const updateSettings = respond(
-  (req) =>
-    familyVisitStaffService.updateSettings({
-      ...withScope(req),
-      branchId: queryId(req.body.branchId, "branchId"),
-      body: req.body,
-    }),
-  { translationKey: "visit_settings_saved" },
-);
-
 module.exports = {
   listVisits,
   inviteFamily,
   updateVisit,
-  getSettings,
-  updateSettings,
 };

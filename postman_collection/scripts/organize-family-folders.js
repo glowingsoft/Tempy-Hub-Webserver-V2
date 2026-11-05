@@ -64,8 +64,7 @@ const familyEngagement = folder(adminRoot, "Staff side of the family module, one
     "gazettes", "gazette detail", "gazette pdf", "download all gazette pdfs", "generate gazettes", "regenerate gazette",
     "mark gazette printed", "mark gazette given", "mark all gazettes printed", "retry failed gazettes"
   )),
-  folder("Settings", "How often gazettes are built and how many messages one holds.", adminPlace("family settings", "update family settings")),
-  folder("Visits", "Visit requests and invitations, and what a site offers on Book A Visit.", adminPlace("family visits", "invite family to a visit", "confirm visit request", "decline visit request", "cancel family visit", "visit settings", "update visit settings")),
+  folder("Visits", "Visit requests and invitations, and what a site offers on Book A Visit.", adminPlace("family visits", "invite family to a visit", "confirm visit request", "decline visit request", "cancel family visit")),
   folder("Family Groups", "One row per resident with their family.", adminPlace("family groups", "family group detail")),
   folder("Family Membership", "Who is in each family, and how they get in.", [
     folder("Family Invitations", "Invite a family member, and follow the invitations.", adminPlace(

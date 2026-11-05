@@ -17,11 +17,8 @@ const {
   assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
-} = require("@adminServices/family/familyScope");
-const {
-  toObjectId,
-  joinOne,
-} = require("@appServices/family/familyPipeline");
+} = require("@adminServices/residents/residentAccess");
+const { toObjectId, joinOne } = require("@appServices/family/familyPipeline");
 const { getAttention } = require("./familyWallActivityService");
 const { getWallGazetteCard } = require("./familyGazetteCard");
 
@@ -57,7 +54,9 @@ const activityOf = async ({ scope, since }) => {
     ]),
   ]);
 
-  const byStatus = Object.fromEntries(uploads.map((row) => [row._id, row.count]));
+  const byStatus = Object.fromEntries(
+    uploads.map((row) => [row._id, row.count]),
+  );
   const approved = byStatus[FamilyUploadStatus.APPROVED] ?? 0;
   const pending = byStatus[FamilyUploadStatus.PENDING] ?? 0;
   const notApproved = byStatus[FamilyUploadStatus.REJECTED] ?? 0;
@@ -118,7 +117,14 @@ const gazetteProgressOf = async ({ scope }) => {
     { $group: { _id: "$branchId", issueId: { $first: "$_id" } } },
   ]);
   if (!issues.length)
-    return { total: 0, building: 0, failed: 0, ready: 0, printed: 0, toGive: 0 };
+    return {
+      total: 0,
+      building: 0,
+      failed: 0,
+      ready: 0,
+      printed: 0,
+      toGive: 0,
+    };
 
   const [row] = await FamilyGazetteItem.aggregate([
     { $match: { issueId: { $in: issues.map((issue) => issue.issueId) } } },
@@ -127,16 +133,32 @@ const gazetteProgressOf = async ({ scope }) => {
         _id: null,
         total: { $sum: 1 },
         building: {
-          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.BUILDING] }, 1, 0] },
+          $sum: {
+            $cond: [
+              { $eq: ["$status", FamilyGazetteItemStatus.BUILDING] },
+              1,
+              0,
+            ],
+          },
         },
         failed: {
-          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.FAILED] }, 1, 0] },
+          $sum: {
+            $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.FAILED] }, 1, 0],
+          },
         },
         ready: {
-          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.READY] }, 1, 0] },
+          $sum: {
+            $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.READY] }, 1, 0],
+          },
         },
         printed: {
-          $sum: { $cond: [{ $eq: ["$status", FamilyGazetteItemStatus.PRINTED] }, 1, 0] },
+          $sum: {
+            $cond: [
+              { $eq: ["$status", FamilyGazetteItemStatus.PRINTED] },
+              1,
+              0,
+            ],
+          },
         },
         toGive: {
           $sum: {
@@ -156,7 +178,15 @@ const gazetteProgressOf = async ({ scope }) => {
     },
   ]);
   const { _id, ...progress } = row ?? {};
-  return { total: 0, building: 0, failed: 0, ready: 0, printed: 0, toGive: 0, ...progress };
+  return {
+    total: 0,
+    building: 0,
+    failed: 0,
+    ready: 0,
+    printed: 0,
+    toGive: 0,
+    ...progress,
+  };
 };
 
 const checklistOf = ({ attention, gazette, progress }) => {
@@ -240,4 +270,4 @@ const getOverview = async ({ actor, organizationId, branchId, days }) => {
   };
 };
 
-module.exports = { getOverview };
+module.exports = { getOverview, activityOf };

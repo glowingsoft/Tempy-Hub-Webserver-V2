@@ -15,11 +15,23 @@ const {
 const auth = require("@middlewares/authMiddleware");
 const createRateLimiter = require("@utils/rateLimiter");
 const roleMiddleware = require("@middlewares/roleMiddleware");
+const { requireMembership } = require("@middlewares/membershipMiddleware");
+const allSettingsController = require("../controllers/allSettingsController");
 
 const router = express.Router();
 
 // Create a rate limiter for Admin Settings
 const apiRateLimiter = createRateLimiter("AdminSettings");
+
+const settingsAccess = (req, res, next) => {
+  const organization = req.header("x-org-id") || req.query.organizationId;
+  return req.user?.userType === "admin" && !organization
+    ? next()
+    : requireMembership()(req, res, next);
+};
+
+router.get("/all", auth, settingsAccess, apiRateLimiter, allSettingsController.getAll);
+router.put("/all", auth, settingsAccess, apiRateLimiter, allSettingsController.updateAll);
 
 // Route to fetch terms and conditions with rate limiting
 router.get("/terms-conditions", apiRateLimiter, getTermsAndConditions);

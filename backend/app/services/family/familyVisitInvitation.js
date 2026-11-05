@@ -36,9 +36,7 @@ const issueInvitation = async ({
         visitorEmail: String(visitorEmail || "").toLowerCase(),
         arrivalAt: visit.startAt,
         visitingUntil: visit.endAt,
-        instructions: [`Visiting ${residentName}`, visit.place]
-          .filter(Boolean)
-          .join(" · "),
+        instructions: `Visiting ${residentName}`,
         inviteCode: randomCode(),
         status: InvitationStatus.ACCEPTED,
         createdBy,

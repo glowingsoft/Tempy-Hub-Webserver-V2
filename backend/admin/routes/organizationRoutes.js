@@ -15,6 +15,11 @@ const { MembershipRole, ModuleSlug } = require("@models/domainEnums");
 const organizationController = require("../controllers/organizationController");
 const staffDashboardSettingsController = require("../controllers/staffDashboardSettingsController");
 
+const ownerDashboardController = require("../controllers/ownerDashboardController");
+const siteDashboardController = require("../controllers/siteDashboardController");
+const lineDashboardController = require("../controllers/lineDashboardController");
+const staffDashboardController = require("../controllers/staffDashboardController");
+
 const branchController = require("../controllers/branchController");
 
 const membershipController = require("../controllers/membershipController");
@@ -94,6 +99,30 @@ const scoped = express.Router({ mergeParams: true });
 scoped.use(requireMembership());
 
 scoped.get(
+  "/dashboard",
+  requireRoles(OWNER_OR_SA),
+  ownerDashboardController.getDashboard,
+);
+
+scoped.get(
+  "/site-dashboard",
+  requireRoles([MembershipRole.SITE_MANAGER]),
+  siteDashboardController.getDashboard,
+);
+
+scoped.get(
+  "/staff-dashboard",
+  requireRoles([MembershipRole.STAFF]),
+  staffDashboardController.getDashboard,
+);
+
+scoped.get(
+  "/line-dashboard",
+  requireRoles([MembershipRole.LINE_MANAGER]),
+  lineDashboardController.getDashboard,
+);
+
+scoped.get(
   "/site-live/activity",
   requireRoles(MANAGERS),
   siteLiveController.getSiteLiveActivity,
@@ -125,53 +154,73 @@ scoped.get(
 
 scoped.get("/", organizationController.getOrganization);
 
-scoped.patch("/", requireRoles(OWNER_OR_SA), organizationController.updateOrganization);
+scoped.patch(
+  "/",
+  requireRoles(OWNER_OR_SA),
+  organizationController.updateOrganization,
+);
 
 scoped.get(
   "/staff-dashboard-settings",
   requireRoles(OWNER_OR_SA),
-  staffDashboardSettingsController.getStaffDashboardSettings
+  staffDashboardSettingsController.getStaffDashboardSettings,
 );
 scoped.put(
   "/staff-dashboard-settings",
   requireRoles(OWNER_OR_SA),
-  staffDashboardSettingsController.saveStaffDashboardSettings
+  staffDashboardSettingsController.saveStaffDashboardSettings,
 );
 scoped.post(
   "/staff-dashboard-settings/reset",
   requireRoles(OWNER_OR_SA),
-  staffDashboardSettingsController.resetStaffDashboardSettings
+  staffDashboardSettingsController.resetStaffDashboardSettings,
 );
 
 scoped.get(
   "/visitor-survey-settings",
-  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
-  visitorSurveyController.getVisitorSurveySettings
+  requireRoles([
+    ...OWNER_OR_SA,
+    MembershipRole.SITE_MANAGER,
+    MembershipRole.LINE_MANAGER,
+  ]),
+  visitorSurveyController.getVisitorSurveySettings,
 );
 scoped.put(
   "/visitor-survey-settings",
   requireRoles(OWNER_OR_SA),
-  visitorSurveyController.saveVisitorSurveySettings
+  visitorSurveyController.saveVisitorSurveySettings,
 );
 scoped.get(
   "/visitor-survey-questions",
-  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
-  visitorSurveyController.listVisitorSurveyQuestions
+  requireRoles([
+    ...OWNER_OR_SA,
+    MembershipRole.SITE_MANAGER,
+    MembershipRole.LINE_MANAGER,
+  ]),
+  visitorSurveyController.listVisitorSurveyQuestions,
 );
 scoped.put(
   "/visitor-survey-questions",
   requireRoles(OWNER_OR_SA),
-  visitorSurveyController.saveVisitorSurveyQuestions
+  visitorSurveyController.saveVisitorSurveyQuestions,
 );
 scoped.get(
   "/visitor-survey-responses",
-  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
-  visitorSurveyController.listVisitorSurveyResponses
+  requireRoles([
+    ...OWNER_OR_SA,
+    MembershipRole.SITE_MANAGER,
+    MembershipRole.LINE_MANAGER,
+  ]),
+  visitorSurveyController.listVisitorSurveyResponses,
 );
 scoped.post(
   "/visitor-survey-responses",
-  requireRoles([...OWNER_OR_SA, MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER]),
-  visitorSurveyController.createVisitorSurveyResponse
+  requireRoles([
+    ...OWNER_OR_SA,
+    MembershipRole.SITE_MANAGER,
+    MembershipRole.LINE_MANAGER,
+  ]),
+  visitorSurveyController.createVisitorSurveyResponse,
 );
 
 scoped.get(
@@ -234,7 +283,7 @@ scoped.get(
 scoped.patch(
   "/invitations/:invitationId",
   requireRoles(INVITERS),
-  membershipController.updateInvitation
+  membershipController.updateInvitation,
 );
 
 scoped.post(
@@ -287,145 +336,145 @@ scoped.patch(
   "/staff-profiles/:staffProfileId/compliance-settings",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.updateStaffComplianceSettings
+  appraisalController.updateStaffComplianceSettings,
 );
 scoped.patch(
   "/staff-profiles/:staffProfileId/supervision-settings",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.updateSupervisionSettings
+  supervisionController.updateSupervisionSettings,
 );
 scoped.get(
   "/supervision",
   requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.listTeamSupervision
+  supervisionController.listTeamSupervision,
 );
 scoped.post(
   "/supervision",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.createSupervision
+  supervisionController.createSupervision,
 );
 scoped.get(
   "/supervision/:supervisionId",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.getSupervision
+  supervisionController.getSupervision,
 );
 scoped.put(
   "/supervision/:supervisionId",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.updateSupervision
+  supervisionController.updateSupervision,
 );
 scoped.post(
   "/supervision/:supervisionId/action-points/sign-off",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.signOffActionPoints
+  supervisionController.signOffActionPoints,
 );
 scoped.post(
   "/supervision/:supervisionId/action-points/:actionPointId/sign-off",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  supervisionController.signOffActionPoint
+  supervisionController.signOffActionPoint,
 );
 scoped.patch(
   "/staff-profiles/:staffProfileId/appraisal-settings",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.updateAppraisalSettings
+  appraisalController.updateAppraisalSettings,
 );
 scoped.get(
   "/compliance-history",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.listComplianceHistory
+  appraisalController.listComplianceHistory,
 );
 scoped.get(
   "/appraisals",
   requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.listTeamAppraisals
+  appraisalController.listTeamAppraisals,
 );
 scoped.post(
   "/appraisals",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.createAppraisal
+  appraisalController.createAppraisal,
 );
 scoped.get(
   "/appraisals/:appraisalId",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.getAppraisal
+  appraisalController.getAppraisal,
 );
 scoped.put(
   "/appraisals/:appraisalId",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.updateAppraisal
+  appraisalController.updateAppraisal,
 );
 scoped.post(
   "/appraisals/:appraisalId/action-points/sign-off",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.signOffActionPoints
+  appraisalController.signOffActionPoints,
 );
 scoped.post(
   "/appraisals/:appraisalId/action-points/:actionPointId/sign-off",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.signOffActionPoint
+  appraisalController.signOffActionPoint,
 );
 scoped.post(
   "/appraisals/:appraisalId/manager-sign",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  appraisalController.managerSignAppraisal
+  appraisalController.managerSignAppraisal,
 );
 scoped.get(
   "/requirements",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.listRequirements
+  requirementController.listRequirements,
 );
 scoped.get(
   "/requirements/:requirementId",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.getRequirement
+  requirementController.getRequirement,
 );
 scoped.post(
   "/requirements",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.createRequirement
+  requirementController.createRequirement,
 );
 scoped.get(
   "/assignments",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.listAssignments
+  requirementController.listAssignments,
 );
 scoped.post(
   "/assignments",
   requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.createAssignments
+  requirementController.createAssignments,
 );
 scoped.get(
   "/competency-matrix",
   requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.competencyMatrix
+  requirementController.competencyMatrix,
 );
 scoped.get(
   "/training-records",
   requireRoles([...TEAM_APPROVER_ROLES, MembershipRole.STAFF]),
   requireModule(ModuleSlug.COMPETENCY_SUPERVISION_APPRAISAL),
-  requirementController.listTrainingRecords
+  requirementController.listTrainingRecords,
 );
 
 scoped.post(
@@ -457,14 +506,14 @@ scoped.get(
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.ROTA_SCHEDULING),
   requirePermission(ROTA_APPROVE),
-  shiftController.getClaim
+  shiftController.getClaim,
 );
 
 scoped.get(
   "/reports/attendance",
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_VIEW),
-  attendanceController.attendanceReport
+  attendanceController.attendanceReport,
 );
 scoped.get(
   "/reports/visitor-check-ins",
@@ -501,14 +550,14 @@ scoped.post(
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_APPROVE),
-  attendanceController.approveRoster
+  attendanceController.approveRoster,
 );
 scoped.post(
   "/attendance/:attendanceDayId/reject-roster",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_APPROVE),
-  attendanceController.rejectRoster
+  attendanceController.rejectRoster,
 );
 scoped.get(
   "/attendance-change-requests",
@@ -528,7 +577,7 @@ scoped.get(
   "/leave-requests/:requestId",
   requireModule(ModuleSlug.LEAVE),
   requirePermission(LEAVE_VIEW),
-  leaveController.getLeaveRequest
+  leaveController.getLeaveRequest,
 );
 scoped.post(
   "/leave-requests/record",
@@ -604,28 +653,28 @@ scoped.get(
   "/person-categories",
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),
-  personCategoryController.listPersonCategories
+  personCategoryController.listPersonCategories,
 );
 scoped.post(
   "/person-categories",
   requireRoles(PERSON_CATEGORY_MANAGERS),
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
-  personCategoryController.createPersonCategory
+  personCategoryController.createPersonCategory,
 );
 scoped.patch(
   "/person-categories/:categoryId",
   requireRoles(PERSON_CATEGORY_MANAGERS),
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
-  personCategoryController.updatePersonCategory
+  personCategoryController.updatePersonCategory,
 );
 scoped.delete(
   "/person-categories/:categoryId",
   requireRoles(PERSON_CATEGORY_MANAGERS),
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
-  personCategoryController.deletePersonCategory
+  personCategoryController.deletePersonCategory,
 );
 
 scoped.get(
@@ -666,27 +715,27 @@ scoped.post(
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
-  visitorAccountInvitationController.createVisitorAccountInvitation
+  visitorAccountInvitationController.createVisitorAccountInvitation,
 );
 scoped.get(
   "/visitor-account-invitations",
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_VIEW),
-  visitorAccountInvitationController.listVisitorAccountInvitations
+  visitorAccountInvitationController.listVisitorAccountInvitations,
 );
 scoped.post(
   "/visitor-account-invitations/:invitationId/resend",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
-  visitorAccountInvitationController.resendVisitorAccountInvitation
+  visitorAccountInvitationController.resendVisitorAccountInvitation,
 );
 scoped.post(
   "/visitor-account-invitations/:invitationId/revoke",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
   requirePermission(VISIT_MANAGE),
-  visitorAccountInvitationController.revokeVisitorAccountInvitation
+  visitorAccountInvitationController.revokeVisitorAccountInvitation,
 );
 scoped.get(
   "/visitor-invitations",
@@ -705,13 +754,13 @@ scoped.get(
   "/kiosk-widgets",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
-  kioskWidgetController.listKioskWidgets
+  kioskWidgetController.listKioskWidgets,
 );
 scoped.put(
   "/kiosk-widgets",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
-  kioskWidgetController.saveKioskWidgets
+  kioskWidgetController.saveKioskWidgets,
 );
 
 scoped.get(
@@ -760,41 +809,41 @@ scoped.get(
   "/document-categories",
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_VIEW),
-  documentController.listDocumentCategories
+  documentController.listDocumentCategories,
 );
 scoped.post(
   "/document-categories",
   requireRoles(CATEGORY_MANAGERS),
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_MANAGE),
-  documentController.createDocumentCategory
+  documentController.createDocumentCategory,
 );
 scoped.patch(
   "/document-categories/:categoryId",
   requireRoles(CATEGORY_MANAGERS),
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_MANAGE),
-  documentController.updateDocumentCategory
+  documentController.updateDocumentCategory,
 );
 scoped.delete(
   "/document-categories/:categoryId",
   requireRoles(CATEGORY_MANAGERS),
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_MANAGE),
-  documentController.deleteDocumentCategory
+  documentController.deleteDocumentCategory,
 );
 scoped.get(
   "/documents",
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_VIEW),
-  documentController.listDocuments
+  documentController.listDocuments,
 );
 scoped.post(
   "/documents",
   requireRoles(MANAGERS),
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_MANAGE),
-  documentController.createDocument
+  documentController.createDocument,
 );
 
 scoped.get(

@@ -15,6 +15,7 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
+const { FamilyMember } = require("@models/FamilyMember");
 const {
   isStaffAccount,
   resolveFamilyResidents,
@@ -29,6 +30,7 @@ const {
 const {
   AuthAudience,
   ActiveInactiveStatus,
+  FamilyMemberStatus,
   MembershipRole,
 } = require("@models/domainEnums");
   const {
@@ -575,6 +577,13 @@ const logout = async ({ userId, deviceId }) => {
 };
 
 const deleteAccount = async ({ userId, email }) => {
+  const nextOfKin = await FamilyMember.exists({
+    userId,
+    status: FamilyMemberStatus.ACTIVE,
+    isNextOfKin: true,
+  });
+  if (nextOfKin) throw new AppError("next_of_kin_must_hand_over_to_delete", 409);
+
   const randomEmail = `deleted_user_${userId}_${Date.now()}@example.com`;
 
   await User.findByIdAndUpdate(

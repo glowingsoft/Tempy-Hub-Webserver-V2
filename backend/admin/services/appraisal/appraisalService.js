@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
+const { notifyStaff, whenOf } = require("../staff/staffNotify");
 const { Organization } = require("@models/Organization");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
@@ -438,6 +439,18 @@ const createAppraisal = async ({
     file: fileFrom(file),
     status: meetingStatus,
   });
+
+  if (record.scheduledAt && meetingStatus === ComplianceMeetingStatus.SCHEDULED) {
+    await notifyStaff({
+      staffId: staff._id,
+      subjectId: actor._id,
+      type: "meetingBooked",
+      objectId: record._id,
+      objectType: "appraisalRecord",
+      title: "Appraisal booked",
+      body: `Your appraisal is booked for ${whenOf(record.scheduledAt, timezone)}.`,
+    });
+  }
 
   return record.toObject();
 };

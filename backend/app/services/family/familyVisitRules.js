@@ -8,36 +8,36 @@ const DEFAULT_TIMEZONE = "Europe/London";
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE = "YYYY-MM-DD";
 
+const STEP_MINUTES = 30;
+
 /** What a site offers until its staff change it. */
 const DEFAULTS = {
-  slots: [
-    { start: "10:00", end: "12:00" },
-    { start: "14:00", end: "16:00" },
-    { start: "16:00", end: "18:00" },
-  ],
-  places: [
-    { name: "Resident's room", capacity: null },
-    { name: "Garden Lounge", capacity: 4 },
-  ],
+  visitingHours: { start: "12:00", end: "18:00" },
   protectedTimes: [],
   daysAhead: 14,
   maxPartySize: 6,
 };
 
-const slotId = ({ start, end }) => `${start}-${end}`;
+const toMinutes = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
 
-const placeOf = (place) => ({
-  name: typeof place === "string" ? place : place.name,
-  capacity: (typeof place === "string" ? null : place.capacity) ?? null,
-});
+const toClock = (minutes) =>
+  `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
-/** A slot is closed when it overlaps any protected window; times are zero-padded HH:mm, so text order is time order. */
-const isProtected = (slot, rules) =>
-  rules.protectedTimes.some(
-    (window) => slot.start < window.end && slot.end > window.start,
-  );
+/** A start time is closed when it falls inside a protected window; times are zero-padded HH:mm, so text order is time order. */
+const isProtected = (time, rules) =>
+  rules.protectedTimes.some((window) => time >= window.start && time < window.end);
 
 const isText = (value) => typeof value === "string";
+
+const timesOf = (rules, { includeProtected = false } = {}) => {
+  const times = [];
+  const last = toMinutes(rules.visitingHours.end) - STEP_MINUTES;
+  for (let minutes = toMinutes(rules.visitingHours.start); minutes <= last; minutes += STEP_MINUTES) {
+    const time = toClock(minutes);
+    if (includeProtected || !isProtected(time, rules)) times.push(time);
+  }
+  return times;
+};
 
 /** A site's visiting rules: its own settings over the defaults, with the site's timezone. */
 const loadRules = async (branchId) => {
@@ -58,8 +58,10 @@ const loadRules = async (branchId) => {
   const settings = row.settings || {};
   return {
     timezone: row.timezone || DEFAULT_TIMEZONE,
-    slots: settings.slots?.length ? settings.slots : DEFAULTS.slots,
-    places: (settings.places?.length ? settings.places : DEFAULTS.places).map(placeOf),
+    visitingHours:
+      settings.visitingHours?.start && settings.visitingHours?.end
+        ? { start: settings.visitingHours.start, end: settings.visitingHours.end }
+        : DEFAULTS.visitingHours,
     protectedTimes: settings.protectedTimes || DEFAULTS.protectedTimes,
     daysAhead: settings.daysAhead || DEFAULTS.daysAhead,
     maxPartySize: settings.maxPartySize || DEFAULTS.maxPartySize,
@@ -115,8 +117,9 @@ const cleanText = (value, { field, max }) => {
 
 module.exports = {
   DEFAULTS,
-  slotId,
-  placeOf,
+  STEP_MINUTES,
+  toMinutes,
+  timesOf,
   isProtected,
   loadRules,
   visitingNotice,

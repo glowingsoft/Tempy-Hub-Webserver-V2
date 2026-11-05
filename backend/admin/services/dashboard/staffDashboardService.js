@@ -15,6 +15,7 @@ const {
   PresenceStatus,
   RequirementCellStatus,
   RequirementType,
+  ShiftStatus,
   StaffProfileStatus,
 } = require("@models/domainEnums");
 const {
@@ -34,6 +35,7 @@ const DAY_FORMAT = "YYYY-MM-DD";
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const COMMUNICATION_SHOWN = 5;
 const OPEN_SHIFTS_SHOWN = 5;
+const WEEK_SHIFTS_LIMIT = 200;
 const MEETING_BADGES = {
   overdue: "overdue",
   dueSoon: "dueSoon",
@@ -238,6 +240,18 @@ const getStaffDashboard = async ({
     to: moment.tz(days[6].date, timezone).endOf("day").toDate(),
   });
 
+  const shiftsOf = async (range) => {
+    const { data } = await listMyShifts({
+      userId: actor._id,
+      organizationId,
+      page: 1,
+      limit: WEEK_SHIFTS_LIMIT,
+      skip: 0,
+      ...range,
+    });
+    return data.filter((shift) => shift.status !== ShiftStatus.CANCELLED);
+  };
+
   const [
     attendance,
     currentShifts,
@@ -257,16 +271,8 @@ const getStaffDashboard = async ({
       today: moment.tz(now, timezone).format(DAY_FORMAT),
       now,
     }),
-    listMyShifts({
-      userId: actor._id,
-      organizationId,
-      ...weekRange(currentWeek),
-    }),
-    listMyShifts({
-      userId: actor._id,
-      organizationId,
-      ...weekRange(shownWeek),
-    }),
+    shiftsOf(weekRange(currentWeek)),
+    shiftsOf(weekRange(shownWeek)),
     LeaveRequest.aggregate([
       { $match: { staffId, status: LeaveRequestStatus.PENDING } },
       { $count: "count" },

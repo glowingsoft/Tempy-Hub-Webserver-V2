@@ -2673,8 +2673,8 @@ module.exports = {
   approveRosterForDay,
   rejectRosterForDay,
   attendanceReport,
-  staffHoursSummary,
-  lateCheckInsReport,
   listLeaveRegisterDays,
   summaryFromCounts,
+  staffHoursSummary,
+  lateCheckInsReport,
 };

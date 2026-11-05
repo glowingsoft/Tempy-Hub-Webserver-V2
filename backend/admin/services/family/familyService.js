@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { frontendLink } = require("@utils/frontendUrl");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
@@ -37,10 +38,7 @@ const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 const INVITE_TTL_DAYS = Number(process.env.FAMILY_INVITE_TTL_DAYS || 7);
 
 const buildAcceptUrl = (token) => {
-  const base = (
-    process.env.FAMILY_INVITE_ACCEPT_URL ||
-    "http://localhost:3000/family-invite"
-  ).replace(/\/+$/, "");
+  const base = frontendLink("FAMILY_INVITE_ACCEPT_URL", "/family-invite");
   return `${base}/${token}`;
 };
 

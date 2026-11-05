@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { frontendLink } = require("@utils/frontendUrl");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
@@ -623,9 +624,7 @@ const deactivateMembership = async ({ actor, membershipId, organizationId }) => 
 };
 
 const buildAcceptUrl = (token) => {
-  const base = (
-    process.env.INVITE_ACCEPT_URL || "http://localhost:3000/invite"
-  ).replace(/\/+$/, "");
+  const base = frontendLink("INVITE_ACCEPT_URL", "/invite");
   return `${base}/${token}`;
 };
 

@@ -14384,52 +14384,6 @@
                 }
               },
               "response": []
-            },
-            {
-              "name": "get rota board",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/rota/board?branchId={{branchId}}&period=week&scope=all",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "organizations",
-                    "{{organizationId}}",
-                    "rota",
-                    "board"
-                  ],
-                  "query": [
-                    {
-                      "key": "branchId",
-                      "value": "{{branchId}}"
-                    },
-                    {
-                      "key": "period",
-                      "value": "week"
-                    },
-                    {
-                      "key": "scope",
-                      "value": "all"
-                    }
-                  ]
-                }
-              },
-              "response": []
             }
           ]
         },
@@ -14528,44 +14482,6 @@
                     "organizations",
                     "{{organizationId}}",
                     "attendance-change-requests"
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "get attendance rota",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{url}}/admin/organizations/{{organizationId}}/attendance/rota?branchId={{branchId}}",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "admin",
-                    "organizations",
-                    "{{organizationId}}",
-                    "attendance",
-                    "rota"
-                  ],
-                  "query": [
-                    {
-                      "key": "branchId",
-                      "value": "{{branchId}}"
-                    }
                   ]
                 }
               },

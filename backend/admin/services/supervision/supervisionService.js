@@ -167,6 +167,72 @@ const emptyPage = (page, limit) => ({
   meta: { ...generateMeta(page, limit, 0), counts: emptyStatusCounts() },
 });
 
+const CSV_EXPORT_LIMIT = 10000;
+const SUPERVISION_CSV_HEADERS = [
+  "Name",
+  "Email",
+  "Site",
+  "Created at",
+  "Last session",
+  "Scheduled at",
+  "Conducted by",
+  "Location",
+  "Status",
+];
+
+const csvCell = (value) => {
+  const text = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+};
+
+const csvDateTime = (value, timezone) => {
+  if (!value) return "";
+  const day = moment.tz(value, timezone || DEFAULT_TZ);
+  return day.isValid() ? day.format("YYYY-MM-DD HH:mm") : "";
+};
+
+const supervisionStatusLabel = (status) => {
+  if (status === ComplianceMeetingStatus.SCHEDULED) return "Scheduled";
+  if (status === ComplianceMeetingStatus.COMPLETED) return "Completed";
+  if (status === ComplianceMeetingStatus.CANCELLED) return "Cancelled";
+  return status || "";
+};
+
+const supervisionsToCsv = (rows, timezone) => {
+  const lines = [SUPERVISION_CSV_HEADERS.join(",")];
+  for (const row of rows) {
+    const tz = row.branch?.timezone || timezone || DEFAULT_TZ;
+    lines.push(
+      [
+        csvCell(row.staff?.name),
+        csvCell(row.staff?.email),
+        csvCell(row.branch?.name),
+        csvCell(csvDateTime(row.createdAt, tz)),
+        csvCell(csvDateTime(row.completedAt, tz)),
+        csvCell(csvDateTime(row.scheduledAt, tz)),
+        csvCell(row.conductedBy),
+        csvCell(row.locationLabel),
+        csvCell(supervisionStatusLabel(row.status)),
+      ].join(","),
+    );
+  }
+  return `\uFEFF${lines.join("\r\n")}`;
+};
+
+const csvExport = (rows, timezone) => ({
+  csv: supervisionsToCsv(rows, timezone),
+  fileName: "supervision.csv",
+});
+
+const parseExportFormat = (format) => {
+  const exportFormat = format ? String(format).trim().toLowerCase() : "";
+  if (exportFormat && exportFormat !== "csv") {
+    throw new AppError("invalid_export_format", 400);
+  }
+  return exportFormat === "csv";
+};
+
 const staffLookup = {
   $lookup: {
     from: StaffProfile.collection.name,
@@ -309,7 +375,9 @@ const listTeamSupervision = async ({
   page,
   limit,
   skip,
+  format,
 }) => {
+  const isCsv = parseExportFormat(format);
   const tz = viewerTimezone(timezone || actor?.timezone);
   const standing = await actorStanding(actor, organizationId);
   const requestedStaffId = staffId
@@ -322,6 +390,7 @@ const listTeamSupervision = async ({
     staffId: requestedStaffId,
   });
   if (scopedStaffId === false) {
+    if (isCsv) return csvExport([], tz);
     const empty = emptyPage(page, limit);
     return { ...empty, meta: { ...empty.meta, timezone: tz } };
   }
@@ -333,6 +402,7 @@ const listTeamSupervision = async ({
     branchId,
   });
   if (!ids.length) {
+    if (isCsv) return csvExport([], tz);
     const empty = emptyPage(page, limit);
     return { ...empty, meta: { ...empty.meta, timezone: tz } };
   }
@@ -359,6 +429,16 @@ const listTeamSupervision = async ({
   const meetingStatus = parseMeetingStatus(status);
   const countMatch = { ...match };
   if (meetingStatus) match.status = meetingStatus;
+
+  if (isCsv) {
+    const rows = await SupervisionRecord.aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      { $limit: CSV_EXPORT_LIMIT },
+      ...recordShapeStages,
+    ]);
+    return csvExport(rows, tz);
+  }
 
   const { data, meta, result } = await paginateWithFacet({
     model: SupervisionRecord,
@@ -730,6 +810,7 @@ const mySupervision = async ({
   page,
   limit,
   skip,
+  format,
 }) => {
   const staff = await StaffProfile.findOne({
     userId: actor._id,
@@ -738,19 +819,22 @@ const mySupervision = async ({
   }).lean();
   if (!staff) throw new AppError("staff_profile_not_found", 404);
 
+  const listed = await listTeamSupervision({
+    actor,
+    organizationId,
+    staffId: staff._id,
+    status,
+    timezone: viewerTz,
+    page,
+    limit,
+    skip,
+    format,
+  });
+  if (listed.csv != null) return listed;
+
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
-  const [listed, defaultInterval, meetings, timezone, supervisor] =
+  const [defaultInterval, meetings, timezone, supervisor] =
     await Promise.all([
-      listTeamSupervision({
-        actor,
-        organizationId,
-        staffId: staff._id,
-        status,
-        timezone: viewerTz,
-        page,
-        limit,
-        skip,
-      }),
       orgInterval(organizationId),
       SupervisionRecord.find({
         organizationId: orgOid,

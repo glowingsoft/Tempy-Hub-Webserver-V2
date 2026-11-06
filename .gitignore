@@ -135,5 +135,5 @@ dist
 /uploads/**
 secretAssets/*
 .cursor
-docs/*
+docs/
 

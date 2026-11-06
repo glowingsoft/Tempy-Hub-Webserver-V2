@@ -63,6 +63,19 @@ const ON_SITE_PRESENCE = [PresenceStatus.ON_SITE, PresenceStatus.ON_BREAK];
 
 const DEFAULT_TZ = "Europe/London";
 const MAX_ROTA_RANGE_DAYS = 56;
+const CSV_EXPORT_LIMIT = 10000;
+const ATTENDANCE_CSV_HEADERS = [
+  "Name",
+  "Email",
+  "Site",
+  "Date",
+  "Clock in",
+  "Clock out",
+  "Break in",
+  "Break out",
+  "Total",
+  "Status",
+];
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -516,12 +529,71 @@ const withComputedWorkedMinutes = (days) =>
     ),
   }));
 
-const fetchAttendanceDays = async ({ match, sort }) => {
-  const data = await AttendanceDay.aggregate([
-    { $match: match },
-    { $sort: sort },
-    ...ATTENDANCE_LIST_LOOKUPS,
-  ]);
+const csvCell = (value) => {
+  const text = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+};
+
+const csvClock = (value, timezone) => {
+  if (!value) return "";
+  const clock = moment.tz(value, timezone || DEFAULT_TZ);
+  return clock.isValid() ? clock.format("hh:mm A") : "";
+};
+
+const attendanceStatusLabel = (row) => {
+  if (row?.kind === "leave" || row?.presenceStatus === PresenceStatus.ON_LEAVE) {
+    return row.leaveType ? `On leave (${row.leaveType})` : "On leave";
+  }
+  if (row?.punctualityStatus === PunctualityStatus.ON_TIME) return "On time";
+  if (row?.punctualityStatus === PunctualityStatus.LATE) return "Late";
+  if (row?.punctualityStatus === PunctualityStatus.UNSCHEDULED) {
+    return "Unscheduled";
+  }
+  return row?.punctualityStatus || "";
+};
+
+const attendanceDaysToCsv = (rows) => {
+  const lines = [ATTENDANCE_CSV_HEADERS.join(",")];
+  for (const row of rows) {
+    const tz = row.branch?.timezone || DEFAULT_TZ;
+    const firstBreak = row.breaks?.[0];
+    lines.push(
+      [
+        csvCell(row.staff?.name),
+        csvCell(row.staff?.email),
+        csvCell(row.branch?.name),
+        csvCell(row.workDate ? utcDateKey(row.workDate) : ""),
+        csvCell(csvClock(row.clockInAt, tz)),
+        csvCell(csvClock(row.clockOutAt, tz)),
+        csvCell(csvClock(firstBreak?.breakInAt, tz)),
+        csvCell(csvClock(firstBreak?.breakOutAt, tz)),
+        csvCell(row.totalHours),
+        csvCell(attendanceStatusLabel(row)),
+      ].join(","),
+    );
+  }
+  return `\uFEFF${lines.join("\r\n")}`;
+};
+
+const csvExport = (rows) => ({
+  csv: attendanceDaysToCsv(rows),
+  fileName: "attendance.csv",
+});
+
+const parseExportFormat = (format) => {
+  const exportFormat = format ? String(format).trim().toLowerCase() : "";
+  if (exportFormat && exportFormat !== "csv") {
+    throw new AppError("invalid_export_format", 400);
+  }
+  return exportFormat === "csv";
+};
+
+const fetchAttendanceDays = async ({ match, sort, limit }) => {
+  const pipeline = [{ $match: match }, { $sort: sort }];
+  if (limit) pipeline.push({ $limit: limit });
+  pipeline.push(...ATTENDANCE_LIST_LOOKUPS);
+  const data = await AttendanceDay.aggregate(pipeline);
   return withComputedWorkedMinutes(data);
 };
 
@@ -1179,7 +1251,9 @@ const listMyAttendance = async ({
   from,
   to,
   punctualityStatus,
+  format,
 }) => {
+  const isCsv = parseExportFormat(format);
   const profile = await requireStaffProfile(userId, organizationId);
   const match = { staffId: profile._id };
 
@@ -1193,6 +1267,15 @@ const listMyAttendance = async ({
   const listMatch = punctuality
     ? { ...match, punctualityStatus: punctuality }
     : match;
+
+  if (isCsv) {
+    const days = await fetchAttendanceDays({
+      match: listMatch,
+      sort: { createdAt: -1, clockInAt: -1 },
+      limit: CSV_EXPORT_LIMIT,
+    });
+    return csvExport(days);
+  }
 
   const { data, meta, result } = await paginateWithFacet({
     model: AttendanceDay,
@@ -1260,7 +1343,9 @@ const listAttendanceDays = async ({
   punctualityStatus,
   keyword,
   actor,
+  format,
 }) => {
+  const isCsv = parseExportFormat(format);
   const standing = await actorStanding(actor, organizationId);
   const scopedBranchId = scopeBranchFilter(standing, branchId);
 
@@ -1268,7 +1353,9 @@ const listAttendanceDays = async ({
   if (scopedBranchId) branchMatch._id = scopedBranchId;
 
   const branchIds = await Branch.find(branchMatch).distinct("_id");
-  if (!branchIds.length) return emptyRegisterPage(page, limit);
+  if (!branchIds.length) {
+    return isCsv ? csvExport([]) : emptyRegisterPage(page, limit);
+  }
 
   const match = { branchId: { $in: branchIds } };
   const inScope = await applyLineManagerStaffScope({
@@ -1278,7 +1365,9 @@ const listAttendanceDays = async ({
     organizationId,
     staffId,
   });
-  if (!inScope) return emptyRegisterPage(page, limit);
+  if (!inScope) {
+    return isCsv ? csvExport([]) : emptyRegisterPage(page, limit);
+  }
 
   if (from || to) {
     match.workDate = {};
@@ -1296,7 +1385,9 @@ const listAttendanceDays = async ({
     branchId,
   });
   const staffIds = await staffIdsMatchingKeyword(scopedStaffIds, keyword);
-  if (!staffIds.length) return emptyRegisterPage(page, limit);
+  if (!staffIds.length) {
+    return isCsv ? csvExport([]) : emptyRegisterPage(page, limit);
+  }
   if (String(keyword || "").trim()) match.staffId = { $in: staffIds };
 
   const punctuality = parsePunctualityStatus(punctualityStatus);
@@ -1304,6 +1395,7 @@ const listAttendanceDays = async ({
   if (leaveType && !punctuality) {
     const leaveDays = await listLeaveRegisterDays({ staffIds, from, to });
     const rows = filterRegisterRows(leaveDays, { leaveType });
+    if (isCsv) return csvExport(rows.slice(0, CSV_EXPORT_LIMIT));
     return {
       ...paginateRows(rows, page, limit, skip),
       meta: {
@@ -1316,6 +1408,15 @@ const listAttendanceDays = async ({
 
   const countMatch = { ...match };
   if (punctuality) match.punctualityStatus = punctuality;
+
+  if (isCsv) {
+    const days = await fetchAttendanceDays({
+      match,
+      sort: { workDate: -1, clockInAt: -1 },
+      limit: CSV_EXPORT_LIMIT,
+    });
+    return csvExport(days);
+  }
 
   const [{ data, meta, result }, leaveDays] = await Promise.all([
     paginateWithFacet({

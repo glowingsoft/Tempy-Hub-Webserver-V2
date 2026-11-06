@@ -233,6 +233,71 @@ const emptyPage = (page, limit) => ({
   meta: { ...generateMeta(page, limit, 0), counts: emptyStatusCounts() },
 });
 
+const CSV_EXPORT_LIMIT = 10000;
+const APPRAISAL_CSV_HEADERS = [
+  "Name",
+  "Email",
+  "Site",
+  "Review period",
+  "Last review",
+  "Next due",
+  "Status",
+];
+
+const csvCell = (value) => {
+  const text = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+};
+
+const csvDate = (value, timezone) => {
+  if (!value) return "";
+  const day = moment.tz(value, timezone || DEFAULT_TZ);
+  return day.isValid() ? day.format("YYYY-MM-DD") : "";
+};
+
+const appraisalStatusLabel = (status) => {
+  if (status === ComplianceMeetingStatus.SCHEDULED) return "Scheduled";
+  if (status === ComplianceMeetingStatus.COMPLETED) return "Completed";
+  if (status === ComplianceMeetingStatus.CANCELLED) return "Cancelled";
+  return status || "";
+};
+
+const appraisalsToCsv = (rows) => {
+  const lines = [APPRAISAL_CSV_HEADERS.join(",")];
+  for (const row of rows) {
+    const tz = row.branch?.timezone || DEFAULT_TZ;
+    const period =
+      String(row.periodLabel || "").trim() ||
+      (row.kind === AppraisalKind.ANNUAL ? "Annual Review" : "");
+    lines.push(
+      [
+        csvCell(row.staff?.name),
+        csvCell(row.staff?.email),
+        csvCell(row.branch?.name),
+        csvCell(period),
+        csvCell(csvDate(row.completedAt, tz)),
+        csvCell(csvDate(row.scheduledAt, tz)),
+        csvCell(appraisalStatusLabel(row.status)),
+      ].join(","),
+    );
+  }
+  return `\uFEFF${lines.join("\r\n")}`;
+};
+
+const csvExport = (rows) => ({
+  csv: appraisalsToCsv(rows),
+  fileName: "appraisals.csv",
+});
+
+const parseExportFormat = (format) => {
+  const exportFormat = format ? String(format).trim().toLowerCase() : "";
+  if (exportFormat && exportFormat !== "csv") {
+    throw new AppError("invalid_export_format", 400);
+  }
+  return exportFormat === "csv";
+};
+
 const listTeamAppraisals = async ({
   actor,
   organizationId,
@@ -243,7 +308,9 @@ const listTeamAppraisals = async ({
   page,
   limit,
   skip,
+  format,
 }) => {
+  const isCsv = parseExportFormat(format);
   const standing = await actorStanding(actor, organizationId);
   const ids = await scopedAppraisalStaffIds({
     standing,
@@ -252,7 +319,9 @@ const listTeamAppraisals = async ({
     staffId: staffId ? toObjectId(staffId, "invalid_staff_profile_id") : null,
     branchId,
   });
-  if (!ids.length) return emptyPage(page, limit);
+  if (!ids.length) {
+    return isCsv ? csvExport([]) : emptyPage(page, limit);
+  }
 
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
   const match = {
@@ -277,6 +346,16 @@ const listTeamAppraisals = async ({
   const meetingStatus = parseMeetingStatus(status);
   const countMatch = { ...match };
   if (meetingStatus) match.status = meetingStatus;
+
+  if (isCsv) {
+    const rows = await AppraisalRecord.aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      { $limit: CSV_EXPORT_LIMIT },
+      ...appraisalRecordStages,
+    ]);
+    return csvExport(rows);
+  }
 
   const [{ data, meta }, counts] = await Promise.all([
     paginateWithFacet({
@@ -711,6 +790,7 @@ const myAppraisal = async ({
   page,
   limit,
   skip,
+  format,
 }) => {
   const staff = await StaffProfile.findOne({
     userId: actor._id,
@@ -719,17 +799,20 @@ const myAppraisal = async ({
   }).lean();
   if (!staff) throw new AppError("staff_profile_not_found", 404);
 
+  const listed = await listTeamAppraisals({
+    actor,
+    organizationId,
+    staffId: staff._id,
+    status,
+    page,
+    limit,
+    skip,
+    format,
+  });
+  if (listed.csv != null) return listed;
+
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
-  const [listed, settings, meetings, timezone, supervisor] = await Promise.all([
-    listTeamAppraisals({
-      actor,
-      organizationId,
-      staffId: staff._id,
-      status,
-      page,
-      limit,
-      skip,
-    }),
+  const [settings, meetings, timezone, supervisor] = await Promise.all([
     loadOrgCycleSettings(organizationId),
     AppraisalRecord.find({
       organizationId: orgOid,

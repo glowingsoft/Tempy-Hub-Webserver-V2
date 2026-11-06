@@ -24,6 +24,17 @@ const DIRECTORY_TYPES = [
 ];
 
 const SITE_STATUSES = ["onSite", "offSite"];
+const CSV_EXPORT_LIMIT = 10000;
+const CSV_HEADERS = [
+  "Name",
+  "Email",
+  "Phone",
+  "Type",
+  "Site",
+  "Department",
+  "Site status",
+  "Car registration",
+];
 
 const toOid = (value, key = "invalid_id") => {
   if (!value || !mongoose.Types.ObjectId.isValid(String(value))) {
@@ -250,6 +261,37 @@ const directoryLookups = [
   },
 ];
 
+const csvCell = (value) => {
+  const text = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+};
+
+const siteStatusLabel = (status) => {
+  if (status === "onSite") return "On site";
+  if (status === "offSite") return "Off site";
+  return "";
+};
+
+const peopleToCsv = (rows) => {
+  const lines = [CSV_HEADERS.join(",")];
+  for (const row of rows) {
+    lines.push(
+      [
+        csvCell(row.name),
+        csvCell(row.email),
+        csvCell(row.phone),
+        csvCell(row.type),
+        csvCell(row.branch?.name),
+        csvCell(row.department?.name),
+        csvCell(siteStatusLabel(row.siteStatus)),
+        csvCell(row.carRegistration),
+      ].join(","),
+    );
+  }
+  return `\uFEFF${lines.join("\r\n")}`;
+};
+
 const listExternalPeople = async ({
   actor,
   organizationId,
@@ -261,7 +303,14 @@ const listExternalPeople = async ({
   type,
   siteStatus,
   keyword,
+  format,
 }) => {
+  const exportFormat = format ? String(format).trim().toLowerCase() : "";
+  if (exportFormat && exportFormat !== "csv") {
+    throw new AppError("invalid_export_format", 400);
+  }
+  const isCsv = exportFormat === "csv";
+
   const standing = await actorStanding(actor, organizationId);
   const scopedBranchId = scopeBranchFilter(standing, branchId);
 
@@ -274,6 +323,9 @@ const listExternalPeople = async ({
   const branches = await Branch.find(branchFilter).select("_id").lean();
   const branchIds = branches.map((row) => row._id);
   if (!branchIds.length) {
+    if (isCsv) {
+      return { csv: peopleToCsv([]), fileName: "directory.csv" };
+    }
     return {
       data: [],
       meta: {
@@ -295,18 +347,24 @@ const listExternalPeople = async ({
   const countMatch = { ...match };
   const statusFilter = parseSiteStatus(siteStatus);
   const afterStatus = statusFilter ? [{ $match: { siteStatus: statusFilter } }] : [];
+  const dataPipeline = [
+    { $match: match },
+    ...directoryLookups,
+    ...afterStatus,
+    { $sort: { createdAt: -1 } },
+    { $skip: isCsv ? 0 : skip },
+    { $limit: isCsv ? CSV_EXPORT_LIMIT : limit },
+  ];
+
+  if (isCsv) {
+    const rows = await ExternalPerson.aggregate(dataPipeline);
+    return { csv: peopleToCsv(rows), fileName: "directory.csv" };
+  }
 
   const [result] = await ExternalPerson.aggregate([
     {
       $facet: {
-        data: [
-          { $match: match },
-          ...directoryLookups,
-          ...afterStatus,
-          { $sort: { createdAt: -1 } },
-          { $skip: skip },
-          { $limit: limit },
-        ],
+        data: dataPipeline,
         totalCount: [
           { $match: match },
           ...directoryLookups,

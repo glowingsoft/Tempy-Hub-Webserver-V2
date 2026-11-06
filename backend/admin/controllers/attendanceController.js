@@ -9,7 +9,7 @@ const { handleServiceError } = require("@services/_errors/handleServiceError");
 const listAttendanceDays = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);
-    const { data, meta, summary } = await attendanceService.listAttendanceDays({
+    const result = await attendanceService.listAttendanceDays({
       organizationId: req.orgId,
       page,
       limit,
@@ -23,14 +23,25 @@ const listAttendanceDays = async (req, res) => {
       punctualityStatus: req.query.punctualityStatus,
       keyword: req.query.keyword,
       actor: req.user,
+      format: req.query.format,
     });
+
+    if (result.csv != null) {
+      res.set({
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${result.fileName}"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      });
+      return res.status(200).send(result.csv);
+    }
 
     return sendResponse({
       res,
       statusCode: 200,
       translationKey: "data_fetched_successfully",
-      data: { days: data, summary },
-      meta,
+      data: { days: result.data, summary: result.summary },
+      meta: result.meta,
     });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");

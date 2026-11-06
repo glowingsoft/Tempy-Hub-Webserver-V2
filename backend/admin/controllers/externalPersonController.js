@@ -47,7 +47,7 @@ const createExternalPerson = async (req, res) => {
 const listExternalPeople = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);
-    const { data, meta } = await externalPersonService.listExternalPeople({
+    const result = await externalPersonService.listExternalPeople({
       actor: req.user,
       organizationId: req.orgId,
       page,
@@ -58,14 +58,25 @@ const listExternalPeople = async (req, res) => {
       type: req.query.type,
       siteStatus: req.query.siteStatus,
       keyword: req.query.keyword,
+      format: req.query.format,
     });
+
+    if (result.csv != null) {
+      res.set({
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${result.fileName}"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      });
+      return res.status(200).send(result.csv);
+    }
 
     return sendResponse({
       res,
       statusCode: 200,
       translationKey: "data_fetched_successfully",
-      data,
-      meta,
+      data: result.data,
+      meta: result.meta,
     });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");

@@ -13895,7 +13895,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Helper\",\n  \"level\": \"operational\"\n}",
+                  "raw": "{\n  \"name\": \"Helper\",\n  \"level\": \"staff\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"

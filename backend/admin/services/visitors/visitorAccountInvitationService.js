@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { frontendLink } = require("@utils/frontendUrl");
 const mongoose = require("mongoose");
 const validator = require("validator");
 const { User } = require("@models/UserModel");
@@ -34,10 +35,10 @@ const hashToken = (token) =>
   crypto.createHash("sha256").update(String(token)).digest("hex");
 
 const buildAcceptUrl = (token) => {
-  const base = (
-    process.env.VISITOR_ACCOUNT_INVITE_ACCEPT_URL ||
-    "http://localhost:3000/visitor-account-invite"
-  ).replace(/\/+$/, "");
+  const base = frontendLink(
+    "VISITOR_ACCOUNT_INVITE_ACCEPT_URL",
+    "/visitor-account-invite"
+  );
   return `${base}/${token}`;
 };
 

@@ -547,7 +547,7 @@ const createJobTitle = async ({
       branchId: scopedBranchId,
       departmentId: nextDepartmentId ?? null,
       name,
-      level: level || JobTitleLevel.OPERATIONAL,
+      level: level || JobTitleLevel.STAFF,
     });
     const [withDetails] = await attachOrgAndBranchDetails([jobTitle.toObject()]);
     return withDetails;

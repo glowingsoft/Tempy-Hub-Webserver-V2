@@ -33,6 +33,7 @@ const membershipSchema = new mongoose.Schema(
       enum: Object.values(ActiveInactiveStatus),
       default: ActiveInactiveStatus.ACTIVE,
     },
+    deactivatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

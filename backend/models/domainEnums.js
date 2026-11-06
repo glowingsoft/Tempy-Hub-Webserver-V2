@@ -223,9 +223,10 @@ const StaffProfileStatus = {
 };
 
 const JobTitleLevel = {
-  EXECUTIVE: "executive",
+  ORGANIZATIONAL: "organizational",
   SITE_MANAGEMENT: "siteManagement",
-  OPERATIONAL: "operational",
+  LINE_MANAGEMENT: "lineManagement",
+  STAFF: "staff",
 };
 
 const StaffAssetStatus = {

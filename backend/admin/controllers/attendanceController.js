@@ -283,6 +283,46 @@ const lateCheckInsReport = async (req, res) => {
   }
 };
 
+const sicknessRateReport = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const result = await attendanceService.sicknessRateReport({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      departmentId: req.query.departmentId,
+      from: req.query.from,
+      to: req.query.to,
+      keyword: req.query.keyword,
+      format: req.query.format,
+      page,
+      limit,
+      skip,
+    });
+
+    if (result.csv != null) {
+      res.set({
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${result.fileName}"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      });
+      return res.status(200).send(result.csv);
+    }
+
+    const { from, to, timezone, branchId, kpis, rows, meta } = result;
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: { from, to, timezone, branchId, kpis, rows },
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const staffHoursSummary = async (req, res) => {
   try {
     const data = await attendanceService.staffHoursSummary({
@@ -310,6 +350,7 @@ module.exports = {
   listAttendanceRota,
   attendanceReport,
   staffHoursSummary,
+  sicknessRateReport,
   lateCheckInsReport,
   getAttendanceDay,
   updateAttendanceDay,

@@ -2748,7 +2748,210 @@ const lateCheckInsReport = async ({
   };
 };
 
+const SICKNESS_LEAVE_LABELS = {
+  [LeaveType.SICK]: "SSP",
+  [LeaveType.PARENTAL]: "SMP",
+  [LeaveType.UNPAID]: "Unpaid",
+  [LeaveType.ABSENCE]: "Absence",
+  [LeaveType.COMPASSIONATE]: "Compassionate",
+};
+const SICKNESS_LEAVE_TYPES = Object.keys(SICKNESS_LEAVE_LABELS);
+const SICKNESS_CSV_HEADERS = [
+  "Name",
+  "Email",
+  "Department",
+  "Sick days",
+  "Leave type",
+  "Date",
+  "Reason",
+];
+
+const sicknessDaysOf = (request, fromUtc, toUtc) => {
+  const days = [];
+  let cursor = startOfUtcDay(request.startDate);
+  const last = startOfUtcDay(request.endDate);
+  while (cursor <= last) {
+    if (cursor >= fromUtc && cursor <= toUtc) {
+      days.push({
+        date: utcDateKey(cursor),
+        reason: request.reason || "",
+        leaveType: request.leaveType,
+        leaveTypeLabel: SICKNESS_LEAVE_LABELS[request.leaveType],
+      });
+    }
+    cursor = new Date(cursor.getTime() + 86400000);
+  }
+  return days;
+};
+
+const sicknessRowsToCsv = (rows) => {
+  const lines = [SICKNESS_CSV_HEADERS.join(",")];
+  for (const row of rows) {
+    for (const day of row.days) {
+      lines.push(
+        [
+          csvCell(row.staff.name),
+          csvCell(row.staff.email),
+          csvCell(row.staff.department?.name || ""),
+          csvCell(row.sickDays),
+          csvCell(day.leaveTypeLabel),
+          csvCell(day.date),
+          csvCell(day.reason),
+        ].join(",")
+      );
+    }
+  }
+  return `\uFEFF${lines.join("\r\n")}`;
+};
+
+const sicknessRateReport = async ({
+  actor,
+  organizationId,
+  branchId,
+  departmentId,
+  from,
+  to,
+  keyword,
+  format,
+  page,
+  limit,
+  skip,
+}) => {
+  const asCsv = parseExportFormat(format);
+  const fromDate = from && String(from).trim() ? from : undefined;
+  const toDate = to && String(to).trim() ? to : undefined;
+
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  const branchMatch = { organizationId };
+  if (scopedBranchId) branchMatch._id = scopedBranchId;
+  const branches = await Branch.find(branchMatch).select("_id timezone").lean();
+
+  const tz =
+    (branches.length === 1 ? branches[0].timezone : DEFAULT_TZ) || DEFAULT_TZ;
+  const { fromDay, toDay } = resolveReportRange(fromDate, toDate, tz);
+  const fromUtc = startOfUtcDay(fromDay.format("YYYY-MM-DD"));
+  const toUtc = startOfUtcDay(toDay.format("YYYY-MM-DD"));
+
+  const respond = ({ rows, kpis, total }) => {
+    if (asCsv) {
+      return { csv: sicknessRowsToCsv(rows), fileName: "sickness-rate.csv" };
+    }
+    return {
+      from: fromDay.format("YYYY-MM-DD"),
+      to: toDay.format("YYYY-MM-DD"),
+      timezone: tz,
+      branchId: scopedBranchId || null,
+      kpis,
+      rows: rows.slice(skip, skip + limit),
+      meta: generateMeta(page, limit, total),
+    };
+  };
+  const emptyKpis = { sicknessRate: null, staffAffected: 0, totalSickDays: 0 };
+
+  if (!branches.length) return respond({ rows: [], kpis: emptyKpis, total: 0 });
+
+  let staffIds = await resolveScopedStaffIds({
+    standing,
+    actor,
+    organizationId,
+    branchId,
+  });
+  if (departmentId) {
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      throw new AppError("invalid_department_id", 400);
+    }
+    staffIds = await StaffProfile.find({
+      _id: { $in: staffIds },
+      departmentIds: new mongoose.Types.ObjectId(String(departmentId)),
+    }).distinct("_id");
+  }
+  staffIds = await staffIdsMatchingKeyword(staffIds, keyword);
+  if (!staffIds.length) return respond({ rows: [], kpis: emptyKpis, total: 0 });
+
+  const staffOids = staffIds.map(
+    (id) => new mongoose.Types.ObjectId(String(id))
+  );
+  const branchOids = branches.map((row) => row._id);
+
+  const [requests, workedDays] = await Promise.all([
+    LeaveRequest.find({
+      staffId: { $in: staffOids },
+      leaveType: { $in: SICKNESS_LEAVE_TYPES },
+      status: { $in: REGISTER_LEAVE_STATUSES },
+      endDate: { $gte: fromUtc },
+      startDate: { $lte: toUtc },
+    })
+      .select("staffId leaveType startDate endDate reason")
+      .lean(),
+    AttendanceDay.countDocuments({
+      branchId: { $in: branchOids },
+      staffId: { $in: staffOids },
+      workDate: { $gte: fromUtc, $lte: toUtc },
+    }),
+  ]);
+
+  const byStaff = new Map();
+  let sickOnlyDays = 0;
+  for (const request of requests) {
+    const days = sicknessDaysOf(request, fromUtc, toUtc);
+    if (!days.length) continue;
+    const key = String(request.staffId);
+    byStaff.set(key, [...(byStaff.get(key) || []), ...days]);
+    if (request.leaveType === LeaveType.SICK) sickOnlyDays += days.length;
+  }
+
+  const affectedIds = [...byStaff.keys()].map(
+    (id) => new mongoose.Types.ObjectId(id)
+  );
+  const profiles = affectedIds.length
+    ? await StaffProfile.aggregate([
+        { $match: { _id: { $in: affectedIds } } },
+        ...REPORT_STAFF_LOOKUPS,
+      ])
+    : [];
+
+  const rows = profiles
+    .map((profile) => {
+      const days = byStaff
+        .get(String(profile._id))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const perType = new Map();
+      for (const day of days) {
+        perType.set(day.leaveType, (perType.get(day.leaveType) || 0) + 1);
+      }
+      const [primaryType] = [...perType.entries()].sort(
+        (a, b) => b[1] - a[1]
+      )[0];
+      return {
+        staff: shapeReportStaff(profile),
+        sickDays: days.length,
+        leaveType: primaryType,
+        leaveTypeLabel: SICKNESS_LEAVE_LABELS[primaryType],
+        days,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.sickDays - a.sickDays || a.staff.name.localeCompare(b.staff.name)
+    );
+
+  const totalSickDays = rows.reduce((sum, row) => sum + row.sickDays, 0);
+  const denom = workedDays + sickOnlyDays;
+
+  return respond({
+    rows,
+    total: rows.length,
+    kpis: {
+      sicknessRate: denom ? Math.round((1000 * sickOnlyDays) / denom) / 10 : null,
+      staffAffected: rows.length,
+      totalSickDays,
+    },
+  });
+};
+
 module.exports = {
+  sicknessRateReport,
   getTodayAttendance,
   getTodayAttendanceForStaff,
   getOpenClockInSessionForStaff,

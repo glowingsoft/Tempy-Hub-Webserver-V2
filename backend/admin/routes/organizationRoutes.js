@@ -528,6 +528,12 @@ scoped.get(
   attendanceController.staffHoursSummary
 );
 scoped.get(
+  "/reports/sickness-rate",
+  requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
+  requirePermission(ATTENDANCE_VIEW),
+  attendanceController.sicknessRateReport
+);
+scoped.get(
   "/reports/late-check-ins",
   requireModule(ModuleSlug.SIGN_IN_ATTENDANCE),
   requirePermission(ATTENDANCE_VIEW),

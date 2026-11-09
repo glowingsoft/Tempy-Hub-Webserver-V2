@@ -336,7 +336,8 @@ const createBranch = async ({
     timezone: timezone || "Europe/London",
     assemblyPoint: assemblyPoint || "",
     settings: buildSettings(settings),
-    status: BranchStatus.PENDING_ACTIVATION,
+    status: BranchStatus.ACTIVE,
+    activatedAt: new Date(),
   };
 
   try {

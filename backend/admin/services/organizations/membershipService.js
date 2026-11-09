@@ -15,6 +15,7 @@ const {
   CATALOGUE,
   getPermission,
   enabledModuleSlugs,
+  withDefaultStaffPermissions,
 } = require("./permissionCatalogue");
 const { StaffProfile } = require("@models/StaffProfile");
 const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
@@ -699,6 +700,11 @@ const inviteMember = async ({
 
   assertMayGrant(standing, { role, branchId: scopedBranchId });
   assertPermissionsGrantable(standing, permissions, organization);
+  const resolvedPermissions = withDefaultStaffPermissions(
+    role,
+    organization,
+    permissions
+  );
   await assertBranchInOrganization(scopedBranchId, organizationId);
 
   const normalisedEmail = String(email).trim().toLowerCase();
@@ -711,7 +717,10 @@ const inviteMember = async ({
   }
 
   let employment = null;
-  if (jobTitleId || departmentIds?.length || reportsToStaffId || startDate || employeeCode) {
+  const wantsLineManagerProfile = role === MembershipRole.LINE_MANAGER;
+  const hasEmploymentFields =
+    jobTitleId || departmentIds?.length || reportsToStaffId || startDate || employeeCode;
+  if (wantsLineManagerProfile || hasEmploymentFields) {
     if (role === MembershipRole.OWNER) {
       throw new AppError("owner_cannot_be_branch_scoped", 400);
     }
@@ -725,6 +734,7 @@ const inviteMember = async ({
       reportsToStaffId,
       startDate,
       employeeCode,
+      requireJobTitle: !wantsLineManagerProfile,
     });
   }
 
@@ -761,7 +771,7 @@ const inviteMember = async ({
       email: normalisedEmail,
       name: name || "",
       role,
-      permissions: permissions || [],
+      permissions: resolvedPermissions,
       jobTitleId: employment?.jobTitleId || null,
       departmentIds: employment?.departmentIds || [],
       reportsToStaffId: employment?.reportsToStaffId || null,
@@ -1010,7 +1020,8 @@ const updateInvitation = async ({
     nextEmployeeCode;
 
   if (employmentTouched && mayHaveStaffProfile) {
-    if (hasEmployment) {
+    const lineManagerProfile = nextRole === MembershipRole.LINE_MANAGER;
+    if (hasEmployment || lineManagerProfile) {
       const staffService = require("@adminServices/staff/staffService");
       const employment = await staffService.validateEmploymentAssignment({
         organizationId,
@@ -1020,6 +1031,7 @@ const updateInvitation = async ({
         reportsToStaffId: nextReportsTo,
         startDate: nextStartDate,
         employeeCode: nextEmployeeCode,
+        requireJobTitle: !lineManagerProfile,
       });
       invitation.jobTitleId = employment.jobTitleId;
       invitation.departmentIds = employment.departmentIds;
@@ -1246,6 +1258,29 @@ const getMyInvitation = async ({ user, invitationId }) => {
   return shapeInvitationPreview(invitation);
 };
 
+const shouldProvisionStaffProfile = (invitation) =>
+  Boolean(
+    invitation?.branchId &&
+      STAFF_PROFILE_ROLES.includes(invitation.role) &&
+      (invitation.jobTitleId || invitation.role === MembershipRole.LINE_MANAGER)
+  );
+
+const provisionStaffProfileFromInvitation = async ({ invitation, userId }) => {
+  if (!shouldProvisionStaffProfile(invitation)) return null;
+  const staffService = require("@adminServices/staff/staffService");
+  return staffService.insertStaffProfile({
+    userId,
+    organizationId: invitation.organizationId,
+    branchId: invitation.branchId,
+    jobTitleId: invitation.jobTitleId,
+    departmentIds: invitation.departmentIds,
+    reportsToStaffId: invitation.reportsToStaffId,
+    startDate: invitation.startDate || new Date(),
+    employeeCode: invitation.employeeCode,
+    role: invitation.role,
+  });
+};
+
 /**
  * Redeems an invitation.
  *
@@ -1281,10 +1316,18 @@ const redeemInvitation = async ({
     resolvedTimezone = branch?.timezone || "Europe/London";
   }
 
+  const organization = await Organization.findById(invitation.organizationId)
+    .select("moduleAccess")
+    .lean();
+  const membershipPermissions = withDefaultStaffPermissions(
+    invitation.role,
+    organization,
+    invitation.permissions
+  );
+
   const session = await mongoose.startSession();
   try {
     let membership;
-    let staffProfile = null;
 
     await session.withTransaction(async () => {
       if (!user) {
@@ -1318,7 +1361,7 @@ const redeemInvitation = async ({
       if (existing) {
         existing.role = invitation.role;
         existing.branchId = invitation.branchId;
-        existing.permissions = invitation.permissions;
+        existing.permissions = membershipPermissions;
         existing.status = ActiveInactiveStatus.ACTIVE;
         await existing.save({ session });
         membership = existing;
@@ -1330,7 +1373,7 @@ const redeemInvitation = async ({
               organizationId: invitation.organizationId,
               branchId: invitation.branchId,
               role: invitation.role,
-              permissions: invitation.permissions,
+              permissions: membershipPermissions,
               status: ActiveInactiveStatus.ACTIVE,
             },
           ],
@@ -1352,26 +1395,6 @@ const redeemInvitation = async ({
         await organizationService.activateOrganization({
           organizationId: invitation.organizationId,
           ownerUserId: user._id,
-          session,
-        });
-      }
-
-      if (
-        invitation.jobTitleId &&
-        invitation.branchId &&
-        STAFF_PROFILE_ROLES.includes(invitation.role)
-      ) {
-        const staffService = require("@adminServices/staff/staffService");
-        staffProfile = await staffService.insertStaffProfile({
-          userId: user._id,
-          organizationId: invitation.organizationId,
-          branchId: invitation.branchId,
-          jobTitleId: invitation.jobTitleId,
-          departmentIds: invitation.departmentIds,
-          reportsToStaffId: invitation.reportsToStaffId,
-          startDate: invitation.startDate,
-          employeeCode: invitation.employeeCode,
-          role: invitation.role,
           session,
         });
       }
@@ -1401,6 +1424,13 @@ const redeemInvitation = async ({
           { session }
         );
       }
+    });
+
+    // StaffProfile must be written after the transaction commits. Creating it
+    // inside the session can abort or look successful in memory without a row.
+    const staffProfile = await provisionStaffProfileFromInvitation({
+      invitation,
+      userId: user._id,
     });
 
     return {

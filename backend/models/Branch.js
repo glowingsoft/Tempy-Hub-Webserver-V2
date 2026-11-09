@@ -20,7 +20,7 @@ const branchSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.values(BranchStatus),
-      default: BranchStatus.PENDING_ACTIVATION,
+      default: BranchStatus.ACTIVE,
     },
     emergencyPinHash: { type: String, default: "" },
     assemblyPoint: { type: String, default: "" },

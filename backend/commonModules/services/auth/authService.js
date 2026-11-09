@@ -330,6 +330,9 @@ const assertAudienceAccess = async (user, audience) => {
   throw new AppError("wrong_token_audience", 400);
 };
 
+const isLoginBlockedStatus = (status) =>
+  status === "restricted" || status === "suspended" || status === "inactive";
+
 const login = async ({
   email,
   password,
@@ -368,10 +371,7 @@ const login = async ({
     throw new AppError("your_account_1", 403);
   }
 
-  if (
-    user.accountState.status === "restricted" ||
-    user.accountState.status === "suspended"
-  ) {
+  if (isLoginBlockedStatus(user.accountState.status)) {
     throw new AppError("your_account_2", 403);
   }
 
@@ -430,7 +430,7 @@ const generateOtp = async ({ email, phoneNumber, type }) => {
       throw new AppError("user_not", 404);
     }
 
-    if (["restricted", "suspended"].includes(user.accountState.status)) {
+    if (isLoginBlockedStatus(user.accountState.status)) {
       throw new AppError("your_account_4", 403);
     }
 
@@ -618,10 +618,7 @@ const socialAuth = async ({
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      if (
-        existingUser.accountState.status === "restricted" ||
-        existingUser.accountState.status === "suspended"
-      ) {
+      if (isLoginBlockedStatus(existingUser.accountState.status)) {
         throw new AppError("your_account_2", 403);
       }
 

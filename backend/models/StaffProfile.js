@@ -31,7 +31,7 @@ const staffProfileSchema = new mongoose.Schema(
     jobTitleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "JobTitle",
-      required: true,
+      default: null,
     },
     reportsToStaffId: {
       type: mongoose.Schema.Types.ObjectId,

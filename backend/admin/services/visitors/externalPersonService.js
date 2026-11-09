@@ -3,6 +3,9 @@ const { ExternalPerson } = require("@models/ExternalPerson");
 const { Branch } = require("@models/Branch");
 const { Department } = require("@models/Department");
 const { VisitSession } = require("@models/VisitSession");
+const { User } = require("@models/UserModel");
+const { Membership } = require("@models/Membership");
+const { userCache } = require("@config/nodeCache");
 const { keywordOr, facetCount } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
@@ -71,6 +74,65 @@ const parseSiteStatus = (value) => {
     throw new AppError("invalid_site_status", 400);
   }
   return value;
+};
+
+const parseHasAccount = (value) => {
+  if (value === undefined || value === null || value === "" || value === "all") {
+    return null;
+  }
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new AppError("invalid_has_account", 400);
+};
+
+const userAccountLookup = {
+  $lookup: {
+    from: User.collection.name,
+    localField: "userId",
+    foreignField: "_id",
+    pipeline: [
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          phoneNumber: 1,
+          profileIcon: 1,
+          "accountState.status": 1,
+          "accountState.userType": 1,
+        },
+      },
+    ],
+    as: "_user",
+  },
+};
+
+const shapeUserAccount = {
+  $addFields: {
+    hasAccount: {
+      $and: [
+        { $ne: ["$userId", null] },
+        { $gt: [{ $size: "$_user" }, 0] },
+      ],
+    },
+    user: {
+      $cond: [
+        { $gt: [{ $size: "$_user" }, 0] },
+        {
+          _id: { $arrayElemAt: ["$_user._id", 0] },
+          name: { $arrayElemAt: ["$_user.name", 0] },
+          email: { $arrayElemAt: ["$_user.email", 0] },
+          phoneNumber: { $arrayElemAt: ["$_user.phoneNumber", 0] },
+          profileIcon: { $arrayElemAt: ["$_user.profileIcon", 0] },
+          status: { $arrayElemAt: ["$_user.accountState.status", 0] },
+          userType: { $arrayElemAt: ["$_user.accountState.userType", 0] },
+          active: {
+            $eq: [{ $arrayElemAt: ["$_user.accountState.status", 0] }, "active"],
+          },
+        },
+        null,
+      ],
+    },
+  },
 };
 
 const normalizeVisitorEmail = (email) => String(email || "").trim().toLowerCase();
@@ -242,6 +304,7 @@ const directoryLookups = [
     },
   },
   onSiteVisitLookup,
+  userAccountLookup,
   {
     $addFields: {
       branch: { $arrayElemAt: ["$_branch", 0] },
@@ -252,11 +315,13 @@ const directoryLookups = [
       onSite: { $gt: [{ $size: "$_onSite" }, 0] },
     },
   },
+  shapeUserAccount,
   {
     $project: {
       _branch: 0,
       _department: 0,
       _onSite: 0,
+      _user: 0,
     },
   },
 ];
@@ -302,6 +367,7 @@ const listExternalPeople = async ({
   departmentId,
   type,
   siteStatus,
+  hasAccount,
   keyword,
   format,
 }) => {
@@ -346,7 +412,11 @@ const listExternalPeople = async ({
 
   const countMatch = { ...match };
   const statusFilter = parseSiteStatus(siteStatus);
-  const afterStatus = statusFilter ? [{ $match: { siteStatus: statusFilter } }] : [];
+  const accountFilter = parseHasAccount(hasAccount);
+  const afterStatus = [
+    ...(statusFilter ? [{ $match: { siteStatus: statusFilter } }] : []),
+    ...(accountFilter == null ? [] : [{ $match: { hasAccount: accountFilter } }]),
+  ];
   const dataPipeline = [
     { $match: match },
     ...directoryLookups,
@@ -403,7 +473,28 @@ const getExternalPerson = async ({
     throw new AppError("outside_managed_branch", 403);
   }
 
-  return person;
+  const user = person.userId
+    ? await User.findById(person.userId)
+        .select("name email phoneNumber profileIcon accountState.status accountState.userType")
+        .lean()
+    : null;
+
+  return {
+    ...person,
+    hasAccount: Boolean(user),
+    user: user
+      ? {
+          _id: user._id,
+          name: user.name || "",
+          email: user.email || "",
+          phoneNumber: user.phoneNumber || "",
+          profileIcon: user.profileIcon || "",
+          status: user.accountState?.status || "active",
+          userType: user.accountState?.userType || "user",
+          active: (user.accountState?.status || "active") === "active",
+        }
+      : null,
+  };
 };
 
 const updateExternalPerson = async ({
@@ -464,6 +555,70 @@ const updateExternalPerson = async ({
   return person.toObject();
 };
 
+const presentVisitorAccount = (user) => {
+  const status = user.accountState?.status || "active";
+  const userId = user._id;
+  return {
+    userId,
+    hasAccount: true,
+    status,
+    active: status === "active",
+    user: {
+      _id: userId,
+      name: user.name || "",
+      email: user.email || "",
+      phoneNumber: user.phoneNumber || "",
+      profileIcon: user.profileIcon || "",
+      status,
+      userType: user.accountState?.userType || "user",
+      active: status === "active",
+    },
+  };
+};
+
+const updateVisitorUserAccount = async ({ actor, organizationId, userId }) => {
+  const userOid = toOid(userId, "invalid_user_id");
+  const orgOid = toOid(organizationId, "invalid_organization_id");
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, null);
+
+  const user = await User.findById(userOid).select(
+    "name email phoneNumber profileIcon accountState"
+  );
+  if (!user) throw new AppError("user_not", 404);
+
+  let branchFilter;
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+    branchFilter = toOid(scopedBranchId, "invalid_branch_id");
+  } else {
+    const branches = await Branch.find({ organizationId: orgOid })
+      .select("_id")
+      .lean();
+    branchFilter = { $in: branches.map((row) => row._id) };
+  }
+
+  const visitorLink = await ExternalPerson.exists({
+    userId: userOid,
+    branchId: branchFilter,
+  });
+  if (!visitorLink) throw new AppError("visitor_account_not_in_organization", 404);
+
+  const staffMembership = await Membership.exists({ userId: userOid });
+  if (staffMembership) throw new AppError("cannot_deactivate_staff_user", 409);
+
+  const current = user.accountState?.status || "active";
+  if (current !== "active" && current !== "inactive") {
+    throw new AppError("account_status_not_toggleable", 409);
+  }
+
+  user.accountState.status = current === "active" ? "inactive" : "active";
+  await user.save();
+  userCache.del(String(user._id));
+
+  return presentVisitorAccount(user);
+};
+
 module.exports = {
   DIRECTORY_TYPES,
   parsePersonType,
@@ -476,4 +631,5 @@ module.exports = {
   listExternalPeople,
   getExternalPerson,
   updateExternalPerson,
+  updateVisitorUserAccount,
 };

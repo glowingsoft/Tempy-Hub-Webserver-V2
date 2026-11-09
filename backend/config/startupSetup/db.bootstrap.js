@@ -462,8 +462,11 @@ async function runDBBootstrap() {
         const acceptedWithEmployment = await StaffInvitation.find({
             status: StaffInvitationStatus.ACCEPTED,
             acceptedByUserId: { $ne: null },
-            jobTitleId: { $ne: null },
             branchId: { $ne: null },
+            $or: [
+                { jobTitleId: { $ne: null } },
+                { role: "lineManager" },
+            ],
         })
             .select(
                 "acceptedByUserId organizationId branchId jobTitleId departmentIds reportsToStaffId startDate employeeCode role"

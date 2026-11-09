@@ -50,7 +50,8 @@ const auth = async (req, res, next) => {
       !user || requiredFields.some((field) => !hasField(user, field));
 
     if (!user || isMissingRequiredFields) {
-      const selectFields = "name email timezone language accountState.userType";
+      const selectFields =
+        "name email timezone language accountState.userType accountState.status";
       user = await User.findById(userId).select(selectFields);
 
       if (!user) {
@@ -63,7 +64,8 @@ const auth = async (req, res, next) => {
 
       if (
         user.accountState.status === "restricted" ||
-        user.accountState.status === "suspended"
+        user.accountState.status === "suspended" ||
+        user.accountState.status === "inactive"
       ) {
         return sendResponse({
           res,

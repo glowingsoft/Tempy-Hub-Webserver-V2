@@ -76,6 +76,31 @@ const ROLES_WITH_ALL_PERMISSIONS = [
   MembershipRole.SITE_MANAGER,
 ];
 
+/** Staff and line managers always receive these unless the module is not bought. */
+const DEFAULT_STAFF_PERMISSION_KEYS = [
+  permissionKey(ModuleSlug.DOCUMENTS_ESIGN, PermissionVerb.VIEW),
+  permissionKey(ModuleSlug.DOCUMENTS_ESIGN, PermissionVerb.APPROVE),
+];
+
+const withDefaultStaffPermissions = (role, organization, permissions) => {
+  if (ROLES_WITH_ALL_PERMISSIONS.includes(role)) return [];
+
+  const merged = new Set(Array.isArray(permissions) ? permissions : []);
+  if (
+    role !== MembershipRole.STAFF &&
+    role !== MembershipRole.LINE_MANAGER
+  ) {
+    return [...merged];
+  }
+
+  const enabled = enabledModuleSlugs(organization);
+  for (const key of DEFAULT_STAFF_PERMISSION_KEYS) {
+    const entry = getPermission(key);
+    if (entry && enabled.has(entry.moduleSlug)) merged.add(key);
+  }
+  return [...merged];
+};
+
 /**
  * What a membership may actually do, as opposed to the exceptions stored on it.
  *
@@ -146,6 +171,8 @@ module.exports = {
   permissionKey,
   enabledModuleSlugs,
   ROLES_WITH_ALL_PERMISSIONS,
+  DEFAULT_STAFF_PERMISSION_KEYS,
+  withDefaultStaffPermissions,
   effectivePermissions,
   modulesForMenu,
   platformAdminModuleMenu,

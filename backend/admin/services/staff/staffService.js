@@ -227,6 +227,7 @@ const validateEmploymentAssignment = async ({
   reportsToStaffId,
   startDate,
   employeeCode,
+  requireJobTitle = true,
 }) => {
   const hasExtra =
     (departmentIds && departmentIds.length) ||
@@ -234,14 +235,16 @@ const validateEmploymentAssignment = async ({
     startDate ||
     employeeCode;
 
-  if (!jobTitleId && !hasExtra) return null;
+  if (!jobTitleId && !hasExtra && requireJobTitle) return null;
 
-  if (!jobTitleId) throw new AppError("job_title_required", 400);
+  if (!jobTitleId && requireJobTitle) throw new AppError("job_title_required", 400);
   if (!branchId) throw new AppError("branch_required_for_staff", 400);
-  if (!startDate) throw new AppError("start_date_required", 400);
+  if (!startDate && requireJobTitle) throw new AppError("start_date_required", 400);
 
   await assertBranchInOrganization(branchId, organizationId);
-  await assertJobTitleInScope({ jobTitleId, organizationId, branchId });
+  if (jobTitleId) {
+    await assertJobTitleInScope({ jobTitleId, organizationId, branchId });
+  }
   const scopedDepartments = await assertDepartmentsInScope({
     departmentIds,
     organizationId,
@@ -267,11 +270,11 @@ const validateEmploymentAssignment = async ({
   }
 
   return {
-    jobTitleId,
+    jobTitleId: jobTitleId || null,
     branchId,
     departmentIds: scopedDepartments,
     reportsToStaffId: reportsToStaffId || null,
-    startDate: new Date(startDate),
+    startDate: startDate ? new Date(startDate) : new Date(),
     employeeCode: employeeCode || null,
   };
 };
@@ -317,14 +320,14 @@ const insertStaffProfile = async ({
         organizationId,
         branchId,
         employeeCode: code,
-        jobTitleId,
         departmentIds: departmentIds || [],
-        reportsToStaffId: reportsToStaffId || null,
-        startDate,
+        startDate: startDate || new Date(),
         contractedWeeklyHours:
           contractedWeeklyHours == null ? 37.5 : Number(contractedWeeklyHours),
         qrToken: randomToken(),
         status: StaffProfileStatus.ACTIVE,
+        ...(jobTitleId ? { jobTitleId } : {}),
+        ...(reportsToStaffId ? { reportsToStaffId } : {}),
       },
     ];
     const options = session ? { session } : {};

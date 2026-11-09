@@ -57,6 +57,7 @@ const listExternalPeople = async (req, res) => {
       departmentId: req.query.departmentId,
       type: req.query.type,
       siteStatus: req.query.siteStatus,
+      hasAccount: req.query.hasAccount,
       keyword: req.query.keyword,
       format: req.query.format,
     });
@@ -130,9 +131,38 @@ const updateExternalPerson = async (req, res) => {
   }
 };
 
+const updateVisitorUserAccount = async (req, res) => {
+  if (
+    !validateParams(req, res, {
+      pathParams: ["userId"],
+      objectIdFields: ["userId"],
+    })
+  ) {
+    return;
+  }
+
+  try {
+    const data = await externalPersonService.updateVisitorUserAccount({
+      actor: req.user,
+      organizationId: req.orgId,
+      userId: req.params.userId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "user_account_state_updated",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   createExternalPerson,
   listExternalPeople,
   getExternalPerson,
   updateExternalPerson,
+  updateVisitorUserAccount,
 };

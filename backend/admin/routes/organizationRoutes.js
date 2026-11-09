@@ -652,6 +652,13 @@ scoped.get(
   requirePermission(VISIT_VIEW),
   externalPersonController.listExternalPeople,
 );
+scoped.patch(
+  "/users/:userId/account",
+  requireRoles(MANAGERS),
+  requireModule(ModuleSlug.FIRE_DRILL_EVACUATION),
+  requirePermission(VISIT_MANAGE),
+  externalPersonController.updateVisitorUserAccount,
+);
 
 const PERSON_CATEGORY_MANAGERS = [...MANAGERS, MembershipRole.LINE_MANAGER];
 

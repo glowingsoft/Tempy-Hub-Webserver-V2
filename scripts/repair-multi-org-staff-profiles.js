@@ -11,7 +11,7 @@ require("module-alias/register");
 const mongoose = require("mongoose");
 const { StaffProfile } = require("@models/StaffProfile");
 const { StaffInvitation } = require("@models/StaffInvitation");
-const { StaffInvitationStatus } = require("@models/domainEnums");
+const { StaffInvitationStatus, MembershipRole } = require("@models/domainEnums");
 const staffService = require("@adminServices/staff/staffService");
 
 (async () => {
@@ -30,8 +30,11 @@ const staffService = require("@adminServices/staff/staffService");
   const accepted = await StaffInvitation.find({
     status: StaffInvitationStatus.ACCEPTED,
     acceptedByUserId: { $ne: null },
-    jobTitleId: { $ne: null },
     branchId: { $ne: null },
+    $or: [
+      { jobTitleId: { $ne: null } },
+      { role: MembershipRole.LINE_MANAGER },
+    ],
   })
     .select(
       "acceptedByUserId organizationId branchId jobTitleId departmentIds reportsToStaffId startDate employeeCode email"

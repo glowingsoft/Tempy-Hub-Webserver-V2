@@ -7,7 +7,7 @@ const { StaffProfile } = require("@models/StaffProfile");
 const { Resident } = require("@models/Resident");
 const { VisitSession } = require("@models/VisitSession");
 const { ExternalPerson } = require("@models/ExternalPerson");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   EvacuationType,
@@ -714,20 +714,27 @@ const getEvacuationEvent = async ({
 };
 
 const emptyEvacuationStatusCounts = () => ({
+  all: 0,
   [EvacuationStatus.ACTIVE]: 0,
   [EvacuationStatus.CLOSED]: 0,
 });
 
 /** Same branch/type scope as the list; status is grouped, not filtered. */
 const countEvacuationsByStatus = async (match) => {
-  const rows = await EvacuationEvent.aggregate([
+  const [row] = await EvacuationEvent.aggregate([
     { $match: match },
-    { $group: { _id: "$status", count: { $sum: 1 } } },
+    {
+      $facet: {
+        allCount: [{ $count: "count" }],
+        byStatus: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+      },
+    },
   ]);
 
   const counts = emptyEvacuationStatusCounts();
-  for (const row of rows) {
-    if (counts[row._id] !== undefined) counts[row._id] = row.count;
+  counts.all = facetCount(row?.allCount);
+  for (const statusRow of row?.byStatus || []) {
+    if (counts[statusRow._id] !== undefined) counts[statusRow._id] = statusRow.count;
   }
   return counts;
 };

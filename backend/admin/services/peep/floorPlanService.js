@@ -3,7 +3,12 @@ const { FloorPlan } = require("@models/FloorPlan");
 const { FloorPlanPin } = require("@models/FloorPlanPin");
 const { Resident } = require("@models/Resident");
 const { Branch } = require("@models/Branch");
-const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  allCountFacet,
+} = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { AdmissionStatus, MembershipRole } = require("@models/domainEnums");
 const {
@@ -99,6 +104,7 @@ const andMatch = (base, extra) => {
 };
 
 const floorPlanStatusCountFacets = (countMatch) => ({
+  ...allCountFacet(countMatch),
   uploadedCount: [
     { $match: andMatch(countMatch, withPlanFileMatch) },
     { $count: "count" },
@@ -285,6 +291,7 @@ const listFloorPlans = async ({
     meta: {
       ...meta,
       counts: {
+        all: facetCount(result.allCount),
         uploaded: facetCount(result.uploadedCount),
         notUploaded: facetCount(result.notUploadedCount),
       },

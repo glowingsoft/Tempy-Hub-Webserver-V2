@@ -6,7 +6,7 @@ const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyMember } = require("@models/FamilyMember");
 const { NotificationExp } = require("@models/Notifications");
 const { FamilyUploadStatus } = require("@models/domainEnums");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const {
@@ -29,17 +29,17 @@ const MAX_REASON_LENGTH = 500;
 
 const ALL = "all";
 
-const statusCountsOf = (rows = []) => {
+const UPLOAD_STATUSES = Object.values(FamilyUploadStatus);
+
+const statusCountsOf = (rows = [], result) => {
+  const all = facetCount(result?.allCount);
   const counts = Object.fromEntries(
-    Object.values(FamilyUploadStatus).map((status) => [status, 0]),
+    UPLOAD_STATUSES.map((status) => [status, 0]),
   );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
-  return {
-    total: Object.values(counts).reduce((sum, n) => sum + n, 0),
-    ...counts,
-  };
+  return { total: all, all, ...counts };
 };
 
 const queueStages = [
@@ -174,6 +174,7 @@ const listUploads = async ({
     skip,
     sort: { createdAt: wanted === FamilyUploadStatus.PENDING ? 1 : -1 },
     extraFacets: {
+      ...allCountFacet(base),
       statusCounts: [
         { $match: base },
         { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -190,7 +191,7 @@ const listUploads = async ({
     data,
     meta: {
       ...meta,
-      counts: statusCountsOf(result.statusCounts),
+      counts: statusCountsOf(result.statusCounts, result),
       oldestPendingAt: result.oldestPending?.[0]?.createdAt ?? null,
     },
   };

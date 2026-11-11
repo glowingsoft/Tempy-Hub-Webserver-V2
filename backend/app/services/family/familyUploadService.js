@@ -9,7 +9,7 @@ const {
   FamilyGazetteItemStatus,
   FamilyUploadStatus,
 } = require("@models/domainEnums");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { prepareUpload } = require("./familyImage");

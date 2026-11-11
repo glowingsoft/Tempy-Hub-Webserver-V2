@@ -7,13 +7,20 @@ const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+} = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   LeaveType,
   LeaveRequestStatus,
   LeaveRequestSource,
   StaffProfileStatus,
+  ModuleSlug,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -29,8 +36,28 @@ const assertKnownLeaveType = (leaveType) => {
 };
 
 const FULL_TIME_WEEKLY_HOURS = 37.5;
-const DEFAULT_FULL_YEAR_HOLIDAY_DAYS = 28;
+const DEFAULT_FULL_YEAR_HOLIDAY_DAYS = 10;
 const DEFAULT_TZ = "Europe/London";
+
+const isLeaveModuleEnabled = (organization) => {
+  const entry = (organization?.moduleAccess || []).find(
+    (row) => row.moduleSlug === ModuleSlug.LEAVE
+  );
+  return Boolean(
+    entry?.enabled && (!entry.expiresAt || new Date(entry.expiresAt) > new Date())
+  );
+};
+
+const orgFullYearLeaveDays = (organization) => {
+  const days = organization?.settings?.defaultAnnualLeaveDays;
+  if (days === undefined || days === null || days === "") {
+    return DEFAULT_FULL_YEAR_HOLIDAY_DAYS;
+  }
+  const parsed = Number(days);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : DEFAULT_FULL_YEAR_HOLIDAY_DAYS;
+};
 
 const usesHolidayBalance = (leaveType) => leaveType === LeaveType.ANNUAL;
 
@@ -728,21 +755,14 @@ const listLeaveScores = async ({
 const LEAVE_REQUEST_STATUSES = Object.values(LeaveRequestStatus);
 
 const emptyLeaveStatusCounts = () =>
-  Object.fromEntries(LEAVE_REQUEST_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(LEAVE_REQUEST_STATUSES);
 
 /** Tab counts ignore `status` so each status total stays independent of the list filter. */
 const leaveStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    LEAVE_REQUEST_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, LEAVE_REQUEST_STATUSES);
 
 const leaveStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    LEAVE_REQUEST_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
-  );
+  statusTabCountsFromFacet(result, LEAVE_REQUEST_STATUSES);
 
 /** Current leave-year sick / absence totals; independent of list filters. */
 const leaveYearScoreFacets = (staffId, from, to) => ({
@@ -1202,11 +1222,15 @@ const upsertEntitlement = async ({
   let calculation = null;
 
   if (recalculate || days == null) {
+    const organization = await Organization.findById(organizationId)
+      .select("settings")
+      .lean();
     calculation = calculateHolidayEntitlement({
       startDate: profile.startDate,
       contractedWeeklyHours: profile.contractedWeeklyHours,
       year: yearLabel,
-      fullYearDays: fullYearDays || DEFAULT_FULL_YEAR_HOLIDAY_DAYS,
+      fullYearDays:
+        fullYearDays || orgFullYearLeaveDays(organization),
     });
     days = calculation.entitlementDays;
   }
@@ -1239,6 +1263,50 @@ const upsertEntitlement = async ({
   };
 };
 
+const seedDefaultAnnualLeave = async ({ profile, session } = {}) => {
+  if (!profile?._id || !profile.organizationId) return null;
+
+  const organization = await Organization.findById(profile.organizationId)
+    .select("settings moduleAccess")
+    .lean();
+  if (!organization || !isLeaveModuleEnabled(organization)) return null;
+
+  const yearLabel = entitlementYearFromDate(profile.startDate || new Date());
+  const existingQuery = LeaveEntitlement.findOne({
+    staffId: profile._id,
+    year: yearLabel,
+    leaveType: LeaveType.ANNUAL,
+  });
+  if (session) existingQuery.session(session);
+  if (await existingQuery) return null;
+
+  const calculation = calculateHolidayEntitlement({
+    startDate: profile.startDate,
+    contractedWeeklyHours: profile.contractedWeeklyHours,
+    year: yearLabel,
+    fullYearDays: orgFullYearLeaveDays(organization),
+  });
+
+  const createArgs = [
+    {
+      staffId: profile._id,
+      organizationId: profile.organizationId,
+      branchId: profile.branchId || null,
+      year: yearLabel,
+      leaveType: LeaveType.ANNUAL,
+      entitlementDays: calculation.entitlementDays,
+    },
+  ];
+  try {
+    const options = session ? { session } : {};
+    const [entitlement] = await LeaveEntitlement.create(createArgs, options);
+    return entitlement;
+  } catch (error) {
+    if (error.code === 11000) return null;
+    throw error;
+  }
+};
+
 module.exports = {
   createLeaveRequest,
   listMyLeaveRequests,
@@ -1255,6 +1323,7 @@ module.exports = {
   closeLeaveRequest,
   listEntitlements,
   upsertEntitlement,
+  seedDefaultAnnualLeave,
   calculateHolidayEntitlement,
   entitlementYearFromDate,
 };

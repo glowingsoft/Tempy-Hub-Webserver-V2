@@ -40,6 +40,8 @@ const organizationSchema = new mongoose.Schema(
       defaultSupervisionIntervalMonths: { type: Number, default: 3, min: 1 },
       /** Null on a staff profile means this interval. */
       defaultAppraisalIntervalMonths: { type: Number, default: 12, min: 1 },
+      /** Full-year annual leave days applied (pro-rata) when a staff profile is created. */
+      defaultAnnualLeaveDays: { type: Number, default: 10, min: 0 },
       /** Line managers allowed to write appraisals. Empty means site managers only. */
       appraisalWriterStaffIds: [
         {

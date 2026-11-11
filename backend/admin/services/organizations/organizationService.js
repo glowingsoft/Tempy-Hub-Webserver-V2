@@ -4,7 +4,13 @@ const { Membership } = require("@models/Membership");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const { User } = require("@models/UserModel");
 const { StaffInvitation } = require("@models/StaffInvitation");
-const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+} = require("@utils/paginate");
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -25,6 +31,16 @@ const {
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
+const DEFAULT_ANNUAL_LEAVE_DAYS = 10;
+
+const parseDefaultAnnualLeaveDays = (value) => {
+  const days = Number(value);
+  if (!Number.isFinite(days) || days < 0 || days > 365) {
+    throw new AppError("invalid_default_annual_leave_days", 400);
+  }
+  return days;
+};
+
 /** Lean reads skip schema defaults, so older orgs omit fields they never saved. */
 const presentSettings = (settings = {}) => {
   const defaults = orgCycleDefaults(settings || {});
@@ -32,6 +48,11 @@ const presentSettings = (settings = {}) => {
     emergencyNotifyOffsite: Boolean(settings?.emergencyNotifyOffsite),
     defaultSupervisionIntervalMonths: defaults.supervisionMonths,
     defaultAppraisalIntervalMonths: defaults.appraisalMonths,
+    defaultAnnualLeaveDays:
+      settings?.defaultAnnualLeaveDays === undefined ||
+      settings?.defaultAnnualLeaveDays === null
+        ? DEFAULT_ANNUAL_LEAVE_DAYS
+        : Number(settings.defaultAnnualLeaveDays),
     appraisalWriterStaffIds: Array.isArray(settings?.appraisalWriterStaffIds)
       ? settings.appraisalWriterStaffIds
       : [],
@@ -196,6 +217,13 @@ const createOrganization = async ({
           ),
         }
       : {}),
+    ...(settings?.defaultAnnualLeaveDays !== undefined
+      ? {
+          defaultAnnualLeaveDays: parseDefaultAnnualLeaveDays(
+            settings.defaultAnnualLeaveDays
+          ),
+        }
+      : { defaultAnnualLeaveDays: DEFAULT_ANNUAL_LEAVE_DAYS }),
   };
   const createdDefaults = orgCycleDefaults(nextSettings);
   assertAppraisalAfterSupervision(
@@ -255,24 +283,13 @@ const activateOrganization = async ({ organizationId, ownerUserId, session }) =>
   );
 };
 
-const organizationStatusCountFacets = (countMatch) => {
-  const facets = {};
-  for (const status of Object.values(OrganizationStatus)) {
-    facets[`${status}Count`] = [
-      { $match: { ...countMatch, status } },
-      { $count: "count" },
-    ];
-  }
-  return facets;
-};
+const ORGANIZATION_STATUSES = Object.values(OrganizationStatus);
 
-const organizationStatusCountsFromFacet = (result) => {
-  const counts = {};
-  for (const status of Object.values(OrganizationStatus)) {
-    counts[status] = facetCount(result[`${status}Count`]);
-  }
-  return counts;
-};
+const organizationStatusCountFacets = (countMatch) =>
+  statusTabCountFacets(countMatch, ORGANIZATION_STATUSES);
+
+const organizationStatusCountsFromFacet = (result) =>
+  statusTabCountsFromFacet(result, ORGANIZATION_STATUSES);
 
 const listOrganizations = async ({ actor, page, limit, skip, keyword, status }) => {
   const match = {};
@@ -362,6 +379,11 @@ const updateOrganization = async ({ organizationId, name, settings, status }) =>
     if (settings.defaultAppraisalIntervalMonths !== undefined) {
       update["settings.defaultAppraisalIntervalMonths"] = nextApp;
     }
+  }
+  if (settings?.defaultAnnualLeaveDays !== undefined) {
+    update["settings.defaultAnnualLeaveDays"] = parseDefaultAnnualLeaveDays(
+      settings.defaultAnnualLeaveDays
+    );
   }
   if (settings?.appraisalWriterStaffIds !== undefined) {
     update["settings.appraisalWriterStaffIds"] = await writerStaffIds(

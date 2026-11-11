@@ -10,7 +10,15 @@ const { LeaveRequest } = require("@models/LeaveRequest");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  allCountFacet,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+  countsFromGroupRows,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -640,27 +648,14 @@ const paginateRows = (rows, page, limit, skip) => ({
 const PUNCTUALITY_STATUSES = Object.values(PunctualityStatus);
 
 const emptyPunctualityStatusCounts = () =>
-  Object.fromEntries(PUNCTUALITY_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(PUNCTUALITY_STATUSES);
 
 /** Tab counts ignore `punctualityStatus` so each total stays independent of the list filter. */
 const punctualityStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    PUNCTUALITY_STATUSES.map((status) => [
-      `${status}Count`,
-      [
-        { $match: { ...countMatch, punctualityStatus: status } },
-        { $count: "count" },
-      ],
-    ]),
-  );
+  statusTabCountFacets(countMatch, PUNCTUALITY_STATUSES, "punctualityStatus");
 
 const punctualityStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    PUNCTUALITY_STATUSES.map((status) => [
-      status,
-      facetCount(result[`${status}Count`]),
-    ]),
-  );
+  statusTabCountsFromFacet(result, PUNCTUALITY_STATUSES);
 
 const parsePunctualityStatus = (status) => {
   if (
@@ -2569,7 +2564,7 @@ const staffHoursSummary = async ({
 const PRESENCE_STATUSES = Object.values(PresenceStatus);
 
 const emptyPresenceStatusCounts = () =>
-  Object.fromEntries(PRESENCE_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(PRESENCE_STATUSES);
 
 const parsePresenceStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -2582,15 +2577,8 @@ const parsePresenceStatus = (status) => {
   return value;
 };
 
-const presenceStatusCountsFromFacet = (result) => {
-  const counts = emptyPresenceStatusCounts();
-  for (const row of result.presenceCounts || []) {
-    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
-      counts[row._id] = row.count;
-    }
-  }
-  return counts;
-};
+const presenceStatusCountsFromFacet = (result) =>
+  countsFromGroupRows(result.presenceCounts, PRESENCE_STATUSES, result);
 
 const shapeLateCheckInRow = (row) => {
   const staff = row.staff || null;
@@ -2719,6 +2707,7 @@ const lateCheckInsReport = async ({
       sort: { clockInAt: -1 },
       extraDataStages: ATTENDANCE_LIST_LOOKUPS,
       extraFacets: {
+        ...allCountFacet(lateMatch),
         presenceCounts: [
           { $match: lateMatch },
           { $group: { _id: "$presenceStatus", count: { $sum: 1 } } },

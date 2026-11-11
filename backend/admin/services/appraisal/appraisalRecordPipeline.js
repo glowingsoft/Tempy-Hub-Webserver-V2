@@ -1,3 +1,4 @@
+const { facetCount } = require("@utils/paginate");
 const { AppraisalRecord } = require("@models/AppraisalRecord");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
@@ -7,18 +8,26 @@ const { conductedByStages } = require("../staff/meetingConductor");
 
 const MEETING_STATUSES = Object.values(ComplianceMeetingStatus);
 
-const emptyStatusCounts = () =>
-  Object.fromEntries(MEETING_STATUSES.map((status) => [status, 0]));
+const emptyStatusCounts = () => ({
+  all: 0,
+  ...Object.fromEntries(MEETING_STATUSES.map((status) => [status, 0])),
+});
 
 /** Tab totals ignore the current `status` filter. */
 const countAppraisalStatuses = async (match) => {
-  const counts = emptyStatusCounts();
-  const rows = await AppraisalRecord.aggregate([
+  const [row] = await AppraisalRecord.aggregate([
     { $match: match },
-    { $group: { _id: "$status", count: { $sum: 1 } } },
+    {
+      $facet: {
+        allCount: [{ $count: "count" }],
+        byStatus: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+      },
+    },
   ]);
-  for (const row of rows) {
-    if (counts[row._id] != null) counts[row._id] = row.count;
+  const counts = emptyStatusCounts();
+  counts.all = facetCount(row?.allCount);
+  for (const statusRow of row?.byStatus || []) {
+    if (counts[statusRow._id] != null) counts[statusRow._id] = statusRow.count;
   }
   return counts;
 };

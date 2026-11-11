@@ -14,7 +14,7 @@ const {
 
   MembershipRole,
 } = require("@models/domainEnums");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet, keywordOr, facetCount, allCountFacet } = require("@utils/paginate");
 const { searchText } = require("@utils/familyQuery");
 const { NotificationExp } = require("@models/Notifications");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
@@ -323,10 +323,13 @@ const checkNewResidents = async ({ value, organizationId, branchId }) => {
   });
 };
 
-const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(
-    Object.values(FamilyNewsletterStatus).map((status) => [status, 0]),
-  );
+const NEWSLETTER_STATUSES = Object.values(FamilyNewsletterStatus);
+
+const statusCountsOf = (rows = [], result) => {
+  const counts = {
+    all: facetCount(result?.allCount),
+    ...Object.fromEntries(NEWSLETTER_STATUSES.map((status) => [status, 0])),
+  };
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -468,6 +471,7 @@ const listNewsletters = async ({
     skip,
     sort: { month: -1, createdAt: -1 },
     extraFacets: {
+      ...allCountFacet(base),
       statusCounts: [
         { $match: base },
         { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -508,7 +512,7 @@ const listNewsletters = async ({
 
   return {
     data,
-    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts, result) },
   };
 };
 

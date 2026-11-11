@@ -7,7 +7,13 @@ const { BranchActivationCode } = require("@models/BranchActivationCode");
 const { User } = require("@models/UserModel");
 const { Membership } = require("@models/Membership");
 const { StaffProfile } = require("@models/StaffProfile");
-const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+} = require("@utils/paginate");
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -363,24 +369,13 @@ const createBranch = async ({
   }
 };
 
-const branchStatusCountFacets = (countMatch) => {
-  const facets = {};
-  for (const status of Object.values(BranchStatus)) {
-    facets[`${status}Count`] = [
-      { $match: { ...countMatch, status } },
-      { $count: "count" },
-    ];
-  }
-  return facets;
-};
+const BRANCH_STATUSES = Object.values(BranchStatus);
 
-const branchStatusCountsFromFacet = (result) => {
-  const counts = {};
-  for (const status of Object.values(BranchStatus)) {
-    counts[status] = facetCount(result[`${status}Count`]);
-  }
-  return counts;
-};
+const branchStatusCountFacets = (countMatch) =>
+  statusTabCountFacets(countMatch, BRANCH_STATUSES);
+
+const branchStatusCountsFromFacet = (result) =>
+  statusTabCountsFromFacet(result, BRANCH_STATUSES);
 
 /** Latest activation code for each branch on this page. Hash stays in the database. */
 const activationCodeLookup = (organizationId) => [

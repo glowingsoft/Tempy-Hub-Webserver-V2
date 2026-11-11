@@ -3,7 +3,13 @@ const { Invitation } = require("@models/Invitation");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { ExternalPerson } = require("@models/ExternalPerson");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+} = require("@utils/paginate");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { visitorInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
@@ -35,23 +41,13 @@ const OPEN_INVITE_STATUSES = [
 const VISITOR_INVITATION_STATUSES = Object.values(InvitationStatus);
 
 const emptyVisitorInvitationStatusCounts = () =>
-  Object.fromEntries(VISITOR_INVITATION_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(VISITOR_INVITATION_STATUSES);
 
 const visitorInvitationStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    VISITOR_INVITATION_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, VISITOR_INVITATION_STATUSES);
 
 const visitorInvitationStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    VISITOR_INVITATION_STATUSES.map((status) => [
-      status,
-      facetCount(result[`${status}Count`]),
-    ])
-  );
+  statusTabCountsFromFacet(result, VISITOR_INVITATION_STATUSES);
 
 const invitationBranchStages = [
   {

@@ -8,7 +8,13 @@ const { Membership } = require("@models/Membership");
 const { User } = require("@models/UserModel");
 const { Organization } = require("@models/Organization");
 const { Branch } = require("@models/Branch");
-const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  allCountFacet,
+  countsFromGroupRows,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -332,6 +338,8 @@ const insertStaffProfile = async ({
     ];
     const options = session ? { session } : {};
     const [profile] = await StaffProfile.create(createArgs, options);
+    const leaveService = require("@adminServices/leave/leaveService");
+    await leaveService.seedDefaultAnnualLeave({ profile, session });
     return profile;
   } catch (error) {
     if (duplicateKey(error)) {
@@ -395,6 +403,7 @@ const parseActiveInactiveFilter = (active, status) => {
 };
 
 const activeInactiveCountFacets = (countMatch) => ({
+  ...allCountFacet(countMatch),
   activeCount: [
     { $match: { ...countMatch, active: true } },
     { $count: "count" },
@@ -406,6 +415,7 @@ const activeInactiveCountFacets = (countMatch) => ({
 });
 
 const activeInactiveCountsFromFacet = (result) => ({
+  all: facetCount(result.allCount),
   active: facetCount(result.activeCount),
   inactive: facetCount(result.inactiveCount),
 });
@@ -709,6 +719,7 @@ const COUNTED_STAFF_ROLES = [
 ];
 
 const emptyStaffRoleCounts = () => ({
+  all: 0,
   staff: 0,
   lineManager: 0,
   siteManager: 0,
@@ -859,13 +870,8 @@ const staffLookups = [
   },
 ];
 
-const countsFromRoleRows = (rows = []) => {
-  const counts = emptyStaffRoleCounts();
-  for (const row of rows) {
-    if (counts[row._id] !== undefined) counts[row._id] = row.count;
-  }
-  return counts;
-};
+const countsFromRoleRows = (rows = [], result) =>
+  countsFromGroupRows(rows, COUNTED_STAFF_ROLES, result);
 
 const createStaffProfile = async ({
   actor,
@@ -1120,6 +1126,7 @@ const listStaffProfiles = async ({
     { $unwind: "$membership" },
     {
       $facet: {
+        allCount: [{ $count: "count" }],
         counts: [{ $group: { _id: "$membership.role", count: { $sum: 1 } } }],
         totalCount: [...roleFilter, { $count: "count" }],
         data: [
@@ -1139,7 +1146,7 @@ const listStaffProfiles = async ({
     data: result?.data || [],
     meta: {
       ...generateMeta(page, limit, facetCount(result?.totalCount)),
-      counts: countsFromRoleRows(result?.counts),
+      counts: countsFromRoleRows(result?.counts, result),
     },
   };
 };

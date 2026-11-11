@@ -7,7 +7,13 @@ const { AttendanceDay } = require("@models/AttendanceDay");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -30,22 +36,14 @@ const DEFAULT_TZ = "Europe/London";
 
 const SHIFT_STATUSES = Object.values(ShiftStatus);
 
-const emptyShiftStatusCounts = () =>
-  Object.fromEntries(SHIFT_STATUSES.map((status) => [status, 0]));
+const emptyShiftStatusCounts = () => emptyStatusTabCounts(SHIFT_STATUSES);
 
 /** Tab counts ignore `status` so each status total stays independent of the list filter. */
 const shiftStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    SHIFT_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, SHIFT_STATUSES);
 
 const shiftStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    SHIFT_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
-  );
+  statusTabCountsFromFacet(result, SHIFT_STATUSES);
 
 const parseShiftStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -62,21 +60,13 @@ const MY_SHIFT_STATUSES = [
   ShiftStatus.COMPLETED,
 ];
 
-const emptyMyShiftStatusCounts = () =>
-  Object.fromEntries(MY_SHIFT_STATUSES.map((status) => [status, 0]));
+const emptyMyShiftStatusCounts = () => emptyStatusTabCounts(MY_SHIFT_STATUSES);
 
 const myShiftStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    MY_SHIFT_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, MY_SHIFT_STATUSES);
 
 const myShiftStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    MY_SHIFT_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
-  );
+  statusTabCountsFromFacet(result, MY_SHIFT_STATUSES);
 
 const parseMyShiftStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -154,21 +144,14 @@ const MY_SHIFT_LOOKUPS = [
 const SHIFT_CLAIM_STATUSES = Object.values(ShiftClaimStatus);
 
 const emptyShiftClaimStatusCounts = () =>
-  Object.fromEntries(SHIFT_CLAIM_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(SHIFT_CLAIM_STATUSES);
 
 /** Tab counts ignore `status` so each claim-status total stays independent of the list filter. */
 const shiftClaimStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    SHIFT_CLAIM_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, SHIFT_CLAIM_STATUSES);
 
 const shiftClaimStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    SHIFT_CLAIM_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
-  );
+  statusTabCountsFromFacet(result, SHIFT_CLAIM_STATUSES);
 
 const parseShiftClaimStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -474,7 +457,7 @@ const listShifts = async ({
     page,
     limit,
     skip,
-    sort: { startsAt: 1 },
+    sort: from || to ? { startsAt: 1 } : { createdAt: -1 },
     extraFacets: shiftStatusCountFacets(countMatch),
   });
 

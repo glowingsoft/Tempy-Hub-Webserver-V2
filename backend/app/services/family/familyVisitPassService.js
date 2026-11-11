@@ -10,6 +10,15 @@ const { AppError } = require("@services/_errors/AppError");
 const { toObjectId } = require("./familyPipeline");
 const { loadRules, visitingNotice, isText } = require("./familyVisitRules");
 const { OPEN_INVITATION_STATUSES } = require("./familyVisitInvitation");
+const { namesOf } = require("./familyNotify");
+const { issue } = require("./familyVisitPassToken");
+const QRCode = require("qrcode");
+
+const QR_OPTIONS = { margin: 1, width: 320, errorCorrectionLevel: "M" };
+
+const SAFETY_ALERT_TITLE = "Safety Alert";
+const safetyMessageOf = (resident) =>
+  `If the home set a visiting password for ${resident}, Staff ask for it at reception. It is never shown in the app.`;
 
 const MAX_GUESTS = 10;
 const MAX_GUEST_NAME = 60;
@@ -30,6 +39,13 @@ const cleanGuests = (value) => {
   });
 };
 
+const cleanGuestCount = (value) => {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value < 0 || value > MAX_GUESTS)
+    throw new AppError("invalid_guest_count", 400, { max: MAX_GUESTS });
+  return value;
+};
+
 const cleanRegistration = (value) => {
   if (value === undefined) return undefined;
   if (value === null || value === "") return "";
@@ -48,8 +64,9 @@ const cleanRegistration = (value) => {
  */
 const getPass = async ({ link, userId, now = new Date() }) => {
   const me = toObjectId(userId);
-  const [rules, [row], saved] = await Promise.all([
+  const [rules, names, [row], saved] = await Promise.all([
     loadRules(link.branchId),
+    namesOf(link),
     FamilyVisit.aggregate([
       {
         $match: {
@@ -128,26 +145,50 @@ const getPass = async ({ link, userId, now = new Date() }) => {
       userId: me,
       residentId: toObjectId(link.residentId),
     })
-      .select("guests carRegistration")
+      .select("guests guestCount carRegistration")
       .lean(),
   ]);
 
   const { code = null, ...visit } = row || {};
+  const guests = saved?.guests || [];
   return {
     visit: row ? visit : null,
     code,
-    guests: saved?.guests || [],
+    ...qrOf({ code, now }),
+    homeName: names.home,
+    residentName: names.resident,
+    guests,
+    guestCount: saved?.guestCount ?? guests.length,
     carRegistration: saved?.carRegistration || "",
+    safetyAlert: {
+      title: SAFETY_ALERT_TITLE,
+      message: safetyMessageOf(names.resident),
+    },
     visiting: visitingNotice(rules),
   };
+};
+
+const qrOf = ({ code, now }) => {
+  if (!code) return { qrPayload: null, expiresAt: null, refreshInSeconds: 0 };
+  const { qrPayload, expiresAt, refreshInSeconds } = issue(code, now);
+  return { qrPayload, expiresAt, refreshInSeconds };
+};
+
+/** The QR as a PNG, for an image view that can send the login header. Null when there is no pass. */
+const getQrPng = async ({ link, userId, now = new Date() }) => {
+  const pass = await getPass({ link, userId, now });
+  if (!pass.qrPayload) return null;
+  return QRCode.toBuffer(pass.qrPayload, QR_OPTIONS);
 };
 
 /** Saves the guests without the app and the car registration; whatever is left out stays as it was. */
 const updatePass = async ({ link, userId, body = {}, now = new Date() }) => {
   const set = {};
   const guests = cleanGuests(body.guests);
+  const guestCount = cleanGuestCount(body.guestCount);
   const carRegistration = cleanRegistration(body.carRegistration);
   if (guests !== undefined) set.guests = guests;
+  if (guestCount !== undefined) set.guestCount = guestCount;
   if (carRegistration !== undefined) set.carRegistration = carRegistration;
   if (!Object.keys(set).length) throw new AppError("nothing_to_update", 400);
 
@@ -159,4 +200,4 @@ const updatePass = async ({ link, userId, body = {}, now = new Date() }) => {
   return getPass({ link, userId, now });
 };
 
-module.exports = { getPass, updatePass };
+module.exports = { getPass, updatePass, getQrPng };

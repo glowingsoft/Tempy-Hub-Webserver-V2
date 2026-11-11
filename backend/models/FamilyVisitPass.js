@@ -14,6 +14,8 @@ const familyVisitPassSchema = new mongoose.Schema(
       required: true,
     },
     guests: { type: [String], default: [] },
+    /** How many guests without the app are coming, when the app only asks for a number. */
+    guestCount: { type: Number, min: 0, max: 10, default: null },
     carRegistration: { type: String, default: "", trim: true },
   },
   { timestamps: true },

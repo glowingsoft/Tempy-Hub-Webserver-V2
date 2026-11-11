@@ -520,6 +520,7 @@
   "post_already_published": "A published post cannot go back to a draft or be scheduled",
   "invalid_filter_id": "{field} is not a valid id",
   "invalid_resident_id": "The resident id is not valid",
+  "invalid_guest_count": "The number of guests must be a whole number from 0 to {max}",
   "invalid_home_tab": "The tab must be family or wall",
   "family_module_not_enabled": "Family Engagement is not turned on for this organization",
   "newsletter_delivery_invalid": "Delivery must switch inApp, email or pdf on or off with true or false",

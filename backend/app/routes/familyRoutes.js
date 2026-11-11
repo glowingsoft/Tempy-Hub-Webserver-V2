@@ -114,6 +114,7 @@ router.put(
   familyController.updateVisit,
 );
 router.get("/visit-pass", residentInQuery, familyController.getVisitPass);
+router.get("/visit-pass/qr", residentInQuery, familyController.getVisitPassQr);
 router.put(
   "/visit-pass",
   writeLimiter,

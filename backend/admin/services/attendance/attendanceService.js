@@ -242,6 +242,26 @@ const hoursFromSettings = (value, fallback) => {
   return Number.isFinite(hours) && hours >= 0 ? hours : fallback;
 };
 
+const autoCheckoutHours = (settings = {}) => ({
+  afterShiftEnd: hoursFromSettings(
+    settings.autoClockOutHoursAfterShiftEnd,
+    AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
+  ),
+  afterClockIn: hoursFromSettings(
+    settings.autoClockOutHoursAfterClockIn,
+    AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
+  ),
+});
+
+const autoCheckoutDueAtMs = (day, shift, settings) => {
+  const { afterShiftEnd, afterClockIn } = autoCheckoutHours(settings);
+  const fromClockIn =
+    new Date(day.clockInAt).getTime() + afterClockIn * 3600000;
+  const endsAt = shift?.endsAt;
+  if (!endsAt) return fromClockIn;
+  return new Date(endsAt).getTime() + afterShiftEnd * 3600000;
+};
+
 const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
   const filter = { clockOutAt: null };
   if (staffId) filter.staffId = staffId;
@@ -270,25 +290,24 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
 
   const now = Date.now();
   const ops = [];
+  const branchDefaultOps = [];
   for (const day of days) {
-    const settings = settingsByBranch.get(String(day.branchId)) || {};
-    const afterShiftEnd = hoursFromSettings(
-      settings.autoClockOutHoursAfterShiftEnd,
-      AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
-    );
-    const afterClockIn = hoursFromSettings(
-      settings.autoClockOutHoursAfterClockIn,
-      AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
-    );
-
-    let dueAtMs = null;
-    if (day.shiftId) {
-      const shift = shiftById.get(String(day.shiftId));
-      if (!shift?.endsAt) continue;
-      dueAtMs = new Date(shift.endsAt).getTime() + afterShiftEnd * 3600000;
-    } else {
-      dueAtMs = new Date(day.clockInAt).getTime() + afterClockIn * 3600000;
+    const stored = settingsByBranch.get(String(day.branchId)) || {};
+    const needsDefaults =
+      stored.autoClockOutHoursAfterShiftEnd == null ||
+      stored.autoClockOutHoursAfterClockIn == null;
+    if (needsDefaults && day.branchId) {
+      branchDefaultOps.push(String(day.branchId));
     }
+    const settings = {
+      autoClockOutHoursAfterShiftEnd: AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
+      autoClockOutHoursAfterClockIn: AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
+      ...stored,
+    };
+    const shift = day.shiftId
+      ? shiftById.get(String(day.shiftId))
+      : null;
+    const dueAtMs = autoCheckoutDueAtMs(day, shift, settings);
     if (now < dueAtMs) continue;
 
     const clockOutAt = new Date(dueAtMs);
@@ -312,6 +331,31 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
         update: { $set: next },
       },
     });
+  }
+
+  const missingSettingIds = [...new Set(branchDefaultOps)];
+  if (missingSettingIds.length) {
+    await Branch.updateMany(
+      { _id: { $in: missingSettingIds } },
+      [
+        {
+          $set: {
+            "settings.autoClockOutHoursAfterShiftEnd": {
+              $ifNull: [
+                "$settings.autoClockOutHoursAfterShiftEnd",
+                AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
+              ],
+            },
+            "settings.autoClockOutHoursAfterClockIn": {
+              $ifNull: [
+                "$settings.autoClockOutHoursAfterClockIn",
+                AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
+              ],
+            },
+          },
+        },
+      ],
+    );
   }
 
   if (!ops.length) return { scanned: days.length, closed: 0 };

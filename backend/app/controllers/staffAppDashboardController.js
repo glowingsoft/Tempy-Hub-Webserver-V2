@@ -7,7 +7,6 @@ const getDashboard = async (req, res) => {
     const data = await getStaffAppDashboard({
       actor: req.user,
       organizationId: req.orgId,
-      weekStart: req.query.weekStart,
     });
     return sendResponse({
       res,

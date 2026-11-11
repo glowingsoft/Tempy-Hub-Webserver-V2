@@ -311,10 +311,13 @@ const withGazette = async (rows) => {
   }));
 };
 
-const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(
-    Object.values(FamilyUploadStatus).map((status) => [status, 0]),
-  );
+const UPLOAD_STATUSES = Object.values(FamilyUploadStatus);
+
+const statusCountsOf = (rows = [], result) => {
+  const counts = {
+    all: facetCount(result?.allCount),
+    ...Object.fromEntries(UPLOAD_STATUSES.map((status) => [status, 0])),
+  };
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -349,6 +352,7 @@ const listMyUploads = async ({
     limit,
     skip,
     extraFacets: {
+      ...allCountFacet(base),
       statusCounts: [
         { $match: base },
         { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -359,7 +363,7 @@ const listMyUploads = async ({
 
   return {
     data: await withGazette(data),
-    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts, result) },
   };
 };
 

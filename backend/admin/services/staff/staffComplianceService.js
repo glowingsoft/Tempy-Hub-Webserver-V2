@@ -178,7 +178,6 @@ const myCompliance = async ({ actor, organizationId }) => {
     ),
     training: scoreAssignments(assignments, RequirementType.TRAINING, amberDays),
     fireDrills: unsetDrillScore(),
-    compartmentDrills: unsetDrillScore(),
   };
 };
 

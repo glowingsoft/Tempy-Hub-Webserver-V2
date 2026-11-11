@@ -165,6 +165,7 @@ const listGazettes = async ({
     throw new AppError("invalid_status_filter", 400);
   const issues = await currentIssues({ organizationId, branchId });
   const emptyCounts = {
+    all: 0,
     ready: 0,
     notReady: 0,
     failed: 0,
@@ -245,6 +246,7 @@ const listGazettes = async ({
           },
         ],
         totalCount: [...(tab ? [{ $match: tab }] : []), { $count: "count" }],
+        allCount: [{ $count: "count" }],
         counts: [
           {
             $group: {
@@ -315,7 +317,11 @@ const listGazettes = async ({
     })),
     meta: {
       ...generateMeta(page, limit, facetCount(result.totalCount)),
-      counts: { ...emptyCounts, ...counts },
+      counts: {
+        ...emptyCounts,
+        ...counts,
+        all: facetCount(result.allCount),
+      },
     },
   };
 };

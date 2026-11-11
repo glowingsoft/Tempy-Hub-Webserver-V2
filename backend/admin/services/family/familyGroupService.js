@@ -129,17 +129,17 @@ const groupStages = (now) => [
   },
 ];
 
-const countsOf = (rows = []) => {
+const GROUP_STATUSES = Object.values(FamilyGroupStatus);
+
+const countsOf = (rows = [], result) => {
+  const all = facetCount(result?.allCount);
   const counts = Object.fromEntries(
-    Object.values(FamilyGroupStatus).map((status) => [status, 0]),
+    GROUP_STATUSES.map((status) => [status, 0]),
   );
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
-  return {
-    total: Object.values(counts).reduce((sum, n) => sum + n, 0),
-    ...counts,
-  };
+  return { all, total: all, ...counts };
 };
 
 /** One row per admitted resident. meta.counts ignores the status filter so the tabs stay stable. */
@@ -202,12 +202,13 @@ const listFamilyGroups = async ({
           },
         ],
         totalCount: [...wanted, { $count: "count" }],
+        allCount: [{ $count: "count" }],
         statusCounts: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
       },
     },
   ]);
 
-  const counts = countsOf(result.statusCounts);
+  const counts = countsOf(result.statusCounts, result);
   const totalRecords = facetCount(result.totalCount);
   return {
     data: result.data,

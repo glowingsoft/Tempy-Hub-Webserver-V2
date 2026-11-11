@@ -9963,7 +9963,7 @@
                     "dashboard"
                   ]
                 },
-                "description": "Staff app Home. Composes visibility, today (clock/break action), and dashboard cards. Query: weekStart=YYYY-MM-DD. Header x-org-id from login memberships."
+                "description": "Staff app Home cards: today clock-in, next shifts, weekly hours, shift claims, leave days, compliance tiles, documents, announcements. Header x-org-id from login memberships. Does not return the admin web dashboard payload."
               },
               "response": []
             }

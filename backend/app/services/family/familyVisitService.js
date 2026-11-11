@@ -191,6 +191,7 @@ const listVisits = async ({
             itemStage,
           ],
           total: [tabMatch, { $count: "count" }],
+          allCount: [{ $count: "count" }],
           upcoming: [{ $match: { isPast: false } }, { $count: "count" }],
           past: [{ $match: { isPast: true } }, { $count: "count" }],
         },
@@ -203,6 +204,7 @@ const listVisits = async ({
     meta: {
       ...generateMeta(page, limit, facetCount(result.total)),
       counts: {
+        all: facetCount(result.allCount),
         upcoming: facetCount(result.upcoming),
         past: facetCount(result.past),
       },

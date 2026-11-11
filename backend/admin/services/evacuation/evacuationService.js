@@ -6,12 +6,15 @@ const { AttendanceDay } = require("@models/AttendanceDay");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Resident } = require("@models/Resident");
 const { VisitSession } = require("@models/VisitSession");
+const { JobTitle } = require("@models/JobTitle");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   EvacuationType,
   EvacuationStatus,
+  FamilyAlertStatus,
+  FamilyUpdatePreset,
   EvacPersonKind,
   EvacCheckStatus,
   PresenceStatus,
@@ -28,7 +31,8 @@ const {
   scopeBranchFilter,
   MANAGER_ROLES,
 } = require("./evacuationAccess");
-const { notifyFamilies } = require("./evacuationNotify");
+const { Organization } = require("@models/Organization");
+const { sendFamilyMessage, countFamilies } = require("./evacuationNotify");
 
 const ON_SITE_PRESENCE = [PresenceStatus.ON_SITE, PresenceStatus.ON_BREAK];
 
@@ -157,11 +161,23 @@ const branchLookupPipeline = [
   { $unwind: { path: "$branchDoc", preserveNullAndEmptyArrays: true } },
 ];
 
-const formatEventDoc = (doc) => {
+const familyAlertOf = (stored) => ({
+  status: FamilyAlertStatus.NOT_SENT,
+  alertedAt: null,
+  alertedByUserId: null,
+  familiesNotified: 0,
+  updates: [],
+  allClearAt: null,
+  allClearByUserId: null,
+  ...(stored || {}),
+});
+
+const formatEventDoc = (doc, { includeFamilyAlert = false } = {}) => {
   if (!doc) return null;
-  const { branchDoc, statRows, rollcall, ...event } = doc;
+  const { branchDoc, statRows, rollcall, familyAlert, ...event } = doc;
   const formatted = {
     ...event,
+    ...(includeFamilyAlert ? { familyAlert: familyAlertOf(familyAlert) } : {}),
     branch: branchDoc
       ? {
           _id: branchDoc._id,
@@ -195,9 +211,7 @@ const assertSiteManagerBranch = (standing, branchId) => {
  */
 const getOnSiteSummary = async ({ branchId, organizationId, actor }) => {
   const orgOid = toObjectId(organizationId);
-  const standing = actor
-    ? await actorStanding(actor, organizationId)
-    : null;
+  const standing = actor ? await actorStanding(actor, organizationId) : null;
   const scopedBranchId = standing
     ? scopeBranchFilter(standing, branchId || null)
     : branchId || null;
@@ -599,12 +613,9 @@ const loadEventWithBranchAndStats = async ({
   organizationId,
   includeStats = true,
   includeChecks = false,
+  includeFamilyAlert = false,
 }) => {
-  const pipeline = [
-    { $match: match },
-    { $limit: 1 },
-    ...branchLookupPipeline,
-  ];
+  const pipeline = [{ $match: match }, { $limit: 1 }, ...branchLookupPipeline];
 
   if (organizationId) {
     pipeline.push({
@@ -622,7 +633,7 @@ const loadEventWithBranchAndStats = async ({
 
   const [doc] = await EvacuationEvent.aggregate(pipeline);
   if (!doc || !doc.branchDoc) return null;
-  return formatEventDoc(doc);
+  return formatEventDoc(doc, { includeFamilyAlert });
 };
 
 const startEvacuation = async ({
@@ -664,7 +675,6 @@ const startEvacuation = async ({
   });
 
   await seedRollcallChecks(event);
-  if (evacuationType === EvacuationType.REAL) notifyFamilies({ event });
 
   return loadEventWithBranchAndStats({
     match: { _id: event._id },
@@ -791,78 +801,74 @@ const listEvacuations = async ({
       sort: { startedAt: -1 },
       extraDataStages: [
         ...branchLookupPipeline,
-      {
-        $lookup: {
-          from: COLLECTIONS.evacChecks,
-          localField: "_id",
-          foreignField: "evacuationEventId",
-          pipeline: [
-            {
-              $group: {
-                _id: null,
-                total: { $sum: 1 },
-                safe: {
-                  $sum: {
-                    $cond: [
-                      { $eq: ["$status", EvacCheckStatus.SAFE] },
-                      1,
-                      0,
-                    ],
+        {
+          $lookup: {
+            from: COLLECTIONS.evacChecks,
+            localField: "_id",
+            foreignField: "evacuationEventId",
+            pipeline: [
+              {
+                $group: {
+                  _id: null,
+                  total: { $sum: 1 },
+                  safe: {
+                    $sum: {
+                      $cond: [{ $eq: ["$status", EvacCheckStatus.SAFE] }, 1, 0],
+                    },
                   },
                 },
               },
-            },
-          ],
-          as: "rollcallAgg",
+            ],
+            as: "rollcallAgg",
+          },
         },
-      },
-      {
-        $lookup: {
-          from: COLLECTIONS.users,
-          localField: "startedByUserId",
-          foreignField: "_id",
-          pipeline: [
-            {
-              $project: {
-                _id: 1,
-                name: 1,
-                email: 1,
-                image: { $ifNull: ["$profileIcon", ""] },
+        {
+          $lookup: {
+            from: COLLECTIONS.users,
+            localField: "startedByUserId",
+            foreignField: "_id",
+            pipeline: [
+              {
+                $project: {
+                  _id: 1,
+                  name: 1,
+                  email: 1,
+                  image: { $ifNull: ["$profileIcon", ""] },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "startedBy",
+          },
+        },
+        {
+          $project: {
+            type: 1,
+            status: 1,
+            startedAt: 1,
+            closedAt: 1,
+            startedByUserId: 1,
+            startedBy: { $ifNull: [{ $arrayElemAt: ["$startedBy", 0] }, null] },
+            kioskId: 1,
+            branchId: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            branch: {
+              _id: "$branchDoc._id",
+              name: "$branchDoc.name",
+              assemblyPoint: { $ifNull: ["$branchDoc.assemblyPoint", ""] },
+            },
+            rollcall: {
+              safe: {
+                $ifNull: [{ $arrayElemAt: ["$rollcallAgg.safe", 0] }, 0],
+              },
+              total: {
+                $ifNull: [{ $arrayElemAt: ["$rollcallAgg.total", 0] }, 0],
               },
             },
-            { $limit: 1 },
-          ],
-          as: "startedBy",
-        },
-      },
-      {
-        $project: {
-          type: 1,
-          status: 1,
-          startedAt: 1,
-          closedAt: 1,
-          startedByUserId: 1,
-          startedBy: { $ifNull: [{ $arrayElemAt: ["$startedBy", 0] }, null] },
-          kioskId: 1,
-          branchId: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          branch: {
-            _id: "$branchDoc._id",
-            name: "$branchDoc.name",
-            assemblyPoint: { $ifNull: ["$branchDoc.assemblyPoint", ""] },
-          },
-          rollcall: {
-            safe: {
-              $ifNull: [{ $arrayElemAt: ["$rollcallAgg.safe", 0] }, 0],
-            },
-            total: {
-              $ifNull: [{ $arrayElemAt: ["$rollcallAgg.total", 0] }, 0],
-            },
           },
         },
-      },
-    ],
+      ],
     }),
     countEvacuationsByStatus(match),
   ]);
@@ -882,9 +888,7 @@ const closeEvacuation = async ({
   const [eventRow] = await EvacuationEvent.aggregate([
     { $match: { _id: eventOid } },
     ...branchLookupPipeline,
-    ...(orgOid
-      ? [{ $match: { "branchDoc.organizationId": orgOid } }]
-      : []),
+    ...(orgOid ? [{ $match: { "branchDoc.organizationId": orgOid } }] : []),
     {
       $project: {
         branchId: 1,
@@ -912,7 +916,7 @@ const closeEvacuation = async ({
 
   await EvacuationEvent.updateOne(
     { _id: eventOid },
-    { $set: { status: EvacuationStatus.CLOSED, closedAt: new Date() } }
+    { $set: { status: EvacuationStatus.CLOSED, closedAt: new Date() } },
   );
 
   return loadEventWithBranchAndStats({
@@ -920,6 +924,404 @@ const closeEvacuation = async ({
     organizationId,
     includeStats: false,
   });
+};
+
+const FAMILY_UPDATE_TEXT = {
+  [FamilyUpdatePreset.ALL_RESIDENTS_AT_ASSEMBLY_POINT]:
+    "All residents are at the assembly point.",
+  [FamilyUpdatePreset.FIRE_SERVICE_ON_SITE]: "The fire service is on site.",
+  [FamilyUpdatePreset.RESIDENTS_BACK_INSIDE]: "Residents are back inside.",
+};
+
+const loadFamilyEvent = async ({ organizationId, evacuationEventId, actor }) => {
+  const [event] = await EvacuationEvent.aggregate([
+    { $match: { _id: toObjectId(evacuationEventId) } },
+    ...branchLookupPipeline,
+    { $match: { "branchDoc.organizationId": toObjectId(organizationId) } },
+    {
+      $project: {
+        branchId: 1,
+        type: 1,
+        status: 1,
+        familyAlert: 1,
+        branchName: "$branchDoc.name",
+        organizationId: "$branchDoc.organizationId",
+      },
+    },
+  ]);
+  if (!event) throw new AppError("evacuation_event_not_found", 404);
+
+  const standing = await actorStanding(actor, organizationId);
+  assertMayManageStaff(standing, event.branchId);
+
+  const [organization] = await Organization.aggregate([
+    { $match: { _id: event.organizationId } },
+    {
+      $project: {
+        offsite: { $ifNull: ["$settings.emergencyNotifyOffsite", false] },
+      },
+    },
+  ]);
+  return {
+    ...event,
+    offsite: Boolean(organization?.offsite),
+    familyAlert: familyAlertOf(event.familyAlert),
+  };
+};
+
+const loadEventForFamilyMessage = async (args) => {
+  const event = await loadFamilyEvent(args);
+  if (event.type !== EvacuationType.REAL) {
+    throw new AppError("family_alert_not_for_drills", 400);
+  }
+  if (!event.offsite) throw new AppError("offsite_alerts_disabled", 403);
+  return event;
+};
+
+const getFamilyAlert = async ({ organizationId, evacuationEventId, actor }) => {
+  const event = await loadFamilyEvent({
+    organizationId,
+    evacuationEventId,
+    actor,
+  });
+  return {
+    evacuationEventId: event._id,
+    type: event.type,
+    status: event.status,
+    offsiteAlertsEnabled: event.offsite,
+    familiesToNotify: await countFamilies(event.branchId),
+    familyAlert: event.familyAlert,
+  };
+};
+
+const loadScopedEvent = async ({
+  organizationId,
+  evacuationEventId,
+  actor,
+  includeStats,
+}) => {
+  const event = await loadEventWithBranchAndStats({
+    match: { _id: toObjectId(evacuationEventId) },
+    organizationId,
+    includeStats,
+  });
+  if (!event) throw new AppError("evacuation_event_not_found", 404);
+  const standing = await actorStanding(actor, organizationId);
+  assertSiteManagerBranch(standing, event.branchId);
+  return event;
+};
+
+const listUnaccounted = async ({
+  organizationId,
+  evacuationEventId,
+  actor,
+  status,
+  personKind,
+  page,
+  limit,
+  skip,
+}) => {
+  const event = await loadScopedEvent({
+    organizationId,
+    evacuationEventId,
+    actor,
+    includeStats: false,
+  });
+
+  const match = { evacuationEventId: toObjectId(evacuationEventId) };
+  if (status) match.status = parseCheckStatus(status);
+  else {
+    match.status = { $in: [EvacCheckStatus.UNKNOWN, EvacCheckStatus.MISSING] };
+  }
+  if (personKind) match.personKind = parsePersonKind(personKind);
+
+  const { data, meta } = await paginateWithFacet({
+    model: EvacCheck,
+    match,
+    page,
+    limit,
+    skip,
+    sort: { status: 1, updatedAt: -1 },
+    extraDataStages: [
+      ...checkPersonLookupStages,
+      {
+        $lookup: {
+          from: COLLECTIONS.staffProfiles,
+          localField: "personId",
+          foreignField: "_id",
+          as: "_staff",
+          pipeline: [{ $project: { jobTitleId: 1 } }],
+        },
+      },
+      {
+        $lookup: {
+          from: JobTitle.collection.name,
+          localField: "_staff.jobTitleId",
+          foreignField: "_id",
+          as: "_jobTitle",
+          pipeline: [{ $project: { name: 1 } }],
+        },
+      },
+      {
+        $lookup: {
+          from: COLLECTIONS.visitSessions,
+          let: { personId: "$personId" },
+          as: "_visit",
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$externalPersonId", "$$personId"] },
+                    { $eq: ["$branchId", event.branchId] },
+                  ],
+                },
+              },
+            },
+            { $sort: { checkInAt: -1 } },
+            { $limit: 1 },
+            { $project: { checkInAt: 1, purposeOfVisit: 1 } },
+          ],
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          personKind: 1,
+          personId: 1,
+          status: 1,
+          markedAt: 1,
+          locationLabel: 1,
+          lastSeenLabel: 1,
+          lastSeenAt: 1,
+          name: { $ifNull: ["$person.name", ""] },
+          email: { $ifNull: ["$person.email", ""] },
+          employeeCode: { $ifNull: ["$person.employeeCode", ""] },
+          roomNumber: { $ifNull: ["$person.roomNumber", ""] },
+          jobTitle: { $ifNull: [{ $arrayElemAt: ["$_jobTitle.name", 0] }, ""] },
+          signedInAt: { $ifNull: [{ $arrayElemAt: ["$_visit.checkInAt", 0] }, null] },
+          visitPurpose: {
+            $ifNull: [{ $arrayElemAt: ["$_visit.purposeOfVisit", 0] }, ""],
+          },
+        },
+      },
+    ],
+  });
+
+  return { data, meta };
+};
+
+const getRollcall = async ({
+  organizationId,
+  evacuationEventId,
+  actor,
+  status,
+  personKind,
+  page,
+  limit,
+  skip,
+}) => {
+  const [event, familyState, unaccounted] = await Promise.all([
+    loadScopedEvent({
+      organizationId,
+      evacuationEventId,
+      actor,
+      includeStats: true,
+    }),
+    getFamilyAlert({ organizationId, evacuationEventId, actor }),
+    listUnaccounted({
+      organizationId,
+      evacuationEventId,
+      actor,
+      status,
+      personKind,
+      page,
+      limit,
+      skip,
+    }),
+  ]);
+
+  return {
+    data: {
+      ...event,
+      familyAlert: {
+        offsiteAlertsEnabled: familyState.offsiteAlertsEnabled,
+        familiesToNotify: familyState.familiesToNotify,
+        ...familyState.familyAlert,
+      },
+      unaccounted: unaccounted.data,
+    },
+    meta: unaccounted.meta,
+  };
+};
+
+const claimFamilyAlert = async ({ event, from, set, requireActive }) => {
+  const filter = { _id: event._id, "familyAlert.status": { $in: from } };
+  if (requireActive) filter.status = EvacuationStatus.ACTIVE;
+  const claimed = await EvacuationEvent.updateOne(filter, { $set: set });
+  return claimed.modifiedCount === 1;
+};
+
+const respondWithEvent = (event, organizationId) =>
+  loadEventWithBranchAndStats({
+    match: { _id: event._id },
+    organizationId,
+    includeStats: true,
+    includeFamilyAlert: true,
+  });
+
+const alertFamilies = async ({ organizationId, evacuationEventId, actor }) => {
+  const event = await loadEventForFamilyMessage({
+    organizationId,
+    evacuationEventId,
+    actor,
+  });
+  if (event.status !== EvacuationStatus.ACTIVE) {
+    throw new AppError("evacuation_not_active", 409);
+  }
+  const now = new Date();
+  const claimed = await claimFamilyAlert({
+    event,
+    from: [FamilyAlertStatus.NOT_SENT],
+    requireActive: true,
+    set: {
+      "familyAlert.status": FamilyAlertStatus.ALERT_SENT,
+      "familyAlert.alertedAt": now,
+      "familyAlert.alertedByUserId": actor._id,
+    },
+  });
+  if (!claimed) throw new AppError("family_alert_already_sent", 409);
+
+  try {
+    const familiesNotified = await sendFamilyMessage({
+      event,
+      actor,
+      title: "Emergency at the home",
+      body: `${event.branchName} has started an evacuation. Please do not travel to the home or phone it. We will send updates.`,
+    });
+    await EvacuationEvent.updateOne(
+      { _id: event._id },
+      { $set: { "familyAlert.familiesNotified": familiesNotified } },
+    );
+  } catch (error) {
+    await EvacuationEvent.updateOne(
+      { _id: event._id },
+      {
+        $set: {
+          "familyAlert.status": FamilyAlertStatus.NOT_SENT,
+          "familyAlert.alertedAt": null,
+          "familyAlert.alertedByUserId": null,
+        },
+      },
+    );
+    throw error;
+  }
+  return respondWithEvent(event, organizationId);
+};
+
+const parseFamilyUpdatePresets = (presets) => {
+  if (!Array.isArray(presets) || !presets.length) {
+    throw new AppError("family_update_required", 400);
+  }
+  const unique = [...new Set(presets.map((value) => String(value).trim()))];
+  if (unique.some((value) => !FAMILY_UPDATE_TEXT[value])) {
+    throw new AppError("invalid_family_update_preset", 400);
+  }
+  return unique;
+};
+
+const updateFamilies = async ({
+  organizationId,
+  evacuationEventId,
+  actor,
+  presets,
+}) => {
+  const chosen = parseFamilyUpdatePresets(presets);
+  const event = await loadEventForFamilyMessage({
+    organizationId,
+    evacuationEventId,
+    actor,
+  });
+  if (event.status !== EvacuationStatus.ACTIVE) {
+    throw new AppError("evacuation_not_active", 409);
+  }
+  if (event.familyAlert.status === FamilyAlertStatus.NOT_SENT) {
+    throw new AppError("family_alert_not_sent", 409);
+  }
+  if (event.familyAlert.status === FamilyAlertStatus.ALL_CLEAR_SENT) {
+    throw new AppError("family_all_clear_already_sent", 409);
+  }
+
+  const message = chosen.map((value) => FAMILY_UPDATE_TEXT[value]).join(" ");
+  const familiesNotified = await sendFamilyMessage({
+    event,
+    actor,
+    title: "Update from the home",
+    body: message,
+  });
+  await EvacuationEvent.updateOne(
+    { _id: event._id },
+    {
+      $push: {
+        "familyAlert.updates": {
+          presets: chosen,
+          message,
+          sentAt: new Date(),
+          sentByUserId: actor._id,
+          familiesNotified,
+        },
+      },
+    },
+  );
+  return respondWithEvent(event, organizationId);
+};
+
+const allClearFamilies = async ({
+  organizationId,
+  evacuationEventId,
+  actor,
+}) => {
+  const event = await loadEventForFamilyMessage({
+    organizationId,
+    evacuationEventId,
+    actor,
+  });
+  if (event.familyAlert.status === FamilyAlertStatus.NOT_SENT) {
+    throw new AppError("family_alert_not_sent", 409);
+  }
+  const claimed = await claimFamilyAlert({
+    event,
+    from: [FamilyAlertStatus.ALERT_SENT],
+    requireActive: false,
+    set: {
+      "familyAlert.status": FamilyAlertStatus.ALL_CLEAR_SENT,
+      "familyAlert.allClearAt": new Date(),
+      "familyAlert.allClearByUserId": actor._id,
+    },
+  });
+  if (!claimed) throw new AppError("family_all_clear_already_sent", 409);
+
+  try {
+    await sendFamilyMessage({
+      event,
+      actor,
+      title: "All clear at the home",
+      body: `The emergency at ${event.branchName} is over.`,
+    });
+  } catch (error) {
+    await EvacuationEvent.updateOne(
+      { _id: event._id },
+      {
+        $set: {
+          "familyAlert.status": FamilyAlertStatus.ALERT_SENT,
+          "familyAlert.allClearAt": null,
+          "familyAlert.allClearByUserId": null,
+        },
+      },
+    );
+    throw error;
+  }
+  return respondWithEvent(event, organizationId);
 };
 
 /** Close the active event for a branch in one flow (kiosk all-clear). */
@@ -1011,7 +1413,10 @@ const upsertEvacCheck = async ({
         .lean());
 
     if (!profile) throw new AppError("staff_profile_not_found", 403);
-    if (kind !== EvacPersonKind.STAFF || String(personOid) !== String(profile._id)) {
+    if (
+      kind !== EvacPersonKind.STAFF ||
+      String(personOid) !== String(profile._id)
+    ) {
       throw new AppError("evac_check_self_only", 403);
     }
     if (String(profile.branchId) !== String(event.branchId)) {
@@ -1065,7 +1470,7 @@ const upsertEvacCheck = async ({
         personId: personOid,
       },
     },
-    { new: true, upsert: true, runValidators: true }
+    { new: true, upsert: true, runValidators: true },
   ).lean();
 
   return enrichSingleCheck(check._id);
@@ -1172,6 +1577,10 @@ module.exports = {
   listEvacuations,
   closeEvacuation,
   closeActiveEvacuationForBranch,
+  getRollcall,
+  alertFamilies,
+  updateFamilies,
+  allClearFamilies,
   upsertEvacCheck,
   listEvacChecks,
   markSelfCheck,

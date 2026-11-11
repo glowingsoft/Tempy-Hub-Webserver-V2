@@ -1,5 +1,53 @@
 const mongoose = require("mongoose");
-const { EvacuationType, EvacuationStatus } = require("./domainEnums");
+const {
+  EvacuationType,
+  EvacuationStatus,
+  FamilyAlertStatus,
+  FamilyUpdatePreset,
+} = require("./domainEnums");
+
+const familyUpdateSchema = new mongoose.Schema(
+  {
+    presets: {
+      type: [{ type: String, enum: Object.values(FamilyUpdatePreset) }],
+      default: [],
+    },
+    message: { type: String, default: "" },
+    sentAt: { type: Date, required: true },
+    sentByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    familiesNotified: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const familyAlertSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: Object.values(FamilyAlertStatus),
+      default: FamilyAlertStatus.NOT_SENT,
+    },
+    alertedAt: { type: Date, default: null },
+    alertedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    familiesNotified: { type: Number, default: 0 },
+    updates: { type: [familyUpdateSchema], default: [] },
+    allClearAt: { type: Date, default: null },
+    allClearByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+  },
+  { _id: false },
+);
 
 const evacuationEventSchema = new mongoose.Schema(
   {
@@ -31,8 +79,9 @@ const evacuationEventSchema = new mongoose.Schema(
       enum: Object.values(EvacuationStatus),
       default: EvacuationStatus.ACTIVE,
     },
+    familyAlert: { type: familyAlertSchema, default: () => ({}) },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const EvacuationEvent =

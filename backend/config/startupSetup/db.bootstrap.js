@@ -17,6 +17,7 @@ const {
 } = require("@models/domainEnums");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const { StaffProfile } = require("@models/StaffProfile");
+const { EvacCheck } = require("@models/EvacCheck");
 const AdminSettings = require("@models/AdminSettings");
 
 const BOOTSTRAP_VERSION = process.env.BOOTSTRAP_VERSION || 1; // Increment this to trigger bootstrap again
@@ -434,6 +435,18 @@ async function runDBBootstrap() {
         if (clearedNfc.modifiedCount) {
             console.log(
                 `✅ cleared empty nfcTagId on ${clearedNfc.modifiedCount} staff profile(s)`
+            );
+        }
+
+        // A stored null clientEventId blocks every other check on the sparse unique
+        // index, so roll call seeding inserted nothing. Unset the nulls.
+        const clearedEvac = await EvacCheck.updateMany(
+            { clientEventId: null },
+            { $unset: { clientEventId: "" } }
+        );
+        if (clearedEvac.modifiedCount) {
+            console.log(
+                `✅ cleared null clientEventId on ${clearedEvac.modifiedCount} evacuation check(s)`
             );
         }
 

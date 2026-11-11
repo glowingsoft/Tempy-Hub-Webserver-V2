@@ -39,7 +39,8 @@ const evacCheckSchema = new mongoose.Schema(
     /** Last recorded position of someone not yet accounted for, e.g. "Room 8". */
     lastSeenLabel: { type: String, default: "" },
     lastSeenAt: { type: Date, default: null },
-    clientEventId: { type: String, default: null },
+    /** Omitted unless sent: a stored null would collide on the sparse unique index below. */
+    clientEventId: { type: String, default: undefined },
   },
   { timestamps: true }
 );

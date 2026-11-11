@@ -3463,6 +3463,167 @@
                   "body": "{\n  \"message\": \"Evacuation check saved\",\n  \"data\": {\n    \"_id\": \"6ab3c8b0aa8607cf227b1c04\",\n    \"personKind\": \"staff\",\n    \"evacuationEventId\": \"6ab3c804acd57c285e236590\",\n    \"personId\": \"6ab3c5bcacd57c285e236548\",\n    \"__v\": 0,\n    \"clientEventId\": \"postman-evac-self-smoke-1\",\n    \"createdAt\": \"2026-09-23T12:40:16.521Z\",\n    \"geo\": {\n      \"lat\": null,\n      \"lng\": null,\n      \"accuracy\": null\n    },\n    \"lastSeenAt\": null,\n    \"lastSeenLabel\": \"\",\n    \"locationLabel\": \"Ward 2 corridor\",\n    \"markedAt\": \"2026-09-23T12:40:38.049Z\",\n    \"status\": \"unknown\",\n    \"updatedAt\": \"2026-09-23T12:40:38.049Z\",\n    \"person\": {\n      \"_id\": \"6ab3c5bcacd57c285e236548\",\n      \"name\": \"Sam Okafor\",\n      \"email\": \"deleted_user_6ab2337c44cdacb0740b292b_1790167193421@example.com\",\n      \"employeeCode\": \"EMP-SPFM\"\n    }\n  }\n}"
                 }
               ]
+            },
+            {
+              "name": "get roll call (evacuation)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/rollcall",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "rollcall"
+                  ]
+                },
+                "description": "One call for the manager app Evacuation screen. Returns the evacuation (type, status, startedAt, kioskId, branch with assemblyPoint), rollcallStats { total, safe, missing, unknown, byKind }, familyAlert { offsiteAlertsEnabled, familiesToNotify, status notSent/alertSent/allClearSent, alertedAt, familiesNotified, updates, allClearAt } and unaccounted (Not Yet Accounted For rows: personKind, status, name, email, roomNumber, employeeCode, jobTitle, lastSeenLabel, lastSeenAt, signedInAt, visitPurpose). The unaccounted list is paged: meta has the totals. Query: status (missing, unknown or safe; default missing and unknown), personKind (staff, resident, visitor or contractor), page, limit. Site manager of the site, owner or super admin; send x-org-id."
+              },
+              "response": []
+            },
+            {
+              "name": "alert families (evacuation)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/alert-families",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "alert-families"
+                  ]
+                },
+                "description": "Alert Families Now. Real evacuations only (drills return 400 family_alert_not_for_drills). Sends one notification to every family member linked to a resident of the site and records familyAlert.status = alertSent with the time and the number of families told. Site manager app: send x-org-id and use the id from get active evacuation. Needs the organization setting emergencyNotifyOffsite. Once only (409 family_alert_already_sent). The response is the evacuation event with rollcallStats and familyAlert."
+              },
+              "response": []
+            },
+            {
+              "name": "update families (evacuation)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"presets\": [\n    \"allResidentsAtAssemblyPoint\",\n    \"fireServiceOnSite\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/update-families",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "update-families"
+                  ]
+                },
+                "description": "Send Update. presets (at least one): allResidentsAtAssemblyPoint, fireServiceOnSite, residentsBackInside. Families must have been alerted first (409 family_alert_not_sent) and the evacuation must still be active (409 evacuation_not_active). Each call is appended to familyAlert.updates."
+              },
+              "response": []
+            },
+            {
+              "name": "all clear families (evacuation)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/all-clear",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "all-clear"
+                  ]
+                },
+                "description": "Post All Clear. Tells the families the emergency is over and sets familyAlert.status = allClearSent with allClearAt. Families must have been alerted first (409 family_alert_not_sent); once only (409 family_all_clear_already_sent). Allowed while the evacuation is active or after it is closed."
+              },
+              "response": []
             }
           ]
         },

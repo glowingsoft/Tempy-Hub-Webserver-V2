@@ -394,6 +394,18 @@ const EvacuationStatus = {
   CLOSED: "closed",
 };
 
+const FamilyAlertStatus = {
+  NOT_SENT: "notSent",
+  ALERT_SENT: "alertSent",
+  ALL_CLEAR_SENT: "allClearSent",
+};
+
+const FamilyUpdatePreset = {
+  ALL_RESIDENTS_AT_ASSEMBLY_POINT: "allResidentsAtAssemblyPoint",
+  FIRE_SERVICE_ON_SITE: "fireServiceOnSite",
+  RESIDENTS_BACK_INSIDE: "residentsBackInside",
+};
+
 const EvacPersonKind = {
   STAFF: "staff",
   RESIDENT: "resident",
@@ -596,6 +608,8 @@ module.exports = {
   KioskTextKind,
   EvacuationType,
   EvacuationStatus,
+  FamilyAlertStatus,
+  FamilyUpdatePreset,
   EvacPersonKind,
   EvacCheckStatus,
   DocumentScope,

@@ -1,4 +1,4 @@
-const { sendResponse } = require("@utils/responseUtil");
+const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const evacuationService = require("@adminServices/evacuation/evacuationService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { EvacCheckStatus } = require("@models/domainEnums");
@@ -50,7 +50,59 @@ const markMyself = async (req, res) => {
   }
 };
 
+const familyMessage = (action, translationKey) => async (req, res) => {
+  try {
+    const data = await evacuationService[action]({
+      organizationId: req.orgId,
+      evacuationEventId: req.params.evacuationEventId,
+      actor: req.user,
+      presets: req.body.presets,
+    });
+
+    return sendResponse({ res, statusCode: 200, translationKey, data });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getRollcall = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await evacuationService.getRollcall({
+      organizationId: req.orgId,
+      evacuationEventId: req.params.evacuationEventId,
+      actor: req.user,
+      status: req.query.status,
+      personKind: req.query.personKind,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const alertFamilies = familyMessage("alertFamilies", "families_alerted");
+const updateFamilies = familyMessage("updateFamilies", "families_updated");
+const allClearFamilies = familyMessage(
+  "allClearFamilies",
+  "families_all_clear_sent"
+);
+
 module.exports = {
   getActiveEvacuation,
   markMyself,
+  getRollcall,
+  alertFamilies,
+  updateFamilies,
+  allClearFamilies,
 };

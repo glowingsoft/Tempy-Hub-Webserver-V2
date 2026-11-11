@@ -10113,6 +10113,24 @@
                           "value": "{{residentId}}",
                           "description": "The resident being viewed; the first one when left out",
                           "disabled": true
+                        },
+                        {
+                          "key": "tab",
+                          "value": "family",
+                          "description": "Optional. family = only the approved posts this resident's family uploaded; wall = all posts of the site (Community Wall). Adds a `feed` field to the response; left out, the response is unchanged",
+                          "disabled": true
+                        },
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "description": "Feed page, only used with tab",
+                          "disabled": true
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "description": "Feed page size (max 50), only used with tab",
+                          "disabled": true
                         }
                       ]
                     },

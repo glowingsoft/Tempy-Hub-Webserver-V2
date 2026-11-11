@@ -28,6 +28,8 @@ const getHome = respond((req) =>
   familyHomeService.getHome({
     user: req.user,
     residentId: queryText(req.query.residentId),
+    tab: queryText(req.query.tab),
+    paging: parsePaginationParams(req),
   }),
 );
 

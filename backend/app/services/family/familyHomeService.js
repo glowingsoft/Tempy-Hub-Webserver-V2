@@ -9,6 +9,28 @@ const { getNextVisit } = require("./familyVisitService");
 const { nextGazette } = require("./familyGazetteService");
 const { unreadTotal } = require("./familyMessageService");
 const { namesOf } = require("./familyNotify");
+const { listTimeline } = require("./familyTimelineService");
+const { listWall } = require("./familyWallService");
+
+const HomeTab = { FAMILY: "family", WALL: "wall" };
+const HOME_TABS = Object.values(HomeTab);
+
+/**
+ * family: only the approved posts this resident's family uploaded (no home wall posts).
+ * wall: every post this site's families may see, as on the Community Wall.
+ */
+const feedOf = async ({ tab, active, residents, userId, paging }) => {
+  const feed =
+    tab === HomeTab.FAMILY
+      ? await listTimeline({
+          link: active,
+          userId,
+          ...paging,
+          familyPostsOnly: true,
+        })
+      : await listWall({ link: active, links: residents, userId, ...paging });
+  return { tab, items: feed.data, meta: feed.meta };
+};
 
 const MORNING_UNTIL = 12;
 const AFTERNOON_UNTIL = 18;
@@ -61,7 +83,15 @@ const noticesOf = ({ visiting, pendingRequests }) => [
 ];
 
 /** The Home Family tab in one call, for the resident being viewed (the first one when none is named). */
-const getHome = async ({ user, residentId, now = new Date() }) => {
+const getHome = async ({
+  user,
+  residentId,
+  tab,
+  paging,
+  now = new Date(),
+}) => {
+  if (tab !== undefined && !HOME_TABS.includes(tab))
+    throw new AppError("invalid_home_tab", 400);
   if (
     residentId !== undefined &&
     (typeof residentId !== "string" || !isValidObjectId(residentId))
@@ -82,7 +112,15 @@ const getHome = async ({ user, residentId, now = new Date() }) => {
     branchId: active.branchId,
     residentId: active.residentId,
   };
-  const [nextVisit, gazette, notifications, messages, pendingRequests, names] =
+  const [
+    nextVisit,
+    gazette,
+    notifications,
+    messages,
+    pendingRequests,
+    names,
+    feed,
+  ] =
     await Promise.all([
       getNextVisit({ link, userId: user._id, now }),
       nextGazette({ link, now }),
@@ -94,6 +132,9 @@ const getHome = async ({ user, residentId, now = new Date() }) => {
       unreadTotal(user._id),
       active.isNextOfKin ? pendingRequestsOf(active) : 0,
       namesOf(active),
+      tab
+        ? feedOf({ tab, active, residents, userId: user._id, paging })
+        : undefined,
     ]);
 
   return {
@@ -109,6 +150,8 @@ const getHome = async ({ user, residentId, now = new Date() }) => {
       pendingRequests,
     }),
     unread: { notifications, messages },
+    // Only present when ?tab= is sent, so the plain home response is unchanged.
+    ...(feed ? { feed } : {}),
   };
 };
 

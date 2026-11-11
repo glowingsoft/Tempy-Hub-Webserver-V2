@@ -176,7 +176,7 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password, deviceId, deviceType, timezone } = req.body;
-  const audience = req.body.audience || AuthAudience.STAFF;
+  const audience = req.body.audience || undefined;
   let surface;
   try {
     surface = normalizeSurface(req.body.surface);

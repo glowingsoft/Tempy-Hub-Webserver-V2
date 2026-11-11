@@ -339,7 +339,7 @@ const login = async ({
   deviceId,
   deviceType,
   timezone,
-  audience = AuthAudience.STAFF,
+  audience,
   surface,
   adminAccessToken,
 }) => {
@@ -379,6 +379,13 @@ const login = async ({
     throw new AppError("your_account_3", 401);
   }
 
+  if (!audience) {
+    // No audience sent: a staff/admin account is staff, anyone else is a family member.
+    audience = (await isStaffAccount(user))
+      ? AuthAudience.STAFF
+      : AuthAudience.FAMILY;
+  }
+
   const access = await assertAudienceAccess(user, audience);
   let resolvedSurface = normalizeSurface(surface);
   if (resolvedSurface) {
@@ -394,7 +401,9 @@ const login = async ({
   const response = formatUserResponse(user, token, [], ["resetToken"]);
   response.audience = audience;
   response.surface = resolvedSurface || null;
-  response.role = access?.highestRole || null;
+  response.role =
+    access?.highestRole ||
+    (audience === AuthAudience.FAMILY ? AuthAudience.FAMILY : null);
   response.access = access;
 
   createOrSkipDevice(user._id, deviceId, deviceType);

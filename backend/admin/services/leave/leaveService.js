@@ -1,12 +1,13 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
-const { notifyStaff, dayOf } = require("../staff/staffNotify");
+const { notifyStaff, notifyOrgManagers, dayOf, whenOf } = require("../staff/staffNotify");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { LeaveEntitlement } = require("@models/LeaveEntitlement");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
+const { Shift } = require("@models/Shift");
 const {
   paginateWithFacet,
   facetCount,
@@ -21,6 +22,7 @@ const {
   LeaveRequestSource,
   StaffProfileStatus,
   ModuleSlug,
+  ShiftStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -38,6 +40,12 @@ const assertKnownLeaveType = (leaveType) => {
 const FULL_TIME_WEEKLY_HOURS = 37.5;
 const DEFAULT_FULL_YEAR_HOLIDAY_DAYS = 10;
 const DEFAULT_TZ = "Europe/London";
+
+const siteTimezone = async (branchId) => {
+  if (!branchId) return DEFAULT_TZ;
+  const branch = await Branch.findById(branchId).select("timezone").lean();
+  return branch?.timezone || DEFAULT_TZ;
+};
 
 const isLeaveModuleEnabled = (organization) => {
   const entry = (organization?.moduleAccess || []).find(
@@ -60,6 +68,14 @@ const orgFullYearLeaveDays = (organization) => {
 };
 
 const usesHolidayBalance = (leaveType) => leaveType === LeaveType.ANNUAL;
+const MAX_HOLIDAY_SPAN_DAYS = 30;
+
+const assertHolidaySpan = (leaveType, calendarDays) => {
+  if (!usesHolidayBalance(leaveType)) return;
+  if (calendarDays > MAX_HOLIDAY_SPAN_DAYS) {
+    throw new AppError("holiday_span_exceeds_30_days", 400);
+  }
+};
 
 const STAFF_REQUESTABLE_TYPES = [LeaveType.ANNUAL];
 const MANAGER_RECORDABLE_TYPES = [LeaveType.SICK, LeaveType.ABSENCE];
@@ -71,17 +87,46 @@ const OVERLAPPING_LEAVE_STATUSES = [
   LeaveRequestStatus.CLOSED,
 ];
 
-const parseLeaveDates = (startDate, endDate, { allowPast = false } = {}) => {
-  const start = moment.tz(startDate, DEFAULT_TZ).startOf("day");
-  const end = moment.tz(endDate, DEFAULT_TZ).startOf("day");
+const parseLeaveDates = (startDate, endDate, { allowPast = false, timezone } = {}) => {
+  const tz = timezone || DEFAULT_TZ;
+  const start = moment.tz(startDate, tz).startOf("day");
+  const end = moment.tz(endDate, tz).startOf("day");
   if (!start.isValid() || !end.isValid()) {
     throw new AppError("invalid_leave_dates", 400);
   }
   if (end.isBefore(start)) throw new AppError("leave_end_before_start", 400);
-  if (!allowPast && start.isBefore(moment.tz(DEFAULT_TZ).startOf("day"))) {
+  if (!allowPast && start.isBefore(moment.tz(tz).startOf("day"))) {
     throw new AppError("leave_start_in_past", 400);
   }
-  return { startDate: start.toDate(), endDate: end.toDate() };
+  return {
+    startDate: start.toDate(),
+    endDate: end.toDate(),
+    calendarDays: end.diff(start, "days") + 1,
+  };
+};
+
+const assertLeaveTotalDays = (totalDays, calendarDays) => {
+  const days = Number(totalDays);
+  if (!Number.isFinite(days) || days <= 0) {
+    throw new AppError("invalid_leave_total_days", 400);
+  }
+  if (days !== calendarDays) {
+    throw new AppError("leave_total_days_mismatch", 400);
+  }
+  return days;
+};
+
+const assertLeaveRequestsEnabled = async (profile, organizationId) => {
+  if (!profile.branchId) return;
+  const branch = await Branch.findOne({
+    _id: profile.branchId,
+    organizationId,
+  })
+    .select("settings.enableLeaveRequests")
+    .lean();
+  if (branch?.settings?.enableLeaveRequests === false) {
+    throw new AppError("leave_requests_disabled_for_site", 403);
+  }
 };
 
 const requireStaffProfile = async (userId, organizationId) => {
@@ -506,23 +551,11 @@ const createLeaveRequest = async ({
   attachmentUrl,
 }) => {
   const profile = await requireStaffProfile(userId, organizationId);
-  if (profile.branchId) {
-    const branch = await Branch.findOne({
-      _id: profile.branchId,
-      organizationId,
-    })
-      .select("settings.enableLeaveRequests")
-      .lean();
-    if (branch?.settings?.enableLeaveRequests === false) {
-      throw new AppError("leave_requests_disabled_for_site", 403);
-    }
-  }
+  await assertLeaveRequestsEnabled(profile, organizationId);
   assertKnownLeaveType(leaveType);
   const dates = parseLeaveDates(startDate, endDate);
-
-  if (totalDays == null || totalDays <= 0) {
-    throw new AppError("invalid_leave_total_days", 400);
-  }
+  const days = assertLeaveTotalDays(totalDays, dates.calendarDays);
+  assertHolidaySpan(leaveType || LeaveType.ANNUAL, dates.calendarDays);
 
   const year = entitlementYearFromDate(dates.startDate);
   const type = leaveType || LeaveType.ANNUAL;
@@ -535,7 +568,7 @@ const createLeaveRequest = async ({
     organizationId,
     year,
     leaveType: type,
-    totalDays,
+    totalDays: days,
   });
 
   const request = await LeaveRequest.create({
@@ -544,7 +577,7 @@ const createLeaveRequest = async ({
     leaveType: type,
     startDate: dates.startDate,
     endDate: dates.endDate,
-    totalDays,
+    totalDays: days,
     reason: reason || "",
     attachmentUrl: attachmentUrl || "",
     status: LeaveRequestStatus.PENDING,
@@ -553,6 +586,123 @@ const createLeaveRequest = async ({
   });
 
   return request.toObject();
+};
+
+const requireShiftForSickness = async ({
+  shiftId,
+  staffId,
+  organizationId,
+  startDate,
+  timezone,
+}) => {
+  assertObjectId(shiftId);
+  const tz = timezone || DEFAULT_TZ;
+  const shift = await Shift.findOne({
+    _id: shiftId,
+    organizationId,
+    staffId,
+    status: ShiftStatus.SCHEDULED,
+  }).lean();
+
+  if (!shift) throw new AppError("shift_not_found", 404);
+
+  const shiftDay = moment.tz(shift.startsAt, tz).startOf("day");
+  const leaveDay = moment.tz(startDate, tz).startOf("day");
+  if (!shiftDay.isSame(leaveDay, "day")) {
+    throw new AppError("shift_not_on_leave_date", 400);
+  }
+
+  const today = moment.tz(tz).startOf("day");
+  if (shiftDay.isBefore(today)) {
+    throw new AppError("sickness_shift_in_the_past", 400);
+  }
+
+  return shift;
+};
+
+const reportSickness = async ({
+  userId,
+  organizationId,
+  startDate,
+  shiftId,
+  reason,
+}) => {
+  const profile = await requireStaffProfile(userId, organizationId);
+  await assertLeaveRequestsEnabled(profile, organizationId);
+
+  const timezone = await siteTimezone(profile.branchId);
+  const dates = parseLeaveDates(startDate, startDate, {
+    allowPast: false,
+    timezone,
+  });
+  const shift = await requireShiftForSickness({
+    shiftId,
+    staffId: profile._id,
+    organizationId,
+    startDate: dates.startDate,
+    timezone,
+  });
+
+  await assertNoOverlap(profile._id, dates.startDate, dates.endDate);
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  let request;
+  try {
+    const [created] = await LeaveRequest.create(
+      [
+        {
+          staffId: profile._id,
+          organizationId,
+          branchId: profile.branchId || shift.branchId || null,
+          leaveType: LeaveType.SICK,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          totalDays: dates.calendarDays,
+          shiftId: shift._id,
+          reason: reason || "",
+          status: LeaveRequestStatus.PENDING,
+          source: LeaveRequestSource.STAFF_REQUEST,
+          createdBy: userId,
+        },
+      ],
+      { session }
+    );
+    request = created;
+
+    await Shift.updateOne(
+      { _id: shift._id, status: ShiftStatus.SCHEDULED },
+      { $set: { urgentCover: true } },
+      { session }
+    );
+
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+
+  const lineManager = profile.reportsToStaffId
+    ? await StaffProfile.findById(profile.reportsToStaffId).select("userId").lean()
+    : null;
+
+  await notifyOrgManagers({
+    organizationId,
+    branchId: profile.branchId,
+    extraUserIds: lineManager?.userId ? [lineManager.userId] : [],
+    subjectId: userId,
+    type: "leaveSicknessReported",
+    objectId: request._id,
+    objectType: "leaveRequest",
+    title: "Staff reported sickness",
+    body: `${profile.employeeCode} reported sickness for ${whenOf(shift.startsAt, timezone)} so the shift can be covered.`,
+  });
+
+  const [enriched] = await attachLeaveRequestDetails([request.toObject()]);
+  return enriched;
 };
 
 const listMyLeaveRequests = async ({
@@ -565,6 +715,7 @@ const listMyLeaveRequests = async ({
   leaveType,
 }) => {
   const profile = await requireStaffProfile(userId, organizationId);
+  assertKnownLeaveType(leaveType);
   const match = { staffId: profile._id };
   if (leaveType) match.leaveType = leaveType;
 
@@ -595,12 +746,24 @@ const listMyLeaveRequests = async ({
     }).lean(),
   ]);
 
+  const remainingHolidayAllowance = remainingDays(entitlement);
+
   return {
     data: await attachLeaveRequestDetails(data),
     meta: { ...meta, counts: leaveStatusCountsFromFacet(result) },
     summary: {
       year,
-      remainingHolidayAllowance: remainingDays(entitlement),
+      yearStart: start,
+      yearEnd: end,
+      leaveType: LeaveType.ANNUAL,
+      remainingHolidayAllowance,
+      remainingDays: remainingHolidayAllowance,
+      entitlementDays: entitlement?.entitlementDays || 0,
+      takenDays: entitlement?.takenDays || 0,
+      pendingDays: entitlement?.pendingDays || 0,
+      carriedOverDays: entitlement?.carriedOverDays || 0,
+      contractedWeeklyHours:
+        Number(profile.contractedWeeklyHours) || FULL_TIME_WEEKLY_HOURS,
       ...leaveYearScoresFromFacet(result),
     },
   };
@@ -650,6 +813,13 @@ const cancelLeaveRequest = async ({ userId, organizationId, requestId }) => {
 
     request.status = LeaveRequestStatus.CANCELLED;
     await request.save({ session });
+    if (request.shiftId) {
+      await Shift.updateOne(
+        { _id: request.shiftId },
+        { $set: { urgentCover: false } },
+        { session }
+      );
+    }
     await session.commitTransaction();
   } catch (error) {
     await session.abortTransaction();
@@ -940,6 +1110,11 @@ const approveLeaveRequest = async ({
   });
 
   const year = entitlementYearFromDate(request.startDate);
+  const holidayDates = parseLeaveDates(request.startDate, request.endDate, {
+    allowPast: true,
+  });
+  assertLeaveTotalDays(request.totalDays, holidayDates.calendarDays);
+  assertHolidaySpan(request.leaveType, holidayDates.calendarDays);
   await assertSufficientBalance({
     staffId: request.staffId,
     organizationId,
@@ -963,7 +1138,9 @@ const approveLeaveRequest = async ({
       session
     );
 
-    request.status = LeaveRequestStatus.APPROVED;
+    request.status = usesHolidayBalance(request.leaveType)
+      ? LeaveRequestStatus.APPROVED
+      : LeaveRequestStatus.CLOSED;
     request.decidedBy = actor._id;
     request.decidedAt = new Date();
     request.decisionNote = decisionNote || "";
@@ -983,8 +1160,12 @@ const approveLeaveRequest = async ({
     type: "leaveRequestUpdate",
     objectId: request._id,
     objectType: "leaveRequest",
-    title: "Leave request approved",
-    body: `Your ${request.leaveType} leave from ${dayOf(request.startDate)} to ${dayOf(request.endDate)} was approved.`,
+    title: usesHolidayBalance(request.leaveType)
+      ? "Leave request approved"
+      : "Sickness confirmed",
+    body: usesHolidayBalance(request.leaveType)
+      ? `Your ${request.leaveType} leave from ${dayOf(request.startDate)} to ${dayOf(request.endDate)} was approved.`
+      : `Your sickness from ${dayOf(request.startDate)} to ${dayOf(request.endDate)} was confirmed.`,
   });
 
   const [enriched] = await attachLeaveRequestDetails([request.toObject()]);
@@ -1022,6 +1203,12 @@ const rejectLeaveRequest = async ({
   request.decidedAt = new Date();
   request.decisionNote = decisionNote || "";
   await request.save();
+  if (request.shiftId) {
+    await Shift.updateOne(
+      { _id: request.shiftId },
+      { $set: { urgentCover: false } }
+    );
+  }
 
   await notifyStaff({
     staffId: request.staffId,
@@ -1053,9 +1240,7 @@ const recordManagerLeave = async ({
   assertMayManageStaff(standing, profile.branchId);
 
   const dates = parseLeaveDates(startDate, endDate, { allowPast: true });
-  if (totalDays == null || totalDays <= 0) {
-    throw new AppError("invalid_leave_total_days", 400);
-  }
+  const days = assertLeaveTotalDays(totalDays, dates.calendarDays);
 
   const year = entitlementYearFromDate(dates.startDate);
   const type = leaveType || LeaveType.SICK;
@@ -1077,7 +1262,7 @@ const recordManagerLeave = async ({
           leaveType: type,
           startDate: dates.startDate,
           endDate: dates.endDate,
-          totalDays,
+          totalDays: days,
           reason: reason || "",
           status: LeaveRequestStatus.CLOSED,
           source: LeaveRequestSource.MANAGER_RECORDED,
@@ -1095,7 +1280,7 @@ const recordManagerLeave = async ({
         year,
         leaveType: type,
       });
-      entitlement.takenDays += totalDays;
+      entitlement.takenDays += days;
       await entitlement.save({ session });
     }
 
@@ -1309,6 +1494,7 @@ const seedDefaultAnnualLeave = async ({ profile, session } = {}) => {
 
 module.exports = {
   createLeaveRequest,
+  reportSickness,
   listMyLeaveRequests,
   getMyLeaveRequest,
   cancelLeaveRequest,

@@ -2,6 +2,27 @@ const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const leaveService = require("@adminServices/leave/leaveService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
+const reportSickness = async (req, res) => {
+  try {
+    const data = await leaveService.reportSickness({
+      userId: req.user._id,
+      organizationId: req.orgId,
+      startDate: req.body.startDate,
+      shiftId: req.body.shiftId,
+      reason: req.body.reason,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 201,
+      translationKey: "sickness_reported",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const createLeaveRequest = async (req, res) => {
   try {
     const data = await leaveService.createLeaveRequest({
@@ -130,6 +151,7 @@ const listMyLeaveScores = async (req, res) => {
 
 module.exports = {
   createLeaveRequest,
+  reportSickness,
   listMyLeaveRequests,
   getMyLeaveRequest,
   cancelLeaveRequest,

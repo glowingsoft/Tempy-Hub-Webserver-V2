@@ -7,12 +7,17 @@ const { AppraisalRecord } = require("@models/AppraisalRecord");
 const { Requirement } = require("@models/Requirement");
 const { RequirementAssignment } = require("@models/RequirementAssignment");
 const { RequirementRecord } = require("@models/RequirementRecord");
+const { EvacuationEvent } = require("@models/EvacuationEvent");
+const { EvacCheck } = require("@models/EvacCheck");
 const { AppError } = require("@services/_errors/AppError");
 const {
   StaffProfileStatus,
   ComplianceMeetingStatus,
   AppraisalKind,
   RequirementType,
+  EvacPersonKind,
+  EvacCheckStatus,
+  EvacuationType,
 } = require("@models/domainEnums");
 const {
   DEFAULT_TZ,
@@ -61,7 +66,38 @@ const scoreAssignments = (rows, type, amberDays) => {
   };
 };
 
-const unsetDrillScore = () => ({ percent: null });
+/** Mock drills at this site where this staff is on the roll. Safe / those drills. */
+const fireDrillScore = async ({ staffId, branchId }) => {
+  if (!branchId) return { percent: null, done: 0, expected: 0 };
+
+  const events = await EvacuationEvent.find({
+    branchId,
+    type: EvacuationType.MOCK,
+  })
+    .select("_id")
+    .lean();
+  if (!events.length) return { percent: null, done: 0, expected: 0 };
+
+  const eventIds = events.map((row) => row._id);
+  const checks = await EvacCheck.find({
+    evacuationEventId: { $in: eventIds },
+    personKind: EvacPersonKind.STAFF,
+    personId: staffId,
+  })
+    .select("status")
+    .lean();
+
+  const expected = checks.length;
+  if (!expected) return { percent: null, done: 0, expected: 0 };
+
+  const done = checks.filter((row) => row.status === EvacCheckStatus.SAFE)
+    .length;
+  return {
+    percent: Math.min(100, Math.round((done / expected) * 100)),
+    done,
+    expected,
+  };
+};
 
 const loadStaff = async (actor, organizationId) => {
   const staff = await StaffProfile.findOne({
@@ -127,7 +163,7 @@ const myCompliance = async ({ actor, organizationId }) => {
   const orgOid = toOid(organizationId, "invalid_organization_id");
   const staff = await loadStaff(actor, organizationId);
 
-  const [organization, branch, supervisions, appraisals, assignments] =
+  const [organization, branch, supervisions, appraisals, assignments, drills] =
     await Promise.all([
       Organization.findById(organizationId)
         .select(
@@ -140,6 +176,7 @@ const myCompliance = async ({ actor, organizationId }) => {
       meetingsOf(SupervisionRecord, orgOid, staff._id),
       meetingsOf(AppraisalRecord, orgOid, staff._id),
       assignmentRows(orgOid, staff._id),
+      fireDrillScore({ staffId: staff._id, branchId: staff.branchId }),
     ]);
   if (!organization) throw new AppError("organization_not_found", 404);
 
@@ -177,7 +214,7 @@ const myCompliance = async ({ actor, organizationId }) => {
       amberDays
     ),
     training: scoreAssignments(assignments, RequirementType.TRAINING, amberDays),
-    fireDrills: unsetDrillScore(),
+    fireDrills: drills,
   };
 };
 

@@ -165,7 +165,13 @@ const listLeaveRegisterDays = async ({ staffIds, from, to }) => {
   const match = {
     staffId: { $in: staffIds },
     leaveType: { $in: REGISTER_LEAVE_TYPES },
-    status: { $in: REGISTER_LEAVE_STATUSES },
+    $or: [
+      { status: { $in: [LeaveRequestStatus.APPROVED, LeaveRequestStatus.CLOSED] } },
+      {
+        status: LeaveRequestStatus.PENDING,
+        leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE] },
+      },
+    ],
   };
 
   if (from || to) {
@@ -453,6 +459,25 @@ const getOpenAttendanceDay = async (staffId) => {
 const assertNotAlreadyClockedIn = async (staffId) => {
   const openDay = await getOpenAttendanceDay(staffId);
   if (openDay) throw new AppError("attendance_open_session_exists", 409);
+};
+
+const assertNotOnSickOrAbsence = async (staffId, at) => {
+  const dayStart = moment.tz(at, DEFAULT_TZ).startOf("day").toDate();
+  const dayEnd = moment.tz(at, DEFAULT_TZ).endOf("day").toDate();
+  const blocking = await LeaveRequest.exists({
+    staffId,
+    leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE] },
+    status: {
+      $in: [
+        LeaveRequestStatus.PENDING,
+        LeaveRequestStatus.APPROVED,
+        LeaveRequestStatus.CLOSED,
+      ],
+    },
+    startDate: { $lte: dayEnd },
+    endDate: { $gte: dayStart },
+  });
+  if (blocking) throw new AppError("staff_on_sick_or_absence", 403);
 };
 
 const latestAttendanceForWorkDate = (staffId, workDate) =>
@@ -973,6 +998,7 @@ const clockIn = async ({
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
   const workDate = startOfUtcDay(clockInAt);
   await assertNotAlreadyClockedIn(profile._id);
+  await assertNotOnSickOrAbsence(profile._id, clockInAt);
 
   const rostered = clockInFromActiveShift(active, clockInAt);
 

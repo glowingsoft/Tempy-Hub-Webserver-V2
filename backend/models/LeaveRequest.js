@@ -32,6 +32,13 @@ const leaveRequestSchema = new mongoose.Schema(
     },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
+    /** Set when staff report sickness against a rostered shift. */
+    shiftId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shift",
+      default: null,
+      index: true,
+    },
     /** Counted in days so half days are expressible as 0.5. */
     totalDays: { type: Number, required: true, min: 0 },
     reason: { type: String, default: "" },

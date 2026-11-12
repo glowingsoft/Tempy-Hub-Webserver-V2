@@ -9,6 +9,7 @@ const { VisitSession } = require("@models/VisitSession");
 const { JobTitle } = require("@models/JobTitle");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
   EvacuationType,
@@ -45,7 +46,10 @@ const COLLECTIONS = {
   externalPeople: ExternalPerson.collection.name,
   users: "users",
   evacChecks: EvacCheck.collection.name,
+  evacuations: EvacuationEvent.collection.name,
 };
+
+const DRILL_WINDOW_MONTHS = 12;
 
 const EMPTY_KIND_STATS = () => ({
   [EvacPersonKind.STAFF]: { total: 0, safe: 0, missing: 0, unknown: 0 },
@@ -1569,6 +1573,163 @@ const markSelfCheck = async ({
   });
 };
 
+const drillScoreMeta = (expected, done) => ({
+  percent:
+    expected === 0 ? null : Math.min(100, Math.round((done / expected) * 100)),
+  done,
+  expected,
+  windowMonths: DRILL_WINDOW_MONTHS,
+});
+
+/** Mock drills this staff marked on, last 12 months, one aggregation. */
+const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
+  const orgOid = toObjectId(organizationId, "invalid_organization_id");
+  const profile = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId: orgOid,
+    status: StaffProfileStatus.ACTIVE,
+  })
+    .select("_id branchId")
+    .lean();
+  if (!profile) throw new AppError("staff_profile_not_found", 404);
+
+  const empty = {
+    data: [],
+    meta: {
+      ...generateMeta(page, limit, 0),
+      fireDrills: drillScoreMeta(0, 0),
+    },
+  };
+  if (!profile.branchId) return empty;
+
+  const since = new Date();
+  since.setUTCMonth(since.getUTCMonth() - DRILL_WINDOW_MONTHS);
+
+  const [result] = await EvacuationEvent.aggregate([
+    {
+      $match: {
+        branchId: profile.branchId,
+        type: EvacuationType.MOCK,
+        startedAt: { $gte: since },
+      },
+    },
+    {
+      $lookup: {
+        from: COLLECTIONS.evacChecks,
+        let: { eventId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$evacuationEventId", "$$eventId"] },
+              personKind: EvacPersonKind.STAFF,
+              personId: profile._id,
+            },
+          },
+          {
+            $project: { status: 1, locationLabel: 1, markedAt: 1 },
+          },
+          { $limit: 1 },
+        ],
+        as: "check",
+      },
+    },
+    { $unwind: "$check" },
+    { $sort: { startedAt: -1 } },
+    {
+      $facet: {
+        score: [
+          {
+            $group: {
+              _id: null,
+              expected: { $sum: 1 },
+              done: {
+                $sum: {
+                  $cond: [
+                    { $eq: ["$check.status", EvacCheckStatus.SAFE] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ],
+        total: [
+          { $match: { "check.status": EvacCheckStatus.SAFE } },
+          { $count: "count" },
+        ],
+        rows: [
+          { $match: { "check.status": EvacCheckStatus.SAFE } },
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $lookup: {
+              from: COLLECTIONS.branches,
+              localField: "branchId",
+              foreignField: "_id",
+              pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+              as: "branch",
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              evacuationEventId: "$_id",
+              startedAt: 1,
+              closedAt: 1,
+              durationSeconds: {
+                $cond: [
+                  {
+                    $and: [
+                      { $ne: ["$closedAt", null] },
+                      { $ne: ["$startedAt", null] },
+                    ],
+                  },
+                  {
+                    $max: [
+                      0,
+                      {
+                        $round: [
+                          {
+                            $divide: [
+                              { $subtract: ["$closedAt", "$startedAt"] },
+                              1000,
+                            ],
+                          },
+                          0,
+                        ],
+                      },
+                    ],
+                  },
+                  null,
+                ],
+              },
+              type: 1,
+              status: 1,
+              attended: { $literal: true },
+              checkStatus: "$check.status",
+              locationLabel: "$check.locationLabel",
+              markedAt: "$check.markedAt",
+              branch: { $arrayElemAt: ["$branch", 0] },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  const score = result?.score?.[0];
+  const total = result?.total?.[0]?.count ?? 0;
+
+  return {
+    data: result?.rows || [],
+    meta: {
+      ...generateMeta(page, limit, total),
+      fireDrills: drillScoreMeta(score?.expected ?? 0, score?.done ?? 0),
+    },
+  };
+};
+
 module.exports = {
   getOnSiteSummary,
   startEvacuation,
@@ -1584,4 +1745,5 @@ module.exports = {
   upsertEvacCheck,
   listEvacChecks,
   markSelfCheck,
+  myDrills,
 };

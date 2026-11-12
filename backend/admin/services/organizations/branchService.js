@@ -72,6 +72,19 @@ const NUMBER_SETTING_FIELDS = new Set([
   "visitorAutoCheckoutHoursAfterCheckIn",
 ]);
 
+const BRANCH_MANAGER_ROLES = [
+  MembershipRole.SITE_MANAGER,
+  MembershipRole.LINE_MANAGER,
+];
+
+const toObjectId = (value) => {
+  try {
+    return new mongoose.Types.ObjectId(String(value));
+  } catch {
+    throw new AppError("branch_not_found", 404);
+  }
+};
+
 const SETTING_FIELDS = [
   "enableBreaks",
   "lateGraceMinutes",
@@ -446,15 +459,125 @@ const listBranches = async ({
 };
 
 /**
+ * Active site + line managers for one branch. Constants in `$match` (not
+ * `$expr`) so Mongo can use `{ branchId, role }` / `organizationId` indexes.
+ */
+const branchManagersLookup = (organizationId, branchId) => ({
+  $lookup: {
+    from: Membership.collection.name,
+    let: { designatedUserId: "$managerUserId" },
+    pipeline: [
+      {
+        $match: {
+          organizationId,
+          branchId,
+          status: ActiveInactiveStatus.ACTIVE,
+          role: { $in: BRANCH_MANAGER_ROLES },
+        },
+      },
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: "userId",
+          foreignField: "_id",
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+                phoneNumber: 1,
+                image: { $ifNull: ["$profileIcon", ""] },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "user",
+        },
+      },
+      {
+        $lookup: {
+          from: StaffProfile.collection.name,
+          localField: "userId",
+          foreignField: "userId",
+          pipeline: [
+            { $match: { organizationId } },
+            {
+              $project: {
+                employeeCode: 1,
+                photoUrl: 1,
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "staffProfile",
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          membershipId: "$_id",
+          userId: 1,
+          role: 1,
+          name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+          email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+          phoneNumber: {
+            $ifNull: [{ $arrayElemAt: ["$user.phoneNumber", 0] }, ""],
+          },
+          image: {
+            $let: {
+              vars: {
+                staffPhoto: {
+                  $ifNull: [
+                    { $arrayElemAt: ["$staffProfile.photoUrl", 0] },
+                    "",
+                  ],
+                },
+                userImage: {
+                  $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""],
+                },
+              },
+              in: {
+                $cond: [
+                  { $gt: [{ $strLenCP: "$$staffPhoto" }, 0] },
+                  "$$staffPhoto",
+                  "$$userImage",
+                ],
+              },
+            },
+          },
+          employeeCode: {
+            $ifNull: [{ $arrayElemAt: ["$staffProfile.employeeCode", 0] }, null],
+          },
+          isDesignatedSiteManager: {
+            $eq: ["$userId", "$$designatedUserId"],
+          },
+          roleRank: {
+            $cond: [{ $eq: ["$role", MembershipRole.SITE_MANAGER] }, 0, 1],
+          },
+        },
+      },
+      { $sort: { roleRank: 1, name: 1 } },
+      { $project: { roleRank: 0 } },
+    ],
+    as: "managers",
+  },
+});
+
+/**
  * Branch routes carry no organization in the path, so every lookup is pinned to
  * the caller's resolved scope — otherwise an org id header would be enough to
  * read another tenant's branch.
  */
 const getBranch = async ({ branchId, organizationId }) => {
-  const branch = await Branch.findOne({
-    _id: branchId,
-    organizationId,
-  }).lean();
+  const orgOid = toObjectId(organizationId);
+  const branchOid = toObjectId(branchId);
+
+  const [branch] = await Branch.aggregate([
+    { $match: { _id: branchOid, organizationId: orgOid } },
+    { $limit: 1 },
+    branchManagersLookup(orgOid, branchOid),
+  ]);
+
   if (!branch) throw new AppError("branch_not_found", 404);
   return {
     ...branch,
@@ -543,10 +666,10 @@ const updateBranch = async ({
     throw new AppError("nothing_to_update", 400);
   }
 
-  let branch;
   if (Object.keys(update).length) {
+    let updated;
     try {
-      branch = await Branch.findOneAndUpdate(
+      updated = await Branch.findOneAndUpdate(
         { _id: branchId, organizationId },
         { $set: update },
         { new: true, runValidators: true }
@@ -556,22 +679,22 @@ const updateBranch = async ({
       if (duplicate) throw duplicate;
       throw error;
     }
-    if (!branch) throw new AppError("branch_not_found", 404);
-  } else {
-    branch = await getBranch({ branchId, organizationId });
+    if (!updated) throw new AppError("branch_not_found", 404);
   }
 
-  if (!hasManagerInvite) return branch;
+  let invitation = null;
+  if (hasManagerInvite) {
+    const applied = await applyManager({
+      actor,
+      organizationId,
+      branchId,
+      manager,
+    });
+    invitation = applied.managerInvitation;
+  }
 
-  const applied = await applyManager({
-    actor,
-    organizationId,
-    branchId,
-    manager,
-  });
-  return applied.managerInvitation
-    ? { ...branch, managerInvitation: applied.managerInvitation }
-    : { ...branch, managerUserId: applied.managerUserId || branch.managerUserId };
+  const branch = await getBranch({ branchId, organizationId });
+  return invitation ? { ...branch, managerInvitation: invitation } : branch;
 };
 
 const ACTIVATION_CODE_LENGTH = 4;

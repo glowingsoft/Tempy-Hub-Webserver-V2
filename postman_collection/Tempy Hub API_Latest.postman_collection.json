@@ -3472,6 +3472,101 @@
           ]
         },
         {
+          "name": "Family Settings",
+          "item": [
+            {
+              "name": "get family settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-settings"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Family Settings screen of the manager app. gazette: issueEveryDays, messageCap, anchorDate, deadlineReminder, communityWall. visiting: bookingOpen, loungeCapacityPerSlot, protectedTimes, visitingHours, daysAhead, maxPartySize, paused. safety: emergencyNotifyOffsite. access {editVisiting, editGazette}: gazette and safety are read-only for site managers. branchId: owner and super admin only."
+              },
+              "response": []
+            },
+            {
+              "name": "update family settings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/family-settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-settings"
+                  ]
+                },
+                "description": "Send only what changed. visiting (site manager of the site, owner, super admin): bookingOpen (false pauses visiting and cancels booked visits), loungeCapacityPerSlot, protectedTimes, visitingHours, daysAhead, maxPartySize, pausedReason. gazette (owner and super admin only, 403 insufficient_role otherwise): issueEveryDays, messageCap, anchorDate, deadlineReminder, communityWall."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Kiosk",
           "item": [
             {

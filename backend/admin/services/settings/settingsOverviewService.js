@@ -65,6 +65,8 @@ const updateAll = async (context) => {
       actor,
       organizationId,
       gazette: body.family.gazette,
+      deadlineReminder: body.family.deadlineReminder,
+      communityWall: body.family.communityWall,
     });
   if (sent.includes("visits"))
     saved.visits = await familyVisitStaffService.updateSettings({

@@ -344,6 +344,7 @@ const settingsView = (rules, branchId) => ({
   })),
   daysAhead: rules.daysAhead,
   maxPartySize: rules.maxPartySize,
+  loungeCapacityPerSlot: rules.loungeCapacityPerSlot,
   paused: rules.paused,
   pausedReason: rules.pausedReason,
   pausedAt: rules.pausedAt,
@@ -428,6 +429,13 @@ const updateSettings = async ({
       field: "maxPartySize",
       min: 1,
       max: 20,
+    });
+
+  if (body.loungeCapacityPerSlot !== undefined)
+    set.loungeCapacityPerSlot = cleanWhole(body.loungeCapacityPerSlot, {
+      field: "loungeCapacityPerSlot",
+      min: 1,
+      max: 50,
     });
 
   if (body.paused !== undefined) {

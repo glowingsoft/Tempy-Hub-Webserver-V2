@@ -11,7 +11,9 @@ const LIMITS = {
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 const present = (row) => ({
-  configured: Boolean(row),
+  configured: Boolean(row?.gazette?.anchorDate),
+  deadlineReminder: row?.deadlineReminder ?? true,
+  communityWall: row?.communityWall ?? true,
   gazette: {
     issueEveryDays: row?.gazette?.issueEveryDays ?? DEFAULTS.issueEveryDays,
     messageCap: row?.gazette?.messageCap ?? DEFAULTS.messageCap,
@@ -37,6 +39,7 @@ const getGazetteRules = async ({ organizationId }) => {
     issueEveryDays: settings.gazette.issueEveryDays,
     messageCap: settings.gazette.messageCap,
     anchorDate: settings.gazette.anchorDate,
+    deadlineReminder: settings.deadlineReminder,
   };
 };
 
@@ -51,8 +54,17 @@ const wholeNumber = (value, field) => {
  * Only what is sent changes. Saving is what switches the schedule on, so the first save also needs a start
  * day: the first issue begins on it.
  */
-const updateSettings = async ({ actor, organizationId, gazette }) => {
-  if (!gazette || typeof gazette !== "object" || Array.isArray(gazette))
+const updateSettings = async ({
+  actor,
+  organizationId,
+  gazette,
+  deadlineReminder,
+  communityWall,
+}) => {
+  if (
+    gazette !== undefined &&
+    (!gazette || typeof gazette !== "object" || Array.isArray(gazette))
+  )
     throw new AppError("gazette_setting_invalid", 400, {
       field: "gazette",
       min: "",
@@ -60,6 +72,20 @@ const updateSettings = async ({ actor, organizationId, gazette }) => {
     });
 
   const set = {};
+  [
+    ["deadlineReminder", deadlineReminder],
+    ["communityWall", communityWall],
+  ].forEach(([field, value]) => {
+    if (value === undefined) return;
+    if (typeof value !== "boolean")
+      throw new AppError("gazette_setting_invalid", 400, {
+        field,
+        min: "",
+        max: "",
+      });
+    set[field] = value;
+  });
+  if (gazette) {
   if (gazette.issueEveryDays !== undefined)
     set["gazette.issueEveryDays"] = wholeNumber(
       gazette.issueEveryDays,
@@ -77,10 +103,12 @@ const updateSettings = async ({ actor, organizationId, gazette }) => {
       throw new AppError("gazette_anchor_invalid", 400);
     set["gazette.anchorDate"] = day.toDate();
   }
+  }
   if (!Object.keys(set).length) throw new AppError("nothing_to_update", 400);
 
   const existing = await getSettings({ organizationId });
-  if (!existing.configured && !set["gazette.anchorDate"])
+  const touchesGazette = Object.keys(set).some((key) => key.startsWith("gazette."));
+  if (touchesGazette && !existing.configured && !set["gazette.anchorDate"])
     throw new AppError("gazette_anchor_required", 400);
 
   await FamilySettings.updateOne(

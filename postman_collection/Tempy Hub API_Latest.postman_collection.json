@@ -3208,6 +3208,270 @@
           ]
         },
         {
+          "name": "Residents & People",
+          "item": [
+            {
+              "name": "list residents (tabs all, restricted, out)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents?tab=all&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "all",
+                      "description": "all, restricted or out"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Residents screen of the manager app. Query: tab (all, restricted, out), admissionStatus (admitted by default, or discharged), keyword (name or room), branchId (owner and super admin only), page, limit. meta.tabCounts has the counts of the three tabs. Row: name, roomNumber, photoUrl, careLevel, admissionStatus, peep {recorded, level, mobility, equipment, assistance}, restriction {active, reason, since}, out {active, destination, note, since, expectedReturnAt} and, once deactivated, discharge."
+              },
+              "response": []
+            },
+            {
+              "name": "get resident (status)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}"
+                  ]
+                },
+                "description": "One resident, opened from the Residents list: restriction, out, peep summary and discharge details."
+              },
+              "response": []
+            },
+            {
+              "name": "deactivate resident (reason and message)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"movedOut\",\n  \"message\": \"We wish them every happiness in their new home.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/deactivate",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "deactivate"
+                  ]
+                },
+                "description": "reason: movedOut, passedAway, movedToAnotherTempyHome or other. message is optional; it goes to every active family member as a notification only when given (no automatic message). Sets the resident to discharged, cancels upcoming family visits and open visit passes, and records the 30 day family access end date. 409 resident_not_admitted when already discharged."
+              },
+              "response": []
+            },
+            {
+              "name": "list people (tabs)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/people?tab=staff&days=7&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "people"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "staff",
+                      "description": "staff, residents, visitors, contractors, residentsOut or didNotSignOut"
+                    },
+                    {
+                      "key": "days",
+                      "value": "7",
+                      "description": "didNotSignOut look-back, 1 to 31"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "People screen of the manager app. tab: staff, residents, visitors (visitor and guest), contractors (contractor and professional), residentsOut or didNotSignOut. meta.tabCounts has the count of every tab. didNotSignOut lists sign-ins from earlier days that are still open or were closed by auto-checkout (status stillSignedIn or autoSignedOut)."
+              },
+              "response": []
+            },
+            {
+              "name": "check out person",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/site-live/people/{{personKind}}/{{recordId}}/check-out",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "people",
+                    "{{personKind}}",
+                    "{{recordId}}",
+                    "check-out"
+                  ]
+                },
+                "description": "Check Out button of the People screen. personKind: staff, visitor, contractor, professional or guest. recordId: the _id of the row. Optional body checkOutAt (after the sign-in, not in the future). For a missed sign-out the row leaves the Didn't Sign Out tab and a reminder is shown once at the person's next kiosk sign-in (signOutReminder)."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Kiosk",
           "item": [
             {
@@ -19664,6 +19928,106 @@
               ]
             },
             {
+              "name": "set resident restricted",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"restricted\": true,\n  \"reason\": \"No visits from the named person\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/residents/{{residentId}}/restriction",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "residents",
+                    "{{residentId}}",
+                    "restriction"
+                  ]
+                },
+                "description": "Mark a resident restricted (restricted true, optional reason) or clear it (restricted false). Admitted residents only. The app shows the Restricted badge and tab."
+              },
+              "response": []
+            },
+            {
+              "name": "set resident out of home",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"out\": true,\n  \"destination\": \"Hospital appointment\",\n  \"note\": \"Taken by family\",\n  \"expectedReturnAt\": \"2026-11-20T16:00:00.000Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/residents/{{residentId}}/out",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "residents",
+                    "{{residentId}}",
+                    "out"
+                  ]
+                },
+                "description": "Mark a resident out of the home (out true; destination, note and expectedReturnAt optional) or back in (out false). Admitted residents only. The app shows the Out tab."
+              },
+              "response": []
+            },
+            {
               "name": "set visitor passcode",
               "event": [
                 {
@@ -29528,6 +29892,14 @@
       "key": "visitTime",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "personKind",
+      "value": "staff"
+    },
+    {
+      "key": "recordId",
+      "value": ""
     }
   ]
 }

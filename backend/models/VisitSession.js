@@ -73,6 +73,13 @@ const visitSessionSchema = new mongoose.Schema(
     checkOutAt: { type: Date, default: null },
     /** True when closed by auto-checkout, not a kiosk/staff punch. */
     autoClosed: { type: Boolean, default: false },
+    /** Set when a manager dealt with a missed sign-out from the People screen. */
+    signOutResolvedAt: { type: Date, default: null },
+    signOutResolvedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     /** Set when the resident requires a visitor passcode and it was verified. */
     residentPasscodeVerified: { type: Boolean, default: false },
     residentPasscodeVerifiedAt: { type: Date, default: null },

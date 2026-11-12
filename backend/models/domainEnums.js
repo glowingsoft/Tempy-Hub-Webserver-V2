@@ -295,6 +295,13 @@ const AdmissionStatus = {
   DISCHARGED: "discharged",
 };
 
+const ResidentDischargeReason = {
+  MOVED_OUT: "movedOut",
+  PASSED_AWAY: "passedAway",
+  MOVED_TO_ANOTHER_TEMPY_HOME: "movedToAnotherTempyHome",
+  OTHER: "other",
+};
+
 const CareLevel = {
   LOW: "low",
   MEDIUM: "medium",
@@ -593,6 +600,7 @@ module.exports = {
   ChangeRequestStatus,
   AdmissionStatus,
   CareLevel,
+  ResidentDischargeReason,
   PeepConsentStatus,
   ExternalPersonType,
   BadgeType,

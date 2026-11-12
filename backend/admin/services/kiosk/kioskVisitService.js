@@ -23,6 +23,7 @@ const {
 } = require("@adminServices/visitors/externalPersonService");
 const visitorInvitationService = require("@adminServices/visitors/visitorInvitationService");
 const { toPublicImageUrl } = require("@utils/imageHelper");
+const signOutReminder = require("@adminServices/siteLive/signOutReminder");
 const { Branch } = require("@models/Branch");
 const { Kiosk } = require("@models/Kiosk");
 const moment = require("moment-timezone");
@@ -464,6 +465,13 @@ const checkInWalkIn = async ({
   return shapeVisit({ session, person, kiosk });
 };
 
+const withSignOutReminder = async (visit) => ({
+  ...visit,
+  signOutReminder: await signOutReminder.takeExternalReminder(
+    visit?.person?._id,
+  ),
+});
+
 const checkInAtKiosk = async ({
   organizationId,
   branchId,
@@ -476,25 +484,29 @@ const checkInAtKiosk = async ({
     throw new AppError("kiosk_locked", 403);
   }
   if (method === VisitMethod.INVITATION || inviteCode) {
-    return checkInByInvitation({
-      organizationId,
-      branchId,
-      kiosk,
-      inviteCode,
-      photoUrl: walkIn.photoUrl,
-    });
+    return withSignOutReminder(
+      await checkInByInvitation({
+        organizationId,
+        branchId,
+        kiosk,
+        inviteCode,
+        photoUrl: walkIn.photoUrl,
+      }),
+    );
   }
 
   if (method && method !== VisitMethod.WALK_IN) {
     throw new AppError("invalid_visit_method", 400);
   }
 
-  return checkInWalkIn({
-    organizationId,
-    branchId,
-    kiosk,
-    ...walkIn,
-  });
+  return withSignOutReminder(
+    await checkInWalkIn({
+      organizationId,
+      branchId,
+      kiosk,
+      ...walkIn,
+    }),
+  );
 };
 
 const checkOutAtKiosk = async ({

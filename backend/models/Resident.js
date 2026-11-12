@@ -1,5 +1,9 @@
 const mongoose = require("mongoose");
-const { AdmissionStatus, CareLevel } = require("./domainEnums");
+const {
+  AdmissionStatus,
+  CareLevel,
+  ResidentDischargeReason,
+} = require("./domainEnums");
 
 const residentSchema = new mongoose.Schema(
   {
@@ -48,13 +52,54 @@ const residentSchema = new mongoose.Schema(
     visitorPasscodeRequired: { type: Boolean, default: false },
     visitorPasscodeHash: { type: String, default: null, select: false },
     visitorPasscodeSetAt: { type: Date, default: null },
+    /** Visiting restriction set by the site manager. */
+    restricted: { type: Boolean, default: false },
+    restrictedReason: { type: String, default: "" },
+    restrictedAt: { type: Date, default: null },
+    restrictedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    /** Currently out of the home. */
+    isOut: { type: Boolean, default: false },
+    outDestination: { type: String, default: "" },
+    outNote: { type: String, default: "" },
+    outSince: { type: Date, default: null },
+    expectedReturnAt: { type: Date, default: null },
+    outByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    /** Filled when the site manager deactivates the resident with a reason. */
+    discharge: {
+      reason: {
+        type: String,
+        enum: [...Object.values(ResidentDischargeReason), null],
+        default: null,
+      },
+      message: { type: String, default: "" },
+      dischargedAt: { type: Date, default: null },
+      dischargedByUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      familyAccessEndsAt: { type: Date, default: null },
+      familiesNotified: { type: Number, default: 0 },
+      visitsCancelled: { type: Number, default: 0 },
+      visitPassesCancelled: { type: Number, default: 0 },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 residentSchema.index({ qrToken: 1 }, { unique: true, sparse: true });
 residentSchema.index({ userId: 1 }, { sparse: true });
 residentSchema.index({ organizationId: 1, branchId: 1, createdAt: -1 });
+residentSchema.index({ branchId: 1, restricted: 1 });
+residentSchema.index({ branchId: 1, isOut: 1 });
 
 const Resident =
   mongoose.models.Resident || mongoose.model("Resident", residentSchema);

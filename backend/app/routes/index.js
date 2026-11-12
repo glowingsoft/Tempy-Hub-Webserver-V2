@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 
-
 const homeRoutes = require("./homeRoutes");
 const staffRoutes = require("./staffRoutes");
 const siteLiveRoutes = require("./siteLiveRoutes");
@@ -25,7 +24,7 @@ const documentRoutes = require("./documentRoutes");
 const familyInvitationRoutes = require("./familyInvitationRoutes");
 const familyRoutes = require("./familyRoutes");
 const familyVisitManagerRoutes = require("./familyVisitManagerRoutes");
-
+const residentRoutes = require("./residentRoutes");
 
 router.use("/support", supportRoutes);
 router.use("/kiosk", kioskRoutes);
@@ -33,6 +32,7 @@ router.use("/invitations", invitationRoutes);
 router.use("/family-invitations", familyInvitationRoutes);
 router.use("/family", familyRoutes);
 router.use("/family-visits", familyVisitManagerRoutes);
+router.use("/residents", residentRoutes);
 router.use("/shifts", shiftRoutes);
 router.use("/shift-claims", shiftClaimRoutes);
 router.use("/attendance", attendanceRoutes);
@@ -50,6 +50,5 @@ router.use("/staff", staffRoutes);
 router.use("/site-live", siteLiveRoutes);
 router.use("/team-live", teamLiveRoutes);
 router.use("/users", usersRoutes);
-
 
 module.exports = router;

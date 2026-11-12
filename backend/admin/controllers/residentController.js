@@ -155,6 +155,50 @@ const verifyVisitorPasscode = async (req, res) => {
   }
 };
 
+const setRestriction = async (req, res) => {
+  try {
+    const data = await residentService.setRestriction({
+      actor: req.user,
+      organizationId: req.orgId,
+      residentId: req.params.residentId,
+      restricted: req.body.restricted,
+      reason: req.body.reason,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "resident_restriction_updated",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const setOut = async (req, res) => {
+  try {
+    const data = await residentService.setOut({
+      actor: req.user,
+      organizationId: req.orgId,
+      residentId: req.params.residentId,
+      out: req.body.out,
+      destination: req.body.destination,
+      note: req.body.note,
+      expectedReturnAt: req.body.expectedReturnAt,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "resident_out_updated",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   createResident,
   listResidents,
@@ -162,4 +206,6 @@ module.exports = {
   updateResident,
   setVisitorPasscode,
   verifyVisitorPasscode,
+  setRestriction,
+  setOut,
 };

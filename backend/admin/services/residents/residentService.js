@@ -6,7 +6,21 @@ const { Branch } = require("@models/Branch");
 const { PeepRecord } = require("@models/PeepRecord");
 const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
-const { AdmissionStatus, CareLevel } = require("@models/domainEnums");
+const { FamilyVisit } = require("@models/FamilyVisit");
+const { Invitation } = require("@models/Invitation");
+const { NotificationTypes } = require("@models/Notifications");
+const {
+  AdmissionStatus,
+  CareLevel,
+  ResidentDischargeReason,
+  FamilyVisitStatus,
+  InvitationStatus,
+} = require("@models/domainEnums");
+const {
+  notify,
+  familyOf,
+  quietly,
+} = require("@appServices/family/familyNotify");
 const {
   actorStanding,
   assertMayAccessResidents,
@@ -69,9 +83,7 @@ const parsePhotographyConsent = (value) => {
 };
 
 const branchSummary = (branch) =>
-  branch
-    ? { _id: branch._id, name: branch.name, code: branch.code }
-    : null;
+  branch ? { _id: branch._id, name: branch.name, code: branch.code } : null;
 
 const toPublicResident = (doc, extras = {}) => {
   if (!doc) return doc;
@@ -79,7 +91,9 @@ const toPublicResident = (doc, extras = {}) => {
   return {
     ...rest,
     hasVisitorPasscode: Boolean(
-      visitorPasscodeHash || doc.visitorPasscodeSetAt || doc.visitorPasscodeRequired
+      visitorPasscodeHash ||
+      doc.visitorPasscodeSetAt ||
+      doc.visitorPasscodeRequired,
     ),
     ...extras,
   };
@@ -211,7 +225,9 @@ const listResidents = async ({
     extraDataStages: branchLookup,
     extraFacets: {
       admittedCount: [
-        { $match: { ...countMatch, admissionStatus: AdmissionStatus.ADMITTED } },
+        {
+          $match: { ...countMatch, admissionStatus: AdmissionStatus.ADMITTED },
+        },
         { $count: "count" },
       ],
       dischargedCount: [
@@ -303,8 +319,12 @@ const createResident = async ({
     admissionStatus: status,
     admittedAt: status === AdmissionStatus.ADMITTED ? new Date() : null,
     qrToken: await generateQrToken(),
-    photographyConsent: photographyConsent === undefined ? false : parsePhotographyConsent(photographyConsent),
-    photographyConsentCheckedAt: photographyConsent === undefined ? null : new Date(),
+    photographyConsent:
+      photographyConsent === undefined
+        ? false
+        : parsePhotographyConsent(photographyConsent),
+    photographyConsentCheckedAt:
+      photographyConsent === undefined ? null : new Date(),
   };
 
   const level = parseCareLevel(careLevel);
@@ -349,7 +369,8 @@ const updateResident = async ({
   if (phone !== undefined) update.phone = String(phone).trim();
   if (photoUrl !== undefined) update.photoUrl = photoUrl || "";
   if (roomNumber !== undefined) {
-    if (!String(roomNumber).trim()) throw new AppError("room_number_required", 400);
+    if (!String(roomNumber).trim())
+      throw new AppError("room_number_required", 400);
     update.roomNumber = String(roomNumber).trim();
   }
   if (careLevel !== undefined) {
@@ -385,7 +406,7 @@ const updateResident = async ({
   const saved = await Resident.findOneAndUpdate(
     { _id: residentId, organizationId },
     { $set: update },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   ).lean();
   if (!saved) throw new AppError("resident_not_found", 404);
 
@@ -417,7 +438,7 @@ const setVisitorPasscode = async ({
   const saved = await Resident.findOneAndUpdate(
     { _id: residentId, organizationId },
     { $set: fields },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   ).lean();
   if (!saved) throw new AppError("resident_not_found", 404);
 
@@ -447,15 +468,405 @@ const verifyVisitorPasscode = async ({
 
   const ok = await bcrypt.compare(
     String(visitorPasscode).trim(),
-    withHash.visitorPasscodeHash
+    withHash.visitorPasscodeHash,
   );
   if (!ok) throw new AppError("resident_passcode_invalid", 403);
   return { ok: true };
 };
 
+const FAMILY_ACCESS_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TABS = ["all", "restricted", "out"];
+const OPEN_VISIT_STATUSES = [
+  FamilyVisitStatus.REQUESTED,
+  FamilyVisitStatus.CONFIRMED,
+  FamilyVisitStatus.INVITED,
+];
+const OPEN_PASS_STATUSES = [
+  InvitationStatus.PENDING,
+  InvitationStatus.AWAITING_GUEST,
+  InvitationStatus.ACCEPTED,
+];
+
+const toId = (value) => new mongoose.Types.ObjectId(String(value));
+
+const parseTab = (value) => {
+  if (value == null || value === "") return "all";
+  const tab = String(value).trim().toLowerCase();
+  if (!TABS.includes(tab)) throw new AppError("invalid_resident_tab", 400);
+  return tab;
+};
+
+const parseAdmission = (value) => {
+  if (value == null || value === "") return AdmissionStatus.ADMITTED;
+  const status = String(value).trim().toLowerCase();
+  if (!Object.values(AdmissionStatus).includes(status)) {
+    throw new AppError("invalid_admission_status", 400);
+  }
+  return status;
+};
+
+const parseFlag = (value, key) => {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new AppError(key, 400);
+};
+
+const parseDate = (value, key) => {
+  if (value == null || value === "") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new AppError(key, 400);
+  return date;
+};
+
+const parseDischargeReason = (value) => {
+  const reason = String(value ?? "").trim();
+  if (!Object.values(ResidentDischargeReason).includes(reason)) {
+    throw new AppError("invalid_discharge_reason", 400);
+  }
+  return reason;
+};
+
+const toPeep = (record) => ({
+  recorded: Boolean(record),
+  level: record?.peepLevel || null,
+  mobility: record?.mobilityNotes || "",
+  equipment: record?.equipmentRequired || "",
+  assistance: record?.assistanceRequired || "",
+});
+
+const loadPeepByResident = async (residents) => {
+  const records = await PeepRecord.find({
+    residentId: { $in: residents.map((resident) => resident._id) },
+  })
+    .select("residentId peepLevel mobilityNotes equipmentRequired assistanceRequired")
+    .lean();
+  return new Map(records.map((record) => [String(record.residentId), record]));
+};
+
+const toRow = (resident, peepRecord = null) => {
+  const row = {
+    _id: resident._id,
+    name: resident.name,
+    roomNumber: resident.roomNumber || "",
+    photoUrl: resident.photoUrl || "",
+    careLevel: resident.careLevel || null,
+    admissionStatus: resident.admissionStatus,
+    branchId: resident.branchId,
+    peep: toPeep(peepRecord),
+    restriction: {
+      active: Boolean(resident.restricted),
+      reason: resident.restrictedReason || "",
+      since: resident.restrictedAt || null,
+    },
+    out: {
+      active: Boolean(resident.isOut),
+      destination: resident.outDestination || "",
+      note: resident.outNote || "",
+      since: resident.outSince || null,
+      expectedReturnAt: resident.expectedReturnAt || null,
+    },
+  };
+  const discharge = resident.discharge;
+  if (
+    resident.admissionStatus === AdmissionStatus.DISCHARGED &&
+    discharge?.reason
+  ) {
+    row.discharge = {
+      reason: discharge.reason,
+      message: discharge.message || "",
+      dischargedAt: discharge.dischargedAt,
+      familyAccessEndsAt: discharge.familyAccessEndsAt,
+      familiesNotified: discharge.familiesNotified || 0,
+      visitsCancelled: discharge.visitsCancelled || 0,
+      visitPassesCancelled: discharge.visitPassesCancelled || 0,
+    };
+  }
+  return row;
+};
+
+const loadResident = async (residentId, organizationId) => {
+  const [resident] = await Resident.aggregate([
+    { $match: { _id: toId(residentId), organizationId: toId(organizationId) } },
+  ]);
+  return resident || null;
+};
+
+const requireManagedResident = async ({
+  actor,
+  organizationId,
+  residentId,
+}) => {
+  const resident = await loadResident(residentId, organizationId);
+  if (!resident) throw new AppError("resident_not_found", 404);
+  const standing = await actorStanding(actor, organizationId);
+  assertMayAccessResidents(standing, resident.branchId);
+  return resident;
+};
+
+const requireAdmitted = (resident) => {
+  if (resident.admissionStatus !== AdmissionStatus.ADMITTED) {
+    throw new AppError("resident_not_admitted", 409);
+  }
+};
+
+const readRow = async (resident) => {
+  const fresh = await loadResident(resident._id, resident.organizationId);
+  const peep = await loadPeepByResident([fresh]);
+  return toRow(fresh, peep.get(String(fresh._id)));
+};
+
+const updateAndRead = async (resident, set) => {
+  await Resident.updateOne({ _id: resident._id }, { $set: set });
+  return readRow(resident);
+};
+
+const listManagerResidents = async ({
+  actor,
+  organizationId,
+  branchId,
+  tab,
+  admissionStatus,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  assertMayAccessResidents(standing, scopedBranchId);
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+  }
+
+  const activeTab = parseTab(tab);
+  const countMatch = {
+    organizationId: toId(organizationId),
+    admissionStatus: parseAdmission(admissionStatus),
+  };
+  if (scopedBranchId) countMatch.branchId = toId(scopedBranchId);
+  const or = keywordOr(keyword, ["name", "roomNumber"], { trim: true });
+  if (or) countMatch.$or = or;
+
+  const match = { ...countMatch };
+  if (activeTab === "restricted") match.restricted = true;
+  if (activeTab === "out") match.isOut = true;
+
+  const { data, meta, result } = await paginateWithFacet({
+    model: Resident,
+    match,
+    page,
+    limit,
+    skip,
+    sort: { name: 1 },
+    extraFacets: {
+      allCount: [{ $match: countMatch }, { $count: "count" }],
+      restrictedCount: [
+        { $match: { ...countMatch, restricted: true } },
+        { $count: "count" },
+      ],
+      outCount: [
+        { $match: { ...countMatch, isOut: true } },
+        { $count: "count" },
+      ],
+    },
+  });
+
+  const peepByResident = await loadPeepByResident(data);
+
+  return {
+    data: data.map((row) => toRow(row, peepByResident.get(String(row._id)))),
+    meta: {
+      ...meta,
+      tabCounts: {
+        all: facetCount(result.allCount),
+        restricted: facetCount(result.restrictedCount),
+        out: facetCount(result.outCount),
+      },
+    },
+  };
+};
+
+const getManagerResident = async ({ actor, organizationId, residentId }) => {
+  const resident = await requireManagedResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  const peep = await loadPeepByResident([resident]);
+  return toRow(resident, peep.get(String(resident._id)));
+};
+
+const setRestriction = async ({
+  actor,
+  organizationId,
+  residentId,
+  restricted,
+  reason,
+}) => {
+  const resident = await requireManagedResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  requireAdmitted(resident);
+  const on = parseFlag(restricted, "invalid_restricted_flag");
+
+  return updateAndRead(
+    resident,
+    on
+      ? {
+          restricted: true,
+          restrictedReason: reason ? String(reason).trim() : "",
+          restrictedAt: new Date(),
+          restrictedByUserId: actor._id,
+        }
+      : {
+          restricted: false,
+          restrictedReason: "",
+          restrictedAt: null,
+          restrictedByUserId: null,
+        },
+  );
+};
+
+const setOut = async ({
+  actor,
+  organizationId,
+  residentId,
+  out,
+  destination,
+  note,
+  expectedReturnAt,
+}) => {
+  const resident = await requireManagedResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  requireAdmitted(resident);
+  const on = parseFlag(out, "invalid_out_flag");
+
+  return updateAndRead(
+    resident,
+    on
+      ? {
+          isOut: true,
+          outDestination: destination ? String(destination).trim() : "",
+          outNote: note ? String(note).trim() : "",
+          outSince: new Date(),
+          expectedReturnAt: parseDate(
+            expectedReturnAt,
+            "invalid_expected_return",
+          ),
+          outByUserId: actor._id,
+        }
+      : {
+          isOut: false,
+          outDestination: "",
+          outNote: "",
+          outSince: null,
+          expectedReturnAt: null,
+          outByUserId: null,
+        },
+  );
+};
+
+const deactivateResident = async ({
+  actor,
+  organizationId,
+  residentId,
+  reason,
+  message,
+}) => {
+  const resident = await requireManagedResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  const dischargeReason = parseDischargeReason(reason);
+  const personalMessage = message ? String(message).trim() : "";
+
+  const now = new Date();
+  const receivers = personalMessage
+    ? await familyOf({ organizationId, residentId: resident._id })
+    : [];
+
+  const moved = await Resident.updateOne(
+    { _id: resident._id, admissionStatus: AdmissionStatus.ADMITTED },
+    {
+      $set: {
+        admissionStatus: AdmissionStatus.DISCHARGED,
+        isOut: false,
+        outDestination: "",
+        outNote: "",
+        outSince: null,
+        expectedReturnAt: null,
+        outByUserId: null,
+        discharge: {
+          reason: dischargeReason,
+          message: personalMessage,
+          dischargedAt: now,
+          dischargedByUserId: actor._id,
+          familyAccessEndsAt: new Date(
+            now.getTime() + FAMILY_ACCESS_DAYS * DAY_MS,
+          ),
+          familiesNotified: receivers.length,
+          visitsCancelled: 0,
+          visitPassesCancelled: 0,
+        },
+      },
+    },
+  );
+  if (moved.modifiedCount !== 1) {
+    throw new AppError("resident_not_admitted", 409);
+  }
+
+  const cancelled = await FamilyVisit.updateMany(
+    {
+      residentId: resident._id,
+      status: { $in: OPEN_VISIT_STATUSES },
+      startAt: { $gte: now },
+    },
+    { $set: { status: FamilyVisitStatus.CANCELLED } },
+  );
+  const passes = await Invitation.updateMany(
+    {
+      residentId: resident._id,
+      status: { $in: OPEN_PASS_STATUSES },
+    },
+    { $set: { status: InvitationStatus.CANCELLED } },
+  );
+
+  if (receivers.length) {
+    await quietly(() =>
+      notify({
+        receivers,
+        type: NotificationTypes.FAMILY_ACCESS,
+        subjectId: actor._id,
+        objectId: resident._id,
+        objectType: "resident",
+        title: `Update about ${resident.name}`,
+        body: personalMessage,
+      }),
+    );
+  }
+
+  return updateAndRead(resident, {
+    "discharge.visitsCancelled": cancelled.modifiedCount || 0,
+    "discharge.visitPassesCancelled": passes.modifiedCount || 0,
+    "discharge.familiesNotified": receivers.length,
+  });
+};
+
 module.exports = {
   listResidents,
   getResident,
+  listManagerResidents,
+  getManagerResident,
+  setRestriction,
+  setOut,
+  deactivateResident,
   createResident,
   updateResident,
   setVisitorPasscode,

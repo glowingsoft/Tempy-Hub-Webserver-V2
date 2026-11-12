@@ -40,6 +40,7 @@ const {
   createScheduledShiftFromAttendance,
 } = require("@adminServices/rota/shiftService");
 const { toPublicImageUrl } = require("@utils/imageHelper");
+const signOutReminder = require("@adminServices/siteLive/signOutReminder");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -1102,12 +1103,17 @@ const clockInForStaff = async ({
     occurredAt: occurredAt ? new Date(occurredAt) : null,
   });
 
-  return presentClockIn({
+  const presented = await presentClockIn({
     staffId: staffProfile._id,
     image,
     day: day.toObject(),
     shift: rostered.hasRosteredShift ? active.shift : null,
   });
+
+  return {
+    ...presented,
+    signOutReminder: await signOutReminder.takeStaffReminder(staffProfile._id),
+  };
 };
 
 const clockOutForStaff = async ({

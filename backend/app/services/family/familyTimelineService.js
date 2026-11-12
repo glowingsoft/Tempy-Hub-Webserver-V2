@@ -103,7 +103,14 @@ const itemStages = ({ residentId, userId }) => [
 ];
 
 /** Approved uploads and tagged wall posts for the resident, newest first. `link` is the caller's active link, so a removed member sees nothing. */
-const listTimeline = async ({ link, userId, page, limit, skip }) => {
+const listTimeline = async ({
+  link,
+  userId,
+  page,
+  limit,
+  skip,
+  familyPostsOnly = false,
+}) => {
   const residentId = toObjectId(link.residentId);
 
   const [result] = await FamilyUpload.aggregate([
@@ -118,6 +125,10 @@ const listTimeline = async ({ link, userId, page, limit, skip }) => {
         mediaIds: 1,
       },
     },
+    // familyPostsOnly: just what this resident's family uploaded, no home wall posts.
+    ...(familyPostsOnly
+      ? []
+      : [
     {
       $unionWith: {
         coll: FamilyPost.collection.name,
@@ -143,6 +154,7 @@ const listTimeline = async ({ link, userId, page, limit, skip }) => {
         ],
       },
     },
+    ]),
     {
       $facet: {
         data: [

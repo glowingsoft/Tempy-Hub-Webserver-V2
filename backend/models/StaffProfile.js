@@ -71,6 +71,11 @@ const staffProfileSchema = new mongoose.Schema(
     inactiveAt: { type: Date, default: null, index: true },
     indicators: { type: [mongoose.Schema.Types.Mixed], default: [] },
     lastSeenAt: { type: Date, default: null },
+    /** Shown once at the next kiosk sign-in after a manager closed a missed sign-out. */
+    signOutReminder: {
+      pending: { type: Boolean, default: false },
+      missedSignInAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

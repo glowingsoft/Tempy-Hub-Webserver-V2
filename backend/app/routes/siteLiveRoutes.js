@@ -8,6 +8,8 @@ const { MembershipRole } = require("@models/domainEnums");
 const {
   getSiteLive,
   getSiteLiveActivity,
+  listPeople,
+  checkOutPerson,
 } = require("../controllers/siteLiveController");
 
 const router = express.Router();
@@ -19,10 +21,12 @@ router.use(
     MembershipRole.SUPER_ADMIN,
     MembershipRole.OWNER,
     MembershipRole.SITE_MANAGER,
-  ])
+  ]),
 );
 
 router.get("/activity", getSiteLiveActivity);
+router.get("/people", listPeople);
+router.post("/people/:personKind/:recordId/check-out", checkOutPerson);
 router.get("/", getSiteLive);
 
 module.exports = router;

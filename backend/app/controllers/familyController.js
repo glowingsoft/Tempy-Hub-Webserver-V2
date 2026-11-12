@@ -1,4 +1,4 @@
-const { parsePaginationParams, sendResponse } = require("@utils/responseUtil");
+const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const { queryText } = require("@utils/familyQuery");
 const familyAccessService = require("@appServices/family/familyAccessService");
@@ -355,21 +355,6 @@ const getVisitPass = respond((req) =>
   }),
 );
 
-const getVisitPassQr = async (req, res) => {
-  try {
-    const png = await familyVisitPassService.getQrPng({
-      link: req.familyLink,
-      userId: req.user._id,
-    });
-    if (!png)
-      return sendResponse({ res, statusCode: 404, translationKey: "visit_not_found" });
-    res.set("Cache-Control", "no-store");
-    return res.type("png").send(png);
-  } catch (error) {
-    return handleServiceError(res, error, "some_thing_went_wrong");
-  }
-};
-
 const updateVisitPass = respond(
   (req) =>
     familyVisitPassService.updatePass({
@@ -586,7 +571,6 @@ module.exports = {
   requestVisit,
   updateVisit,
   getVisitPass,
-  getVisitPassQr,
   updateVisitPass,
   listWall,
   addReaction,

@@ -25,10 +25,6 @@ const {
   toPersonObject,
 } = require("./externalPersonService");
 
-const {
-  resolve: resolvePassToken,
-} = require("@appServices/family/familyVisitPassToken");
-
 const INVITE_CODE_LENGTH = 6;
 const OPEN_INVITE_STATUSES = [
   InvitationStatus.PENDING,
@@ -146,8 +142,7 @@ const rotateInviteCode = async (invitation) => {
   return invitation;
 };
 
-// Also turns a family Visit Pass rotating token back into its invitation code.
-const normalizeCode = (code) => resolvePassToken(String(code || "").trim());
+const normalizeCode = (code) => String(code || "").trim();
 
 const loadOrgName = async (organizationId, fallback) => {
   if (fallback) return fallback;

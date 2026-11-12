@@ -73,7 +73,6 @@
     "nodemon": "^3.1.7",
     "p-limit": "^6.2.0",
     "puppeteer": "^25.16.0",
-    "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
     "shortid": "^2.2.16",
     "sib-api-v3-sdk": "^8.5.0",

@@ -10574,34 +10574,7 @@
                         }
                       ]
                     },
-                    "description": "Visit Pass. visit is my next confirmed visit (or an invitation I said I would attend) and code is its kiosk code, the same 6-digit invitation code the kiosk already accepts: show it as the QR code. Both are null when there is no such visit. guests are the people without the app and carRegistration the car, as saved below. qrPayload is the rotating QR link, the same tempyhub:// form the kiosk QR uses (tempyhub://visit-pass?token=...): draw it as the QR, and fetch the pass again when refreshInSeconds runs out (it changes every 30 seconds and the kiosk accepts the current and previous one). expiresAt is when it stops being current. qrPayload is null with no visit. The visit pass qr image request returns the same QR as a PNG. guestCount is the number shown in the Who's Coming stepper. homeName and residentName fill the card heading and safetyAlert is the notice text."
-                  },
-                  "response": []
-                },
-                {
-                  "name": "visit pass qr image",
-                  "request": {
-                    "method": "GET",
-                    "header": [],
-                    "url": {
-                      "raw": "{{url}}/app/family/visit-pass/qr?residentId={{residentId}}",
-                      "host": [
-                        "{{url}}"
-                      ],
-                      "path": [
-                        "app",
-                        "family",
-                        "visit-pass",
-                        "qr"
-                      ],
-                      "query": [
-                        {
-                          "key": "residentId",
-                          "value": "{{residentId}}"
-                        }
-                      ]
-                    },
-                    "description": "The current rotating Visit Pass QR as a PNG image (404 when there is no pass). Needs the login header, so use it where the image view can send it; otherwise draw qr.imageDataUrl from the visit pass response."
+                    "description": "Visit Pass. visit is my next confirmed visit (or an invitation I said I would attend) and code is its kiosk code, the same 6-digit invitation code the kiosk already accepts: show it as the QR code. Both are null when there is no such visit. guests are the people without the app and carRegistration the car, as saved below. The code does not refresh by itself yet: a code that changes every few seconds needs the kiosk to check it."
                   },
                   "response": []
                 },
@@ -10635,10 +10608,10 @@
                         "visit-pass"
                       ]
                     },
-                    "description": "Saves the guests without the app and the car registration for this resident. Body: residentId, guestCount (whole number 0 to 10, what the stepper sends) and/or guests (up to 10 names, each up to 60 characters), carRegistration (up to 12 letters, digits, spaces or hyphens; send an empty string to clear it). Anything left out stays as it was. Returns the pass.",
+                    "description": "Saves the guests without the app and the car registration for this resident. Body: residentId, guests (up to 10 names, each up to 60 characters), carRegistration (up to 12 letters, digits, spaces or hyphens; send an empty string to clear it). Anything left out stays as it was. Returns the pass.",
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"guestCount\": 3,\n  \"carRegistration\": \"AB12 CDE\"\n}",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"guests\": [\n    \"Tom Hughes\"\n  ],\n  \"carRegistration\": \"AB12 CDE\"\n}",
                       "options": {
                         "raw": {
                           "language": "json"

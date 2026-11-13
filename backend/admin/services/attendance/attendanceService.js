@@ -424,6 +424,7 @@ const presentClockIn = async ({ staffId, image, day, shift }) => {
 
   return {
     ...day,
+    attendance: shapeStaffAttendance(day, new Date()),
     image: url,
     photoUrl: url,
     greeting: greetingForHour(clockMoment.hour()),
@@ -483,6 +484,36 @@ const assertNotOnSickOrAbsence = async (staffId, at) => {
 
 const latestAttendanceForWorkDate = (staffId, workDate) =>
   AttendanceDay.findOne({ staffId, workDate }).sort({ clockInAt: -1 }).lean();
+
+const shapeStaffAttendance = (day, now = new Date(), settings = {}) => {
+  if (!day) return null;
+  const row = typeof day.toObject === "function" ? day.toObject() : day;
+  const closed = Boolean(row.clockOutAt);
+  return {
+    _id: row._id,
+    shiftId: row.shiftId || null,
+    clockInAt: row.clockInAt,
+    clockOutAt: row.clockOutAt || null,
+    presenceStatus: row.presenceStatus,
+    punctualityStatus: row.punctualityStatus,
+    breaks: row.breaks || [],
+    workedMinutes: closed
+      ? row.workedMinutes ?? computeWorkedMinutes(row, settings)
+      : computeWorkedMinutes({ ...row, clockOutAt: now }, settings),
+    checkInMethod: row.checkInMethod,
+  };
+};
+
+const getStaffAttendanceSnapshot = async ({
+  staffId,
+  now = new Date(),
+  branchSettings = {},
+}) => {
+  const open = await getOpenAttendanceDay(staffId);
+  if (open) return shapeStaffAttendance(open, now, branchSettings);
+  const day = await latestAttendanceForWorkDate(staffId, startOfUtcDay(now));
+  return day ? shapeStaffAttendance(day, now, branchSettings) : null;
+};
 
 const assertClientEventAvailable = (existingByEvent, staffId) => {
   if (!existingByEvent) return;
@@ -3018,6 +3049,8 @@ const sicknessRateReport = async ({
 module.exports = {
   sicknessRateReport,
   getTodayAttendance,
+  getStaffAttendanceSnapshot,
+  shapeStaffAttendance,
   getTodayAttendanceForStaff,
   getOpenClockInSessionForStaff,
   listOnSiteForBranch,

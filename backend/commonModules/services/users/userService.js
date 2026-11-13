@@ -8,6 +8,8 @@ const Review = require("@models/Review");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { JobTitle } = require("@models/JobTitle");
+const { Department } = require("@models/Department");
+const { Organization } = require("@models/Organization");
 const { StaffProfileStatus } = require("@models/domainEnums");
 const { formatUserResponse } = require("@utils/userResponseUtil");
 const { userCache } = require("@config/nodeCache");
@@ -189,47 +191,93 @@ const getUserWithPopulatedFields = async (userId, fieldsToPopulate = []) => {
   }
 };
 
+const staffCardFromRow = (profile, { branch, jobTitle, departments, organization }) => ({
+    ...profile,
+    organization: organization
+      ? {
+          _id: organization._id,
+          name: organization.name,
+          status: organization.status,
+        }
+      : null,
+    branch: branch
+      ? {
+          _id: branch._id,
+          name: branch.name,
+          code: branch.code,
+          status: branch.status,
+          timezone: branch.timezone,
+        }
+      : null,
+    jobTitle: jobTitle
+      ? { _id: jobTitle._id, name: jobTitle.name, level: jobTitle.level }
+      : null,
+    departments: (departments || []).map((d) => ({
+      _id: d._id,
+      name: d.name,
+      branchId: d.branchId || null,
+    })),
+});
+
+const loadStaffCardsForUser = async (userId, organizationId) => {
+  const match = {
+    userId,
+    status: StaffProfileStatus.ACTIVE,
+  };
+  if (organizationId && mongoose.Types.ObjectId.isValid(organizationId)) {
+    match.organizationId = organizationId;
+  }
+
+  const profiles = await StaffProfile.find(match).select("-pinHash").lean();
+  if (!profiles.length) return [];
+
+  const orgIds = [...new Set(profiles.map((p) => String(p.organizationId)))];
+  const branchIds = [...new Set(profiles.map((p) => String(p.branchId)))];
+  const jobTitleIds = profiles.map((p) => p.jobTitleId).filter(Boolean);
+  const departmentIds = [
+    ...new Set(profiles.flatMap((p) => (p.departmentIds || []).map(String))),
+  ];
+
+  const [organizations, branches, jobTitles, departments] = await Promise.all([
+    Organization.find({ _id: { $in: orgIds } }).select("name status").lean(),
+    Branch.find({ _id: { $in: branchIds } })
+      .select("name code status timezone")
+      .lean(),
+    jobTitleIds.length
+      ? JobTitle.find({ _id: { $in: jobTitleIds } }).select("name level").lean()
+      : [],
+    departmentIds.length
+      ? Department.find({ _id: { $in: departmentIds } })
+          .select("name branchId")
+          .lean()
+      : [],
+  ]);
+
+  const orgById = new Map(organizations.map((o) => [String(o._id), o]));
+  const branchById = new Map(branches.map((b) => [String(b._id), b]));
+  const jobById = new Map(jobTitles.map((j) => [String(j._id), j]));
+  const deptById = new Map(departments.map((d) => [String(d._id), d]));
+
+  return profiles.map((profile) =>
+    staffCardFromRow(profile, {
+      organization: orgById.get(String(profile.organizationId)),
+      branch: branchById.get(String(profile.branchId)),
+      jobTitle: profile.jobTitleId
+        ? jobById.get(String(profile.jobTitleId))
+        : null,
+      departments: (profile.departmentIds || [])
+        .map((id) => deptById.get(String(id)))
+        .filter(Boolean),
+    })
+  );
+};
+
 const loadStaffCard = async (userId, organizationId) => {
   if (!organizationId || !mongoose.Types.ObjectId.isValid(organizationId)) {
     return undefined;
   }
-
-  const profile = await StaffProfile.findOne({
-    userId,
-    organizationId,
-    status: StaffProfileStatus.ACTIVE,
-  }).lean();
-
-  if (!profile) return null;
-
-  const [branch, jobTitle] = await Promise.all([
-    Branch.findById(profile.branchId).select("name code").lean(),
-    profile.jobTitleId
-      ? JobTitle.findById(profile.jobTitleId).select("name level").lean()
-      : null,
-  ]);
-
-  return {
-    _id: profile._id,
-    employeeCode: profile.employeeCode,
-    phone: profile.phone,
-    photoUrl: profile.photoUrl,
-    bannerUrl: profile.bannerUrl,
-    ward: profile.ward,
-    locationLabel: profile.locationLabel,
-    branchId: profile.branchId,
-    branch: branch
-      ? { _id: branch._id, name: branch.name, code: branch.code }
-      : null,
-    jobTitleId: profile.jobTitleId,
-    jobTitle: jobTitle
-      ? { _id: jobTitle._id, name: jobTitle.name, level: jobTitle.level }
-      : null,
-    reportsToStaffId: profile.reportsToStaffId,
-    contractedWeeklyHours: profile.contractedWeeklyHours,
-    startDate: profile.startDate,
-    status: profile.status,
-  };
+  const [card] = await loadStaffCardsForUser(userId, organizationId);
+  return card || null;
 };
 
 const withStaffCard = async (payload, userId, organizationId) => {
@@ -400,5 +448,7 @@ module.exports = {
   getOtherUserProfile,
   updateUserProfile,
   listAllUsers,
+  loadStaffCardsForUser,
+  loadStaffCard,
   SubscriptionType,
 };

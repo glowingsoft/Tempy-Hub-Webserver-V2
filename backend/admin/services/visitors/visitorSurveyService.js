@@ -652,6 +652,107 @@ const feedbackRowStages = () => [
   { $project: { branch: 0, visit: 0, host: 0, hostUser: 0 } },
 ];
 
+const answerValueExpr = (key) => ({
+  $let: {
+    vars: {
+      hit: {
+        $arrayElemAt: [
+          {
+            $filter: {
+              input: { $ifNull: ["$answers", []] },
+              as: "a",
+              cond: { $eq: ["$$a.key", key] },
+            },
+          },
+          0,
+        ],
+      },
+    },
+    in: "$$hit.value",
+  },
+});
+
+const emptySurveySummary = () => ({
+  totalResponses: 0,
+  ratedCount: 0,
+  averageRating: null,
+  expectedVisitYes: 0,
+  expectedVisitNo: 0,
+  expectedVisitOther: 0,
+  withComments: 0,
+  ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+});
+
+const roundOne = (value) => Math.round(value * 10) / 10;
+
+const surveySummaryFromFacet = (result) => {
+  const summary = emptySurveySummary();
+  const row = result?.summary?.[0];
+  if (!row) return summary;
+
+  summary.totalResponses = row.total || 0;
+  summary.ratedCount = row.ratedCount || 0;
+  summary.averageRating =
+    summary.ratedCount > 0 ? roundOne(row.ratingSum / summary.ratedCount) : null;
+  summary.expectedVisitYes = row.expectedYes || 0;
+  summary.expectedVisitNo = row.expectedNo || 0;
+  summary.expectedVisitOther = row.expectedOther || 0;
+  summary.withComments = row.withComments || 0;
+
+  for (const bucket of result?.ratingCounts || []) {
+    const score = Number(bucket._id);
+    if (score >= 1 && score <= 5) {
+      summary.ratingBreakdown[score] = bucket.count || 0;
+    }
+  }
+  return summary;
+};
+
+const surveySummaryFacets = (match) => ({
+  summary: [
+    { $match: match },
+    {
+      $addFields: {
+        _expected: answerValueExpr("expectedVisit"),
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: 1 },
+        ratedCount: {
+          $sum: { $cond: [{ $isNumber: "$rating" }, 1, 0] },
+        },
+        ratingSum: {
+          $sum: { $cond: [{ $isNumber: "$rating" }, "$rating", 0] },
+        },
+        expectedYes: {
+          $sum: { $cond: [{ $eq: ["$_expected", "Yes"] }, 1, 0] },
+        },
+        expectedNo: {
+          $sum: { $cond: [{ $eq: ["$_expected", "No"] }, 1, 0] },
+        },
+        expectedOther: {
+          $sum: { $cond: [{ $eq: ["$_expected", "Other"] }, 1, 0] },
+        },
+        withComments: {
+          $sum: {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$comments", ""] } }, 0] },
+              1,
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ],
+  ratingCounts: [
+    { $match: { ...match, rating: { $gte: 1, $lte: 5 } } },
+    { $group: { _id: "$rating", count: { $sum: 1 } } },
+  ],
+});
+
 const listVisitorSurveyResponses = async ({
   actor,
   organizationId,
@@ -672,7 +773,7 @@ const listVisitorSurveyResponses = async ({
   }
   const term = String(search || "").trim();
   if (term) match.visitorName = { $regex: escapeRegex(term), $options: "i" };
-  return paginateWithFacet({
+  const { data, meta, result } = await paginateWithFacet({
     model: VisitorSurveyResponse,
     match,
     page,
@@ -680,7 +781,12 @@ const listVisitorSurveyResponses = async ({
     skip,
     sort: { createdAt: -1 },
     extraDataStages: feedbackRowStages(),
+    extraFacets: surveySummaryFacets(match),
   });
+  return {
+    data,
+    meta: { ...meta, summary: surveySummaryFromFacet(result) },
+  };
 };
 
 module.exports = {

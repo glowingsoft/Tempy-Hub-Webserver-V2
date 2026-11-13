@@ -747,10 +747,11 @@ const listMyLeaveRequests = async ({
   ]);
 
   const remainingHolidayAllowance = remainingDays(entitlement);
+  const counts = leaveStatusCountsFromFacet(result);
 
   return {
     data: await attachLeaveRequestDetails(data),
-    meta: { ...meta, counts: leaveStatusCountsFromFacet(result) },
+    meta: { ...meta, counts },
     summary: {
       year,
       yearStart: start,
@@ -759,8 +760,9 @@ const listMyLeaveRequests = async ({
       remainingHolidayAllowance,
       remainingDays: remainingHolidayAllowance,
       entitlementDays: entitlement?.entitlementDays || 0,
-      takenDays: entitlement?.takenDays || 0,
-      pendingDays: entitlement?.pendingDays || 0,
+      takenDays:
+        (entitlement?.takenDays || 0) + (entitlement?.pendingDays || 0),
+      pendingRequests: counts.pending || 0,
       carriedOverDays: entitlement?.carriedOverDays || 0,
       contractedWeeklyHours:
         Number(profile.contractedWeeklyHours) || FULL_TIME_WEEKLY_HOURS,

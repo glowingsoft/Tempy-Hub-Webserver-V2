@@ -10,6 +10,7 @@ const {
 } = require("@models/domainEnums");
 const { StaffProfile } = require("@models/StaffProfile");
 const { JobTitle } = require("@models/JobTitle");
+const { Department } = require("@models/Department");
 const { Branch } = require("@models/Branch");
 const { AttendanceDay } = require("@models/AttendanceDay");
 const { LeaveEntitlement } = require("@models/LeaveEntitlement");
@@ -18,7 +19,10 @@ const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const attendanceService = require("@adminServices/attendance/attendanceService");
 const staffDashboardSettingsService = require("@adminServices/organizations/staffDashboardSettingsService");
-const { listMyShifts, listOpenShifts } = require("@adminServices/rota/shiftService");
+const {
+  listStaffShiftsInRange,
+  listOpenShifts,
+} = require("@adminServices/rota/shiftService");
 const { myCompliance } = require("@adminServices/staff/staffComplianceService");
 const { entitlementYearFromDate } = require("@adminServices/leave/leaveService");
 const { AppError } = require("@services/_errors/AppError");
@@ -27,8 +31,7 @@ const DEFAULT_TZ = "Europe/London";
 const DAY_FORMAT = "YYYY-MM-DD";
 const NEXT_SHIFT_DAYS = 3;
 const WEEK_SHIFTS_LIMIT = 200;
-/** Same window as rota `EARLY_CLOCK_IN_MINUTES`. */
-const CLOCK_IN_WINDOW_MINUTES = 15;
+const DEFAULT_EARLY_CLOCK_IN_MINUTES = 60;
 const DEFAULT_UNPAID_BREAK_BANDS = [
   { minShiftHours: 6, unpaidBreakHours: 0.5 },
   { minShiftHours: 12, unpaidBreakHours: 1 },
@@ -81,43 +84,112 @@ const loadHomeStaff = async ({ userId, organizationId }) => {
       },
     },
     {
+      $lookup: {
+        from: Department.collection.name,
+        localField: "departmentIds",
+        foreignField: "_id",
+        pipeline: [
+          { $project: { name: 1, sortOrder: 1 } },
+          { $sort: { sortOrder: 1 } },
+        ],
+        as: "_departments",
+      },
+    },
+    {
+      $lookup: {
+        from: Branch.collection.name,
+        localField: "branchId",
+        foreignField: "_id",
+        pipeline: [
+          {
+            $project: { name: 1, code: 1, timezone: 1, settings: 1 },
+          },
+          { $limit: 1 },
+        ],
+        as: "_branch",
+      },
+    },
+    {
       $project: {
         branchId: 1,
         jobTitleId: 1,
         contractedWeeklyHours: 1,
+        departmentName: {
+          $ifNull: [{ $arrayElemAt: ["$_departments.name", 0] }, ""],
+        },
+        _branch: { $arrayElemAt: ["$_branch", 0] },
       },
     },
   ]);
   if (!staff) throw new AppError("staff_profile_not_found", 403);
 
-  const [branch, jobTitle] = await Promise.all([
-    Branch.findById(staff.branchId).select("timezone settings").lean(),
-    staff.jobTitleId
-      ? JobTitle.findById(staff.jobTitleId).select("name").lean()
-      : null,
-  ]);
+  const branch = staff._branch || null;
+  const jobTitle = staff.jobTitleId
+    ? await JobTitle.findById(staff.jobTitleId).select("name").lean()
+    : null;
 
   return {
     staffId: staff._id,
     branchId: staff.branchId,
     timezone: branch?.timezone || DEFAULT_TZ,
     branchSettings: branch?.settings || {},
+    site: shapeSite(branch),
     jobTitle: jobTitle?.name || "",
+    departmentName: staff.departmentName || "",
     contractedWeeklyHours: Number(staff.contractedWeeklyHours) || 0,
   };
 };
 
-const listWeekShifts = async ({ userId, organizationId, from, to }) => {
-  const { data } = await listMyShifts({
-    userId,
-    organizationId,
-    page: 1,
-    limit: WEEK_SHIFTS_LIMIT,
-    skip: 0,
-    from,
-    to,
-  });
-  return data.filter((shift) => shift.status !== ShiftStatus.CANCELLED);
+const shapeBreakBands = (bands) => {
+  const source =
+    Array.isArray(bands) && bands.length ? bands : DEFAULT_UNPAID_BREAK_BANDS;
+  return [...source]
+    .map((band) => {
+      const minShiftHours = Number(band.minShiftHours);
+      const unpaidBreakHours = Number(band.unpaidBreakHours);
+      return {
+        minShiftHours,
+        unpaidBreakHours,
+        unpaidBreakMinutes: Math.round(unpaidBreakHours * 60),
+      };
+    })
+    .sort((a, b) => b.minShiftHours - a.minShiftHours);
+};
+
+const shapeSite = (branch) => {
+  if (!branch) return null;
+  const settings = branch.settings || {};
+  return {
+    _id: branch._id,
+    name: branch.name || "",
+    code: branch.code || "",
+    timezone: branch.timezone || DEFAULT_TZ,
+    settings: {
+      enableBreaks: Boolean(settings.enableBreaks),
+      paidBreaks: Boolean(settings.paidBreaks),
+      allowPhoneCheckIn: Boolean(settings.allowPhoneCheckIn),
+      lateGraceMinutes:
+        settings.lateGraceMinutes === undefined
+          ? 5
+          : Number(settings.lateGraceMinutes),
+      enableLeaveRequests: settings.enableLeaveRequests !== false,
+      maxShiftHours:
+        Number(settings.maxShiftHours) >= 1 ? Number(settings.maxShiftHours) : 12,
+      earlyClockInMinutes:
+        Number(settings.earlyClockInMinutes) >= 0
+          ? Number(settings.earlyClockInMinutes)
+          : DEFAULT_EARLY_CLOCK_IN_MINUTES,
+      breakBands: shapeBreakBands(settings.breakBands),
+    },
+  };
+};
+
+const overlaps = (shift, from, to) =>
+  new Date(shift.startsAt) < to && new Date(shift.endsAt) > from;
+
+const inStartRange = (shift, from, to) => {
+  const start = new Date(shift.startsAt);
+  return start >= from && start <= to;
 };
 
 const scheduledHours = (shifts) =>
@@ -193,7 +265,8 @@ const annualLeave = async (staffId) => {
   ]);
   return {
     remainingDays: remainingDaysOf(entitlement),
-    pendingDays: entitlement?.pendingDays || 0,
+    takenDays:
+      (entitlement?.takenDays || 0) + (entitlement?.pendingDays || 0),
     pendingRequests: pending,
   };
 };
@@ -223,9 +296,45 @@ const nextShiftItems = ({ shifts, timezone, now }) => {
   });
 };
 
-const todayCard = ({ today, jobTitle, branchSettings, timezone, now }) => {
-  const shift = today?.activeShift?.shift || null;
-  const presence = today?.attendance?.presenceStatus || null;
+const slimShift = (shift, activeId) => ({
+  _id: shift._id,
+  startsAt: shift.startsAt,
+  endsAt: shift.endsAt,
+  status: shift.status,
+  branchId: shift.branchId,
+  isActive: Boolean(activeId) && String(shift._id) === String(activeId),
+});
+
+const pickActiveShift = (shifts, now, earlyClockInMinutes) => {
+  const windowMinutes =
+    Number(earlyClockInMinutes) >= 0
+      ? Number(earlyClockInMinutes)
+      : DEFAULT_EARLY_CLOCK_IN_MINUTES;
+  const earliestClockIn = new Date(now.getTime() + windowMinutes * 60 * 1000);
+  const eligible = shifts.filter(
+    (shift) =>
+      shift.status === ShiftStatus.SCHEDULED &&
+      new Date(shift.startsAt) <= earliestClockIn &&
+      new Date(shift.endsAt) >= now
+  );
+  if (!eligible.length) return null;
+  return eligible.reduce((latest, shift) =>
+    new Date(shift.startsAt) >= new Date(latest.startsAt) ? shift : latest
+  );
+};
+
+const todayCard = ({
+  shifts,
+  activeShift,
+  attendance,
+  jobTitle,
+  departmentName,
+  branchSettings,
+  timezone,
+  now,
+}) => {
+  const shift = activeShift || null;
+  const presence = attendance?.presenceStatus || null;
   let unpaidBreakMinutesValue = 0;
   let startsInMinutes = null;
   if (shift?.startsAt && shift?.endsAt) {
@@ -233,30 +342,44 @@ const todayCard = ({ today, jobTitle, branchSettings, timezone, now }) => {
     unpaidBreakMinutesValue = unpaidBreakMinutes(shiftHours, branchSettings);
     startsInMinutes = Math.round((new Date(shift.startsAt) - now) / 60000);
   }
+  const clockInEligible = Boolean(shift);
 
   return {
     date: moment.tz(now, timezone).format(DAY_FORMAT),
     startsAt: shift?.startsAt || null,
     endsAt: shift?.endsAt || null,
     jobTitle,
+    departmentName: departmentName || "",
     unpaidBreakMinutes: unpaidBreakMinutesValue,
     startsInMinutes,
-    clockInWindowMinutes: CLOCK_IN_WINDOW_MINUTES,
-    clockInEligible: Boolean(today?.activeShift?.clockInEligible),
+    clockInEligible,
     presenceStatus: presence,
-    primaryAction: todayAction(presence, true),
+    primaryAction: todayAction(presence, true, attendance, clockInEligible),
+    shifts: shifts.map((row) => slimShift(row, shift?._id)),
+    activeShift: {
+      shift: shift ? slimShift(shift, shift._id) : null,
+      clockInEligible,
+    },
+    attendance,
   };
 };
 
-const todayAction = (presence, checkInVisible) => {
+const todayAction = (presence, checkInVisible, attendance, clockInEligible) => {
   if (!checkInVisible) return null;
-  if (presence === PresenceStatus.ON_SITE) return "startBreak";
   if (presence === PresenceStatus.ON_BREAK) return "endBreak";
+  if (presence === PresenceStatus.ON_SITE) {
+    const hasCompletedBreak = (attendance?.breaks || []).some(
+      (segment) => segment.breakOutAt
+    );
+    return hasCompletedBreak ? "clockOut" : "startBreak";
+  }
   if (presence === PresenceStatus.ON_LEAVE) return null;
-  return "clockIn";
+  if (clockInEligible) return "clockIn";
+  if (!presence) return "clockIn";
+  return null;
 };
 
-const percentOf = (score) => score?.percent ?? null;
+const percentOf = (score) => score?.percent ?? 0;
 
 const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() }) => {
   const staff = await loadHomeStaff({
@@ -266,7 +389,13 @@ const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() })
 
   const thisWeek = weekRange(now, staff.timezone, 0);
   const nextWeek = weekRange(now, staff.timezone, 1);
-  const nextStripFrom = moment.tz(now, staff.timezone).startOf("day").add(1, "day").toDate();
+  const todayStart = moment.tz(now, staff.timezone).startOf("day").toDate();
+  const todayEnd = moment.tz(now, staff.timezone).endOf("day").toDate();
+  const nextStripFrom = moment
+    .tz(now, staff.timezone)
+    .startOf("day")
+    .add(1, "day")
+    .toDate();
   const nextStripTo = moment
     .tz(now, staff.timezone)
     .startOf("day")
@@ -276,10 +405,8 @@ const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() })
 
   const [
     visibility,
-    today,
-    thisWeekShifts,
-    nextWeekShifts,
-    stripShifts,
+    attendance,
+    rosterShifts,
     leave,
     standing,
     openShifts,
@@ -290,17 +417,17 @@ const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() })
       userId: actor._id,
       organizationId,
     }),
-    attendanceService.getTodayAttendance({
-      userId: actor._id,
-      organizationId,
+    attendanceService.getStaffAttendanceSnapshot({
+      staffId: staff.staffId,
+      now,
+      branchSettings: staff.branchSettings,
     }),
-    listWeekShifts({ userId: actor._id, organizationId, ...thisWeek }),
-    listWeekShifts({ userId: actor._id, organizationId, ...nextWeek }),
-    listWeekShifts({
-      userId: actor._id,
+    listStaffShiftsInRange({
+      staffId: staff.staffId,
       organizationId,
-      from: nextStripFrom,
-      to: nextStripTo,
+      from: todayStart,
+      to: nextWeek.to,
+      limit: WEEK_SHIFTS_LIMIT,
     }),
     annualLeave(staff.staffId),
     myCompliance({ actor, organizationId }),
@@ -318,21 +445,45 @@ const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() })
     }),
   ]);
 
+  const todayShifts = rosterShifts.filter((shift) =>
+    overlaps(shift, todayStart, todayEnd)
+  );
+  const thisWeekShifts = rosterShifts.filter((shift) =>
+    overlaps(shift, thisWeek.from, thisWeek.to)
+  );
+  const nextWeekShifts = rosterShifts.filter((shift) =>
+    overlaps(shift, nextWeek.from, nextWeek.to)
+  );
+  const stripShifts = rosterShifts.filter((shift) =>
+    inStartRange(shift, nextStripFrom, nextStripTo)
+  );
+  const activeShift = pickActiveShift(
+    rosterShifts,
+    now,
+    staff.branchSettings?.earlyClockInMinutes
+  );
+
   const checkInVisible = Boolean(visibility.cards?.checkIn);
   const todayShaped = todayCard({
-    today,
+    shifts: todayShifts,
+    activeShift,
+    attendance,
     jobTitle: staff.jobTitle,
+    departmentName: staff.departmentName,
     branchSettings: staff.branchSettings,
     timezone: staff.timezone,
     now,
   });
   todayShaped.primaryAction = todayAction(
     todayShaped.presenceStatus,
-    checkInVisible
+    checkInVisible,
+    attendance,
+    todayShaped.clockInEligible
   );
 
   return {
     visibility,
+    site: staff.site,
     today: todayShaped,
     nextShifts: {
       items: nextShiftItems({
@@ -358,6 +509,7 @@ const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() })
       competency: percentOf(standing.competency),
       training: percentOf(standing.training),
       fireDrills: percentOf(standing.fireDrills),
+      compartmentDrills: percentOf(standing.compartmentDrills),
     },
     documents,
     announcements: { unread: 0, items: [] },

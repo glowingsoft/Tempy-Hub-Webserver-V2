@@ -38,6 +38,7 @@ const {
     normalizeSurface,
     surfaceFromAccess,
   } = require("./surfaceAccess");
+const { loadStaffCardsForUser } = require("@commonServices/users/userService");
 
 const register = async ({
   email,
@@ -423,6 +424,21 @@ const login = async ({
     (audience === AuthAudience.FAMILY ? AuthAudience.FAMILY : null);
   response.access = slimAccessForLogin(access);
 
+  const staffProfiles =
+    audience === AuthAudience.STAFF
+      ? await loadStaffCardsForUser(user._id)
+      : [];
+  const primaryOrgId = access?.memberships?.[0]?.organizationId;
+  response.staffProfile =
+    staffProfiles.find(
+      (row) => String(row.organizationId) === String(primaryOrgId)
+    ) ||
+    staffProfiles[0] ||
+    null;
+  if (staffProfiles.length > 1) {
+    response.staffProfiles = staffProfiles;
+  }
+
   createOrSkipDevice(user._id, deviceId, deviceType);
 
   return response;
@@ -747,12 +763,8 @@ const me = async ({ userId, audience = AuthAudience.STAFF, organizationId }) => 
   const access = await resolveStaffAccess(user);
   const scoped = slimAccessForMe(access, organizationId);
 
-  const staffQuery = { userId };
-  if (scoped.organizationId) staffQuery.organizationId = scoped.organizationId;
-
-  const staffProfile = await StaffProfile.findOne(staffQuery)
-    .select("_id branchId organizationId employeeCode jobTitleId reportsToStaffId")
-    .lean();
+  const staffCards = await loadStaffCardsForUser(userId, scoped.organizationId);
+  const staffProfile = staffCards[0] || null;
 
   const hasDirectReports = staffProfile
     ? (await StaffProfile.countDocuments({

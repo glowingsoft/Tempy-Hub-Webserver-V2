@@ -31,8 +31,9 @@ const {
   applyLineManagerStaffScope,
 } = require("./shiftAccess");
 
-const EARLY_CLOCK_IN_MINUTES = 15;
+const DEFAULT_EARLY_CLOCK_IN_MINUTES = 60;
 const DEFAULT_TZ = "Europe/London";
+const DEFAULT_MAX_SHIFT_HOURS = 12;
 
 const SHIFT_STATUSES = Object.values(ShiftStatus);
 
@@ -164,10 +165,42 @@ const parseShiftClaimStatus = (status) => {
   return value;
 };
 
+const maxShiftHoursOf = (settings) => {
+  const hours = Number(settings?.maxShiftHours);
+  return Number.isFinite(hours) && hours >= 1 ? hours : DEFAULT_MAX_SHIFT_HOURS;
+};
+
+const earlyClockInMinutesOf = (settings) => {
+  const minutes = Number(settings?.earlyClockInMinutes);
+  return Number.isFinite(minutes) && minutes >= 0
+    ? minutes
+    : DEFAULT_EARLY_CLOCK_IN_MINUTES;
+};
+
 const branchTimezone = async (branchId) => {
   const branch = await Branch.findById(branchId).select("timezone").lean();
   return branch?.timezone || DEFAULT_TZ;
 };
+
+const loadBranchRota = async (branchId) => {
+  const branch = await Branch.findById(branchId)
+    .select("timezone settings.maxShiftHours")
+    .lean();
+  return {
+    timezone: branch?.timezone || DEFAULT_TZ,
+    maxShiftHours: maxShiftHoursOf(branch?.settings),
+  };
+};
+
+const assertShiftDuration = (times, maxShiftHours) => {
+  const hours =
+    (new Date(times.endsAt) - new Date(times.startsAt)) / 3600000;
+  if (hours > maxShiftHours) {
+    throw new AppError("shift_exceeds_max_hours", 400);
+  }
+};
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 const toZoneMoment = (value, timezone) => {
   const tz = timezone || DEFAULT_TZ;
@@ -177,6 +210,28 @@ const toZoneMoment = (value, timezone) => {
     return moment.parseZone(raw).tz(tz);
   }
   return moment.tz(raw, tz);
+};
+
+const parseQueryInstant = (value, timezone, endOfDay) => {
+  if (value == null || String(value).trim() === "") return undefined;
+  const raw = String(value).trim();
+  const tz = timezone || DEFAULT_TZ;
+  const m = DATE_ONLY.test(raw)
+    ? moment.tz(raw, "YYYY-MM-DD", true, tz)
+    : toZoneMoment(raw, tz);
+  if (!m.isValid()) throw new AppError("invalid_shift_times", 400);
+  if (DATE_ONLY.test(raw)) {
+    return (endOfDay ? m.endOf("day") : m.startOf("day")).toDate();
+  }
+  return m.toDate();
+};
+
+const startsAtQueryRange = (from, to, timezone) => {
+  if (!from && !to) return undefined;
+  const range = {};
+  if (from) range.$gte = parseQueryInstant(from, timezone, false);
+  if (to) range.$lte = parseQueryInstant(to, timezone, true);
+  return range;
 };
 
 const parseShiftTimes = (
@@ -223,7 +278,7 @@ const assertNoStaffOverlap = async (shift) => {
 };
 
 const applyShiftTimes = async (shift, { startsAt, endsAt, attendance }) => {
-  const timezone = await branchTimezone(shift.branchId);
+  const { timezone, maxShiftHours } = await loadBranchRota(shift.branchId);
   const startLocked = attendance && startsAt !== undefined && !sameInstant(startsAt, shift.startsAt);
   const sessionOpen = attendance && !attendance.clockOutAt;
   const sessionClosed = attendance && attendance.clockOutAt;
@@ -250,6 +305,7 @@ const applyShiftTimes = async (shift, { startsAt, endsAt, attendance }) => {
     }
   }
 
+  assertShiftDuration(times, maxShiftHours);
   shift.startsAt = times.startsAt;
   shift.endsAt = times.endsAt;
 };
@@ -359,8 +415,9 @@ const createShift = async ({
   assertMayManageStaff(standing, scopedBranchId);
   await assertBranchInOrganization(scopedBranchId, organizationId);
 
-  const timezone = await branchTimezone(scopedBranchId);
+  const { timezone, maxShiftHours } = await loadBranchRota(scopedBranchId);
   const times = parseShiftTimes(startsAt, endsAt, timezone);
+  assertShiftDuration(times, maxShiftHours);
 
   if (staffId) {
     const profile = await StaffProfile.findOne({
@@ -441,11 +498,12 @@ const listShifts = async ({
     match.staffId = new mongoose.Types.ObjectId(String(staffId));
   }
 
-  if (from || to) {
-    match.startsAt = {};
-    if (from) match.startsAt.$gte = new Date(from);
-    if (to) match.startsAt.$lte = new Date(to);
-  }
+  const startsAtRange = startsAtQueryRange(
+    from,
+    to,
+    branchId ? await branchTimezone(branchId) : DEFAULT_TZ
+  );
+  if (startsAtRange) match.startsAt = startsAtRange;
 
   const countMatch = { ...match };
   const shiftStatus = parseShiftStatus(status);
@@ -550,6 +608,28 @@ const updateShift = async ({
   return withDetails;
 };
 
+/** Assigned shifts overlapping [from, to] — no profile lookup or branch joins. */
+const listStaffShiftsInRange = async ({
+  staffId,
+  organizationId,
+  from,
+  to,
+  limit = 200,
+}) => {
+  if (!staffId || !from || !to) return [];
+  return Shift.find({
+    organizationId: new mongoose.Types.ObjectId(String(organizationId)),
+    staffId,
+    status: { $in: [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED] },
+    startsAt: { $lt: new Date(to) },
+    endsAt: { $gt: new Date(from) },
+  })
+    .sort({ startsAt: 1 })
+    .limit(limit)
+    .select("_id startsAt endsAt status branchId")
+    .lean();
+};
+
 const listMyShifts = async ({
   userId,
   organizationId,
@@ -561,17 +641,15 @@ const listMyShifts = async ({
   skip,
 }) => {
   const profile = await requireStaffProfile(userId, organizationId);
+  const tz = await branchTimezone(profile.branchId);
   const match = {
     organizationId: new mongoose.Types.ObjectId(String(organizationId)),
     staffId: profile._id,
     status: { $in: MY_SHIFT_STATUSES },
   };
 
-  if (from || to) {
-    match.startsAt = {};
-    if (from) match.startsAt.$gte = new Date(from);
-    if (to) match.startsAt.$lte = new Date(to);
-  }
+  const startsAtRange = startsAtQueryRange(from, to, tz);
+  if (startsAtRange) match.startsAt = startsAtRange;
 
   const countMatch = { ...match };
   const shiftStatus = parseMyShiftStatus(status);
@@ -607,12 +685,12 @@ const openShiftMatch = (profile, organizationId) => ({
 const listOpenShifts = async ({ userId, organizationId, from, to }) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const match = openShiftMatch(profile, organizationId);
-
-  if (from || to) {
-    match.startsAt = {};
-    if (from) match.startsAt.$gte = new Date(from);
-    if (to) match.startsAt.$lte = new Date(to);
-  }
+  const startsAtRange = startsAtQueryRange(
+    from,
+    to,
+    await branchTimezone(profile.branchId)
+  );
+  if (startsAtRange) match.startsAt = startsAtRange;
 
   const shifts = await Shift.find(match).sort({ startsAt: 1 }).lean();
   return attachShiftDetails(shifts);
@@ -620,12 +698,14 @@ const listOpenShifts = async ({ userId, organizationId, from, to }) => {
 
 const getActiveShiftForStaff = async ({ staffProfile, organizationId }) => {
   const branch = await Branch.findById(staffProfile.branchId)
-    .select("settings.lateGraceMinutes timezone")
+    .select("settings.lateGraceMinutes settings.earlyClockInMinutes timezone")
     .lean();
 
   const tz = branch?.timezone || DEFAULT_TZ;
   const now = moment.tz(tz);
-  const earliestClockIn = now.clone().add(EARLY_CLOCK_IN_MINUTES, "minutes");
+  const earliestClockIn = now
+    .clone()
+    .add(earlyClockInMinutesOf(branch?.settings), "minutes");
 
   const shift = await Shift.findOne({
     organizationId,
@@ -950,10 +1030,11 @@ const createScheduledShiftFromAttendance = async ({
   endsAt,
 }) => {
   await assertBranchInOrganization(branchId, organizationId);
-  const timezone = await branchTimezone(branchId);
+  const { timezone, maxShiftHours } = await loadBranchRota(branchId);
   const times = parseShiftTimes(startsAt, endsAt, timezone, {
     requireFutureStart: false,
   });
+  assertShiftDuration(times, maxShiftHours);
 
   const shift = await Shift.create({
     organizationId,
@@ -975,6 +1056,7 @@ module.exports = {
   getShift,
   updateShift,
   listMyShifts,
+  listStaffShiftsInRange,
   listOpenShifts,
   getActiveShift,
   getActiveShiftForStaff,

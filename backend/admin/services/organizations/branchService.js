@@ -64,12 +64,17 @@ const resolveBranchCode = async (requested, excludeId) => {
   return code;
 };
 
+const DEFAULT_MAX_SHIFT_HOURS = 12;
+const DEFAULT_EARLY_CLOCK_IN_MINUTES = 60;
+
 const NUMBER_SETTING_FIELDS = new Set([
   "lateGraceMinutes",
   "autoClockOutHoursAfterShiftEnd",
   "autoClockOutHoursAfterClockIn",
   "visitorAutoCheckoutHoursAfterVisitUntil",
   "visitorAutoCheckoutHoursAfterCheckIn",
+  "maxShiftHours",
+  "earlyClockInMinutes",
 ]);
 
 const BRANCH_MANAGER_ROLES = [
@@ -95,6 +100,8 @@ const SETTING_FIELDS = [
   "autoClockOutHoursAfterClockIn",
   "visitorAutoCheckoutHoursAfterVisitUntil",
   "visitorAutoCheckoutHoursAfterCheckIn",
+  "maxShiftHours",
+  "earlyClockInMinutes",
 ];
 
 const normalizeHoursSetting = (value, fallback) => {
@@ -102,6 +109,28 @@ const normalizeHoursSetting = (value, fallback) => {
   const hours = Number(value);
   if (!Number.isFinite(hours) || hours < 0) {
     throw new AppError("invalid_auto_clock_out_hours", 400);
+  }
+  return hours;
+};
+
+const normalizeEarlyClockInMinutes = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return DEFAULT_EARLY_CLOCK_IN_MINUTES;
+  }
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes < 0) {
+    throw new AppError("invalid_early_clock_in_minutes", 400);
+  }
+  return minutes;
+};
+
+const normalizeMaxShiftHours = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return DEFAULT_MAX_SHIFT_HOURS;
+  }
+  const hours = Number(value);
+  if (!Number.isFinite(hours) || hours < 1) {
+    throw new AppError("invalid_max_shift_hours", 400);
   }
   return hours;
 };
@@ -159,6 +188,8 @@ const buildSettings = (settings) => ({
     settings?.visitorAutoCheckoutHoursAfterCheckIn,
     10
   ),
+  maxShiftHours: normalizeMaxShiftHours(settings?.maxShiftHours),
+  earlyClockInMinutes: normalizeEarlyClockInMinutes(settings?.earlyClockInMinutes),
   ...(settings?.breakBands !== undefined
     ? { breakBands: normalizeBreakBands(settings.breakBands) }
     : {}),
@@ -617,7 +648,11 @@ const updateBranch = async ({
     for (const field of SETTING_FIELDS) {
       if (settings[field] === undefined) continue;
       update[`settings.${field}`] = NUMBER_SETTING_FIELDS.has(field)
-        ? normalizeHoursSetting(settings[field], 0)
+        ? field === "maxShiftHours"
+          ? normalizeMaxShiftHours(settings[field])
+          : field === "earlyClockInMinutes"
+            ? normalizeEarlyClockInMinutes(settings[field])
+            : normalizeHoursSetting(settings[field], 0)
         : Boolean(settings[field]);
     }
 

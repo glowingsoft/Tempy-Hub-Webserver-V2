@@ -3,6 +3,29 @@ const evacuationService = require("@adminServices/evacuation/evacuationService")
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { EvacCheckStatus } = require("@models/domainEnums");
 
+const myDrills = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await evacuationService.myDrills({
+      actor: req.user,
+      organizationId: req.orgId,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 /** Staff: active evacuation for a branch (Alerts screens). */
 const getActiveEvacuation = async (req, res) => {
   try {
@@ -99,6 +122,7 @@ const allClearFamilies = familyMessage(
 );
 
 module.exports = {
+  myDrills,
   getActiveEvacuation,
   markMyself,
   getRollcall,

@@ -7,10 +7,9 @@ const { ModuleSlug, MembershipRole } = require("@models/domainEnums");
  * for it: a line manager who may additionally approve leave, a carer who may
  * countersign documents. The role still decides the shape of someone's access.
  *
- * Every module carries the same three verbs. A uniform set is predictable for
- * the admin panel to render and for us to reason about, at the cost of a few
- * combinations that will never be used (approving a floor plan, say). Those are
- * harmless while unused, and cheap to hide later.
+ * View and manage exist on every module. Approve exists only where a route
+ * actually signs something off (leave, attendance changes, rota claims, family
+ * requests, document countersign).
  */
 const PermissionVerb = {
   VIEW: "view",
@@ -36,9 +35,23 @@ const VERB_MIN_GRANT_ROLE = {
 
 const permissionKey = (moduleSlug, verb) => `${moduleSlug}.${verb}`;
 
+const MODULES_WITH_APPROVE = new Set([
+  ModuleSlug.LEAVE,
+  ModuleSlug.SIGN_IN_ATTENDANCE,
+  ModuleSlug.ROTA_SCHEDULING,
+  ModuleSlug.FAMILY_ENGAGEMENT,
+  ModuleSlug.DOCUMENTS_ESIGN,
+]);
+
+const verbsForModule = (moduleSlug) => {
+  const verbs = [PermissionVerb.VIEW, PermissionVerb.MANAGE];
+  if (MODULES_WITH_APPROVE.has(moduleSlug)) verbs.push(PermissionVerb.APPROVE);
+  return verbs;
+};
+
 /** Every valid permission, in module order. */
 const CATALOGUE = Object.values(ModuleSlug).flatMap((moduleSlug) =>
-  Object.values(PermissionVerb).map((verb) => ({
+  verbsForModule(moduleSlug).map((verb) => ({
     key: permissionKey(moduleSlug, verb),
     moduleSlug,
     verb,
@@ -155,16 +168,17 @@ const modulesForMenu = (permissionKeys, moduleNameBySlug = new Map()) => {
   );
 };
 
-/** Platform operator menu — every sellable module, all verbs. */
+/** Platform operator menu — sellable modules with only verbs that exist. */
 const platformAdminModuleMenu = (moduleNameBySlug = new Map()) =>
   Object.values(ModuleSlug).map((moduleSlug) => ({
     moduleSlug,
     moduleName: moduleNameBySlug.get(moduleSlug) || moduleSlug,
-    permissions: Object.values(PermissionVerb),
+    permissions: verbsForModule(moduleSlug),
   }));
 
 module.exports = {
   PermissionVerb,
+  MODULES_WITH_APPROVE,
   CATALOGUE,
   getPermission,
   isKnownPermission,

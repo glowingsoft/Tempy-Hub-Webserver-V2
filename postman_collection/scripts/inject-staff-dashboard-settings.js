@@ -81,10 +81,19 @@ const adminRequests = [
 ];
 
 const appRequests = [
+  req("get staff home dashboard", "GET", ["app", "staff", "dashboard"], {
+    tests: [
+      'pm.test("Staff home dashboard loaded", function () {',
+      "    pm.response.to.have.status(200);",
+      "});",
+    ],
+    description:
+      "Staff app Home. Composes visibility, today (clock/break action), and dashboard cards. Query: weekStart=YYYY-MM-DD. Header x-org-id from login memberships.",
+  }),
   req(
     "get my staff dashboard settings",
     "GET",
-    ["staff", "dashboard-settings"],
+    ["app", "staff", "dashboard-settings"],
     {
       tests: [
         'pm.test("Staff dashboard settings for app", function () {',

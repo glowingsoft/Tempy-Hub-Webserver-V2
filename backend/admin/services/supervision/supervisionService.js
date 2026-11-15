@@ -21,7 +21,13 @@ const {
 const { DEFAULT_TZ, inZone, supervisionStanding } = require("./supervisionSchedule");
 const { updateStaffComplianceSettings } = require("../staff/complianceSettings");
 const { actorConductor, conductedByStages } = require("../staff/meetingConductor");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 
 const toObjectId = (value, key) => {
@@ -103,21 +109,13 @@ const updateSupervisionSettings = (payload) => updateStaffComplianceSettings(pay
 
 const MEETING_STATUSES = Object.values(ComplianceMeetingStatus);
 
-const emptyStatusCounts = () =>
-  Object.fromEntries(MEETING_STATUSES.map((status) => [status, 0]));
+const emptyStatusCounts = () => emptyStatusTabCounts(MEETING_STATUSES);
 
 const statusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    MEETING_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, MEETING_STATUSES);
 
 const statusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    MEETING_STATUSES.map((status) => [status, facetCount(result[`${status}Count`])])
-  );
+  statusTabCountsFromFacet(result, MEETING_STATUSES);
 
 const parseMeetingStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {

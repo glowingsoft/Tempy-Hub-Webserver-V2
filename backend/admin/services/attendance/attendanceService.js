@@ -10,7 +10,15 @@ const { LeaveRequest } = require("@models/LeaveRequest");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  allCountFacet,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+  countsFromGroupRows,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -158,7 +166,13 @@ const listLeaveRegisterDays = async ({ staffIds, from, to }) => {
   const match = {
     staffId: { $in: staffIds },
     leaveType: { $in: REGISTER_LEAVE_TYPES },
-    status: { $in: REGISTER_LEAVE_STATUSES },
+    $or: [
+      { status: { $in: [LeaveRequestStatus.APPROVED, LeaveRequestStatus.CLOSED] } },
+      {
+        status: LeaveRequestStatus.PENDING,
+        leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE] },
+      },
+    ],
   };
 
   if (from || to) {
@@ -235,6 +249,26 @@ const hoursFromSettings = (value, fallback) => {
   return Number.isFinite(hours) && hours >= 0 ? hours : fallback;
 };
 
+const autoCheckoutHours = (settings = {}) => ({
+  afterShiftEnd: hoursFromSettings(
+    settings.autoClockOutHoursAfterShiftEnd,
+    AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
+  ),
+  afterClockIn: hoursFromSettings(
+    settings.autoClockOutHoursAfterClockIn,
+    AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
+  ),
+});
+
+const autoCheckoutDueAtMs = (day, shift, settings) => {
+  const { afterShiftEnd, afterClockIn } = autoCheckoutHours(settings);
+  const fromClockIn =
+    new Date(day.clockInAt).getTime() + afterClockIn * 3600000;
+  const endsAt = shift?.endsAt;
+  if (!endsAt) return fromClockIn;
+  return new Date(endsAt).getTime() + afterShiftEnd * 3600000;
+};
+
 const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
   const filter = { clockOutAt: null };
   if (staffId) filter.staffId = staffId;
@@ -263,25 +297,24 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
 
   const now = Date.now();
   const ops = [];
+  const branchDefaultOps = [];
   for (const day of days) {
-    const settings = settingsByBranch.get(String(day.branchId)) || {};
-    const afterShiftEnd = hoursFromSettings(
-      settings.autoClockOutHoursAfterShiftEnd,
-      AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
-    );
-    const afterClockIn = hoursFromSettings(
-      settings.autoClockOutHoursAfterClockIn,
-      AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
-    );
-
-    let dueAtMs = null;
-    if (day.shiftId) {
-      const shift = shiftById.get(String(day.shiftId));
-      if (!shift?.endsAt) continue;
-      dueAtMs = new Date(shift.endsAt).getTime() + afterShiftEnd * 3600000;
-    } else {
-      dueAtMs = new Date(day.clockInAt).getTime() + afterClockIn * 3600000;
+    const stored = settingsByBranch.get(String(day.branchId)) || {};
+    const needsDefaults =
+      stored.autoClockOutHoursAfterShiftEnd == null ||
+      stored.autoClockOutHoursAfterClockIn == null;
+    if (needsDefaults && day.branchId) {
+      branchDefaultOps.push(String(day.branchId));
     }
+    const settings = {
+      autoClockOutHoursAfterShiftEnd: AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
+      autoClockOutHoursAfterClockIn: AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
+      ...stored,
+    };
+    const shift = day.shiftId
+      ? shiftById.get(String(day.shiftId))
+      : null;
+    const dueAtMs = autoCheckoutDueAtMs(day, shift, settings);
     if (now < dueAtMs) continue;
 
     const clockOutAt = new Date(dueAtMs);
@@ -305,6 +338,31 @@ const closeExpiredOpenSessions = async ({ branchId, staffId } = {}) => {
         update: { $set: next },
       },
     });
+  }
+
+  const missingSettingIds = [...new Set(branchDefaultOps)];
+  if (missingSettingIds.length) {
+    await Branch.updateMany(
+      { _id: { $in: missingSettingIds } },
+      [
+        {
+          $set: {
+            "settings.autoClockOutHoursAfterShiftEnd": {
+              $ifNull: [
+                "$settings.autoClockOutHoursAfterShiftEnd",
+                AUTO_CLOCK_OUT_AFTER_SHIFT_END_HOURS,
+              ],
+            },
+            "settings.autoClockOutHoursAfterClockIn": {
+              $ifNull: [
+                "$settings.autoClockOutHoursAfterClockIn",
+                AUTO_CLOCK_OUT_AFTER_CLOCK_IN_HOURS,
+              ],
+            },
+          },
+        },
+      ],
+    );
   }
 
   if (!ops.length) return { scanned: days.length, closed: 0 };
@@ -366,6 +424,7 @@ const presentClockIn = async ({ staffId, image, day, shift }) => {
 
   return {
     ...day,
+    attendance: shapeStaffAttendance(day, new Date()),
     image: url,
     photoUrl: url,
     greeting: greetingForHour(clockMoment.hour()),
@@ -404,8 +463,57 @@ const assertNotAlreadyClockedIn = async (staffId) => {
   if (openDay) throw new AppError("attendance_open_session_exists", 409);
 };
 
+const assertNotOnSickOrAbsence = async (staffId, at) => {
+  const dayStart = moment.tz(at, DEFAULT_TZ).startOf("day").toDate();
+  const dayEnd = moment.tz(at, DEFAULT_TZ).endOf("day").toDate();
+  const blocking = await LeaveRequest.exists({
+    staffId,
+    leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE] },
+    status: {
+      $in: [
+        LeaveRequestStatus.PENDING,
+        LeaveRequestStatus.APPROVED,
+        LeaveRequestStatus.CLOSED,
+      ],
+    },
+    startDate: { $lte: dayEnd },
+    endDate: { $gte: dayStart },
+  });
+  if (blocking) throw new AppError("staff_on_sick_or_absence", 403);
+};
+
 const latestAttendanceForWorkDate = (staffId, workDate) =>
   AttendanceDay.findOne({ staffId, workDate }).sort({ clockInAt: -1 }).lean();
+
+const shapeStaffAttendance = (day, now = new Date(), settings = {}) => {
+  if (!day) return null;
+  const row = typeof day.toObject === "function" ? day.toObject() : day;
+  const closed = Boolean(row.clockOutAt);
+  return {
+    _id: row._id,
+    shiftId: row.shiftId || null,
+    clockInAt: row.clockInAt,
+    clockOutAt: row.clockOutAt || null,
+    presenceStatus: row.presenceStatus,
+    punctualityStatus: row.punctualityStatus,
+    breaks: row.breaks || [],
+    workedMinutes: closed
+      ? row.workedMinutes ?? computeWorkedMinutes(row, settings)
+      : computeWorkedMinutes({ ...row, clockOutAt: now }, settings),
+    checkInMethod: row.checkInMethod,
+  };
+};
+
+const getStaffAttendanceSnapshot = async ({
+  staffId,
+  now = new Date(),
+  branchSettings = {},
+}) => {
+  const open = await getOpenAttendanceDay(staffId);
+  if (open) return shapeStaffAttendance(open, now, branchSettings);
+  const day = await latestAttendanceForWorkDate(staffId, startOfUtcDay(now));
+  return day ? shapeStaffAttendance(day, now, branchSettings) : null;
+};
 
 const assertClientEventAvailable = (existingByEvent, staffId) => {
   if (!existingByEvent) return;
@@ -641,27 +749,14 @@ const paginateRows = (rows, page, limit, skip) => ({
 const PUNCTUALITY_STATUSES = Object.values(PunctualityStatus);
 
 const emptyPunctualityStatusCounts = () =>
-  Object.fromEntries(PUNCTUALITY_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(PUNCTUALITY_STATUSES);
 
 /** Tab counts ignore `punctualityStatus` so each total stays independent of the list filter. */
 const punctualityStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    PUNCTUALITY_STATUSES.map((status) => [
-      `${status}Count`,
-      [
-        { $match: { ...countMatch, punctualityStatus: status } },
-        { $count: "count" },
-      ],
-    ]),
-  );
+  statusTabCountFacets(countMatch, PUNCTUALITY_STATUSES, "punctualityStatus");
 
 const punctualityStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    PUNCTUALITY_STATUSES.map((status) => [
-      status,
-      facetCount(result[`${status}Count`]),
-    ]),
-  );
+  statusTabCountsFromFacet(result, PUNCTUALITY_STATUSES);
 
 const parsePunctualityStatus = (status) => {
   if (
@@ -935,6 +1030,7 @@ const clockIn = async ({
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
   const workDate = startOfUtcDay(clockInAt);
   await assertNotAlreadyClockedIn(profile._id);
+  await assertNotOnSickOrAbsence(profile._id, clockInAt);
 
   const rostered = clockInFromActiveShift(active, clockInAt);
 
@@ -2575,7 +2671,7 @@ const staffHoursSummary = async ({
 const PRESENCE_STATUSES = Object.values(PresenceStatus);
 
 const emptyPresenceStatusCounts = () =>
-  Object.fromEntries(PRESENCE_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(PRESENCE_STATUSES);
 
 const parsePresenceStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -2588,15 +2684,8 @@ const parsePresenceStatus = (status) => {
   return value;
 };
 
-const presenceStatusCountsFromFacet = (result) => {
-  const counts = emptyPresenceStatusCounts();
-  for (const row of result.presenceCounts || []) {
-    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
-      counts[row._id] = row.count;
-    }
-  }
-  return counts;
-};
+const presenceStatusCountsFromFacet = (result) =>
+  countsFromGroupRows(result.presenceCounts, PRESENCE_STATUSES, result);
 
 const shapeLateCheckInRow = (row) => {
   const staff = row.staff || null;
@@ -2725,6 +2814,7 @@ const lateCheckInsReport = async ({
       sort: { clockInAt: -1 },
       extraDataStages: ATTENDANCE_LIST_LOOKUPS,
       extraFacets: {
+        ...allCountFacet(lateMatch),
         presenceCounts: [
           { $match: lateMatch },
           { $group: { _id: "$presenceStatus", count: { $sum: 1 } } },
@@ -2959,6 +3049,8 @@ const sicknessRateReport = async ({
 module.exports = {
   sicknessRateReport,
   getTodayAttendance,
+  getStaffAttendanceSnapshot,
+  shapeStaffAttendance,
   getTodayAttendanceForStaff,
   getOpenClockInSessionForStaff,
   listOnSiteForBranch,

@@ -3,7 +3,14 @@ const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
 const moment = require("moment-timezone");
-const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  allCountFacet,
+  emptyStatusTabCounts,
+  countsFromGroupRows,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
@@ -133,24 +140,18 @@ const closeExpiredVisitSessions = async ({ branchId } = {}) => {
 };
 
 const emptyVisitSessionStatusCounts = () =>
-  Object.fromEntries(VISIT_SESSION_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(VISIT_SESSION_STATUSES);
 
 const visitSessionStatusCountFacets = (countMatch) => ({
+  ...allCountFacet(countMatch),
   statusCounts: [
     { $match: countMatch },
     { $group: { _id: "$status", count: { $sum: 1 } } },
   ],
 });
 
-const visitSessionStatusCountsFromFacet = (result) => {
-  const counts = emptyVisitSessionStatusCounts();
-  for (const row of result.statusCounts || []) {
-    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
-      counts[row._id] = row.count;
-    }
-  }
-  return counts;
-};
+const visitSessionStatusCountsFromFacet = (result) =>
+  countsFromGroupRows(result.statusCounts, VISIT_SESSION_STATUSES, result);
 
 const emptyVisitSessionList = (page, limit) => ({
   data: [],

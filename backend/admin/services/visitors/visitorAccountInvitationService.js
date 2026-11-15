@@ -15,7 +15,14 @@ const {
   VisitorAccountInvitationStatus,
 } = require("@models/domainEnums");
 const { isStaffAccount } = require("@appServices/family/familyAccessService");
-const { paginateWithFacet, facetCount, keywordOr } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  keywordOr,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+} = require("@utils/paginate");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -243,26 +250,18 @@ const parseAccountInvitationStatus = (status) => {
   return value;
 };
 
+const ACCOUNT_INVITATION_STATUSES = Object.values(
+  VisitorAccountInvitationStatus
+);
+
 const accountInvitationStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    Object.values(VisitorAccountInvitationStatus).map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, ACCOUNT_INVITATION_STATUSES);
 
 const emptyAccountInvitationStatusCounts = () =>
-  Object.fromEntries(
-    Object.values(VisitorAccountInvitationStatus).map((status) => [status, 0])
-  );
+  emptyStatusTabCounts(ACCOUNT_INVITATION_STATUSES);
 
-const accountInvitationStatusCountsFromFacet = (result) => {
-  const counts = emptyAccountInvitationStatusCounts();
-  for (const status of Object.values(VisitorAccountInvitationStatus)) {
-    counts[status] = facetCount(result[`${status}Count`]);
-  }
-  return counts;
-};
+const accountInvitationStatusCountsFromFacet = (result) =>
+  statusTabCountsFromFacet(result, ACCOUNT_INVITATION_STATUSES);
 
 const accountInviteDetailStages = [
   {

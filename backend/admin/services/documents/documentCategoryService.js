@@ -183,6 +183,7 @@ const listDocumentCategories = async ({
       },
     ],
     extraFacets: {
+      allCount: [{ $match: countMatch }, { $count: "count" }],
       activeCount: [{ $match: { ...countMatch, active: true } }, { $count: "count" }],
       inactiveCount: [{ $match: { ...countMatch, active: false } }, { $count: "count" }],
     },
@@ -193,6 +194,7 @@ const listDocumentCategories = async ({
     meta: {
       ...meta,
       counts: {
+        all: facetCount(result.allCount),
         active: facetCount(result.activeCount),
         inactive: facetCount(result.inactiveCount),
       },

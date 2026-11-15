@@ -137,3 +137,16 @@ secretAssets/*
 .cursor
 docs/
 
+# Local helper scripts (not part of the app)
+/scripts/
+
+# Spreadsheets
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.ods
+
+# XML
+*.xml
+

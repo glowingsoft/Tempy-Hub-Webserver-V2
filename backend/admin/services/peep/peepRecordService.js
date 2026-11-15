@@ -11,7 +11,7 @@ const {
   MembershipRole,
   PeepConsentStatus,
 } = require("@models/domainEnums");
-const { facetCount } = require("@utils/paginate");
+const { facetCount, countsFromGroupRows } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const {
   actorStanding,
@@ -40,13 +40,8 @@ const emptyPeepLevelCounts = () =>
   Object.fromEntries(PEEP_LEVELS.map((level) => [level, 0]));
 
 /** Tab counts ignore the selected level so each total stays independent of that filter. */
-const peepLevelCountsFromGroup = (rows) => {
-  const counts = emptyPeepLevelCounts();
-  for (const row of rows || []) {
-    if (counts[row._id] != null) counts[row._id] = row.count;
-  }
-  return counts;
-};
+const peepLevelCountsFromGroup = (rows, result) =>
+  countsFromGroupRows(rows, PEEP_LEVELS, result);
 
 const parsePeepLevel = (value, { required = false } = {}) => {
   if (isAllFilter(value)) {
@@ -237,6 +232,7 @@ const listPeepRecords = async ({
     ...(narrowFirst ? [...recordShapeStages, ...afterLookups] : []),
     {
       $facet: {
+        allCount: [{ $count: "count" }],
         counts: [{ $group: { _id: "$peepLevel", count: { $sum: 1 } } }],
         data: [
           ...levelMatch,
@@ -253,7 +249,7 @@ const listPeepRecords = async ({
     data: result?.data || [],
     meta: {
       ...generateMeta(page, limit, totalRecords),
-      counts: peepLevelCountsFromGroup(result?.counts),
+      counts: peepLevelCountsFromGroup(result?.counts, result),
     },
   };
 };

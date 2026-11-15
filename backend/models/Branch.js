@@ -27,6 +27,8 @@ const branchSchema = new mongoose.Schema(
     settings: {
       enableBreaks: { type: Boolean, default: false },
       lateGraceMinutes: { type: Number, default: 5, min: 0 },
+      /** Minutes before startsAt that staff may clock in. Missing/null uses 60. */
+      earlyClockInMinutes: { type: Number, default: 60, min: 0 },
       /** Allows staff to clock in from their phone instead of a kiosk. */
       allowPhoneCheckIn: { type: Boolean, default: false },
       /** If true, break time is paid (not deducted). If false, unpaid bands apply. */
@@ -49,6 +51,8 @@ const branchSchema = new mongoose.Schema(
         default: 10,
         min: 0,
       },
+      /** Longest allowed rostered shift. Missing/null uses 12. */
+      maxShiftHours: { type: Number, default: 12, min: 1 },
       /**
        * Unpaid break bands, e.g. 6h shift → 0.5h, 12h → 1h.
        * Longest matching minShiftHours wins.

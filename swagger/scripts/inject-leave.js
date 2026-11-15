@@ -223,6 +223,24 @@ spec.paths["/app/leave-requests"] = {
   },
 };
 
+spec.paths["/app/leave-requests/report-sickness"] = {
+  post: {
+    tags: tag,
+    summary: "Report sickness against a scheduled shift",
+    security: bearer,
+    parameters: [orgHeader],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/LeaveSicknessReport" },
+        },
+      },
+    },
+    responses: { 201: ok, 400: { description: "Bad request" }, 409: { description: "Overlap" } },
+  },
+};
+
 spec.paths["/app/leave-requests/{requestId}"] = {
   get: {
     tags: tag,
@@ -259,6 +277,16 @@ spec.components.schemas.LeaveRequestCreate = {
     totalDays: { type: "number", minimum: 0.5 },
     reason: { type: "string" },
     attachmentUrl: { type: "string" },
+  },
+};
+
+spec.components.schemas.LeaveSicknessReport = {
+  type: "object",
+  required: ["startDate", "shiftId"],
+  properties: {
+    startDate: { type: "string", format: "date-time" },
+    shiftId: { type: "string" },
+    reason: { type: "string" },
   },
 };
 

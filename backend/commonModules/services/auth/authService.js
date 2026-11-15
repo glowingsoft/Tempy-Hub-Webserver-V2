@@ -38,6 +38,7 @@ const {
     normalizeSurface,
     surfaceFromAccess,
   } = require("./surfaceAccess");
+const { loadStaffCardsForUser } = require("@commonServices/users/userService");
 
 const register = async ({
   email,
@@ -196,27 +197,16 @@ const resolveStaffAccess = async (user) => {
     .lean();
   const moduleNameBySlug = new Map(definitions.map((d) => [d.slug, d.name]));
 
-  const now = new Date();
-  const moduleAccess = {};
-  const organizationSummaries = organizations.map(({ _id, name, status, moduleAccess: entitlements }) => {
-    moduleAccess[String(_id)] = (entitlements || [])
-      .filter(
-        (m) => m.enabled && (!m.expiresAt || new Date(m.expiresAt) > now)
-      )
-      .map((m) => m.moduleSlug);
-
-    return { _id, name, status };
-  });
-
   const memberships = rows.map((row) => {
     const organization = byOrganization.get(String(row.organizationId));
     const permissionKeys = effectivePermissions(row, organization);
 
     return {
-      ...row,
+      _id: row._id,
+      organizationId: row.organizationId,
+      branchId: row.branchId || null,
+      role: row.role,
       organizationName: organization?.name || "",
-      permissions: permissionKeys,
-      assignedPermissions: row.permissions || [],
       modules: modulesForMenu(permissionKeys, moduleNameBySlug),
     };
   });
@@ -230,27 +220,58 @@ const resolveStaffAccess = async (user) => {
     highestRole === MembershipRole.SUPER_ADMIN ||
     highestRole === MembershipRole.OWNER;
 
-  const modules =
-    isPlatformAdmin && !memberships.length
-      ? platformAdminModuleMenu(moduleNameBySlug)
-      : memberships.length === 1
-        ? memberships[0].modules
-        : undefined;
-
   return {
     isPlatformAdmin,
     memberships,
     highestRole,
     defaultSurface: isAdminSurface ? "adminWeb" : "staffApp",
-    /** Convenience when the account belongs to a single organization. */
-    modules,
-    /** Per-organization module menu; use the entry matching the active org scope. */
-    moduleMenu: Object.fromEntries(
-      memberships.map((m) => [String(m.organizationId), m.modules])
-    ),
-    /** Org-level entitlements (licensed modules), keyed by organizationId. */
-    moduleAccess,
-    organizations: organizationSummaries,
+    platformModules:
+      isPlatformAdmin && !memberships.length
+        ? platformAdminModuleMenu(moduleNameBySlug)
+        : null,
+  };
+};
+
+const slimMemberships = (memberships = []) =>
+  memberships.map((row) => ({
+    _id: row._id,
+    organizationId: row.organizationId,
+    branchId: row.branchId || null,
+    role: row.role,
+    organizationName: row.organizationName || "",
+  }));
+
+const membershipForOrg = (memberships = [], organizationId) => {
+  if (organizationId) {
+    const match = memberships.find(
+      (row) => String(row.organizationId) === String(organizationId)
+    );
+    if (match) return match;
+  }
+  return memberships[0] || null;
+};
+
+/** Login: org scope only. Menus come from GET /auth/me. */
+const slimAccessForLogin = (access) => {
+  if (!access) return access;
+  const slim = {
+    isPlatformAdmin: !!access.isPlatformAdmin,
+    memberships: slimMemberships(access.memberships),
+  };
+  if (access.residents != null) slim.residents = access.residents;
+  if (access.accessState != null) slim.accessState = access.accessState;
+  return slim;
+};
+
+/** /me: one org, one modules list (licensed ∩ this user). */
+const slimAccessForMe = (access, organizationId) => {
+  if (!access) return access;
+  const membership = membershipForOrg(access.memberships, organizationId);
+  return {
+    isPlatformAdmin: !!access.isPlatformAdmin,
+    organizationId: membership?.organizationId || null,
+    branchId: membership?.branchId || null,
+    modules: access.platformModules || membership?.modules || [],
   };
 };
 
@@ -268,10 +289,7 @@ const resolveFamilyAccess = async (user) => {
 };
 
 const emptyStaffAccessFields = () => ({
-  moduleMenu: {},
-  moduleAccess: {},
-  organizations: [],
-  modules: undefined,
+  memberships: [],
 });
 
 /**
@@ -398,13 +416,28 @@ const login = async ({
 
   const token = user.generateAuthToken(audience, resolvedSurface);
 
-  const response = formatUserResponse(user, token, [], ["resetToken"]);
+  const response = formatUserResponse(user, token, [], ["resetToken", "otpInfo"]);
   response.audience = audience;
   response.surface = resolvedSurface || null;
   response.role =
     access?.highestRole ||
     (audience === AuthAudience.FAMILY ? AuthAudience.FAMILY : null);
-  response.access = access;
+  response.access = slimAccessForLogin(access);
+
+  const staffProfiles =
+    audience === AuthAudience.STAFF
+      ? await loadStaffCardsForUser(user._id)
+      : [];
+  const primaryOrgId = access?.memberships?.[0]?.organizationId;
+  response.staffProfile =
+    staffProfiles.find(
+      (row) => String(row.organizationId) === String(primaryOrgId)
+    ) ||
+    staffProfiles[0] ||
+    null;
+  if (staffProfiles.length > 1) {
+    response.staffProfiles = staffProfiles;
+  }
 
   createOrSkipDevice(user._id, deviceId, deviceType);
 
@@ -695,17 +728,16 @@ const socialAuth = async ({
 };
 
 /**
- * Everything a client needs on boot: the account, its scopes, and which
- * sellable modules are live for each organization it can act in.
+ * Profile plus the module menu for one organisation (x-org-id, else first membership).
  */
-const me = async ({ userId, audience = AuthAudience.STAFF }) => {
+const me = async ({ userId, audience = AuthAudience.STAFF, organizationId }) => {
   const user = await User.findById(userId);
 
   if (!user) {
     throw new AppError("user_not", 404);
   }
 
-  const profile = formatUserResponse(user, null, [], ["resetToken"]);
+  const profile = formatUserResponse(user, null, [], ["resetToken", "otpInfo"]);
 
   if (audience === AuthAudience.FAMILY) {
     return {
@@ -721,33 +753,33 @@ const me = async ({ userId, audience = AuthAudience.STAFF }) => {
       audience,
       access: {
         isPlatformAdmin: false,
-        memberships: [],
-        highestRole: null,
-        defaultSurface:
-          audience === AuthAudience.RESIDENT ? "residentApp" : "visitorApp",
-        ...emptyStaffAccessFields(),
+        modules: [],
+        organizationId: null,
+        branchId: null,
       },
     };
   }
 
   const access = await resolveStaffAccess(user);
+  const scoped = slimAccessForMe(access, organizationId);
 
-  const staffProfiles = await StaffProfile.find({ userId })
-    .select("_id branchId organizationId employeeCode jobTitleId reportsToStaffId")
-    .lean();
+  const staffCards = await loadStaffCardsForUser(userId, scoped.organizationId);
+  const staffProfile = staffCards[0] || null;
 
-  const profileIds = staffProfiles.map((p) => p._id);
-  const directReports = profileIds.length
-    ? await StaffProfile.countDocuments({ reportsToStaffId: { $in: profileIds } })
-    : 0;
+  const hasDirectReports = staffProfile
+    ? (await StaffProfile.countDocuments({
+        reportsToStaffId: staffProfile._id,
+      })) > 0
+    : false;
 
   return {
     user: profile,
     audience,
-    access,
-    staffProfile: staffProfiles[0] || null,
-    staffProfiles,
-    hasDirectReports: directReports > 0,
+    role: access.highestRole,
+    surface: access.defaultSurface,
+    access: scoped,
+    staffProfile,
+    hasDirectReports,
   };
 };
 

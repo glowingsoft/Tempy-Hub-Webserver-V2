@@ -2,6 +2,50 @@ const { generateMeta } = require("./responseUtil");
 
 const facetCount = (bucket) => bucket?.[0]?.count ?? 0;
 
+/** Tab “All” total: same match as the other tabs, without the status/role filter. */
+const allCountFacet = (countMatch) => ({
+  allCount: [{ $match: countMatch }, { $count: "count" }],
+});
+
+const statusTabCountFacets = (countMatch, statuses, field = "status") => ({
+  ...allCountFacet(countMatch),
+  ...Object.fromEntries(
+    statuses.map((status) => [
+      `${status}Count`,
+      [{ $match: { ...countMatch, [field]: status } }, { $count: "count" }],
+    ])
+  ),
+});
+
+const statusTabCountsFromFacet = (result, statuses) => ({
+  all: facetCount(result?.allCount),
+  ...Object.fromEntries(
+    statuses.map((status) => [
+      status,
+      facetCount(result?.[`${status}Count`]),
+    ])
+  ),
+});
+
+const emptyStatusTabCounts = (statuses) => ({
+  all: 0,
+  ...Object.fromEntries(statuses.map((status) => [status, 0])),
+});
+
+/** Fill tab keys from a `$group` `_id` bucket; `all` must come from `allCount` `$count`. */
+const countsFromGroupRows = (rows = [], keys, result) => {
+  const counts = {
+    all: facetCount(result?.allCount),
+    ...Object.fromEntries(keys.map((key) => [key, 0])),
+  };
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(counts, row._id)) {
+      counts[row._id] = row.count;
+    }
+  }
+  return counts;
+};
+
 const keywordOr = (keyword, fields, { trim = false } = {}) => {
   if (keyword == null) return null;
   if (trim && String(keyword).trim() === "") return null;
@@ -63,4 +107,13 @@ const paginateWithFacet = async ({
   };
 };
 
-module.exports = { paginateWithFacet, keywordOr, facetCount };
+module.exports = {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  allCountFacet,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+  countsFromGroupRows,
+};

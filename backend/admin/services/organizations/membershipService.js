@@ -18,7 +18,14 @@ const {
   withDefaultStaffPermissions,
 } = require("./permissionCatalogue");
 const { StaffProfile } = require("@models/StaffProfile");
-const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  statusTabCountFacets,
+  statusTabCountsFromFacet,
+  emptyStatusTabCounts,
+} = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { staffInvitationEmailTemplate } = require("@utils/emailTemplates");
@@ -39,20 +46,10 @@ const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 const STAFF_INVITATION_STATUSES = Object.values(StaffInvitationStatus);
 
 const staffInvitationStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    STAFF_INVITATION_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, STAFF_INVITATION_STATUSES);
 
 const staffInvitationStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    STAFF_INVITATION_STATUSES.map((status) => [
-      status,
-      facetCount(result[`${status}Count`]),
-    ])
-  );
+  statusTabCountsFromFacet(result, STAFF_INVITATION_STATUSES);
 
 const parseStaffInvitationStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
@@ -378,23 +375,13 @@ const membershipDetailStages = [
 const MEMBERSHIP_STATUSES = Object.values(ActiveInactiveStatus);
 
 const emptyMembershipStatusCounts = () =>
-  Object.fromEntries(MEMBERSHIP_STATUSES.map((status) => [status, 0]));
+  emptyStatusTabCounts(MEMBERSHIP_STATUSES);
 
 const membershipStatusCountFacets = (countMatch) =>
-  Object.fromEntries(
-    MEMBERSHIP_STATUSES.map((status) => [
-      `${status}Count`,
-      [{ $match: { ...countMatch, status } }, { $count: "count" }],
-    ])
-  );
+  statusTabCountFacets(countMatch, MEMBERSHIP_STATUSES);
 
 const membershipStatusCountsFromFacet = (result) =>
-  Object.fromEntries(
-    MEMBERSHIP_STATUSES.map((status) => [
-      status,
-      facetCount(result[`${status}Count`]),
-    ])
-  );
+  statusTabCountsFromFacet(result, MEMBERSHIP_STATUSES);
 
 const parseMembershipStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {

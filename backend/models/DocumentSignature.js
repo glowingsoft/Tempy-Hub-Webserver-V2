@@ -46,6 +46,10 @@ const documentSignatureSchema = new mongoose.Schema(
 );
 
 documentSignatureSchema.index({ documentVersionId: 1, signerUserId: 1 });
+documentSignatureSchema.index(
+  { documentVersionId: 1, signerStaffId: 1 },
+  { unique: true, sparse: true }
+);
 
 const DocumentSignature =
   mongoose.models.DocumentSignature ||

@@ -229,6 +229,7 @@ const me = async (req, res) => {
     const data = await authService.me({
       userId: req.user._id,
       audience: req.audience,
+      organizationId: req.header("x-org-id") || req.query.organizationId,
     });
 
     return sendResponse({

@@ -17,7 +17,7 @@ const {
 const { audienceLabelOf } = require("@utils/familyPostVisibility");
 const { getWallGazetteCard } = require("./familyGazetteCard");
 const moment = require("moment-timezone");
-const { paginateWithFacet, facetCount } = require("@utils/paginate");
+const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   actorStanding,
@@ -274,10 +274,13 @@ const postRowStages = (userId = null) => [
   },
 ];
 
-const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(
-    Object.values(FamilyPostStatus).map((status) => [status, 0]),
-  );
+const POST_STATUSES = Object.values(FamilyPostStatus);
+
+const statusCountsOf = (rows = [], result) => {
+  const counts = {
+    all: facetCount(result?.allCount),
+    ...Object.fromEntries(POST_STATUSES.map((status) => [status, 0])),
+  };
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -394,6 +397,7 @@ const listPosts = async ({
           [FamilyPostStatus.REMOVED]: { removedAt: -1, _id: -1 },
         }[wanted],
         extraFacets: {
+          ...allCountFacet(base),
           statusCounts: [
             { $match: base },
             { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -422,7 +426,7 @@ const listPosts = async ({
     meta: {
       ...meta,
       counts: {
-        ...statusCountsOf(result.statusCounts),
+        ...statusCountsOf(result.statusCounts, result),
         pinned: facetCount(result.pinnedCount),
         photos: facetCount(result.photoCount),
       },

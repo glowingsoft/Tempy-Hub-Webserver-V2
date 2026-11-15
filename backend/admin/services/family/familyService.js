@@ -9,7 +9,7 @@ const { Organization } = require("@models/Organization");
 const { Resident } = require("@models/Resident");
 const { FamilyInvitation } = require("@models/FamilyInvitation");
 const { FamilyMember } = require("@models/FamilyMember");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
 const { sendTransactionalEmail } = require("@utils/mailer");
 const { familyInvitationEmailTemplate } = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
@@ -211,10 +211,13 @@ const invitationStatusNow = (now) => ({
   ],
 });
 
-const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(
-    Object.values(FamilyInvitationStatus).map((status) => [status, 0]),
-  );
+const INVITE_STATUSES = Object.values(FamilyInvitationStatus);
+
+const statusCountsOf = (rows = [], result) => {
+  const counts = {
+    all: facetCount(result?.allCount),
+    ...Object.fromEntries(INVITE_STATUSES.map((status) => [status, 0])),
+  };
   rows.forEach((row) => {
     counts[row._id] = row.count;
   });
@@ -261,6 +264,7 @@ const listInvitations = async ({
     limit,
     skip,
     extraFacets: {
+      ...allCountFacet(base),
       statusCounts: [
         { $match: base },
         { $group: { _id: invitationStatusNow(now), count: { $sum: 1 } } },
@@ -301,7 +305,7 @@ const listInvitations = async ({
 
   return {
     data,
-    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts, result) },
   };
 };
 

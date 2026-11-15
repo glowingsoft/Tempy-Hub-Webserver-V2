@@ -4,7 +4,7 @@ const { FamilyMember } = require("@models/FamilyMember");
 const { FamilyHandover } = require("@models/FamilyHandover");
 const { FamilyUpload } = require("@models/FamilyUpload");
 const { Branch } = require("@models/Branch");
-const { paginateWithFacet } = require("@utils/paginate");
+const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   FamilyHandoverStatus,
@@ -124,10 +124,11 @@ const LISTED_STATUSES = Object.values(FamilyMemberStatus).filter(
   (status) => status !== FamilyMemberStatus.REMOVED,
 );
 
-const statusCountsOf = (rows = []) => {
-  const counts = Object.fromEntries(
-    LISTED_STATUSES.map((status) => [status, 0]),
-  );
+const statusCountsOf = (rows = [], result) => {
+  const counts = {
+    all: facetCount(result?.allCount),
+    ...Object.fromEntries(LISTED_STATUSES.map((status) => [status, 0])),
+  };
   rows.forEach((row) => {
     if (row._id in counts) counts[row._id] = row.count;
   });
@@ -187,6 +188,7 @@ const listAllMembers = async ({
     skip,
     sort: { createdAt: 1 },
     extraFacets: {
+      ...allCountFacet(base),
       statusCounts: [
         { $match: base },
         { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -217,7 +219,7 @@ const listAllMembers = async ({
 
   return {
     data,
-    meta: { ...meta, counts: statusCountsOf(result.statusCounts) },
+    meta: { ...meta, counts: statusCountsOf(result.statusCounts, result) },
   };
 };
 

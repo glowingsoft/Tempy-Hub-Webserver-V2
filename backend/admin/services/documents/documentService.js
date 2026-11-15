@@ -511,4 +511,6 @@ module.exports = {
   addDocumentVersion,
   listDocumentAcknowledgements,
   versionFile,
+  shapeDocument,
+  versionLookup,
 };

@@ -6,7 +6,7 @@ const { VisitSession } = require("@models/VisitSession");
 const { User } = require("@models/UserModel");
 const { Membership } = require("@models/Membership");
 const { userCache } = require("@config/nodeCache");
-const { keywordOr, facetCount } = require("@utils/paginate");
+const { keywordOr, facetCount, allCountFacet } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -396,7 +396,7 @@ const listExternalPeople = async ({
       data: [],
       meta: {
         ...generateMeta(page, limit, 0),
-        counts: { onSite: 0, offSite: 0 },
+        counts: { all: 0, onSite: 0, offSite: 0 },
       },
     };
   }
@@ -441,6 +441,7 @@ const listExternalPeople = async ({
           ...afterStatus,
           { $count: "count" },
         ],
+        ...allCountFacet(countMatch),
         ...siteStatusCountFacets(countMatch),
       },
     },
@@ -451,6 +452,7 @@ const listExternalPeople = async ({
     meta: {
       ...generateMeta(page, limit, facetCount(result?.totalCount)),
       counts: {
+        all: facetCount(result?.allCount),
         onSite: facetCount(result?.onSiteCount),
         offSite: facetCount(result?.offSiteCount),
       },

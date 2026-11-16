@@ -846,36 +846,10 @@ const getActiveEvacuation = async ({
     return null;
   }
 
-  if (!actor || !organizationId) {
-    throw new AppError("invalid_id", 400);
-  }
-
-  const standing = await actorStanding(actor, organizationId);
-  if (!MANAGER_ROLES.includes(standing.role)) {
-    throw new AppError("invalid_id", 400);
-  }
-
-  const scopedBranchId = scopeBranchFilter(standing, null);
-  let branchIds;
-  if (scopedBranchId) {
-    await assertBranchInOrganization(scopedBranchId, organizationId);
-    branchIds = [toObjectId(scopedBranchId)];
-  } else {
-    const orgBranches = await Branch.find({
-      organizationId: toObjectId(organizationId),
-    })
-      .select("_id")
-      .lean();
-    branchIds = orgBranches.map((b) => b._id);
-  }
-
-  if (!branchIds.length) return [];
-
   return loadEventWithBranchAndStats({
     match: activeEvacuationMatch({ branchIds, type }),
     organizationId,
     includeStats,
-    many: true,
   });
 };
 

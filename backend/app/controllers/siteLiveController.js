@@ -1,5 +1,6 @@
 const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const siteLiveService = require("@adminServices/siteLive/siteLiveService");
+const { getSiteStatistics } = require("@adminServices/dashboard/siteDashboardService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const getSiteLive = async (req, res) => {
@@ -119,7 +120,29 @@ const listDirectory = async (req, res) => {
   }
 };
 
+const getStatistics = async (req, res) => {
+  try {
+    const data = await getSiteStatistics({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      period: req.query.period,
+      departmentId: req.query.departmentId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
+  getStatistics,
   getSiteLive,
   getSiteLiveActivity,
   listPeople,

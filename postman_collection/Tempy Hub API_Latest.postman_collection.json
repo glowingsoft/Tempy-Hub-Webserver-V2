@@ -6916,6 +6916,60 @@
                   "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": [],\n  \"meta\": {\n    \"currentPage\": 1,\n    \"totalPages\": 0,\n    \"totalRecords\": 0,\n    \"limit\": 20\n  }\n}"
                 }
               ]
+            },
+            {
+              "name": "statistics (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/statistics?period=thisMonth&departmentId=&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "statistics"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "thisMonth",
+                      "description": "thisWeek, thisMonth or thisYear"
+                    },
+                    {
+                      "key": "departmentId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "A department chip; limits the staff numbers"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Owner and super admin only"
+                    }
+                  ]
+                },
+                "description": "Statistics screen. visitors {visitors, contractors, mostCommonReason {reason, percent}, averageVisit (text, e.g. 0 hr 10 min)}, staff {retentionRate (last 12 months), newStarters, leavers, departments [{_id, name}]}. period is the Week, Month or Year tab. departmentId filters the staff numbers."
+              },
+              "response": []
             }
           ]
         },

@@ -21,9 +21,11 @@ const {
 } = require("./complianceRows");
 const {
   resolvePeriod,
+  getWorkforcePeriod,
 } = require("@adminServices/statistics/statisticsService");
 const {
   resolveLiveBranchId,
+  loadDepartments,
 } = require("@adminServices/siteLive/siteLiveService");
 const evacuationService = require("@adminServices/evacuation/evacuationService");
 const {
@@ -379,4 +381,64 @@ const getSiteDashboard = async ({
   };
 };
 
-module.exports = { getSiteDashboard };
+const RETENTION_MONTHS = 12;
+
+const hoursAndMinutes = (minutes) =>
+  `${Math.floor((minutes ?? 0) / 60)} hr ${(minutes ?? 0) % 60} min`;
+
+/** Statistics screen of the manager app: visits in the period and the site's workforce movement. */
+const getSiteStatistics = async ({
+  actor,
+  organizationId,
+  branchId,
+  period = "thisMonth",
+  departmentId,
+  now = new Date(),
+}) => {
+  const range = activityRange(period, now);
+  const siteId = toObjectId(
+    await resolveLiveBranchId({ actor, organizationId, branchId }),
+  );
+  const departments = await loadDepartments(organizationId, [siteId]);
+  if (
+    departmentId &&
+    !departments.some((department) => String(department._id) === String(departmentId))
+  )
+    throw new AppError("invalid_department_id", 400);
+
+  const staffScope = {
+    organizationId: toObjectId(organizationId),
+    branchId: siteId,
+    ...(departmentId ? { departmentIds: toObjectId(departmentId) } : {}),
+  };
+  const [activity, retention, movement] = await Promise.all([
+    visitActivity({ branchId: siteId, period, now }),
+    getWorkforcePeriod(staffScope, {
+      start: moment.utc(now).subtract(RETENTION_MONTHS, "months").toDate(),
+      end: now,
+    }),
+    getWorkforcePeriod(staffScope, range),
+  ]);
+
+  const visits = activity.visitorVisits + activity.contractorProfessionalVisits;
+  const [top] = activity.topReasons;
+  return {
+    period,
+    visitors: {
+      visitors: activity.visitorVisits,
+      contractors: activity.contractorProfessionalVisits,
+      mostCommonReason: top
+        ? { reason: top.reason, percent: Math.round((top.count / visits) * 100) }
+        : null,
+      averageVisit: hoursAndMinutes(activity.averageVisitMinutes),
+    },
+    staff: {
+      retentionRate: Math.round(retention.retentionRate),
+      newStarters: movement.newStarters,
+      leavers: movement.leavers,
+      departments,
+    },
+  };
+};
+
+module.exports = { getSiteDashboard, getSiteStatistics };

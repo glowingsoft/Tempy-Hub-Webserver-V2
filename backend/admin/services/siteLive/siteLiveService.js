@@ -997,4 +997,5 @@ module.exports = {
   listPeople,
   checkOutPerson,
   listDirectory,
+  loadDepartments,
 };

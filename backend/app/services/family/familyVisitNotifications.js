@@ -33,7 +33,7 @@ const notifyVisitRequested = ({ visit, requesterName }) =>
     const people = visit.partySize === 1 ? "1 person" : `${visit.partySize} people`;
     await notify({
       ...about(visit),
-      receivers: await managersOf(visit),
+      receivers: await managersOf(visit, "visitRequests"),
       subjectId: visit.requestedBy,
       title: "New visit request",
       body: `${requesterName} asked to visit ${resident} on ${when} (${people}).`,

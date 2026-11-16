@@ -30,11 +30,16 @@ const listMyShifts = async (req, res) => {
 
 const listOpenShifts = async (req, res) => {
   try {
-    const data = await shiftService.listOpenShifts({
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await shiftService.listOpenShifts({
       userId: req.user._id,
       organizationId: req.orgId,
       from: req.query.from,
       to: req.query.to,
+      claim: req.query.claim,
+      page,
+      limit,
+      skip,
     });
 
     return sendResponse({
@@ -42,6 +47,7 @@ const listOpenShifts = async (req, res) => {
       statusCode: 200,
       translationKey: "data_fetched_successfully",
       data,
+      meta,
     });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");

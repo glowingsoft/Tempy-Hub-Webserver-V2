@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_SUBJECT_LENGTH = 120;
 
 /** One row per recipient; a message sent to several people shares a broadcastId. */
 const messageSchema = new mongoose.Schema(
@@ -31,6 +32,7 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    subject: { type: String, default: "", trim: true, maxlength: MAX_SUBJECT_LENGTH },
     messageType: { type: String, enum: ["text"], default: "text" },
     messageContent: {
       type: String,
@@ -52,3 +54,4 @@ const Message =
 
 module.exports = Message;
 module.exports.MAX_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH;
+module.exports.MAX_SUBJECT_LENGTH = MAX_SUBJECT_LENGTH;

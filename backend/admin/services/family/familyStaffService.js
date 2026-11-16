@@ -675,8 +675,68 @@ const createCode = async ({ actor, organizationId, residentId }) => {
   });
 };
 
+const getFamily = async ({ actor, organizationId, residentId }) => {
+  const resident = await requireManageableResident({
+    actor,
+    organizationId,
+    residentId,
+  });
+  const [{ members }, code, [info]] = await Promise.all([
+    listMembers({ organizationId, residentId: resident._id }),
+    familyCodeService.getCurrentCode({ link: codeLinkFor(resident) }),
+    Resident.aggregate([
+      { $match: { _id: toObjectId(resident._id) } },
+      {
+        $project: {
+          _id: 0,
+          photoUrl: 1,
+          roomNumber: 1,
+          photographyConsent: 1,
+          photographyConsentCheckedAt: 1,
+          visitorPasscodeRequired: 1,
+          visitorPasscodeSetAt: 1,
+        },
+      },
+    ]),
+  ]);
+
+  const active = members.filter(
+    (member) => member.status === FamilyMemberStatus.ACTIVE,
+  );
+  return {
+    resident: {
+      residentId: resident._id,
+      name: resident.name,
+      photoUrl: info?.photoUrl ?? "",
+      roomNumber: info?.roomNumber ?? "",
+    },
+    photoSharing: {
+      agreed: Boolean(info?.photographyConsent),
+      agreedAt: info?.photographyConsentCheckedAt ?? null,
+    },
+    memberCount: active.length,
+    nextOfKinName: active.find((member) => member.isNextOfKin)?.name ?? "",
+    members: members.map(
+      ({ memberId, name, photoUrl, relationship, isNextOfKin, status }) => ({
+        memberId,
+        name,
+        photoUrl,
+        relationship,
+        isNextOfKin,
+        status,
+      }),
+    ),
+    familyCode: { code: code.code, expiresAt: code.expiresAt },
+    visitingPassword: {
+      required: Boolean(info?.visitorPasscodeRequired),
+      setAt: info?.visitorPasscodeSetAt ?? null,
+    },
+  };
+};
+
 module.exports = {
   listScope,
+  getFamily,
   listMembers,
   listAllMembers,
   getMember,

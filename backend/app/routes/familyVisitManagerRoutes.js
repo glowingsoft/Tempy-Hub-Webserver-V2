@@ -32,8 +32,33 @@ router.use(
   checkFamilyFilters,
 );
 
-router.get("/", requirePermission(FAMILY_VIEW), familyVisitManagerController.listRequests);
-router.put("/visiting", pauseLimiter, requirePermission(FAMILY_MANAGE), familyVisitManagerController.updateVisiting);
-router.put("/:id", decideLimiter, requirePermission(FAMILY_APPROVE), familyVisitManagerController.updateRequest);
+router.get(
+  "/",
+  requirePermission(FAMILY_VIEW),
+  familyVisitManagerController.listRequests,
+);
+router.put(
+  "/visiting",
+  pauseLimiter,
+  requirePermission(FAMILY_MANAGE),
+  familyVisitManagerController.updateVisiting,
+);
+router.get(
+  "/settings",
+  requirePermission(FAMILY_VIEW),
+  familyVisitManagerController.getSettings,
+);
+router.put(
+  "/settings",
+  pauseLimiter,
+  requirePermission(FAMILY_MANAGE),
+  familyVisitManagerController.updateSettings,
+);
+router.put(
+  "/:id",
+  decideLimiter,
+  requirePermission(FAMILY_APPROVE),
+  familyVisitManagerController.updateRequest,
+);
 
 module.exports = router;

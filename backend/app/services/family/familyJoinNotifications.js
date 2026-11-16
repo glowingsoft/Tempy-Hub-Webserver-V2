@@ -15,7 +15,7 @@ const notifyJoinRequested = ({ link, requesterName }) =>
     const { resident, home } = await namesOf(link);
     const [kin, managers] = await Promise.all([
       familyOf({ ...link, nextOfKinOnly: true }),
-      managersOf(link),
+      managersOf(link, "joinRequests"),
     ]);
     await notify({
       ...about(link),

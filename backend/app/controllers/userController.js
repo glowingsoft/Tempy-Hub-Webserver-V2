@@ -2,6 +2,7 @@ const {
   sendResponse,
   validateParams,
 } = require("@utils/responseUtil");
+const { respond } = require("@utils/controllerResponse");
 const userService = require("@commonServices/users/userService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
@@ -175,7 +176,22 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
+const getNotificationPreferences = respond((req) =>
+  userService.getNotificationPreferences({ userId: req.user._id }),
+);
+
+const updateNotificationPreferences = respond(
+  (req) =>
+    userService.updateNotificationPreferences({
+      userId: req.user._id,
+      body: req.body,
+    }),
+  { translationKey: "notification_preferences_saved" },
+);
+
 module.exports = {
+  getNotificationPreferences,
+  updateNotificationPreferences,
   blockUser,
   reportUser,
   addOrUpdateSubscription,

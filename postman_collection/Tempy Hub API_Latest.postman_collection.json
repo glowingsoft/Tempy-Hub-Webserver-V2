@@ -3888,6 +3888,605 @@
                 "description": "Check Out button of the People screen. personKind: staff, visitor, contractor, professional or guest. recordId: the _id of the row. Optional body checkOutAt (after the sign-in, not in the future). For a missed sign-out the row leaves the Didn't Sign Out tab and a reminder is shown once at the person's next kiosk sign-in (signOutReminder)."
               },
               "response": []
+            },
+            {
+              "name": "list directory (tabs)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/directory?tab=staff&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "directory"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "staff",
+                      "description": "staff, residents, contractors or archived"
+                    },
+                    {
+                      "key": "departmentId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "staff tab only"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Directory screen. tab: staff (default; departmentId filters, meta.departments fills the Select Department list), residents, contractors or archived (staff who left and deactivated residents, with leftAt). keyword searches the name. meta.tabCounts has every tab count. Rows hold only what the screen shows: _id, personKind, name, photoUrl and the tab's subtitle fields. branchId: owner and super admin only."
+              },
+              "response": []
+            },
+            {
+              "name": "get resident family (family tab)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family"
+                  ]
+                },
+                "description": "Family tab of the resident screen. resident {residentId, name, photoUrl, roomNumber}, photoSharing {agreed, agreedAt}, memberCount and nextOfKinName (the To card of Private Message), members [{memberId, name, photoUrl, relationship, isNextOfKin, status}] (status pending shows the Review button), familyCode {code, expiresAt}, visitingPassword {required, setAt}. Needs the family module and the family view permission."
+              },
+              "response": []
+            },
+            {
+              "name": "set next of kin",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/next-of-kin",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "next-of-kin"
+                  ]
+                },
+                "description": "Next Of Kin button on the Family tab. memberId from the family list; it must be an active member."
+              },
+              "response": []
+            },
+            {
+              "name": "remove family member",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/members/{{memberId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "members",
+                    "{{memberId}}"
+                  ]
+                },
+                "description": "Remove button on the Family tab. Active members only; a pending member is rejected from Join Requests instead."
+              },
+              "response": []
+            },
+            {
+              "name": "make new family code",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "code"
+                  ]
+                },
+                "description": "New Code button on the Family tab. Replaces the current code; returns {code, expiresAt}."
+              },
+              "response": []
+            },
+            {
+              "name": "change visiting password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visitorPasscode\": \"1234\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/visiting-password",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "visiting-password"
+                  ]
+                },
+                "description": "Change button of Visiting Password. An empty or null visitorPasscode turns the password off. Returns visitingPassword {required, setAt}; the password itself is never returned."
+              },
+              "response": []
+            },
+            {
+              "name": "approve or reject family photo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\",\n  \"reason\": \"poor_quality\",\n  \"note\": \"Too dark to use\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/photos/{{uploadId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "photos",
+                    "{{uploadId}}"
+                  ]
+                },
+                "description": "Reject This Photo sheet. action: approve or reject. reason (reject only): another_resident, poor_quality or not_appropriate; note is optional and the family sees both. The residentId must be the resident of the photo. 409 upload_already_decided when another manager decided first."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Announcements",
+          "item": [
+            {
+              "name": "list announcements (manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/announcements?page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "announcements"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true,
+                      "description": "Optional. Owner and super admin: omit for every site, or set to one site. Site manager is always their own site."
+                    }
+                  ]
+                },
+                "description": "Announcements screen (manager). Per card: _id, branchId, subject, category, audience, recipients (count), seen, acknowledged, allAcknowledged, createdAt and people[] {userId, name, email, photoUrl, seen, acknowledged, seenAt, acknowledgedAt}. branchId query is optional: without it owner and super admin see every site; a site manager always sees only their site."
+              },
+              "response": []
+            },
+            {
+              "name": "create announcement (send to all)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const body = pm.response.json();",
+                      "if (body.data && body.data._id) pm.collectionVariables.set(\"announcementId\", body.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/announcements",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "announcements"
+                  ]
+                },
+                "description": "Create Announcement screen. audience is siteManager, lineManager, and/or staff (defaults to staff). departmentIds only apply when staff is in audience; empty means all staff of the site. Returns the card. Saves announcementId.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subject\": \"Half-term Visiting\",\n  \"description\": \"Visiting hours change this week.\",\n  \"category\": \"Clinical\",\n  \"audience\": [\"staff\"],\n  \"departmentIds\": [],\n  \"branchId\": \"{{branchId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "remind who has not acknowledged",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/announcements/{{announcementId}}/remind",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "announcements",
+                    "{{announcementId}}",
+                    "remind"
+                  ]
+                },
+                "description": "'Remind the 7 who haven't' link. Returns {reminded}. 409 when everyone acknowledged, 429 within an hour of the last reminder."
+              },
+              "response": []
+            },
+            {
+              "name": "my announcements (staff)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements/mine?page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements",
+                    "mine"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Staff app list. meta.unread counts the ones not opened."
+              },
+              "response": []
+            },
+            {
+              "name": "open announcement (staff)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements/mine/{{announcementId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements",
+                    "mine",
+                    "{{announcementId}}"
+                  ]
+                },
+                "description": "Opening marks it seen. Returns subject, description, category, seen, acknowledged."
+              },
+              "response": []
+            },
+            {
+              "name": "acknowledge announcement (staff)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements/mine/{{announcementId}}/acknowledge",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements",
+                    "mine",
+                    "{{announcementId}}",
+                    "acknowledge"
+                  ]
+                },
+                "description": "Marks it seen and acknowledged."
+              },
+              "response": []
             }
           ]
         },
@@ -6581,6 +7180,160 @@
                   "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": [],\n  \"meta\": {\n    \"currentPage\": 1,\n    \"totalPages\": 0,\n    \"totalRecords\": 0,\n    \"limit\": 20\n  }\n}"
                 }
               ]
+            },
+            {
+              "name": "statistics (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/statistics?period=thisMonth&departmentId=&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "statistics"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "thisMonth",
+                      "description": "thisWeek, thisMonth or thisYear"
+                    },
+                    {
+                      "key": "departmentId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "A department chip; limits the staff numbers"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Owner and super admin only"
+                    }
+                  ]
+                },
+                "description": "Statistics screen. visitors {visitors, contractors, mostCommonReason {reason, percent}, averageVisit (text, e.g. 0 hr 10 min)}, staff {retentionRate (last 12 months), newStarters, leavers, departments [{_id, name}]}. period is the Week, Month or Year tab. departmentId filters the staff numbers."
+              },
+              "response": []
+            },
+            {
+              "name": "compliance (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/compliance?page=1&limit=20&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "compliance"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Owner and super admin only"
+                    }
+                  ]
+                },
+                "description": "Compliance screen. scores {supervision, appraisal, competency, training}, supervisionByDepartment [{department, percent}], staff [{staffId, name, photoUrl, intervalMonths, customInterval, percent, completedThisCycle, expectedThisCycle, cycleMonth, dueByMonth}] (lowest percent first, paged)."
+              },
+              "response": []
+            },
+            {
+              "name": "export compliance (csv or pdf)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/compliance/export?format=csv&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "compliance",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "csv",
+                      "description": "csv or pdf"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Owner and super admin only"
+                    }
+                  ]
+                },
+                "description": "Export CSV / PDF button of the Compliance screen. Downloads compliance-YYYY-MM-DD.csv or .pdf with the four scores, supervision by department and every active person of the site. 400 invalid_export_format when format is missing or not csv or pdf. In Postman use Send and Download for the file."
+              },
+              "response": []
             }
           ]
         },
@@ -9946,6 +10699,98 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "get family settings (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "settings"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Family Settings screen. gazette {issueEveryDays, messageCap, deadlineReminder, communityWall}, visiting {bookingOpen, loungeCapacityPerSlot, protectedTimes}, safety {emergencyNotifyOffsite}, access {editVisiting, editGazette}. Gazette and safety are read-only for site managers. branchId: owner and super admin only."
+              },
+              "response": []
+            },
+            {
+              "name": "update family settings (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/family-visits/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "settings"
+                  ]
+                },
+                "description": "Send only what changed. visiting (site manager of the site, owner, super admin): bookingOpen (false pauses visiting and cancels booked visits), loungeCapacityPerSlot, protectedTimes, visitingHours, daysAhead, maxPartySize, pausedReason. gazette (owner and super admin only, 403 insufficient_role otherwise): issueEveryDays, messageCap, anchorDate, deadlineReminder, communityWall."
+              },
+              "response": []
             }
           ]
         },
@@ -10683,6 +11528,91 @@
                     "users",
                     "subscriptions"
                   ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "get notification preferences (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/users/notification-preferences",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "users",
+                    "notification-preferences"
+                  ]
+                },
+                "description": "Notifications screen. alwaysOn {fireEmergency, walkInAtKiosk} (always true), staffAndRota {shiftClaims, leaveAndSickness, kioskOffline, agencyBids}, family {photosWaiting, joinRequests, visitRequests, reportedPosts, gazetteReminders}, quietHours {start, end} or null for Off."
+              },
+              "response": []
+            },
+            {
+              "name": "save notification preferences (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/users/notification-preferences",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "users",
+                    "notification-preferences"
+                  ]
+                },
+                "description": "Save button. Every part is optional. quietHours null turns it Off. alwaysOn can only be sent as true. Returns the same shape as the GET.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffAndRota\": {\n    \"shiftClaims\": false\n  },\n  \"family\": {\n    \"gazetteReminders\": true\n  },\n  \"quietHours\": {\n    \"start\": \"22:00\",\n    \"end\": \"07:00\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
                 }
               },
               "response": []
@@ -31257,6 +32187,54 @@
           "response": []
         },
         {
+          "name": "sendMessage family (private message)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audience\": \"family\",\n  \"residentIds\": [\n    \"{{residentId}}\"\n  ],\n  \"subject\": \"Hair Appointment Moved\",\n  \"message\": \"The hairdresser is now visiting on Thursday at 10:00.\",\n  \"alsoEmail\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/chats/message",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "message"
+              ]
+            },
+            "description": "Private Message screen of the site manager app. audience family sends to every active family member of the resident (all and selected reach the next of kin only). subject is optional (up to 120 characters); alsoEmail true also emails each member. Every message is saved in the app inbox. Returns broadcastId, recipients, emailed and subject; GET /chats/sent/{{broadcastId}} gives the read count for 'Read by 1 so far'."
+          },
+          "response": []
+        },
+        {
           "name": "sent",
           "event": [
             {
@@ -31898,6 +32876,10 @@
       "key": "recordId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "announcementId",
+      "value": ""
     }
   ]
 }

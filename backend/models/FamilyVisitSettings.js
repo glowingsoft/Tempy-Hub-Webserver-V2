@@ -31,6 +31,8 @@ const familyVisitSettingsSchema = new mongoose.Schema(
     protectedTimes: { type: [protectedTimeSchema], default: undefined },
     daysAhead: { type: Number, min: 1, max: 60, default: undefined },
     maxPartySize: { type: Number, min: 1, max: 20, default: undefined },
+    /** How many visiting parties one time slot holds in the lounge. */
+    loungeCapacityPerSlot: { type: Number, min: 1, max: 50, default: undefined },
     paused: { type: Boolean, default: false },
     pausedReason: { type: String, default: "", trim: true },
     pausedAt: { type: Date, default: null },

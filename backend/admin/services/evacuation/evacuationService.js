@@ -33,6 +33,7 @@ const {
   MANAGER_ROLES,
 } = require("./evacuationAccess");
 const { Organization } = require("@models/Organization");
+const { Kiosk } = require("@models/Kiosk");
 const { sendFamilyMessage, countFamilies } = require("./evacuationNotify");
 
 const ON_SITE_PRESENCE = [PresenceStatus.ON_SITE, PresenceStatus.ON_BREAK];
@@ -47,15 +48,24 @@ const COLLECTIONS = {
   users: "users",
   evacChecks: EvacCheck.collection.name,
   evacuations: EvacuationEvent.collection.name,
+  kiosks: Kiosk.collection.name,
 };
 
 const DRILL_WINDOW_MONTHS = 12;
 
+const emptyKindBucket = () => ({
+  total: 0,
+  safe: 0,
+  missing: 0,
+  unknown: 0,
+  offSite: 0,
+});
+
 const EMPTY_KIND_STATS = () => ({
-  [EvacPersonKind.STAFF]: { total: 0, safe: 0, missing: 0, unknown: 0 },
-  [EvacPersonKind.RESIDENT]: { total: 0, safe: 0, missing: 0, unknown: 0 },
-  [EvacPersonKind.VISITOR]: { total: 0, safe: 0, missing: 0, unknown: 0 },
-  [EvacPersonKind.CONTRACTOR]: { total: 0, safe: 0, missing: 0, unknown: 0 },
+  [EvacPersonKind.STAFF]: emptyKindBucket(),
+  [EvacPersonKind.RESIDENT]: emptyKindBucket(),
+  [EvacPersonKind.VISITOR]: emptyKindBucket(),
+  [EvacPersonKind.CONTRACTOR]: emptyKindBucket(),
 });
 
 const startOfUtcDay = (date) => {
@@ -78,9 +88,25 @@ const parseEvacuationType = (type) => {
   return type;
 };
 
-/** Figma smoke "waiting" is rollcall unknown — not a fourth stored status. */
+const optionalEvacuationType = (type) => {
+  if (type == null || String(type).trim() === "") return undefined;
+  return parseEvacuationType(String(type).trim());
+};
+
+const activeEvacuationMatch = ({ branchId, branchIds, type }) => {
+  const match = { status: EvacuationStatus.ACTIVE };
+  if (branchId) match.branchId = branchId;
+  else if (branchIds) match.branchId = { $in: branchIds };
+  const evacuationType = optionalEvacuationType(type);
+  if (evacuationType) match.type = evacuationType;
+  return match;
+};
+
+/** Figma smoke "waiting" is rollcall unknown. "offsite" / "absent" store as offSite. */
 const CHECK_STATUS_ALIASES = {
   waiting: EvacCheckStatus.UNKNOWN,
+  offsite: EvacCheckStatus.OFF_SITE,
+  absent: EvacCheckStatus.OFF_SITE,
 };
 
 const parseCheckStatus = (status) => {
@@ -103,6 +129,7 @@ const emptyRollcallStats = () => ({
   safe: 0,
   missing: 0,
   unknown: 0,
+  offSite: 0,
   byKind: EMPTY_KIND_STATS(),
 });
 
@@ -125,6 +152,9 @@ const statsFromGroupedRows = (rows = []) => {
     } else if (status === EvacCheckStatus.MISSING) {
       stats.missing += count;
       stats.byKind[kind].missing += count;
+    } else if (status === EvacCheckStatus.OFF_SITE) {
+      stats.offSite += count;
+      stats.byKind[kind].offSite += count;
     } else {
       stats.unknown += count;
       stats.byKind[kind].unknown += count;
@@ -165,6 +195,62 @@ const branchLookupPipeline = [
   { $unwind: { path: "$branchDoc", preserveNullAndEmptyArrays: true } },
 ];
 
+const kioskPublicProject = {
+  $project: {
+    _id: 1,
+    receptionIdentifier: 1,
+    locationLabel: 1,
+    deviceType: 1,
+    kioskMode: 1,
+    fireEvacuation: 1,
+    lastHeartbeatAt: 1,
+  },
+};
+
+/** Event kiosk (if set) plus site kiosks used on the alarm screen. */
+const kioskLookupPipeline = [
+  {
+    $lookup: {
+      from: COLLECTIONS.kiosks,
+      let: { kioskId: "$kioskId" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $ne: ["$$kioskId", null] },
+                { $eq: ["$_id", "$$kioskId"] },
+              ],
+            },
+          },
+        },
+        { $limit: 1 },
+        kioskPublicProject,
+      ],
+      as: "_kiosk",
+    },
+  },
+  {
+    $lookup: {
+      from: COLLECTIONS.kiosks,
+      let: { siteId: "$branchId" },
+      pipeline: [
+        { $match: { $expr: { $eq: ["$branchId", "$$siteId"] } } },
+        { $match: { fireEvacuation: { $ne: false } } },
+        { $sort: { locationLabel: 1, receptionIdentifier: 1 } },
+        kioskPublicProject,
+      ],
+      as: "kiosks",
+    },
+  },
+  {
+    $addFields: {
+      kiosk: { $ifNull: [{ $arrayElemAt: ["$_kiosk", 0] }, null] },
+    },
+  },
+  { $unset: "_kiosk" },
+];
+
 const familyAlertOf = (stored) => ({
   status: FamilyAlertStatus.NOT_SENT,
   alertedAt: null,
@@ -176,19 +262,41 @@ const familyAlertOf = (stored) => ({
   ...(stored || {}),
 });
 
+const DEFAULT_TZ = "Europe/London";
+
+const shapeKiosk = (kiosk) => {
+  if (!kiosk) return null;
+  const reception = String(kiosk.receptionIdentifier || "").trim();
+  const location = String(kiosk.locationLabel || "").trim();
+  return {
+    _id: kiosk._id,
+    name: reception || location || "",
+    receptionIdentifier: reception,
+    locationLabel: location,
+    deviceType: kiosk.deviceType || null,
+    kioskMode: kiosk.kioskMode || null,
+    fireEvacuation: kiosk.fireEvacuation !== false,
+    lastHeartbeatAt: kiosk.lastHeartbeatAt || null,
+  };
+};
+
 const formatEventDoc = (doc, { includeFamilyAlert = false } = {}) => {
   if (!doc) return null;
-  const { branchDoc, statRows, rollcall, familyAlert, ...event } = doc;
+  const { branchDoc, statRows, rollcall, familyAlert, kiosk, kiosks, ...event } =
+    doc;
   const formatted = {
     ...event,
     ...(includeFamilyAlert ? { familyAlert: familyAlertOf(familyAlert) } : {}),
     branch: branchDoc
       ? {
-          _id: branchDoc._id,
-          name: branchDoc.name,
-          assemblyPoint: branchDoc.assemblyPoint || "",
-        }
+        _id: branchDoc._id,
+        name: branchDoc.name,
+        assemblyPoint: branchDoc.assemblyPoint || "",
+        timezone: branchDoc.timezone || DEFAULT_TZ,
+      }
       : undefined,
+    kiosk: shapeKiosk(kiosk),
+    kiosks: (kiosks || []).map(shapeKiosk),
   };
   if (rollcall) {
     formatted.rollcallStats = statsFromGroupedRows(rollcall.stats);
@@ -620,10 +728,8 @@ const loadEventWithBranchAndStats = async ({
   includeFamilyAlert = false,
   many = false,
 }) => {
-  const pipeline = [{ $match: match }];
-  if (many) pipeline.push({ $sort: { startedAt: -1 } });
-  else pipeline.push({ $limit: 1 });
-  pipeline.push(...branchLookupPipeline);
+  const pipeline = [{ $match: match }, { $sort: { startedAt: -1 } }, { $limit: 1 }];
+  pipeline.push(...branchLookupPipeline, ...kioskLookupPipeline);
 
   if (organizationId) {
     pipeline.push({
@@ -700,6 +806,7 @@ const getActiveEvacuation = async ({
   branchId,
   includeStats = true,
   actor = null,
+  type,
 }) => {
   if (branchId) {
     const branchOid = toObjectId(branchId);
@@ -711,10 +818,32 @@ const getActiveEvacuation = async ({
       assertSiteManagerBranch(standing, branchOid);
     }
     return loadEventWithBranchAndStats({
-      match: { branchId: branchOid, status: EvacuationStatus.ACTIVE },
+      match: activeEvacuationMatch({ branchId: branchOid, type }),
       organizationId: null,
       includeStats,
     });
+  }
+
+  const standing =
+    actor && organizationId ? await actorStanding(actor, organizationId) : null;
+  const scopedBranchId = standing
+    ? scopeBranchFilter(standing, null)
+    : null;
+
+  let branchIds;
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+    branchIds = [toObjectId(scopedBranchId)];
+  } else if (organizationId) {
+    const orgBranches = await Branch.find({
+      organizationId: toObjectId(organizationId),
+    })
+      .select("_id")
+      .lean();
+    branchIds = orgBranches.map((row) => row._id);
+    if (!branchIds.length) return null;
+  } else {
+    return null;
   }
 
   if (!actor || !organizationId) {
@@ -743,10 +872,7 @@ const getActiveEvacuation = async ({
   if (!branchIds.length) return [];
 
   return loadEventWithBranchAndStats({
-    match: {
-      branchId: { $in: branchIds },
-      status: EvacuationStatus.ACTIVE,
-    },
+    match: activeEvacuationMatch({ branchIds, type }),
     organizationId,
     includeStats,
     many: true,
@@ -1607,13 +1733,17 @@ const markSelfCheck = async ({
 
   if (!active) throw new AppError("no_active_evacuation", 404);
 
+  const checkStatus = parseCheckStatus(status || EvacCheckStatus.SAFE);
+
   return upsertEvacCheck({
     organizationId,
     evacuationEventId: active._id,
     personKind: EvacPersonKind.STAFF,
     personId: profile._id,
-    status: status || EvacCheckStatus.SAFE,
-    locationLabel,
+    status: checkStatus,
+    locationLabel:
+      locationLabel ||
+      (checkStatus === EvacCheckStatus.OFF_SITE ? "Not on site" : locationLabel),
     geo,
     clientEventId,
     actor: { _id: userId },

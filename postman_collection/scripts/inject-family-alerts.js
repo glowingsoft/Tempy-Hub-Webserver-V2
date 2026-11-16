@@ -69,7 +69,7 @@ const requests = [
     "get roll call (evacuation)",
     "rollcall",
     null,
-    "One call for the manager app Evacuation screen. Returns the evacuation (type, status, startedAt, kioskId, branch with assemblyPoint), rollcallStats { total, safe, missing, unknown, byKind }, familyAlert { offsiteAlertsEnabled, familiesToNotify, status notSent/alertSent/allClearSent, alertedAt, familiesNotified, updates, allClearAt } and unaccounted (Not Yet Accounted For rows: personKind, status, name, email, roomNumber, employeeCode, jobTitle, lastSeenLabel, lastSeenAt, signedInAt, visitPurpose). The unaccounted list is paged: meta has the totals. Query: status (missing, unknown or safe; default missing and unknown), personKind (staff, resident, visitor or contractor), page, limit. Site manager of the site, owner or super admin; send x-org-id.",
+    "One call for the manager app Evacuation screen. Returns the evacuation (type, status, startedAt, kioskId, branch with assemblyPoint), rollcallStats { total, safe, missing, unknown, offSite, byKind }, familyAlert { offsiteAlertsEnabled, familiesToNotify, status notSent/alertSent/allClearSent, alertedAt, familiesNotified, updates, allClearAt } and unaccounted (Not Yet Accounted For rows: personKind, status, name, email, roomNumber, employeeCode, jobTitle, lastSeenLabel, lastSeenAt, signedInAt, visitPurpose). The unaccounted list is paged: meta has the totals. Query: status (missing, unknown, safe or offSite; default missing and unknown — offSite is accounted). personKind (staff, resident, visitor or contractor), page, limit. Site manager of the site, owner or super admin; send x-org-id.",
     "GET"
   ),
   make(

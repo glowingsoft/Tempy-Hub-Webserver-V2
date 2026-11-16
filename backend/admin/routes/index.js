@@ -43,6 +43,7 @@ const platformRoutes = require("./platformRoutes.js");
 const documentRoutes = require("./documentRoutes.js");
 const requirementRoutes = require("./requirementRoutes.js");
 const assignmentRoutes = require("./assignmentRoutes.js");
+const announcementRoutes = require("./announcementRoutes.js");
 
 const {
   listModuleDefinitions,
@@ -90,6 +91,7 @@ router.use("/platform", platformRoutes);
 router.use("/documents", documentRoutes);
 router.use("/requirements", requirementRoutes);
 router.use("/assignments", assignmentRoutes);
+router.use("/announcements", announcementRoutes);
 
 router.get("/module-definitions", auth, listModuleDefinitions);
 

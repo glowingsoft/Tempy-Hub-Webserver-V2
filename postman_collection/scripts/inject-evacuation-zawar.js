@@ -383,6 +383,15 @@ const appEvac = [
       clientEventId: "postman-evac-self-smoke-1",
     },
   }),
+  req("mark myself off site", "POST", ["app", "evacuations", "me", "check"], {
+    header: orgHeader,
+    body: {
+      branchId: "{{branchId}}",
+      status: "offSite",
+      locationLabel: "Not on site",
+      clientEventId: "postman-evac-self-offsite-1",
+    },
+  }),
 ];
 
 const kioskEvac = [

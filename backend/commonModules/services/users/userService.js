@@ -437,6 +437,99 @@ const listAllUsers = async () => {
   return User.find({}).sort({ createdAt: -1 }).lean();
 };
 
+const ALWAYS_ON = ["fireEmergency", "walkInAtKiosk"];
+const PREFERENCE_SECTIONS = {
+  staffAndRota: ["shiftClaims", "leaveAndSickness", "kioskOffline", "agencyBids"],
+  family: ["photosWaiting", "joinRequests", "visitRequests", "reportedPosts", "gazetteReminders"],
+};
+const OFF_BY_DEFAULT = ["gazetteReminders"];
+const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const isPlainObject = (value) =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+/** The Notifications screen: the switches of the signed-in person and their quiet hours (null means Off). */
+const getNotificationPreferences = async ({ userId }) => {
+  const [row] = await User.aggregate([
+    { $match: { _id: new mongoose.Types.ObjectId(String(userId)) } },
+    { $project: { notificationPreferences: 1 } },
+  ]);
+  const stored = row?.notificationPreferences || {};
+  const sectionOf = (keys) =>
+    Object.fromEntries(
+      keys.map((key) => [key, stored[key] ?? !OFF_BY_DEFAULT.includes(key)]),
+    );
+  return {
+    alwaysOn: Object.fromEntries(ALWAYS_ON.map((key) => [key, true])),
+    staffAndRota: sectionOf(PREFERENCE_SECTIONS.staffAndRota),
+    family: sectionOf(PREFERENCE_SECTIONS.family),
+    quietHours: stored.quietHours?.start
+      ? { start: stored.quietHours.start, end: stored.quietHours.end }
+      : null,
+  };
+};
+
+const updateNotificationPreferences = async ({ userId, body }) => {
+  if (!isPlainObject(body)) throw new AppError("nothing_to_update", 400);
+  const allowed = [...Object.keys(PREFERENCE_SECTIONS), "alwaysOn", "quietHours"];
+  if (Object.keys(body).some((key) => !allowed.includes(key)))
+    throw new AppError("invalid_notification_preference", 400);
+
+  const set = {};
+  const unset = {};
+  if (body.alwaysOn !== undefined) {
+    const sent = body.alwaysOn;
+    if (
+      !isPlainObject(sent) ||
+      Object.keys(sent).some((key) => !ALWAYS_ON.includes(key)) ||
+      Object.values(sent).some((value) => value !== true)
+    )
+      throw new AppError("always_on_cannot_be_changed", 400);
+  }
+  for (const [section, keys] of Object.entries(PREFERENCE_SECTIONS)) {
+    if (body[section] === undefined) continue;
+    if (
+      !isPlainObject(body[section]) ||
+      Object.entries(body[section]).some(
+        ([key, value]) => !keys.includes(key) || typeof value !== "boolean",
+      )
+    )
+      throw new AppError("invalid_notification_preference", 400);
+    Object.entries(body[section]).forEach(([key, value]) => {
+      set[`notificationPreferences.${key}`] = value;
+    });
+  }
+  if (body.quietHours !== undefined) {
+    const { quietHours } = body;
+    if (quietHours === null) {
+      unset["notificationPreferences.quietHours"] = "";
+    } else {
+      if (
+        !isPlainObject(quietHours) ||
+        !CLOCK_TIME.test(String(quietHours.start)) ||
+        !CLOCK_TIME.test(String(quietHours.end)) ||
+        quietHours.start === quietHours.end
+      )
+        throw new AppError("invalid_quiet_hours", 400);
+      set["notificationPreferences.quietHours"] = {
+        start: quietHours.start,
+        end: quietHours.end,
+      };
+    }
+  }
+  if (!Object.keys(set).length && !Object.keys(unset).length)
+    throw new AppError("nothing_to_update", 400);
+
+  await User.updateOne(
+    { _id: userId },
+    {
+      ...(Object.keys(set).length ? { $set: set } : {}),
+      ...(Object.keys(unset).length ? { $unset: unset } : {}),
+    },
+  );
+  return getNotificationPreferences({ userId });
+};
+
 module.exports = {
   blockUser,
   reportUser,
@@ -450,5 +543,7 @@ module.exports = {
   listAllUsers,
   loadStaffCardsForUser,
   loadStaffCard,
+  getNotificationPreferences,
+  updateNotificationPreferences,
   SubscriptionType,
 };

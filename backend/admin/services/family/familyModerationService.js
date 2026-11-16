@@ -27,6 +27,22 @@ const { authorRoleStages, ROLE_LABELS } = require("./familyAuthor");
 
 const MAX_REASON_LENGTH = 500;
 
+const REJECT_REASONS = {
+  another_resident: "Another resident can be identified",
+  poor_quality: "Poor quality",
+  not_appropriate: "Not appropriate",
+};
+
+const reasonText = ({ reason, reasonKey, note }) => {
+  if (reasonKey === undefined) return String(reason ?? "").trim();
+  if (!Object.prototype.hasOwnProperty.call(REJECT_REASONS, reasonKey))
+    throw new AppError("invalid_reject_reason", 400, {
+      reasons: Object.keys(REJECT_REASONS).join(", "),
+    });
+  const extra = String(note ?? "").trim();
+  return extra ? `${REJECT_REASONS[reasonKey]}. ${extra}` : REJECT_REASONS[reasonKey];
+};
+
 const ALL = "all";
 
 const UPLOAD_STATUSES = Object.values(FamilyUploadStatus);
@@ -198,7 +214,7 @@ const listUploads = async ({
 };
 
 /** A site or line manager can only decide for their own site; 409 if another manager decided first. */
-const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
+const loadWaitingUpload = async ({ actor, organizationId, uploadId, residentId }) => {
   if (!isValidObjectId(uploadId)) throw new AppError("upload_not_found", 404);
 
   const [upload] = await FamilyUpload.aggregate([
@@ -218,7 +234,8 @@ const loadWaitingUpload = async ({ actor, organizationId, uploadId }) => {
       },
     },
   ]);
-  if (!upload) throw new AppError("upload_not_found", 404);
+  if (!upload || (residentId && String(upload.residentId) !== String(residentId)))
+    throw new AppError("upload_not_found", 404);
 
   const standing = await actorStanding(actor, organizationId);
   assertMayAccessResidents(standing, upload.branchId);
@@ -297,8 +314,8 @@ const saveBlurredCopies = async ({ upload, areas }) => {
   }
 };
 
-const approveUpload = async ({ actor, organizationId, uploadId, blur }) => {
-  const upload = await loadWaitingUpload({ actor, organizationId, uploadId });
+const approveUpload = async ({ actor, organizationId, uploadId, residentId, blur }) => {
+  const upload = await loadWaitingUpload({ actor, organizationId, uploadId, residentId });
 
   await saveBlurredCopies({ upload, areas: blur });
   const decidedAt = await settle({
@@ -326,13 +343,21 @@ const approveUpload = async ({ actor, organizationId, uploadId, blur }) => {
   });
 };
 
-const rejectUpload = async ({ actor, organizationId, uploadId, reason }) => {
-  const text = String(reason ?? "").trim();
+const rejectUpload = async ({
+  actor,
+  organizationId,
+  uploadId,
+  residentId,
+  reason,
+  reasonKey,
+  note,
+}) => {
+  const text = reasonText({ reason, reasonKey, note });
   if (!text) throw new AppError("reason_required", 400);
   if (text.length > MAX_REASON_LENGTH)
     throw new AppError("reason_too_long", 400);
 
-  const upload = await loadWaitingUpload({ actor, organizationId, uploadId });
+  const upload = await loadWaitingUpload({ actor, organizationId, uploadId, residentId });
   const decidedAt = await settle({
     upload,
     actor,
@@ -358,4 +383,4 @@ const rejectUpload = async ({ actor, organizationId, uploadId, reason }) => {
   });
 };
 
-module.exports = { listUploads, approveUpload, rejectUpload };
+module.exports = { listUploads, approveUpload, rejectUpload, REJECT_REASONS };

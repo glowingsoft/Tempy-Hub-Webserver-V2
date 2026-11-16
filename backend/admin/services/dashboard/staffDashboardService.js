@@ -290,7 +290,9 @@ const getStaffDashboard = async ({
       limit: COMMUNICATION_SHOWN,
       timezone,
     }),
-    listOpenShifts({ userId: actor._id, organizationId, from: now }),
+    listOpenShifts({ userId: actor._id, organizationId, from: now }).then(
+      (result) => result.data
+    ),
     documentsToSign({ organizationId, branchId, staffId }),
     AttendanceChangeRequest.aggregate([
       {

@@ -8,6 +8,7 @@ const { generateMeta } = require("@utils/responseUtil");
 const { paginateWithFacet, facetCount } = require("@utils/paginate");
 const { searchText } = require("@utils/familyQuery");
 const { AppError } = require("@services/_errors/AppError");
+const { sendTransactionalEmail } = require("@utils/mailer");
 const Conversation = require("../../../commonModules/chatModule/models/Conversation");
 const Message = require("../../../commonModules/chatModule/models/Message");
 const {
@@ -19,14 +20,16 @@ const {
 const {
   chunksOf,
   cleanMessageText,
+  cleanSubject,
   idText,
   ensureThreads,
   deliver,
 } = require("@appServices/family/familyMessageDelivery");
+const { escapeHtml } = require("./familyNewsletterEmail");
 const { resolveSite } = require("./familySite");
 const { listScope } = require("./familyStaffService");
 
-const AUDIENCES = { ALL: "all", SELECTED: "selected", PEOPLE: "people" };
+const AUDIENCES = { ALL: "all", SELECTED: "selected", PEOPLE: "people", FAMILY: "family" };
 const MAX_RESIDENTS = 100;
 const MAX_PEOPLE = 200;
 const CONTACT_ROLE = "Next of kin";
@@ -92,7 +95,9 @@ const recipientsOf = async ({
     isNextOfKin: true,
   };
 
-  if (audience === AUDIENCES.SELECTED) {
+  if (audience === AUDIENCES.FAMILY) delete match.isNextOfKin;
+
+  if (audience === AUDIENCES.SELECTED || audience === AUDIENCES.FAMILY) {
     const found = await Resident.aggregate([
       {
         $match: {
@@ -118,7 +123,7 @@ const recipientsOf = async ({
   return {
     userIds: rows.map((row) => row._id),
     withoutNextOfKin:
-      audience === AUDIENCES.SELECTED
+      audience === AUDIENCES.SELECTED || audience === AUDIENCES.FAMILY
         ? residentIds.filter((id) => !covered.has(String(id)))
         : [],
     notReached:
@@ -134,6 +139,7 @@ const saveMessages = async ({
   broadcastId,
   senderId,
   text,
+  subject,
   threads,
   now,
 }) => {
@@ -145,6 +151,7 @@ const saveMessages = async ({
     broadcastId,
     senderId,
     recipientId: toObjectId(recipientId),
+    subject,
     messageContent: text,
   }));
 
@@ -191,7 +198,29 @@ const contactInScope = async ({ actor, organizationId, conversationId }) => {
   return contact;
 };
 
-/** audience is all, selected (residentIds) or people (recipientIds); conversationId sends to one contact. */
+const emailFamily = async ({ userIds, subject, text }) => {
+  const people = await User.aggregate([
+    { $match: { _id: { $in: userIds } } },
+    { $project: { email: 1 } },
+  ]);
+  const html = `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
+  let emailed = 0;
+  for (const chunk of chunksOf(people.filter((person) => person.email))) {
+    const results = await Promise.allSettled(
+      chunk.map((person) =>
+        sendTransactionalEmail({ to: person.email, subject, html, throwOnError: true }),
+      ),
+    );
+    results.forEach((result) => {
+      if (result.status === "rejected")
+        console.error("family message email failed", result.reason?.message);
+      else if (result.value?.delivered) emailed += 1;
+    });
+  }
+  return emailed;
+};
+
+/** audience is all (every next of kin), selected (next of kin of residentIds), family (everyone linked to residentIds) or people (recipientIds); conversationId sends to one contact. */
 const sendMessage = async ({
   actor,
   organizationId,
@@ -201,9 +230,12 @@ const sendMessage = async ({
   recipientIds,
   conversationId,
   message,
+  subject,
+  alsoEmail,
   now = new Date(),
 }) => {
   const text = cleanMessageText(message);
+  const title = cleanSubject(subject);
 
   let site;
   let kind = audience;
@@ -217,7 +249,7 @@ const sendMessage = async ({
   } else {
     if (!Object.values(AUDIENCES).includes(audience))
       throw new AppError("invalid_message_audience", 400, { max: MAX_RESIDENTS });
-    if (audience === AUDIENCES.SELECTED)
+    if (audience === AUDIENCES.SELECTED || audience === AUDIENCES.FAMILY)
       residents = cleanIds(residentIds, MAX_RESIDENTS);
     if (audience === AUDIENCES.PEOPLE) people = cleanIds(recipientIds, MAX_PEOPLE);
     site = await resolveSite({ actor, organizationId, branchId });
@@ -252,6 +284,7 @@ const sendMessage = async ({
     broadcastId,
     senderId: actor._id,
     text,
+    subject: title,
     threads,
     now,
   });
@@ -263,16 +296,23 @@ const sendMessage = async ({
     })),
     subjectId: actor._id,
     senderName: actor.name,
-    title: `Message from ${homeName}`,
+    title: title || `Message from ${homeName}`,
     chatName: homeName,
     text,
+    subject: title,
     now,
   });
+  const emailed =
+    alsoEmail === true
+      ? await emailFamily({ userIds, subject: title || `Message from ${homeName}`, text })
+      : 0;
 
   return {
     broadcastId,
     sentAt: now,
+    subject: title,
     recipients: userIds.length,
+    emailed,
     conversationId: messages.length === 1 ? messages[0].conversationId : null,
     residentsWithoutNextOfKin: withoutNextOfKin,
     recipientsNotReached: notReached,
@@ -387,6 +427,7 @@ const getContact = async ({
           senderId: 1,
           senderName: { $ifNull: ["$sender.name", ""] },
           messageType: 1,
+          subject: 1,
           messageContent: 1,
           createdAt: 1,
           readAt: 1,
@@ -503,6 +544,7 @@ const listSent = async ({
     {
       $group: {
         _id: "$broadcastId",
+        subject: { $first: "$subject" },
         message: { $first: "$messageContent" },
         senderId: { $first: "$senderId" },
         branchId: { $first: "$branchId" },
@@ -523,6 +565,7 @@ const listSent = async ({
             $project: {
               _id: 0,
               broadcastId: "$_id",
+              subject: 1,
               message: 1,
               branchId: 1,
               homeName: { $ifNull: ["$home.name", ""] },
@@ -557,7 +600,8 @@ const getSent = async ({ actor, organizationId, broadcastId, page, limit, skip }
       {
         $group: {
           _id: "$broadcastId",
-          message: { $first: "$messageContent" },
+          subject: { $first: "$subject" },
+        message: { $first: "$messageContent" },
           senderId: { $first: "$senderId" },
           branchId: { $first: "$branchId" },
           sentAt: { $min: "$createdAt" },
@@ -571,6 +615,7 @@ const getSent = async ({ actor, organizationId, broadcastId, page, limit, skip }
         $project: {
           _id: 0,
           broadcastId: "$_id",
+          subject: 1,
           message: 1,
           branchId: 1,
           homeName: { $ifNull: ["$home.name", ""] },

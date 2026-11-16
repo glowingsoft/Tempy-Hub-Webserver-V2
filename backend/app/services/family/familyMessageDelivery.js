@@ -6,7 +6,7 @@ const {
   emitMessageToUsers,
 } = require("../../../commonModules/chatModule/sockets/chatEventEmitter");
 
-const { MAX_MESSAGE_LENGTH } = Message;
+const { MAX_MESSAGE_LENGTH, MAX_SUBJECT_LENGTH } = Message;
 const CHUNK = 500;
 const PREVIEW_LENGTH = 140;
 
@@ -19,6 +19,13 @@ const cleanMessageText = (value) => {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text || text.length > MAX_MESSAGE_LENGTH)
     throw new AppError("invalid_message_text", 400, { max: MAX_MESSAGE_LENGTH });
+  return text;
+};
+
+const cleanSubject = (value) => {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text.length > MAX_SUBJECT_LENGTH)
+    throw new AppError("invalid_message_subject", 400, { max: MAX_SUBJECT_LENGTH });
   return text;
 };
 
@@ -54,6 +61,7 @@ const deliver = async ({
   title,
   chatName,
   text,
+  subject = "",
   now,
 }) => {
   try {
@@ -89,6 +97,7 @@ const deliver = async ({
           senderName,
           chatName,
           messageType: "text",
+          subject,
           messageContent: text,
           createdAt: now,
           isRead: false,
@@ -103,6 +112,7 @@ const deliver = async ({
 module.exports = {
   chunksOf,
   cleanMessageText,
+  cleanSubject,
   idText,
   ensureThreads,
   deliver,

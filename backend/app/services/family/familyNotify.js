@@ -14,7 +14,8 @@ const { toObjectId } = require("./familyPipeline");
 const CHUNK = 500;
 const ANSWERING_ROLES = [MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER];
 
-const managersOf = async ({ organizationId, branchId }) => {
+/** `preference` is a switch of the Notifications screen: a manager who turned it off is left out. */
+const managersOf = async ({ organizationId, branchId }, preference) => {
   const rows = await Membership.aggregate([
     {
       $match: {
@@ -26,7 +27,20 @@ const managersOf = async ({ organizationId, branchId }) => {
     },
     { $group: { _id: "$userId" } },
   ]);
-  return rows.map((row) => row._id);
+  const managers = rows.map((row) => row._id);
+  if (!preference || !managers.length) return managers;
+
+  const muted = await User.aggregate([
+    {
+      $match: {
+        _id: { $in: managers },
+        [`notificationPreferences.${preference}`]: false,
+      },
+    },
+    { $project: { _id: 1 } },
+  ]);
+  const off = new Set(muted.map((row) => String(row._id)));
+  return managers.filter((id) => !off.has(String(id)));
 };
 
 const familyOf = async ({ organizationId, residentId, nextOfKinOnly = false }) => {

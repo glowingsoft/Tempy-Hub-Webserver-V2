@@ -7,8 +7,11 @@ const { JobTitle } = require("@models/JobTitle");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
 const { Resident } = require("@models/Resident");
+const { Department } = require("@models/Department");
+const { PersonCategory } = require("@models/PersonCategory");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { generateMeta } = require("@utils/responseUtil");
+const { facetCount } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   VisitSessionStatus,
@@ -17,6 +20,7 @@ const {
   ExternalPersonType,
   PresenceStatus,
   AdmissionStatus,
+  StaffProfileStatus,
 } = require("@models/domainEnums");
 const { loadMyStatus } = require("./myStatus");
 const {
@@ -193,7 +197,9 @@ const parseTab = (value) => {
 };
 
 const parseKind = (value) => {
-  const kind = String(value ?? "").trim().toLowerCase();
+  const kind = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (!KINDS.includes(kind)) throw new AppError("invalid_person_kind", 400);
   return kind;
 };
@@ -631,10 +637,364 @@ const checkOutPerson = async ({
   };
 };
 
+const DIRECTORY_TABS = ["staff", "residents", "contractors", "archived"];
+
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const parseDirectoryTab = (value) => {
+  if (value == null || value === "") return "staff";
+  const tab = String(value).trim();
+  if (!DIRECTORY_TABS.includes(tab))
+    throw new AppError("invalid_directory_tab", 400);
+  return tab;
+};
+
+const parseDepartment = (value) => {
+  if (value == null || value === "") return null;
+  if (!mongoose.isValidObjectId(String(value)))
+    throw new AppError("invalid_department_id", 400);
+  return toId(value);
+};
+
+const parseKeyword = (value) => {
+  const text = typeof value === "string" ? value.trim().slice(0, 80) : "";
+  return text ? new RegExp(escapeRegex(text), "i") : null;
+};
+
+const paged = async (model, pipeline, { sort, skip, limit }) => {
+  const [result] = await model.aggregate([
+    ...pipeline,
+    {
+      $facet: {
+        data: [{ $sort: sort }, { $skip: skip }, { $limit: limit }],
+        total: [{ $count: "count" }],
+      },
+    },
+  ]);
+  return { rows: result.data, total: facetCount(result.total) };
+};
+
+const staffJoins = [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "userId",
+      foreignField: "_id",
+      as: "_user",
+    },
+  },
+  {
+    $lookup: {
+      from: JobTitle.collection.name,
+      localField: "jobTitleId",
+      foreignField: "_id",
+      as: "_jobTitle",
+    },
+  },
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      as: "_departments",
+    },
+  },
+];
+
+const staffPipeline = (match, keyword) => [
+  { $match: match },
+  ...staffJoins,
+  { $addFields: { name: { $ifNull: [first("$_user.name"), ""] } } },
+  ...(keyword ? [{ $match: { name: keyword } }] : []),
+];
+
+const directoryResidentMatch = (
+  organizationId,
+  branchIds,
+  status,
+  keyword,
+) => ({
+  organizationId: toId(organizationId),
+  branchId: { $in: branchIds },
+  admissionStatus: status,
+  ...(keyword ? { $or: [{ name: keyword }, { roomNumber: keyword }] } : {}),
+});
+
+const staffRows = async ({ branchIds, departmentId, keyword, ...window }) => {
+  const match = {
+    branchId: { $in: branchIds },
+    status: { $ne: StaffProfileStatus.INACTIVE },
+    ...(departmentId ? { departmentIds: departmentId } : {}),
+  };
+  const { rows, total } = await paged(
+    StaffProfile,
+    staffPipeline(match, keyword),
+    { sort: { name: 1, _id: 1 }, ...window },
+  );
+  return {
+    total,
+    rows: rows.map((row) => ({
+      _id: row._id,
+      personKind: "staff",
+      name: row.name,
+      photoUrl: row.photoUrl || "",
+      jobTitle: row._jobTitle?.[0]?.name || "",
+      departments: (row._departments || []).map(
+        (department) => department.name,
+      ),
+    })),
+  };
+};
+
+const residentDirectoryRows = async ({
+  organizationId,
+  branchIds,
+  keyword,
+  ...window
+}) => {
+  const { rows, total } = await paged(
+    Resident,
+    [
+      {
+        $match: directoryResidentMatch(
+          organizationId,
+          branchIds,
+          AdmissionStatus.ADMITTED,
+          keyword,
+        ),
+      },
+    ],
+    { sort: { name: 1, _id: 1 }, ...window },
+  );
+  return {
+    total,
+    rows: rows.map((row) => ({
+      _id: row._id,
+      personKind: "resident",
+      name: row.name,
+      photoUrl: row.photoUrl || "",
+      roomNumber: row.roomNumber || "",
+    })),
+  };
+};
+
+const contractorRows = async ({ branchIds, keyword, ...window }) => {
+  const { rows, total } = await paged(
+    ExternalPerson,
+    [
+      {
+        $match: {
+          branchId: { $in: branchIds },
+          type: { $in: CONTRACTOR_TYPES },
+          ...(keyword ? { name: keyword } : {}),
+        },
+      },
+      {
+        $lookup: {
+          from: PersonCategory.collection.name,
+          localField: "categoryId",
+          foreignField: "_id",
+          as: "_category",
+        },
+      },
+    ],
+    { sort: { name: 1, _id: 1 }, ...window },
+  );
+  return {
+    total,
+    rows: rows.map((row) => ({
+      _id: row._id,
+      personKind: row.type,
+      name: row.name,
+      photoUrl: row.photoUrl || "",
+      category: row._category?.[0]?.name || row.visitorCategory || "",
+    })),
+  };
+};
+
+const archivedStaff = async ({ branchIds, keyword, window }) => {
+  const { rows, total } = await paged(
+    StaffProfile,
+    staffPipeline(
+      { branchId: { $in: branchIds }, status: StaffProfileStatus.INACTIVE },
+      keyword,
+    ),
+    { sort: { inactiveAt: -1, _id: 1 }, ...window },
+  );
+  return {
+    total,
+    rows: rows.map((row) => ({
+      _id: row._id,
+      personKind: "staff",
+      name: row.name,
+      photoUrl: row.photoUrl || "",
+      departments: (row._departments || []).map(
+        (department) => department.name,
+      ),
+      leftAt: row.inactiveAt || row.updatedAt || null,
+    })),
+  };
+};
+
+const archivedResidents = async ({
+  organizationId,
+  branchIds,
+  keyword,
+  window,
+}) => {
+  const { rows, total } = await paged(
+    Resident,
+    [
+      {
+        $match: directoryResidentMatch(
+          organizationId,
+          branchIds,
+          AdmissionStatus.DISCHARGED,
+          keyword,
+        ),
+      },
+      {
+        $addFields: {
+          leftAt: { $ifNull: ["$discharge.dischargedAt", "$updatedAt"] },
+        },
+      },
+    ],
+    { sort: { leftAt: -1, _id: 1 }, ...window },
+  );
+  return {
+    total,
+    rows: rows.map((row) => ({
+      _id: row._id,
+      personKind: "resident",
+      name: row.name,
+      photoUrl: row.photoUrl || "",
+      reason: row.discharge?.reason || "",
+      leftAt: row.leftAt || null,
+    })),
+  };
+};
+
+const archivedRows = async ({
+  organizationId,
+  branchIds,
+  keyword,
+  skip,
+  limit,
+}) => {
+  const window = { skip: 0, limit: skip + limit };
+  const [staff, residents] = await Promise.all([
+    archivedStaff({ branchIds, keyword, window }),
+    archivedResidents({ organizationId, branchIds, keyword, window }),
+  ]);
+  const merged = [...staff.rows, ...residents.rows].sort(
+    (a, b) => new Date(b.leftAt || 0) - new Date(a.leftAt || 0),
+  );
+  return {
+    total: staff.total + residents.total,
+    rows: merged.slice(skip, skip + limit),
+  };
+};
+
+const loadDepartments = async (organizationId, branchIds) =>
+  Department.aggregate([
+    {
+      $match: {
+        organizationId: toId(organizationId),
+        active: { $ne: false },
+        $or: [{ branchId: null }, { branchId: { $in: branchIds } }],
+      },
+    },
+    { $sort: { sortOrder: 1, name: 1 } },
+    { $project: { _id: 1, name: 1 } },
+  ]);
+
+/**
+ * Directory screen of the manager app: Staff, Residents, Contractors & Pros and Archived tabs.
+ * Archived holds staff who have left and residents who were deactivated, newest first.
+ */
+const listDirectory = async ({
+  actor,
+  organizationId,
+  branchId,
+  tab,
+  departmentId,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
+  const activeTab = parseDirectoryTab(tab);
+  const department = parseDepartment(departmentId);
+  const search = parseKeyword(keyword);
+  const { branchIds } = await resolvePeopleScope({
+    actor,
+    organizationId,
+    branchId,
+  });
+
+  const scope = { organizationId, branchIds, keyword: search, skip, limit };
+  const loaders = {
+    staff: () => staffRows({ ...scope, departmentId: department }),
+    residents: () => residentDirectoryRows(scope),
+    contractors: () => contractorRows(scope),
+    archived: () => archivedRows(scope),
+  };
+
+  const [active, count] = await Promise.all([
+    loaders[activeTab](),
+    Promise.all([
+      StaffProfile.countDocuments({
+        branchId: { $in: branchIds },
+        status: { $ne: StaffProfileStatus.INACTIVE },
+      }),
+      Resident.countDocuments(
+        directoryResidentMatch(
+          organizationId,
+          branchIds,
+          AdmissionStatus.ADMITTED,
+        ),
+      ),
+      ExternalPerson.countDocuments({
+        branchId: { $in: branchIds },
+        type: { $in: CONTRACTOR_TYPES },
+      }),
+      StaffProfile.countDocuments({
+        branchId: { $in: branchIds },
+        status: StaffProfileStatus.INACTIVE,
+      }),
+      Resident.countDocuments(
+        directoryResidentMatch(
+          organizationId,
+          branchIds,
+          AdmissionStatus.DISCHARGED,
+        ),
+      ),
+    ]),
+  ]);
+
+  return {
+    data: active.rows.map(withPublicPhoto),
+    meta: {
+      ...generateMeta(page, limit, active.total),
+      tab: activeTab,
+      tabCounts: {
+        staff: count[0],
+        residents: count[1],
+        contractors: count[2],
+        archived: count[3] + count[4],
+      },
+      ...(activeTab === "staff"
+        ? { departments: await loadDepartments(organizationId, branchIds) }
+        : {}),
+    },
+  };
+};
+
 module.exports = {
   getSiteLive,
   getSiteLiveActivity,
   resolveLiveBranchId,
   listPeople,
   checkOutPerson,
+  listDirectory,
 };

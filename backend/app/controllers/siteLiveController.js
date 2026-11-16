@@ -92,9 +92,37 @@ const checkOutPerson = async (req, res) => {
   }
 };
 
+const listDirectory = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await siteLiveService.listDirectory({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      tab: req.query.tab,
+      departmentId: req.query.departmentId,
+      keyword: req.query.keyword,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
   getSiteLive,
   getSiteLiveActivity,
   listPeople,
   checkOutPerson,
+  listDirectory,
 };

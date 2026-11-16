@@ -3888,14 +3888,9 @@
                 "description": "Check Out button of the People screen. personKind: staff, visitor, contractor, professional or guest. recordId: the _id of the row. Optional body checkOutAt (after the sign-in, not in the future). For a missed sign-out the row leaves the Didn't Sign Out tab and a reminder is shown once at the person's next kiosk sign-in (signOutReminder)."
               },
               "response": []
-            }
-          ]
-        },
-        {
-          "name": "Family Settings",
-          "item": [
+            },
             {
-              "name": "get family settings",
+              "name": "list directory (tabs)",
               "event": [
                 {
                   "listen": "test",
@@ -3916,71 +3911,48 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/family-settings",
+                  "raw": "{{url}}/app/site-live/directory?tab=staff&page=1&limit=20",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "app",
-                    "family-settings"
+                    "site-live",
+                    "directory"
                   ],
                   "query": [
+                    {
+                      "key": "tab",
+                      "value": "staff",
+                      "description": "staff, residents, contractors or archived"
+                    },
+                    {
+                      "key": "departmentId",
+                      "value": "",
+                      "disabled": true,
+                      "description": "staff tab only"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": "",
+                      "disabled": true
+                    },
                     {
                       "key": "branchId",
                       "value": "{{branchId}}",
                       "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
                     }
                   ]
                 },
-                "description": "Family Settings screen of the manager app. gazette: issueEveryDays, messageCap, anchorDate, deadlineReminder, communityWall. visiting: bookingOpen, loungeCapacityPerSlot, protectedTimes, visitingHours, daysAhead, maxPartySize, paused. safety: emergencyNotifyOffsite. access {editVisiting, editGazette}: gazette and safety are read-only for site managers. branchId: owner and super admin only."
-              },
-              "response": []
-            },
-            {
-              "name": "update family settings",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "PUT",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "url": {
-                  "raw": "{{url}}/app/family-settings",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "app",
-                    "family-settings"
-                  ]
-                },
-                "description": "Send only what changed. visiting (site manager of the site, owner, super admin): bookingOpen (false pauses visiting and cancels booked visits), loungeCapacityPerSlot, protectedTimes, visitingHours, daysAhead, maxPartySize, pausedReason. gazette (owner and super admin only, 403 insufficient_role otherwise): issueEveryDays, messageCap, anchorDate, deadlineReminder, communityWall."
+                "description": "Directory screen. tab: staff (default; departmentId filters, meta.departments fills the Select Department list), residents, contractors or archived (staff who left and deactivated residents, with leftAt). keyword searches the name. meta.tabCounts has every tab count. Rows hold only what the screen shows: _id, personKind, name, photoUrl and the tab's subtitle fields. branchId: owner and super admin only."
               },
               "response": []
             }
@@ -10039,6 +10011,98 @@
                     }
                   }
                 }
+              },
+              "response": []
+            },
+            {
+              "name": "get family settings (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/family-visits/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "settings"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Family Settings screen. gazette {issueEveryDays, messageCap, deadlineReminder, communityWall}, visiting {bookingOpen, loungeCapacityPerSlot, protectedTimes}, safety {emergencyNotifyOffsite}, access {editVisiting, editGazette}. Gazette and safety are read-only for site managers. branchId: owner and super admin only."
+              },
+              "response": []
+            },
+            {
+              "name": "update family settings (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/family-visits/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "family-visits",
+                    "settings"
+                  ]
+                },
+                "description": "Send only what changed. visiting (site manager of the site, owner, super admin): bookingOpen (false pauses visiting and cancels booked visits), loungeCapacityPerSlot, protectedTimes, visitingHours, daysAhead, maxPartySize, pausedReason. gazette (owner and super admin only, 403 insufficient_role otherwise): issueEveryDays, messageCap, anchorDate, deadlineReminder, communityWall."
               },
               "response": []
             }

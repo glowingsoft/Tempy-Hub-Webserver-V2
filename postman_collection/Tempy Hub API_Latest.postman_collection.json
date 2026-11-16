@@ -11529,6 +11529,91 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "get notification preferences (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/users/notification-preferences",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "users",
+                    "notification-preferences"
+                  ]
+                },
+                "description": "Notifications screen. alwaysOn {fireEmergency, walkInAtKiosk} (always true), staffAndRota {shiftClaims, leaveAndSickness, kioskOffline, agencyBids}, family {photosWaiting, joinRequests, visitRequests, reportedPosts, gazetteReminders}, quietHours {start, end} or null for Off."
+              },
+              "response": []
+            },
+            {
+              "name": "save notification preferences (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/users/notification-preferences",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "users",
+                    "notification-preferences"
+                  ]
+                },
+                "description": "Save button. Every part is optional. quietHours null turns it Off. alwaysOn can only be sent as true. Returns the same shape as the GET.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffAndRota\": {\n    \"shiftClaims\": false\n  },\n  \"family\": {\n    \"gazetteReminders\": true\n  },\n  \"quietHours\": {\n    \"start\": \"22:00\",\n    \"end\": \"07:00\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
             }
           ]
         },

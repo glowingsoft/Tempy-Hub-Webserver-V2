@@ -53,6 +53,8 @@ const sendMessage = respond(
       recipientIds: req.body?.recipientIds,
       conversationId: req.body?.conversationId,
       message: req.body?.message,
+      subject: req.body?.subject,
+      alsoEmail: req.body?.alsoEmail,
     }),
   { statusCode: 201, translationKey: "message_sent" },
 );

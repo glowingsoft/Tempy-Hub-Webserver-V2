@@ -2,6 +2,7 @@ const { parsePaginationParams } = require("@utils/responseUtil");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const { queryText, queryId } = require("@utils/familyQuery");
 const familyVisitStaffService = require("@adminServices/family/familyVisitStaffService");
+const settingsOverviewService = require("@adminServices/settings/settingsOverviewService");
 
 const { VisitDecision } = familyVisitStaffService;
 
@@ -67,4 +68,32 @@ const updateVisiting = respondByAction({
   resume: setVisiting(false, "visiting_resumed"),
 });
 
-module.exports = { listRequests, updateRequest, updateVisiting };
+const settingsScope = (req) => ({
+  actor: req.user,
+  role: req.membership?.role,
+  permissions: req.membership?.permissions,
+  organization: req.organization,
+  organizationId: req.orgId,
+  branchId: queryId(req.query.branchId, "branchId"),
+});
+
+const getSettings = respond((req) =>
+  settingsOverviewService.getFamilyScreen(settingsScope(req)),
+);
+
+const updateSettings = respond(
+  (req) =>
+    settingsOverviewService.updateFamilyScreen({
+      ...settingsScope(req),
+      body: req.body,
+    }),
+  { translationKey: "settings_saved" },
+);
+
+module.exports = {
+  listRequests,
+  updateRequest,
+  updateVisiting,
+  getSettings,
+  updateSettings,
+};

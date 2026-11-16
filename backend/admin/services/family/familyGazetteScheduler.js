@@ -124,6 +124,10 @@ const sendDueReminders = async ({ now = new Date() } = {}) => {
 
   for (const site of await scheduledSites()) {
     let claimed = null;
+    if (site.rules.deadlineReminder === false) {
+      result.skipped += 1;
+      continue;
+    }
     try {
       const period = choosePeriod({
         rules: site.rules,

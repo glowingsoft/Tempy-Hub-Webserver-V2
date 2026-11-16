@@ -6,6 +6,10 @@ const { User } = require("@models/UserModel");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { VisitSession } = require("@models/VisitSession");
 const { Resident } = require("@models/Resident");
+const { Department } = require("@models/Department");
+const { generateMeta } = require("@utils/responseUtil");
+const { escapeHtml } = require("@adminServices/family/familyNewsletterEmail");
+const { htmlToPdf } = require("@adminServices/family/familyPdfRenderer");
 const { AttendanceDay } = require("@models/AttendanceDay");
 const {
   AdmissionStatus,
@@ -21,9 +25,11 @@ const {
 } = require("./complianceRows");
 const {
   resolvePeriod,
+  getWorkforcePeriod,
 } = require("@adminServices/statistics/statisticsService");
 const {
   resolveLiveBranchId,
+  loadDepartments,
 } = require("@adminServices/siteLive/siteLiveService");
 const evacuationService = require("@adminServices/evacuation/evacuationService");
 const {
@@ -379,4 +385,343 @@ const getSiteDashboard = async ({
   };
 };
 
-module.exports = { getSiteDashboard };
+const RETENTION_MONTHS = 12;
+
+const hoursAndMinutes = (minutes) =>
+  `${Math.floor((minutes ?? 0) / 60)} hr ${(minutes ?? 0) % 60} min`;
+
+/** Statistics screen of the manager app: visits in the period and the site's workforce movement. */
+const getSiteStatistics = async ({
+  actor,
+  organizationId,
+  branchId,
+  period = "thisMonth",
+  departmentId,
+  now = new Date(),
+}) => {
+  const range = activityRange(period, now);
+  const siteId = toObjectId(
+    await resolveLiveBranchId({ actor, organizationId, branchId }),
+  );
+  const departments = await loadDepartments(organizationId, [siteId]);
+  if (
+    departmentId &&
+    !departments.some(
+      (department) => String(department._id) === String(departmentId),
+    )
+  )
+    throw new AppError("invalid_department_id", 400);
+
+  const staffScope = {
+    organizationId: toObjectId(organizationId),
+    branchId: siteId,
+    ...(departmentId ? { departmentIds: toObjectId(departmentId) } : {}),
+  };
+  const [activity, retention, movement] = await Promise.all([
+    visitActivity({ branchId: siteId, period, now }),
+    getWorkforcePeriod(staffScope, {
+      start: moment.utc(now).subtract(RETENTION_MONTHS, "months").toDate(),
+      end: now,
+    }),
+    getWorkforcePeriod(staffScope, range),
+  ]);
+
+  const visits = activity.visitorVisits + activity.contractorProfessionalVisits;
+  const [top] = activity.topReasons;
+  return {
+    period,
+    visitors: {
+      visitors: activity.visitorVisits,
+      contractors: activity.contractorProfessionalVisits,
+      mostCommonReason: top
+        ? {
+            reason: top.reason,
+            percent: Math.round((top.count / visits) * 100),
+          }
+        : null,
+      averageVisit: hoursAndMinutes(activity.averageVisitMinutes),
+    },
+    staff: {
+      retentionRate: Math.round(retention.retentionRate),
+      newStarters: movement.newStarters,
+      leavers: movement.leavers,
+      departments,
+    },
+  };
+};
+
+const percentOf = (part, whole) =>
+  whole > 0 ? Math.round((part / whole) * 100) : null;
+
+const meetingPercent = (standings) =>
+  percentOf(
+    standings.reduce(
+      (sum, row) => sum + Math.min(row.completed, row.required),
+      0,
+    ),
+    standings.reduce((sum, row) => sum + row.required, 0),
+  );
+
+const byPercentThenName = (a, b) =>
+  (b.percent ?? -1) - (a.percent ?? -1) || a.name.localeCompare(b.name);
+
+const staffDetails = async (staff) => {
+  const departmentIds = [
+    ...new Set(
+      staff.flatMap((member) => (member.departmentIds || []).map(String)),
+    ),
+  ].map(toObjectId);
+  const [people, departments] = await Promise.all([
+    StaffProfile.aggregate([
+      { $match: { _id: { $in: staff.map((member) => member._id) } } },
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          name: { $ifNull: ["$user.name", ""] },
+          photoUrl: {
+            $cond: [
+              { $gt: [{ $strLenCP: { $ifNull: ["$photoUrl", ""] } }, 0] },
+              "$photoUrl",
+              { $ifNull: ["$user.profileIcon", ""] },
+            ],
+          },
+        },
+      },
+    ]),
+    departmentIds.length
+      ? Department.aggregate([
+          { $match: { _id: { $in: departmentIds } } },
+          { $project: { name: 1 } },
+        ])
+      : [],
+  ]);
+  return {
+    people: new Map(people.map((row) => [String(row._id), row])),
+    departments: new Map(departments.map((row) => [String(row._id), row.name])),
+  };
+};
+
+const cycleProgress = ({ startDate, nextDueAt, now, timezone }) => {
+  const start = moment.tz(startDate, timezone);
+  const monthsSince = Math.max(
+    0,
+    moment.tz(now, timezone).diff(start, "months"),
+  );
+  const cycleStart = start
+    .clone()
+    .add(Math.floor(monthsSince / 12) * 12, "months");
+  return {
+    cycleMonth: (monthsSince % 12) + 1,
+    dueByMonth: Math.round(
+      moment.tz(nextDueAt, timezone).diff(cycleStart, "months", true),
+    ),
+  };
+};
+
+/** Compliance screen of the manager app: the four scores, supervision by department and each person's supervision standing. */
+const buildSiteCompliance = async ({
+  actor,
+  organizationId,
+  branchId,
+  now = new Date(),
+}) => {
+  const siteId = toObjectId(
+    await resolveLiveBranchId({ actor, organizationId, branchId }),
+  );
+  const [branch] = await Branch.aggregate([
+    { $match: { _id: siteId } },
+    { $project: { name: 1, timezone: 1 } },
+  ]);
+  const timezone = branch?.timezone || ACTIVITY_TZ;
+  const snapshot = await complianceSnapshot({
+    organization: toObjectId(organizationId),
+    branchZones: new Map([[String(siteId), branch?.timezone]]),
+    now,
+    branchId: siteId,
+  });
+  const { staff, supervisionStandings, appraisalStandings } = snapshot.detail;
+  const { people, departments } = await staffDetails(staff);
+
+  const byDepartment = new Map();
+  staff.forEach((member, index) => {
+    const { completed, required } = supervisionStandings[index];
+    (member.departmentIds || []).forEach((id) => {
+      const row = byDepartment.get(String(id)) || { done: 0, expected: 0 };
+      row.done += Math.min(completed, required);
+      row.expected += required;
+      byDepartment.set(String(id), row);
+    });
+  });
+
+  const rows = staff
+    .map((member, index) => {
+      const standing = supervisionStandings[index];
+      const person = people.get(String(member._id));
+      return {
+        staffId: member._id,
+        name: person?.name || "",
+        photoUrl: person?.photoUrl || "",
+        intervalMonths: standing.intervalMonths,
+        customInterval: Boolean(member.supervisionIntervalMonths),
+        percent: standing.score,
+        completedThisCycle: standing.completedThisCycle,
+        expectedThisCycle: standing.expectedThisCycle,
+        ...cycleProgress({
+          startDate: member.startDate,
+          nextDueAt: standing.nextDueAt,
+          now,
+          timezone,
+        }),
+      };
+    })
+    .sort(
+      (a, b) =>
+        (a.percent ?? 101) - (b.percent ?? 101) || a.name.localeCompare(b.name),
+    );
+
+  return {
+    siteName: branch?.name || "",
+    scores: {
+      supervision: meetingPercent(supervisionStandings),
+      appraisal: meetingPercent(appraisalStandings),
+      competency: snapshot.competency.compliantPercent,
+      training: snapshot.training.compliantPercent,
+    },
+    supervisionByDepartment: [...byDepartment]
+      .map(([id, row]) => ({
+        name: departments.get(id) || "",
+        percent: percentOf(row.done, row.expected),
+      }))
+      .filter((row) => row.name)
+      .sort(byPercentThenName)
+      .map(({ name, percent }) => ({ department: name, percent })),
+    staff: rows,
+  };
+};
+
+const getSiteCompliance = async ({ page, limit, skip, ...scope }) => {
+  const { siteName, staff, ...report } = await buildSiteCompliance(scope);
+  return {
+    data: { ...report, staff: staff.slice(skip, skip + limit) },
+    meta: generateMeta(page, limit, staff.length),
+  };
+};
+
+const EXPORT_FORMATS = ["csv", "pdf"];
+const SCORE_LABELS = [
+  ["supervision", "Supervision"],
+  ["appraisal", "Appraisal"],
+  ["competency", "Competency"],
+  ["training", "Training"],
+];
+const STAFF_HEADERS = [
+  "Name",
+  "Supervision every (months)",
+  "Custom interval",
+  "Supervision %",
+  "Done this cycle",
+  "Due this cycle",
+  "Month of cycle",
+  "Due by month",
+];
+
+const percentText = (value) => (value == null ? "" : `${value}%`);
+
+const staffCells = (row) => [
+  row.name,
+  row.intervalMonths,
+  row.customInterval ? "Yes" : "No",
+  percentText(row.percent),
+  row.completedThisCycle,
+  row.expectedThisCycle,
+  row.cycleMonth,
+  row.dueByMonth,
+];
+
+const csvCell = (value) => {
+  const text = value == null ? "" : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+const complianceCsv = ({ scores, supervisionByDepartment, staff }) => {
+  const line = (cells) => cells.map(csvCell).join(",");
+  return `\uFEFF${[
+    line(["Score", "Percent"]),
+    ...SCORE_LABELS.map(([key, label]) =>
+      line([label, percentText(scores[key])]),
+    ),
+    "",
+    line(["Department", "Supervision %"]),
+    ...supervisionByDepartment.map((row) =>
+      line([row.department, percentText(row.percent)]),
+    ),
+    "",
+    line(STAFF_HEADERS),
+    ...staff.map((row) => line(staffCells(row))),
+  ].join("\r\n")}`;
+};
+
+const htmlTable = (head, rows) =>
+  `<table><thead><tr>${head.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("")}</tr></thead><tbody>${rows
+    .map(
+      (cells) =>
+        `<tr>${cells.map((cell) => `<td>${escapeHtml(cell ?? "")}</td>`).join("")}</tr>`,
+    )
+    .join("")}</tbody></table>`;
+
+const compliancePdfHtml = (
+  { siteName, scores, supervisionByDepartment, staff },
+  day,
+) => `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 16mm; }
+body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
+h1 { font-size: 20px; margin: 0 0 2px; } h2 { font-size: 14px; margin: 18px 0 6px; } p { margin: 0; color: #555; }
+table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #d9dde4; }
+th { background: #f1f3f7; }
+</style></head><body>
+<h1>Compliance</h1><p>${escapeHtml(siteName)} - ${escapeHtml(day)}</p>
+<h2>Scores</h2>${htmlTable(
+  ["Score", "Percent"],
+  SCORE_LABELS.map(([key, label]) => [label, percentText(scores[key])]),
+)}
+<h2>Supervision by department</h2>${htmlTable(
+  ["Department", "Supervision %"],
+  supervisionByDepartment.map((row) => [
+    row.department,
+    percentText(row.percent),
+  ]),
+)}
+<h2>Staff</h2>${htmlTable(STAFF_HEADERS, staff.map(staffCells))}
+</body></html>`;
+
+/** The Export CSV / PDF button of the Compliance screen: every person, not one page. */
+const exportSiteCompliance = async ({ format, ...scope }) => {
+  const kind = String(format ?? "")
+    .trim()
+    .toLowerCase();
+  if (!EXPORT_FORMATS.includes(kind))
+    throw new AppError("invalid_export_format", 400);
+
+  const report = await buildSiteCompliance(scope);
+  const day = moment.utc(scope.now ?? new Date()).format("YYYY-MM-DD");
+  if (kind === "csv")
+    return { csv: complianceCsv(report), fileName: `compliance-${day}.csv` };
+  const { buffer } = await htmlToPdf(compliancePdfHtml(report, day));
+  return { pdf: { buffer, filename: `compliance-${day}.pdf` } };
+};
+
+module.exports = {
+  getSiteDashboard,
+  getSiteStatistics,
+  getSiteCompliance,
+  exportSiteCompliance,
+};

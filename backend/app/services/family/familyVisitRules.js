@@ -16,6 +16,7 @@ const DEFAULTS = {
   protectedTimes: [],
   daysAhead: 14,
   maxPartySize: 6,
+  loungeCapacityPerSlot: 4,
 };
 
 const toMinutes = (clock) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
@@ -65,6 +66,8 @@ const loadRules = async (branchId) => {
     protectedTimes: settings.protectedTimes || DEFAULTS.protectedTimes,
     daysAhead: settings.daysAhead || DEFAULTS.daysAhead,
     maxPartySize: settings.maxPartySize || DEFAULTS.maxPartySize,
+    loungeCapacityPerSlot:
+      settings.loungeCapacityPerSlot || DEFAULTS.loungeCapacityPerSlot,
     paused: settings.paused === true,
     pausedReason: settings.pausedReason || "",
     pausedAt: settings.pausedAt || null,

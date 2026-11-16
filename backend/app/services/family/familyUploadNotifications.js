@@ -12,7 +12,7 @@ const notifyUploadWaiting = ({ upload }) =>
     const [author, { resident }, managers] = await Promise.all([
       nameOf(upload.authorId),
       namesOf(upload),
-      managersOf(upload),
+      managersOf(upload, "photosWaiting"),
     ]);
     await notify({
       type: NotificationTypes.FAMILY_UPLOAD_PENDING,

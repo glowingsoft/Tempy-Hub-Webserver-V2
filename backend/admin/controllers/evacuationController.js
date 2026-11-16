@@ -52,13 +52,14 @@ const getActiveEvacuation = async (req, res) => {
       organizationId: req.orgId,
       branchId: req.query.branchId || req.params.branchId,
       includeStats: req.query.includeStats !== "false",
+      actor: req.user,
     });
 
     return sendResponse({
       res,
       statusCode: 200,
       translationKey: "data_fetched_successfully",
-      data,
+      data: data ?? [],
     });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");

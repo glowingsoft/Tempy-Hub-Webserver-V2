@@ -648,6 +648,8 @@ const reportSickness = async ({
   const session = await mongoose.startSession();
   session.startTransaction();
 
+  console.log(dates.calendarDays ,'calendar days')
+
   let request;
   try {
     const [created] = await LeaveRequest.create(

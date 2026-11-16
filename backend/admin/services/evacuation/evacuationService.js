@@ -618,8 +618,12 @@ const loadEventWithBranchAndStats = async ({
   includeStats = true,
   includeChecks = false,
   includeFamilyAlert = false,
+  many = false,
 }) => {
-  const pipeline = [{ $match: match }, { $limit: 1 }, ...branchLookupPipeline];
+  const pipeline = [{ $match: match }];
+  if (many) pipeline.push({ $sort: { startedAt: -1 } });
+  else pipeline.push({ $limit: 1 });
+  pipeline.push(...branchLookupPipeline);
 
   if (organizationId) {
     pipeline.push({
@@ -635,9 +639,13 @@ const loadEventWithBranchAndStats = async ({
     pipeline.push(...rollcallStatsPipeline("$_id"));
   }
 
-  const [doc] = await EvacuationEvent.aggregate(pipeline);
-  if (!doc || !doc.branchDoc) return null;
-  return formatEventDoc(doc, { includeFamilyAlert });
+  const docs = await EvacuationEvent.aggregate(pipeline);
+  const formatted = docs
+    .filter((doc) => doc?.branchDoc)
+    .map((doc) => formatEventDoc(doc, { includeFamilyAlert }));
+
+  if (many) return formatted;
+  return formatted[0] || null;
 };
 
 const startEvacuation = async ({
@@ -691,16 +699,57 @@ const getActiveEvacuation = async ({
   organizationId,
   branchId,
   includeStats = true,
+  actor = null,
 }) => {
-  const branchOid = toObjectId(branchId);
-  if (organizationId) {
-    await assertBranchInOrganization(branchOid, organizationId);
+  if (branchId) {
+    const branchOid = toObjectId(branchId);
+    if (organizationId) {
+      await assertBranchInOrganization(branchOid, organizationId);
+    }
+    if (actor && organizationId) {
+      const standing = await actorStanding(actor, organizationId);
+      assertSiteManagerBranch(standing, branchOid);
+    }
+    return loadEventWithBranchAndStats({
+      match: { branchId: branchOid, status: EvacuationStatus.ACTIVE },
+      organizationId: null,
+      includeStats,
+    });
   }
 
+  if (!actor || !organizationId) {
+    throw new AppError("invalid_id", 400);
+  }
+
+  const standing = await actorStanding(actor, organizationId);
+  if (!MANAGER_ROLES.includes(standing.role)) {
+    throw new AppError("invalid_id", 400);
+  }
+
+  const scopedBranchId = scopeBranchFilter(standing, null);
+  let branchIds;
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+    branchIds = [toObjectId(scopedBranchId)];
+  } else {
+    const orgBranches = await Branch.find({
+      organizationId: toObjectId(organizationId),
+    })
+      .select("_id")
+      .lean();
+    branchIds = orgBranches.map((b) => b._id);
+  }
+
+  if (!branchIds.length) return [];
+
   return loadEventWithBranchAndStats({
-    match: { branchId: branchOid, status: EvacuationStatus.ACTIVE },
-    organizationId: null,
+    match: {
+      branchId: { $in: branchIds },
+      status: EvacuationStatus.ACTIVE,
+    },
+    organizationId,
     includeStats,
+    many: true,
   });
 };
 

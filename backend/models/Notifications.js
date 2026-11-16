@@ -29,6 +29,7 @@ const NotificationTypes = {
   SHIFT_CLAIM_UPDATE: "shiftClaimUpdate",
   REQUIREMENT_ASSIGNED: "requirementAssigned",
   MEETING_BOOKED: "meetingBooked",
+  ANNOUNCEMENT: "announcement",
 };
 
 // Define the NotificationSchema

@@ -25,6 +25,7 @@ const familyInvitationRoutes = require("./familyInvitationRoutes");
 const familyRoutes = require("./familyRoutes");
 const familyVisitManagerRoutes = require("./familyVisitManagerRoutes");
 const residentRoutes = require("./residentRoutes");
+const announcementRoutes = require("./announcementRoutes");
 
 router.use("/support", supportRoutes);
 router.use("/kiosk", kioskRoutes);
@@ -33,6 +34,7 @@ router.use("/family-invitations", familyInvitationRoutes);
 router.use("/family", familyRoutes);
 router.use("/family-visits", familyVisitManagerRoutes);
 router.use("/residents", residentRoutes);
+router.use("/announcements", announcementRoutes);
 router.use("/shifts", shiftRoutes);
 router.use("/shift-claims", shiftClaimRoutes);
 router.use("/attendance", attendanceRoutes);

@@ -69,6 +69,41 @@ const myShiftStatusCountFacets = (countMatch) =>
 const myShiftStatusCountsFromFacet = (result) =>
   statusTabCountsFromFacet(result, MY_SHIFT_STATUSES);
 
+const MY_SHIFT_HOUR_STATUSES = [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED];
+
+const roundShiftHours = (value) => Math.round(Number(value || 0) * 10) / 10;
+
+const myShiftHoursFacet = (countMatch) => ({
+  hours: [
+    {
+      $match: {
+        ...countMatch,
+        status: { $in: MY_SHIFT_HOUR_STATUSES },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        shiftCount: { $sum: 1 },
+        shiftHours: {
+          $sum: {
+            $divide: [{ $subtract: ["$endsAt", "$startsAt"] }, 3600000],
+          },
+        },
+      },
+    },
+  ],
+});
+
+const myShiftHoursFromFacet = (result, contractedWeeklyHours) => {
+  const row = result?.hours?.[0];
+  return {
+    contractedWeeklyHours: Number(contractedWeeklyHours) || 0,
+    shiftHours: roundShiftHours(row?.shiftHours),
+    shiftCount: row?.shiftCount || 0,
+  };
+};
+
 const parseMyShiftStatus = (status) => {
   if (status == null || String(status).trim() === "" || String(status).trim() === "all") {
     return undefined;
@@ -140,6 +175,58 @@ const MY_SHIFT_LOOKUPS = [
     },
   },
   { $unset: ["_branch", "_staff", "_user"] },
+];
+
+const OPEN_CLAIM_STATUSES = [
+  ShiftClaimStatus.PENDING,
+  ShiftClaimStatus.APPROVED,
+];
+
+const OPEN_SHIFT_FILTERS = ["available", "claimed"];
+
+const parseOpenShiftClaim = (claim) => {
+  if (claim == null || String(claim).trim() === "" || String(claim).trim() === "all") {
+    return undefined;
+  }
+  const value = String(claim).trim().toLowerCase();
+  if (!OPEN_SHIFT_FILTERS.includes(value)) {
+    throw new AppError("invalid_open_shift_claim", 400);
+  }
+  return value;
+};
+
+const claimedOpenShiftIds = (staffId) =>
+  ShiftClaim.distinct("shiftId", {
+    staffId,
+    status: { $in: OPEN_CLAIM_STATUSES },
+  });
+
+const myClaimLookupStages = (staffId) => [
+  {
+    $lookup: {
+      from: ShiftClaim.collection.name,
+      let: { shiftId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            staffId,
+            status: { $in: OPEN_CLAIM_STATUSES },
+            $expr: { $eq: ["$shiftId", "$$shiftId"] },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+        { $project: { _id: 1, status: 1, note: 1, createdAt: 1 } },
+      ],
+      as: "_myClaim",
+    },
+  },
+  {
+    $addFields: {
+      myClaim: { $ifNull: [{ $arrayElemAt: ["$_myClaim", 0] }, null] },
+    },
+  },
+  { $unset: "_myClaim" },
 ];
 
 const SHIFT_CLAIM_STATUSES = Object.values(ShiftClaimStatus);
@@ -655,6 +742,7 @@ const listMyShifts = async ({
   const shiftStatus = parseMyShiftStatus(status);
   if (shiftStatus) match.status = shiftStatus;
 
+  const ranged = Boolean(startsAtRange);
   const { data, meta, result } = await paginateWithFacet({
     model: Shift,
     match,
@@ -663,12 +751,21 @@ const listMyShifts = async ({
     skip,
     sort: { startsAt: 1 },
     extraDataStages: MY_SHIFT_LOOKUPS,
-    extraFacets: myShiftStatusCountFacets(countMatch),
+    extraFacets: {
+      ...myShiftStatusCountFacets(countMatch),
+      ...(ranged ? myShiftHoursFacet(countMatch) : {}),
+    },
   });
 
   return {
     data,
-    meta: { ...meta, counts: myShiftStatusCountsFromFacet(result) },
+    meta: {
+      ...meta,
+      counts: myShiftStatusCountsFromFacet(result),
+      ...(ranged
+        ? myShiftHoursFromFacet(result, profile.contractedWeeklyHours)
+        : {}),
+    },
   };
 };
 
@@ -682,18 +779,52 @@ const openShiftMatch = (profile, organizationId) => ({
   ],
 });
 
-const listOpenShifts = async ({ userId, organizationId, from, to }) => {
+const listOpenShifts = async ({
+  userId,
+  organizationId,
+  from,
+  to,
+  claim,
+  page,
+  limit,
+  skip,
+}) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const match = openShiftMatch(profile, organizationId);
-  const startsAtRange = startsAtQueryRange(
-    from,
-    to,
-    await branchTimezone(profile.branchId)
-  );
+  const claimTab = parseOpenShiftClaim(claim);
+  const [tz, claimedIds] = await Promise.all([
+    branchTimezone(profile.branchId),
+    claimTab ? claimedOpenShiftIds(profile._id) : [],
+  ]);
+  const startsAtRange = startsAtQueryRange(from, to, tz);
   if (startsAtRange) match.startsAt = startsAtRange;
 
-  const shifts = await Shift.find(match).sort({ startsAt: 1 }).lean();
-  return attachShiftDetails(shifts);
+  if (claimTab === "claimed") {
+    if (!claimedIds.length) {
+      return {
+        data: [],
+        meta: generateMeta(page || 1, limit || 10, 0),
+      };
+    }
+    match._id = { $in: claimedIds };
+  } else if (claimTab === "available" && claimedIds.length) {
+    match._id = { $nin: claimedIds };
+  }
+
+  const applyLimit = Number.isFinite(page) && Number.isFinite(limit);
+  return paginateWithFacet({
+    model: Shift,
+    match,
+    page: applyLimit ? page : 1,
+    limit: applyLimit ? limit : 0,
+    skip: applyLimit ? skip : 0,
+    applyLimit,
+    sort: { startsAt: 1 },
+    extraDataStages: [
+      ...MY_SHIFT_LOOKUPS,
+      ...myClaimLookupStages(profile._id),
+    ],
+  });
 };
 
 const getActiveShiftForStaff = async ({ staffProfile, organizationId }) => {

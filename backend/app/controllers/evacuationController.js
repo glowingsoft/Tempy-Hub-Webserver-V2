@@ -32,6 +32,7 @@ const getActiveEvacuation = async (req, res) => {
     const data = await evacuationService.getActiveEvacuation({
       organizationId: req.orgId,
       branchId: req.query.branchId,
+      type: req.query.type,
       includeStats: false,
     });
 
@@ -39,7 +40,7 @@ const getActiveEvacuation = async (req, res) => {
       res,
       statusCode: 200,
       translationKey: "data_fetched_successfully",
-      data,
+      data: data ?? {},
     });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");

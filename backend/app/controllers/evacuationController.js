@@ -48,8 +48,8 @@ const getActiveEvacuation = async (req, res) => {
 };
 
 /**
- * Staff self mark — Smoke "I Understand - Waiting" → status unknown + locationLabel,
- * or full evacuate → status safe.
+ * Staff self mark — Safe at assembly → safe, smoke waiting → unknown,
+ * I'm not on site → offSite.
  */
 const markMyself = async (req, res) => {
   try {

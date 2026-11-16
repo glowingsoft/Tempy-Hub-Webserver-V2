@@ -53,11 +53,19 @@ const COLLECTIONS = {
 
 const DRILL_WINDOW_MONTHS = 12;
 
+const emptyKindBucket = () => ({
+  total: 0,
+  safe: 0,
+  missing: 0,
+  unknown: 0,
+  offSite: 0,
+});
+
 const EMPTY_KIND_STATS = () => ({
-  [EvacPersonKind.STAFF]: { total: 0, safe: 0, missing: 0, unknown: 0 },
-  [EvacPersonKind.RESIDENT]: { total: 0, safe: 0, missing: 0, unknown: 0 },
-  [EvacPersonKind.VISITOR]: { total: 0, safe: 0, missing: 0, unknown: 0 },
-  [EvacPersonKind.CONTRACTOR]: { total: 0, safe: 0, missing: 0, unknown: 0 },
+  [EvacPersonKind.STAFF]: emptyKindBucket(),
+  [EvacPersonKind.RESIDENT]: emptyKindBucket(),
+  [EvacPersonKind.VISITOR]: emptyKindBucket(),
+  [EvacPersonKind.CONTRACTOR]: emptyKindBucket(),
 });
 
 const startOfUtcDay = (date) => {
@@ -94,9 +102,11 @@ const activeEvacuationMatch = ({ branchId, branchIds, type }) => {
   return match;
 };
 
-/** Figma smoke "waiting" is rollcall unknown — not a fourth stored status. */
+/** Figma smoke "waiting" is rollcall unknown. "offsite" / "absent" store as offSite. */
 const CHECK_STATUS_ALIASES = {
   waiting: EvacCheckStatus.UNKNOWN,
+  offsite: EvacCheckStatus.OFF_SITE,
+  absent: EvacCheckStatus.OFF_SITE,
 };
 
 const parseCheckStatus = (status) => {
@@ -119,6 +129,7 @@ const emptyRollcallStats = () => ({
   safe: 0,
   missing: 0,
   unknown: 0,
+  offSite: 0,
   byKind: EMPTY_KIND_STATS(),
 });
 
@@ -141,6 +152,9 @@ const statsFromGroupedRows = (rows = []) => {
     } else if (status === EvacCheckStatus.MISSING) {
       stats.missing += count;
       stats.byKind[kind].missing += count;
+    } else if (status === EvacCheckStatus.OFF_SITE) {
+      stats.offSite += count;
+      stats.byKind[kind].offSite += count;
     } else {
       stats.unknown += count;
       stats.byKind[kind].unknown += count;
@@ -713,9 +727,7 @@ const loadEventWithBranchAndStats = async ({
   includeChecks = false,
   includeFamilyAlert = false,
 }) => {
-  const pipeline = [{ $match: match }];
-  if (many) pipeline.push({ $sort: { startedAt: -1 } });
-  else pipeline.push({ $limit: 1 });
+  const pipeline = [{ $match: match }, { $sort: { startedAt: -1 } }, { $limit: 1 }];
   pipeline.push(...branchLookupPipeline, ...kioskLookupPipeline);
 
   if (organizationId) {
@@ -805,6 +817,28 @@ const getActiveEvacuation = async ({
       organizationId: null,
       includeStats,
     });
+  }
+
+  const standing =
+    actor && organizationId ? await actorStanding(actor, organizationId) : null;
+  const scopedBranchId = standing
+    ? scopeBranchFilter(standing, null)
+    : null;
+
+  let branchIds;
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+    branchIds = [toObjectId(scopedBranchId)];
+  } else if (organizationId) {
+    const orgBranches = await Branch.find({
+      organizationId: toObjectId(organizationId),
+    })
+      .select("_id")
+      .lean();
+    branchIds = orgBranches.map((row) => row._id);
+    if (!branchIds.length) return null;
+  } else {
+    return null;
   }
 
   return loadEventWithBranchAndStats({
@@ -1668,13 +1702,17 @@ const markSelfCheck = async ({
 
   if (!active) throw new AppError("no_active_evacuation", 404);
 
+  const checkStatus = parseCheckStatus(status || EvacCheckStatus.SAFE);
+
   return upsertEvacCheck({
     organizationId,
     evacuationEventId: active._id,
     personKind: EvacPersonKind.STAFF,
     personId: profile._id,
-    status: status || EvacCheckStatus.SAFE,
-    locationLabel,
+    status: checkStatus,
+    locationLabel:
+      locationLabel ||
+      (checkStatus === EvacCheckStatus.OFF_SITE ? "Not on site" : locationLabel),
     geo,
     clientEventId,
     actor: { _id: userId },

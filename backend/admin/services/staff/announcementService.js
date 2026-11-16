@@ -1,13 +1,21 @@
 const {
   Announcement,
+  AnnouncementAudience,
+  ANNOUNCEMENT_AUDIENCE,
   MAX_SUBJECT_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_CATEGORY_LENGTH,
 } = require("@models/Announcement");
 const { StaffProfile } = require("@models/StaffProfile");
+const { Membership } = require("@models/Membership");
 const { Department } = require("@models/Department");
+const { User } = require("@models/UserModel");
+const { toPublicImageUrl } = require("@utils/imageHelper");
 const { NotificationExp, NotificationTypes } = require("@models/Notifications");
-const { StaffProfileStatus } = require("@models/domainEnums");
+const {
+  StaffProfileStatus,
+  ActiveInactiveStatus,
+} = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
@@ -19,11 +27,26 @@ const {
   assertMayAccessResidents,
 } = require("@adminServices/residents/residentAccess");
 const {
+  scopeBranchFilter,
+  assertBranchInOrganization,
+} = require("@adminServices/staff/staffAccess");
+const {
   toObjectId,
   isValidObjectId,
 } = require("@appServices/family/familyPipeline");
 
 const ALL_STAFF = "All Staff";
+const DEFAULT_AUDIENCE = [AnnouncementAudience.STAFF];
+const AUDIENCE_ORDER = [
+  AnnouncementAudience.SITE_MANAGER,
+  AnnouncementAudience.LINE_MANAGER,
+  AnnouncementAudience.STAFF,
+];
+const AUDIENCE_LABEL = {
+  [AnnouncementAudience.SITE_MANAGER]: "Site Managers",
+  [AnnouncementAudience.LINE_MANAGER]: "Line Managers",
+  [AnnouncementAudience.STAFF]: "Staff",
+};
 const NOTIFY_CHUNK = 500;
 const PREVIEW_LENGTH = 140;
 const REMIND_COOLDOWN_MS = 60 * 60 * 1000;
@@ -48,6 +71,98 @@ const cleanDepartmentIds = async ({ value, organizationId, siteId }) => {
   return ids.map(toObjectId);
 };
 
+const cleanAudience = (value) => {
+  if (value === undefined || value === null) return [...DEFAULT_AUDIENCE];
+  if (!Array.isArray(value) || !value.length)
+    throw new AppError("invalid_announcement_audience", 400);
+  const roles = [...new Set(value.map(String))];
+  if (!roles.every((role) => ANNOUNCEMENT_AUDIENCE.includes(role)))
+    throw new AppError("invalid_announcement_audience", 400);
+  return AUDIENCE_ORDER.filter((role) => roles.includes(role));
+};
+
+const userIdsOf = (rows) =>
+  rows
+    .map((row) => row.userId || row._id)
+    .filter(Boolean)
+    .map((id) => String(id));
+
+const loadRecipients = async ({
+  organizationId,
+  siteId,
+  actorId,
+  audience,
+  departments,
+}) => {
+  const orgId = toObjectId(organizationId);
+  const exclude = [toObjectId(actorId), null];
+  const ids = new Set();
+
+  const managerRoles = audience.filter(
+    (role) => role !== AnnouncementAudience.STAFF,
+  );
+  if (managerRoles.length) {
+    const managers = await Membership.find({
+      organizationId: orgId,
+      branchId: siteId,
+      status: ActiveInactiveStatus.ACTIVE,
+      role: { $in: managerRoles },
+      userId: { $nin: exclude },
+    })
+      .select("userId")
+      .lean();
+    userIdsOf(managers).forEach((id) => ids.add(id));
+  }
+
+  if (audience.includes(AnnouncementAudience.STAFF)) {
+    const staff = await StaffProfile.aggregate([
+      {
+        $match: {
+          organizationId: orgId,
+          branchId: siteId,
+          status: StaffProfileStatus.ACTIVE,
+          userId: { $nin: exclude },
+          ...(departments.length ? { departmentIds: { $in: departments } } : {}),
+        },
+      },
+      { $group: { _id: "$userId" } },
+    ]);
+    userIdsOf(staff).forEach((id) => ids.add(id));
+  }
+
+  return [...ids].map(toObjectId);
+};
+
+const createdByOf = (user) => {
+  const userId = user?._id || user?.userId;
+  if (!userId) return null;
+  return {
+    userId,
+    name: user.name || "",
+    email: user.email || "",
+    photoUrl: toPublicImageUrl(user.photoUrl || user.profileIcon) || "",
+  };
+};
+
+const createdByLookup = [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "createdBy",
+      foreignField: "_id",
+      as: "createdByUser",
+    },
+  },
+  { $unwind: { path: "$createdByUser", preserveNullAndEmptyArrays: true } },
+];
+
+const createdByProject = {
+  userId: "$createdByUser._id",
+  name: { $ifNull: ["$createdByUser.name", ""] },
+  email: { $ifNull: ["$createdByUser.email", ""] },
+  photoUrl: { $ifNull: ["$createdByUser.profileIcon", ""] },
+};
+
 const countWhere = (field) => ({
   $size: {
     $filter: {
@@ -68,24 +183,97 @@ const cardStages = [
     },
   },
   {
+    $lookup: {
+      from: User.collection.name,
+      localField: "recipients.userId",
+      foreignField: "_id",
+      as: "recipientUsers",
+    },
+  },
+  ...createdByLookup,
+  {
     $project: {
       _id: 1,
+      branchId: 1,
       subject: 1,
       category: 1,
       createdAt: 1,
+      createdBy: createdByProject,
       departments: "$departments.name",
+      audience: 1,
       recipients: { $size: "$recipients" },
       seen: countWhere("seenAt"),
       acknowledged: countWhere("acknowledgedAt"),
+      people: {
+        $map: {
+          input: "$recipients",
+          as: "recipient",
+          in: {
+            $let: {
+              vars: {
+                user: {
+                  $arrayElemAt: [
+                    {
+                      $filter: {
+                        input: "$recipientUsers",
+                        as: "user",
+                        cond: { $eq: ["$$user._id", "$$recipient.userId"] },
+                      },
+                    },
+                    0,
+                  ],
+                },
+              },
+              in: {
+                userId: "$$recipient.userId",
+                name: { $ifNull: ["$$user.name", ""] },
+                email: { $ifNull: ["$$user.email", ""] },
+                photoUrl: { $ifNull: ["$$user.profileIcon", ""] },
+                seen: { $ne: ["$$recipient.seenAt", null] },
+                acknowledged: { $ne: ["$$recipient.acknowledgedAt", null] },
+                seenAt: "$$recipient.seenAt",
+                acknowledgedAt: "$$recipient.acknowledgedAt",
+              },
+            },
+          },
+        },
+      },
     },
   },
 ];
 
-const cardOf = ({ departments, ...row }) => ({
-  ...row,
-  audience: departments.length ? [...departments].sort().join(", ") : ALL_STAFF,
-  allAcknowledged: row.recipients > 0 && row.acknowledged === row.recipients,
-});
+const audienceLabelOf = (roles, departmentNames) => {
+  const ordered = AUDIENCE_ORDER.filter((role) => roles.includes(role));
+  const names = [...departmentNames].sort();
+  if (
+    ordered.length === 1 &&
+    ordered[0] === AnnouncementAudience.STAFF
+  ) {
+    return names.length ? names.join(", ") : ALL_STAFF;
+  }
+  const rolePart = ordered.map((role) => AUDIENCE_LABEL[role]).join(", ");
+  if (names.length && ordered.includes(AnnouncementAudience.STAFF)) {
+    return `${rolePart} (${names.join(", ")})`;
+  }
+  return rolePart;
+};
+
+const cardOf = ({ departments = [], audience, people = [], createdBy, ...row }) => {
+  const roles = Array.isArray(audience) && audience.length
+    ? AUDIENCE_ORDER.filter((role) => audience.includes(role))
+    : [...DEFAULT_AUDIENCE];
+  return {
+    ...row,
+    audience: roles,
+    audienceLabel: audienceLabelOf(roles, departments),
+    allAcknowledged: row.recipients > 0 && row.acknowledged === row.recipients,
+    createdBy: createdByOf(createdBy),
+    people: people.map((person) => ({
+      ...person,
+      photoUrl: toPublicImageUrl(person.photoUrl) || "",
+    })),
+  };
+};
 
 const notify = async ({ receivers, announcementId, actorId, title, text }) => {
   try {
@@ -110,7 +298,7 @@ const notify = async ({ receivers, announcementId, actorId, title, text }) => {
   }
 };
 
-/** The Create Announcement screen: sent to every active staff member of the site, or only to the chosen departments. */
+/** The Create Announcement screen: sent to chosen site roles, or only to chosen departments when staff are included. */
 const createAnnouncement = async ({
   actor,
   organizationId,
@@ -119,6 +307,7 @@ const createAnnouncement = async ({
   description,
   category,
   departmentIds,
+  audience: audienceInput,
 }) => {
   const cleaned = {
     subject: cleanText(
@@ -141,36 +330,36 @@ const createAnnouncement = async ({
   const siteId = toObjectId(
     await resolveLiveBranchId({ actor, organizationId, branchId }),
   );
+  const audience = cleanAudience(audienceInput);
   const departments = await cleanDepartmentIds({
     value: departmentIds,
     organizationId,
     siteId,
   });
+  if (departments.length && !audience.includes(AnnouncementAudience.STAFF)) {
+    throw new AppError("invalid_announcement_departments", 400);
+  }
 
-  const staff = await StaffProfile.aggregate([
-    {
-      $match: {
-        organizationId: toObjectId(organizationId),
-        branchId: siteId,
-        status: StaffProfileStatus.ACTIVE,
-        userId: { $nin: [toObjectId(actor._id), null] },
-        ...(departments.length ? { departmentIds: { $in: departments } } : {}),
-      },
-    },
-    { $group: { _id: "$userId" } },
-  ]);
-  if (!staff.length) throw new AppError("announcement_no_recipients", 400);
+  const receivers = await loadRecipients({
+    organizationId,
+    siteId,
+    actorId: actor._id,
+    audience,
+    departments,
+  });
+  if (!receivers.length) throw new AppError("announcement_no_recipients", 400);
 
   const created = await Announcement.create({
     organizationId: toObjectId(organizationId),
     branchId: siteId,
     createdBy: actor._id,
     ...cleaned,
+    audience,
     departmentIds: departments,
-    recipients: staff.map((row) => ({ userId: row._id })),
+    recipients: receivers.map((userId) => ({ userId })),
   });
   await notify({
-    receivers: staff.map((row) => row._id),
+    receivers,
     announcementId: created._id,
     actorId: actor._id,
     title: cleaned.subject,
@@ -187,8 +376,10 @@ const createAnnouncement = async ({
     subject: created.subject,
     category: created.category,
     createdAt: created.createdAt,
+    createdBy: actor,
+    audience,
     departments: names,
-    recipients: staff.length,
+    recipients: receivers.length,
     seen: 0,
     acknowledged: 0,
   });
@@ -203,19 +394,46 @@ const listAnnouncements = async ({
   limit,
   skip,
 }) => {
-  const siteId = toObjectId(
-    await resolveLiveBranchId({ actor, organizationId, branchId }),
-  );
-  const { data, meta } = await paginateWithFacet({
+  const standing = await actorStanding(actor, organizationId);
+  const scopedBranchId = scopeBranchFilter(standing, branchId);
+  if (scopedBranchId) {
+    await assertBranchInOrganization(scopedBranchId, organizationId);
+  }
+
+  const match = { organizationId: toObjectId(organizationId) };
+  if (scopedBranchId) match.branchId = toObjectId(scopedBranchId);
+
+  const { result, data, meta } = await paginateWithFacet({
     model: Announcement,
-    match: { organizationId: toObjectId(organizationId), branchId: siteId },
+    match,
     page,
     limit,
     skip,
     sort: { createdAt: -1, _id: -1 },
     extraDataStages: cardStages,
+    extraFacets: {
+      readState: [
+        { $match: match },
+        { $unwind: "$recipients" },
+        {
+          $group: {
+            _id: null,
+            read: {
+              $sum: { $cond: [{ $ne: ["$recipients.seenAt", null] }, 1, 0] },
+            },
+            unread: {
+              $sum: { $cond: [{ $eq: ["$recipients.seenAt", null] }, 1, 0] },
+            },
+          },
+        },
+      ],
+    },
   });
-  return { data: data.map(cardOf), meta };
+  const readState = result.readState?.[0] || { read: 0, unread: 0 };
+  return {
+    data: data.map(cardOf),
+    meta: { ...meta, read: readState.read, unread: readState.unread },
+  };
 };
 
 /** "Remind the 7 who haven't": notifies only the people who have not acknowledged yet, once an hour at most. */
@@ -300,7 +518,7 @@ const mineOf = (userId) => ({
   ],
 });
 
-/** The staff member's own announcements, newest first; meta.unread counts the ones not opened yet. */
+/** The staff member's own announcements, newest first. meta.read / meta.unread cover the whole list, not just this page. */
 const listMine = async ({ actor, organizationId, page, limit, skip }) => {
   const userId = toObjectId(actor._id);
   const match = {
@@ -324,26 +542,42 @@ const listMine = async ({ actor, organizationId, page, limit, skip }) => {
         },
         { $count: "count" },
       ],
+      read: [
+        {
+          $match: {
+            ...match,
+            recipients: { $elemMatch: { userId, seenAt: { $ne: null } } },
+          },
+        },
+        { $count: "count" },
+      ],
     },
     extraDataStages: [
+      ...createdByLookup,
       {
         $project: {
           _id: 1,
           subject: 1,
           category: 1,
           createdAt: 1,
+          createdBy: createdByProject,
           mine: mineOf(userId),
         },
       },
     ],
   });
   return {
-    data: data.map(({ mine, ...row }) => ({
+    data: data.map(({ mine, createdBy, ...row }) => ({
       ...row,
+      createdBy: createdByOf(createdBy),
       seen: Boolean(mine?.seenAt),
       acknowledged: Boolean(mine?.acknowledgedAt),
     })),
-    meta: { ...meta, unread: result.unread?.[0]?.count ?? 0 },
+    meta: {
+      ...meta,
+      read: result.read?.[0]?.count ?? 0,
+      unread: result.unread?.[0]?.count ?? 0,
+    },
   };
 };
 
@@ -359,12 +593,14 @@ const loadMine = async ({ actor, organizationId, announcementId }) => {
         "recipients.userId": userId,
       },
     },
+    ...createdByLookup,
     {
       $project: {
         subject: 1,
         description: 1,
         category: 1,
         createdAt: 1,
+        createdBy: createdByProject,
         mine: mineOf(userId),
       },
     },
@@ -402,8 +638,13 @@ const getMine = async ({
     field: "seenAt",
     now,
   });
-  const { mine, ...rest } = announcement;
-  return { ...rest, seen: true, acknowledged: Boolean(mine?.acknowledgedAt) };
+  const { mine, createdBy, ...rest } = announcement;
+  return {
+    ...rest,
+    createdBy: createdByOf(createdBy),
+    seen: true,
+    acknowledged: Boolean(mine?.acknowledgedAt),
+  };
 };
 
 const acknowledgeAnnouncement = async ({

@@ -4251,12 +4251,12 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/announcements?page=1&limit=20&branchId={{branchId}}",
+                  "raw": "{{url}}/admin/announcements?page=1&limit=20",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
-                    "app",
+                    "admin",
                     "announcements"
                   ],
                   "query": [
@@ -4270,11 +4270,13 @@
                     },
                     {
                       "key": "branchId",
-                      "value": "{{branchId}}"
+                      "value": "{{branchId}}",
+                      "disabled": true,
+                      "description": "Optional. Owner and super admin: omit for every site, or set to one site. Site manager is always their own site."
                     }
                   ]
                 },
-                "description": "Announcements screen. Per card: _id, subject, category, audience, recipients, seen, acknowledged, allAcknowledged, createdAt. branchId: owner and super admin only."
+                "description": "Announcements screen (manager). Per card: _id, branchId, subject, category, audience, recipients (count), seen, acknowledged, allAcknowledged, createdAt and people[] {userId, name, email, photoUrl, seen, acknowledged, seenAt, acknowledgedAt}. branchId query is optional: without it owner and super admin see every site; a site manager always sees only their site."
               },
               "response": []
             },
@@ -4306,19 +4308,19 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/announcements",
+                  "raw": "{{url}}/admin/announcements",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
-                    "app",
+                    "admin",
                     "announcements"
                   ]
                 },
-                "description": "Create Announcement screen, Send To All. category and departmentIds are optional; no departmentIds means all staff of the site. Returns the card. Saves announcementId.",
+                "description": "Create Announcement screen. audience is siteManager, lineManager, and/or staff (defaults to staff). departmentIds only apply when staff is in audience; empty means all staff of the site. Returns the card. Saves announcementId.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"subject\": \"Half-term Visiting\",\n  \"description\": \"Visiting hours change this week.\",\n  \"category\": \"Clinical\",\n  \"departmentIds\": [],\n  \"branchId\": \"{{branchId}}\"\n}",
+                  "raw": "{\n  \"subject\": \"Half-term Visiting\",\n  \"description\": \"Visiting hours change this week.\",\n  \"category\": \"Clinical\",\n  \"audience\": [\"staff\"],\n  \"departmentIds\": [],\n  \"branchId\": \"{{branchId}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -4350,12 +4352,12 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/announcements/{{announcementId}}/remind",
+                  "raw": "{{url}}/admin/announcements/{{announcementId}}/remind",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
-                    "app",
+                    "admin",
                     "announcements",
                     "{{announcementId}}",
                     "remind"

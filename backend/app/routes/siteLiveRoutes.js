@@ -12,6 +12,8 @@ const {
   checkOutPerson,
   listDirectory,
   getStatistics,
+  getCompliance,
+  exportCompliance,
 } = require("../controllers/siteLiveController");
 
 const router = express.Router();
@@ -30,6 +32,8 @@ router.get("/activity", getSiteLiveActivity);
 router.get("/people", listPeople);
 router.get("/directory", listDirectory);
 router.get("/statistics", getStatistics);
+router.get("/compliance", getCompliance);
+router.get("/compliance/export", exportCompliance);
 router.post("/people/:personKind/:recordId/check-out", checkOutPerson);
 router.get("/", getSiteLive);
 

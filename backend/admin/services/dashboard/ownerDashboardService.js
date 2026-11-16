@@ -21,8 +21,13 @@ const {
   trainingRows,
   meetingRows,
 } = require("./complianceRows");
-const { cellFromDates } = require("@adminServices/requirements/requirementDates");
-const { DEFAULT_TZ, supervisionStanding } = require("@adminServices/supervision/supervisionSchedule");
+const {
+  cellFromDates,
+} = require("@adminServices/requirements/requirementDates");
+const {
+  DEFAULT_TZ,
+  supervisionStanding,
+} = require("@adminServices/supervision/supervisionSchedule");
 const { effectiveIntervals } = require("@adminServices/appraisal/cycle");
 const { SupervisionRecord } = require("@models/SupervisionRecord");
 const { AppraisalRecord } = require("@models/AppraisalRecord");
@@ -339,7 +344,11 @@ const fireDrills = async ({ branchIds, now }) => {
 };
 
 const latestRecord = (records) =>
-  records.reduce((latest, record) => (!latest || record.completedAt > latest.completedAt ? record : latest), null);
+  records.reduce(
+    (latest, record) =>
+      !latest || record.completedAt > latest.completedAt ? record : latest,
+    null,
+  );
 
 const requirementScores = (cells) => {
   const byName = new Map();
@@ -356,55 +365,129 @@ const requirementScores = (cells) => {
   return {
     compliantPercent: percentOf(done, expected),
     items: rows
-      .map(([name, row]) => ({ name, compliantPercent: percentOf(row.done, row.expected) }))
+      .map(([name, row]) => ({
+        name,
+        compliantPercent: percentOf(row.done, row.expected),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   };
 };
 
 const meetingScores = (standings, now) => {
   const monthEnd = moment.tz(now, TZ).endOf("month");
-  const count = (badges) => standings.filter((standing) => badges.includes(standing.badge)).length;
+  const count = (badges) =>
+    standings.filter((standing) => badges.includes(standing.badge)).length;
   return {
     required: standings.reduce((sum, standing) => sum + standing.required, 0),
-    completed: standings.reduce((sum, standing) => sum + Math.min(standing.completed, standing.required), 0),
+    completed: standings.reduce(
+      (sum, standing) => sum + Math.min(standing.completed, standing.required),
+      0,
+    ),
     pending: count(["booked", "dueSoon"]),
     overdue: count(["overdue"]),
-    dueThisMonth: standings.filter((standing) => standing.badge !== "overdue" && moment(standing.nextDueAt).isSameOrBefore(monthEnd)).length,
+    dueThisMonth: standings.filter(
+      (standing) =>
+        standing.badge !== "overdue" &&
+        moment(standing.nextDueAt).isSameOrBefore(monthEnd),
+    ).length,
   };
 };
 
-const complianceSnapshot = async ({ organization, branchZones, now, branchId = null }) => {
+const complianceSnapshot = async ({
+  organization,
+  branchZones,
+  now,
+  branchId = null,
+}) => {
   const scope = branchId ? { branchId } : {};
-  const [staff, [org], supervisions, appraisals, assignments] = await Promise.all([
-    StaffProfile.aggregate([
-      { $match: { organizationId: organization, status: StaffProfileStatus.ACTIVE, ...scope } },
-      { $project: { branchId: 1, startDate: 1, supervisionIntervalMonths: 1, appraisalIntervalMonths: 1 } },
-    ]),
-    Organization.aggregate([{ $match: { _id: organization } }, { $project: { settings: 1 } }]),
-    SupervisionRecord.aggregate([
-      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED }, ...scope } },
-      { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1 } },
-    ]),
-    AppraisalRecord.aggregate([
-      { $match: { organizationId: organization, status: { $ne: ComplianceMeetingStatus.CANCELLED }, ...scope } },
-      { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1, kind: 1 } },
-    ]),
-    RequirementAssignment.aggregate([
-      { $match: { organizationId: organization, ...scope } },
-      { $lookup: { from: Requirement.collection.name, localField: "requirementId", foreignField: "_id", as: "requirement" } },
-      { $unwind: "$requirement" },
-      { $lookup: { from: RequirementRecord.collection.name, localField: "_id", foreignField: "assignmentId", as: "records" } },
-      {
-        $project: {
-          staffId: 1,
-          assignedAt: 1,
-          dueDate: 1,
-          requirement: { name: 1, type: 1, createdAt: 1, firstCompletionDays: 1, amberDaysOverride: 1 },
-          records: { completedAt: 1, expiresAt: 1 },
+  const [staff, [org], supervisions, appraisals, assignments] =
+    await Promise.all([
+      StaffProfile.aggregate([
+        {
+          $match: {
+            organizationId: organization,
+            status: StaffProfileStatus.ACTIVE,
+            ...scope,
+          },
         },
-      },
-    ]),
-  ]);
+        {
+          $project: {
+            branchId: 1,
+            startDate: 1,
+            departmentIds: 1,
+            supervisionIntervalMonths: 1,
+            appraisalIntervalMonths: 1,
+          },
+        },
+      ]),
+      Organization.aggregate([
+        { $match: { _id: organization } },
+        { $project: { settings: 1 } },
+      ]),
+      SupervisionRecord.aggregate([
+        {
+          $match: {
+            organizationId: organization,
+            status: { $ne: ComplianceMeetingStatus.CANCELLED },
+            ...scope,
+          },
+        },
+        { $project: { staffId: 1, status: 1, completedAt: 1, scheduledAt: 1 } },
+      ]),
+      AppraisalRecord.aggregate([
+        {
+          $match: {
+            organizationId: organization,
+            status: { $ne: ComplianceMeetingStatus.CANCELLED },
+            ...scope,
+          },
+        },
+        {
+          $project: {
+            staffId: 1,
+            status: 1,
+            completedAt: 1,
+            scheduledAt: 1,
+            kind: 1,
+          },
+        },
+      ]),
+      RequirementAssignment.aggregate([
+        { $match: { organizationId: organization, ...scope } },
+        {
+          $lookup: {
+            from: Requirement.collection.name,
+            localField: "requirementId",
+            foreignField: "_id",
+            as: "requirement",
+          },
+        },
+        { $unwind: "$requirement" },
+        {
+          $lookup: {
+            from: RequirementRecord.collection.name,
+            localField: "_id",
+            foreignField: "assignmentId",
+            as: "records",
+          },
+        },
+        {
+          $project: {
+            staffId: 1,
+            assignedAt: 1,
+            dueDate: 1,
+            requirement: {
+              name: 1,
+              type: 1,
+              createdAt: 1,
+              firstCompletionDays: 1,
+              amberDaysOverride: 1,
+            },
+            records: { completedAt: 1, expiresAt: 1 },
+          },
+        },
+      ]),
+    ]);
 
   const settings = org?.settings || {};
   const amberDays = settings.amberDays ?? null;
@@ -416,38 +499,68 @@ const complianceSnapshot = async ({ organization, branchZones, now, branchId = n
       staffId: row.staffId,
       name: row.requirement.name,
       type: row.requirement.type,
-      cell: cellFromDates({ assignment: row, latest: latestRecord(row.records), requirement: row.requirement, orgAmberDays: amberDays, today: now }),
+      cell: cellFromDates({
+        assignment: row,
+        latest: latestRecord(row.records),
+        requirement: row.requirement,
+        orgAmberDays: amberDays,
+        today: now,
+      }),
     }));
 
   const standingOf = (member, intervalMonths, meetings) =>
     supervisionStanding({
       startDate: member.startDate,
       intervalMonths,
-      meetings: meetings.filter((row) => String(row.staffId) === String(member._id)),
+      meetings: meetings.filter(
+        (row) => String(row.staffId) === String(member._id),
+      ),
       timezone: branchZones.get(String(member.branchId)) || DEFAULT_TZ,
       checkDate: now,
     });
   const countsAsAppraisal = (row) =>
     row.status === ComplianceMeetingStatus.SCHEDULED ||
-    (row.status === ComplianceMeetingStatus.COMPLETED && row.kind !== AppraisalKind.OTHER);
+    (row.status === ComplianceMeetingStatus.COMPLETED &&
+      row.kind !== AppraisalKind.OTHER);
   const appraisalMeetings = appraisals.filter(countsAsAppraisal);
   const supervisionStandings = staff.map((member) =>
-    standingOf(member, effectiveIntervals(member, settings).supervisionMonths, supervisions),
+    standingOf(
+      member,
+      effectiveIntervals(member, settings).supervisionMonths,
+      supervisions,
+    ),
   );
   const appraisalStandings = staff.map((member) =>
-    standingOf(member, effectiveIntervals(member, settings).appraisalMonths, appraisalMeetings),
+    standingOf(
+      member,
+      effectiveIntervals(member, settings).appraisalMonths,
+      appraisalMeetings,
+    ),
   );
 
   const supervision = meetingScores(supervisionStandings, now);
   const appraisal = meetingScores(appraisalStandings, now);
   return {
     detail: { staff, cells, supervisionStandings, appraisalStandings },
-    competency: requirementScores(cells.filter((cell) => cell.type === RequirementType.COMPETENCY)),
-    training: requirementScores(cells.filter((cell) => cell.type === RequirementType.TRAINING)),
+    competency: requirementScores(
+      cells.filter((cell) => cell.type === RequirementType.COMPETENCY),
+    ),
+    training: requirementScores(
+      cells.filter((cell) => cell.type === RequirementType.TRAINING),
+    ),
     supervisionAppraisal: {
-      compliantPercent: percentOf(supervision.completed + appraisal.completed, supervision.required + appraisal.required),
-      supervisions: { pending: supervision.pending, overdue: supervision.overdue },
-      appraisals: { dueThisMonth: appraisal.dueThisMonth, overdue: appraisal.overdue },
+      compliantPercent: percentOf(
+        supervision.completed + appraisal.completed,
+        supervision.required + appraisal.required,
+      ),
+      supervisions: {
+        pending: supervision.pending,
+        overdue: supervision.overdue,
+      },
+      appraisals: {
+        dueThisMonth: appraisal.dueThisMonth,
+        overdue: appraisal.overdue,
+      },
     },
   };
 };
@@ -507,12 +620,35 @@ const workforceUtilisation = async ({ organization, branchIds, now }) => {
 
 const openShifts = ({ organization, now, branchId = null, include = {} }) =>
   Shift.aggregate([
-    { $match: { organizationId: organization, status: ShiftStatus.OPEN, startsAt: { $gt: now }, ...(branchId ? { branchId } : {}) } },
+    {
+      $match: {
+        organizationId: organization,
+        status: ShiftStatus.OPEN,
+        startsAt: { $gt: now },
+        ...(branchId ? { branchId } : {}),
+      },
+    },
     { $sort: { startsAt: 1 } },
     { $limit: OPEN_SHIFTS_SHOWN },
-    { $lookup: { from: Branch.collection.name, localField: "branchId", foreignField: "_id", as: "branch" } },
+    {
+      $lookup: {
+        from: Branch.collection.name,
+        localField: "branchId",
+        foreignField: "_id",
+        as: "branch",
+      },
+    },
     { $unwind: { path: "$branch", preserveNullAndEmptyArrays: true } },
-    { $project: { _id: 0, siteName: { $ifNull: ["$branch.name", ""] }, startsAt: 1, endsAt: 1, urgentCover: { $ifNull: ["$urgentCover", false] }, ...include } },
+    {
+      $project: {
+        _id: 0,
+        siteName: { $ifNull: ["$branch.name", ""] },
+        startsAt: 1,
+        endsAt: 1,
+        urgentCover: { $ifNull: ["$urgentCover", false] },
+        ...include,
+      },
+    },
   ]);
 
 const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
@@ -523,7 +659,9 @@ const getOwnerDashboard = async ({ organizationId, now = new Date() }) => {
     { $project: { timezone: 1 } },
   ]);
   const branchIds = branches.map((branch) => branch._id);
-  const branchZones = new Map(branches.map((branch) => [String(branch._id), branch.timezone]));
+  const branchZones = new Map(
+    branches.map((branch) => [String(branch._id), branch.timezone]),
+  );
   const today = moment.tz(now, TZ);
 
   const [

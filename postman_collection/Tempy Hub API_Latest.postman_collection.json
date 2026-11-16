@@ -6970,6 +6970,106 @@
                 "description": "Statistics screen. visitors {visitors, contractors, mostCommonReason {reason, percent}, averageVisit (text, e.g. 0 hr 10 min)}, staff {retentionRate (last 12 months), newStarters, leavers, departments [{_id, name}]}. period is the Week, Month or Year tab. departmentId filters the staff numbers."
               },
               "response": []
+            },
+            {
+              "name": "compliance (screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/compliance?page=1&limit=20&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "compliance"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Owner and super admin only"
+                    }
+                  ]
+                },
+                "description": "Compliance screen. scores {supervision, appraisal, competency, training}, supervisionByDepartment [{department, percent}], staff [{staffId, name, photoUrl, intervalMonths, customInterval, percent, completedThisCycle, expectedThisCycle, cycleMonth, dueByMonth}] (lowest percent first, paged)."
+              },
+              "response": []
+            },
+            {
+              "name": "export compliance (csv or pdf)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/compliance/export?format=csv&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "compliance",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "csv",
+                      "description": "csv or pdf"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Owner and super admin only"
+                    }
+                  ]
+                },
+                "description": "Export CSV / PDF button of the Compliance screen. Downloads compliance-YYYY-MM-DD.csv or .pdf with the four scores, supervision by department and every active person of the site. 400 invalid_export_format when format is missing or not csv or pdf. In Postman use Send and Download for the file."
+              },
+              "response": []
             }
           ]
         },

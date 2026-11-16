@@ -1,6 +1,11 @@
 const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const siteLiveService = require("@adminServices/siteLive/siteLiveService");
-const { getSiteStatistics } = require("@adminServices/dashboard/siteDashboardService");
+const {
+  getSiteStatistics,
+  getSiteCompliance,
+  exportSiteCompliance,
+} = require("@adminServices/dashboard/siteDashboardService");
+const { sendPdf } = require("@utils/familyPdfResponse");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const getSiteLive = async (req, res) => {
@@ -141,7 +146,57 @@ const getStatistics = async (req, res) => {
   }
 };
 
+const getCompliance = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await getSiteCompliance({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      page,
+      limit,
+      skip,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const exportCompliance = async (req, res) => {
+  try {
+    const result = await exportSiteCompliance({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      format: req.query.format,
+    });
+
+    if (result.csv != null) {
+      res.set({
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${result.fileName}"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      });
+      return res.status(200).send(result.csv);
+    }
+    return await sendPdf({ req, res, pdf: result.pdf, attachment: true });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
+  exportCompliance,
+  getCompliance,
   getStatistics,
   getSiteLive,
   getSiteLiveActivity,

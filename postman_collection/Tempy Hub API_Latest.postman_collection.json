@@ -4489,6 +4489,151 @@
           ]
         },
         {
+          "name": "Documents",
+          "item": [
+            {
+              "name": "list folders (documents screen)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/folders?branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "folders"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                },
+                "description": "Documents screen. Per folder: _id, title, files, waitingSignature. branchId: owner and super admin only."
+              },
+              "response": []
+            },
+            {
+              "name": "new folder",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/folders",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "folders"
+                  ]
+                },
+                "description": "New Folder button. Returns {_id, title, files: 0, waitingSignature: 0}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Policies\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "bulk upload",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/bulk-upload",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "bulk-upload"
+                  ]
+                },
+                "description": "Bulk Upload button. Upload the files first with POST /upload/s3 and use the returned keys. 1 to 20 files. Returns {created, failed}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"categoryId\": \"{{documentCategoryId}}\",\n  \"requiresSignature\": true,\n  \"branchId\": \"{{branchId}}\",\n  \"files\": [\n    {\n      \"file\": {\n        \"key\": \"documents/Visiting-Policy-Oct-2026.pdf\",\n        \"originalName\": \"Visiting-Policy-Oct-2026.pdf\",\n        \"mimeType\": \"application/pdf\",\n        \"sizeBytes\": 120000\n      }\n    },\n    {\n      \"title\": \"Fire Plan\",\n      \"file\": {\n        \"key\": \"documents/fire-plan.pdf\",\n        \"originalName\": \"fire-plan.pdf\",\n        \"mimeType\": \"application/pdf\",\n        \"sizeBytes\": 98000\n      }\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Kiosk",
           "item": [
             {

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const { Document } = require("@models/Document");
 const { DocumentVersion } = require("@models/DocumentVersion");
+const { DocumentCategory } = require("@models/DocumentCategory");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const { User } = require("@models/UserModel");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -8,14 +9,19 @@ const { ExternalPerson } = require("@models/ExternalPerson");
 const { paginateWithFacet, keywordOr } = require("@utils/paginate");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
-const { DocumentScope, DocumentAudience, MembershipRole } = require("@models/domainEnums");
+const {
+  DocumentScope,
+  DocumentAudience,
+  MembershipRole,
+  StaffProfileStatus,
+} = require("@models/domainEnums");
 const {
   actorStanding,
   assertMayManageStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./documentAccess");
-const { resolveCategoryId } = require("./documentCategoryService");
+const { resolveCategoryId, ensureDocumentCategories } = require("./documentCategoryService");
 
 const AUDIENCES = new Set(Object.values(DocumentAudience));
 const SCOPES = new Set(Object.values(DocumentScope));
@@ -502,7 +508,119 @@ const listDocumentAcknowledgements = async ({
   };
 };
 
+const MAX_BULK_FILES = 20;
+
+const fileTitle = (name) => String(name || "").replace(/\.[^.]+$/, "").trim();
+
+/** The Documents screen: every active folder with its file count and the files still waiting for a signature from the site's staff. */
+const listSiteFolders = async ({ actor, organizationId, branchId }) => {
+  const standing = await actorStanding(actor, organizationId);
+  const siteId = scopeBranchFilter(standing, branchId);
+  if (!siteId) throw new AppError("branch_scope_required", 400);
+  await assertBranchInOrganization(siteId, organizationId);
+  await ensureDocumentCategories(organizationId);
+
+  const orgId = toOid(organizationId);
+  const site = toOid(siteId);
+  const [folders, documents, staff] = await Promise.all([
+    DocumentCategory.aggregate([
+      { $match: { organizationId: orgId, active: { $ne: false } } },
+      { $sort: { title: 1 } },
+      { $project: { title: 1 } },
+    ]),
+    Document.aggregate([
+      { $match: { organizationId: orgId, $or: [{ branchId: site }, { branchId: null }] } },
+      { $project: { categoryId: 1, requiresSignature: 1, audiences: 1, currentVersionId: 1 } },
+    ]),
+    StaffProfile.aggregate([
+      { $match: { organizationId: orgId, branchId: site, status: StaffProfileStatus.ACTIVE } },
+      { $project: { _id: 1 } },
+    ]),
+  ]);
+
+  const staffIds = staff.map((row) => row._id);
+  const needsSignature = (doc) =>
+    doc.requiresSignature !== false &&
+    Boolean(doc.currentVersionId) &&
+    (doc.audiences?.length ? doc.audiences : [DocumentAudience.STAFF]).includes(DocumentAudience.STAFF);
+  const signable = documents.filter(needsSignature);
+  const signed =
+    staffIds.length && signable.length
+      ? await DocumentSignature.aggregate([
+          {
+            $match: {
+              documentVersionId: { $in: signable.map((doc) => doc.currentVersionId) },
+              signerStaffId: { $in: staffIds },
+            },
+          },
+          { $group: { _id: "$documentVersionId", signers: { $addToSet: "$signerStaffId" } } },
+          { $project: { signed: { $size: "$signers" } } },
+        ])
+      : [];
+  const signedBy = new Map(signed.map((row) => [String(row._id), row.signed]));
+
+  return folders.map((folder) => {
+    const inFolder = documents.filter((doc) => String(doc.categoryId) === String(folder._id));
+    return {
+      _id: folder._id,
+      title: folder.title,
+      files: inFolder.length,
+      waitingSignature: staffIds.length
+        ? inFolder.filter(
+            (doc) =>
+              needsSignature(doc) &&
+              (signedBy.get(String(doc.currentVersionId)) || 0) < staffIds.length,
+          ).length
+        : 0,
+    };
+  });
+};
+
+/** Bulk Upload: files already uploaded to storage become documents of one folder; a file that fails is reported and the rest still go in. */
+const bulkCreateDocuments = async ({
+  actor,
+  organizationId,
+  branchId,
+  categoryId,
+  audiences,
+  requiresSignature,
+  files,
+}) => {
+  if (!Array.isArray(files) || !files.length || files.length > MAX_BULK_FILES)
+    throw new AppError("invalid_bulk_upload", 400, { max: MAX_BULK_FILES });
+  if (!categoryId) throw new AppError("document_category_required", 400);
+  await resolveCategoryId({ organizationId, categoryId });
+
+  const created = [];
+  const failed = [];
+  let firstError = null;
+  for (const [index, entry] of files.entries()) {
+    const title = String(entry?.title || "").trim() || fileTitle(entry?.file?.originalName);
+    try {
+      const doc = await createDocument({
+        actor,
+        organizationId,
+        branchId,
+        categoryId,
+        audiences,
+        requiresSignature,
+        title,
+        file: entry?.file,
+      });
+      created.push({ _id: doc._id, title: doc.title });
+    } catch (error) {
+      if (!(error instanceof AppError)) throw error;
+      firstError = firstError || error;
+      failed.push({ index, title, error: error.message });
+    }
+  }
+  if (!created.length) throw firstError;
+  return { created, failed };
+};
+
 module.exports = {
+  listSiteFolders,
+  bulkCreateDocuments,
   listDocuments,
   getDocument,
   createDocument,

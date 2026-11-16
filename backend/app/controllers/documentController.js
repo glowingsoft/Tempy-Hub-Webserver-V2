@@ -1,5 +1,8 @@
 const { sendResponse, validateParams, parsePaginationParams } = require("@utils/responseUtil");
+const { respond } = require("@utils/controllerResponse");
 const staffDocumentsService = require("../services/staff/staffDocumentsService");
+const documentService = require("@adminServices/documents/documentService");
+const { createDocumentCategory } = require("@adminServices/documents/documentCategoryService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const listDocuments = async (req, res) => {
@@ -66,4 +69,45 @@ const signDocument = async (req, res) => {
   }
 };
 
-module.exports = { listDocuments, getDocument, signDocument };
+const listFolders = respond((req) =>
+  documentService.listSiteFolders({
+    actor: req.user,
+    organizationId: req.orgId,
+    branchId: req.query.branchId,
+  }),
+);
+
+const createFolder = respond(
+  async (req) => {
+    const { _id, title } = await createDocumentCategory({
+      actor: req.user,
+      organizationId: req.orgId,
+      title: req.body?.title,
+    });
+    return { _id, title, files: 0, waitingSignature: 0 };
+  },
+  { statusCode: 201, translationKey: "document_category_created_successfully" },
+);
+
+const bulkUpload = respond(
+  (req) =>
+    documentService.bulkCreateDocuments({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.body?.branchId,
+      categoryId: req.body?.categoryId,
+      audiences: req.body?.audiences,
+      requiresSignature: req.body?.requiresSignature,
+      files: req.body?.files,
+    }),
+  { statusCode: 201, translationKey: "documents_uploaded" },
+);
+
+module.exports = {
+  listDocuments,
+  getDocument,
+  signDocument,
+  listFolders,
+  createFolder,
+  bulkUpload,
+};

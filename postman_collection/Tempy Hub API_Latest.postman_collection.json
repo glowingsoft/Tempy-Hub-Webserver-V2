@@ -3955,6 +3955,274 @@
                 "description": "Directory screen. tab: staff (default; departmentId filters, meta.departments fills the Select Department list), residents, contractors or archived (staff who left and deactivated residents, with leftAt). keyword searches the name. meta.tabCounts has every tab count. Rows hold only what the screen shows: _id, personKind, name, photoUrl and the tab's subtitle fields. branchId: owner and super admin only."
               },
               "response": []
+            },
+            {
+              "name": "get resident family (family tab)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family"
+                  ]
+                },
+                "description": "Family tab of the resident screen. resident {residentId, name, photoUrl, roomNumber}, photoSharing {agreed, agreedAt}, memberCount and nextOfKinName (the To card of Private Message), members [{memberId, name, photoUrl, relationship, isNextOfKin, status}] (status pending shows the Review button), familyCode {code, expiresAt}, visitingPassword {required, setAt}. Needs the family module and the family view permission."
+              },
+              "response": []
+            },
+            {
+              "name": "set next of kin",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/next-of-kin",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "next-of-kin"
+                  ]
+                },
+                "description": "Next Of Kin button on the Family tab. memberId from the family list; it must be an active member."
+              },
+              "response": []
+            },
+            {
+              "name": "remove family member",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/members/{{memberId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "members",
+                    "{{memberId}}"
+                  ]
+                },
+                "description": "Remove button on the Family tab. Active members only; a pending member is rejected from Join Requests instead."
+              },
+              "response": []
+            },
+            {
+              "name": "make new family code",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "code"
+                  ]
+                },
+                "description": "New Code button on the Family tab. Replaces the current code; returns {code, expiresAt}."
+              },
+              "response": []
+            },
+            {
+              "name": "change visiting password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visitorPasscode\": \"1234\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/visiting-password",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "visiting-password"
+                  ]
+                },
+                "description": "Change button of Visiting Password. An empty or null visitorPasscode turns the password off. Returns visitingPassword {required, setAt}; the password itself is never returned."
+              },
+              "response": []
+            },
+            {
+              "name": "approve or reject family photo",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\",\n  \"reason\": \"poor_quality\",\n  \"note\": \"Too dark to use\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/photos/{{uploadId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "photos",
+                    "{{uploadId}}"
+                  ]
+                },
+                "description": "Reject This Photo sheet. action: approve or reject. reason (reject only): another_resident, poor_quality or not_appropriate; note is optional and the family sees both. The residentId must be the resident of the photo. 409 upload_already_decided when another manager decided first."
+              },
+              "response": []
             }
           ]
         },
@@ -31412,6 +31680,54 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "sendMessage family (private message)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audience\": \"family\",\n  \"residentIds\": [\n    \"{{residentId}}\"\n  ],\n  \"subject\": \"Hair Appointment Moved\",\n  \"message\": \"The hairdresser is now visiting on Thursday at 10:00.\",\n  \"alsoEmail\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/chats/message",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "chats",
+                "message"
+              ]
+            },
+            "description": "Private Message screen of the site manager app. audience family sends to every active family member of the resident (all and selected reach the next of kin only). subject is optional (up to 120 characters); alsoEmail true also emails each member. Every message is saved in the app inbox. Returns broadcastId, recipients, emailed and subject; GET /chats/sent/{{broadcastId}} gives the read count for 'Read by 1 so far'."
           },
           "response": []
         },

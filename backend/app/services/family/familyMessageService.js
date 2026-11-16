@@ -168,6 +168,7 @@ const listMessages = async ({
           senderId: 1,
           senderName: { $ifNull: ["$sender.name", ""] },
           messageType: 1,
+          subject: 1,
           messageContent: 1,
           createdAt: 1,
           isRead: { $ne: ["$readAt", null] },

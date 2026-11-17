@@ -173,7 +173,52 @@ const countWhere = (field) => ({
   },
 });
 
-const cardStages = [
+const recipientUsersLookup = {
+  $lookup: {
+    from: User.collection.name,
+    localField: "recipients.userId",
+    foreignField: "_id",
+    as: "recipientUsers",
+  },
+};
+
+const peopleProject = {
+  $map: {
+    input: "$recipients",
+    as: "recipient",
+    in: {
+      $let: {
+        vars: {
+          user: {
+            $arrayElemAt: [
+              {
+                $filter: {
+                  input: "$recipientUsers",
+                  as: "user",
+                  cond: { $eq: ["$$user._id", "$$recipient.userId"] },
+                },
+              },
+              0,
+            ],
+          },
+        },
+        in: {
+          userId: "$$recipient.userId",
+          name: { $ifNull: ["$$user.name", ""] },
+          email: { $ifNull: ["$$user.email", ""] },
+          photoUrl: { $ifNull: ["$$user.profileIcon", ""] },
+          seen: { $ne: ["$$recipient.seenAt", null] },
+          acknowledged: { $ne: ["$$recipient.acknowledgedAt", null] },
+          seenAt: "$$recipient.seenAt",
+          acknowledgedAt: "$$recipient.acknowledgedAt",
+        },
+      },
+    },
+  },
+};
+
+/** The list cards; the detail adds the full message and who has seen and acknowledged it. */
+const cardStagesOf = ({ detail = false } = {}) => [
   {
     $lookup: {
       from: Department.collection.name,
@@ -182,14 +227,7 @@ const cardStages = [
       as: "departments",
     },
   },
-  {
-    $lookup: {
-      from: User.collection.name,
-      localField: "recipients.userId",
-      foreignField: "_id",
-      as: "recipientUsers",
-    },
-  },
+  ...(detail ? [recipientUsersLookup] : []),
   ...createdByLookup,
   {
     $project: {
@@ -204,43 +242,14 @@ const cardStages = [
       recipients: { $size: "$recipients" },
       seen: countWhere("seenAt"),
       acknowledged: countWhere("acknowledgedAt"),
-      people: {
-        $map: {
-          input: "$recipients",
-          as: "recipient",
-          in: {
-            $let: {
-              vars: {
-                user: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: "$recipientUsers",
-                        as: "user",
-                        cond: { $eq: ["$$user._id", "$$recipient.userId"] },
-                      },
-                    },
-                    0,
-                  ],
-                },
-              },
-              in: {
-                userId: "$$recipient.userId",
-                name: { $ifNull: ["$$user.name", ""] },
-                email: { $ifNull: ["$$user.email", ""] },
-                photoUrl: { $ifNull: ["$$user.profileIcon", ""] },
-                seen: { $ne: ["$$recipient.seenAt", null] },
-                acknowledged: { $ne: ["$$recipient.acknowledgedAt", null] },
-                seenAt: "$$recipient.seenAt",
-                acknowledgedAt: "$$recipient.acknowledgedAt",
-              },
-            },
-          },
-        },
-      },
+      ...(detail
+        ? { description: 1, remindedAt: 1, people: peopleProject }
+        : {}),
     },
   },
 ];
+
+const cardStages = cardStagesOf();
 
 const audienceLabelOf = (roles, departmentNames) => {
   const ordered = AUDIENCE_ORDER.filter((role) => roles.includes(role));
@@ -258,7 +267,7 @@ const audienceLabelOf = (roles, departmentNames) => {
   return rolePart;
 };
 
-const cardOf = ({ departments = [], audience, people = [], createdBy, ...row }) => {
+const cardOf = ({ departments = [], audience, people, createdBy, ...row }) => {
   const roles = Array.isArray(audience) && audience.length
     ? AUDIENCE_ORDER.filter((role) => audience.includes(role))
     : [...DEFAULT_AUDIENCE];
@@ -268,10 +277,14 @@ const cardOf = ({ departments = [], audience, people = [], createdBy, ...row }) 
     audienceLabel: audienceLabelOf(roles, departments),
     allAcknowledged: row.recipients > 0 && row.acknowledged === row.recipients,
     createdBy: createdByOf(createdBy),
-    people: people.map((person) => ({
-      ...person,
-      photoUrl: toPublicImageUrl(person.photoUrl) || "",
-    })),
+    ...(people
+      ? {
+          people: people.map((person) => ({
+            ...person,
+            photoUrl: toPublicImageUrl(person.photoUrl) || "",
+          })),
+        }
+      : {}),
   };
 };
 
@@ -382,6 +395,7 @@ const createAnnouncement = async ({
     recipients: receivers.length,
     seen: 0,
     acknowledged: 0,
+    people: [],
   });
 };
 
@@ -434,6 +448,27 @@ const listAnnouncements = async ({
     data: data.map(cardOf),
     meta: { ...meta, read: readState.read, unread: readState.unread },
   };
+};
+
+/** The detail of one announcement for its sender: the full message and who has seen and acknowledged it. */
+const getAnnouncement = async ({ actor, organizationId, announcementId }) => {
+  if (!isValidObjectId(announcementId))
+    throw new AppError("announcement_not_found", 404);
+  const [row] = await Announcement.aggregate([
+    {
+      $match: {
+        _id: toObjectId(announcementId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
+    ...cardStagesOf({ detail: true }),
+  ]);
+  if (!row) throw new AppError("announcement_not_found", 404);
+  assertMayAccessResidents(
+    await actorStanding(actor, organizationId),
+    row.branchId,
+  );
+  return cardOf(row);
 };
 
 /** "Remind the 7 who haven't": notifies only the people who have not acknowledged yet, once an hour at most. */
@@ -676,6 +711,7 @@ const acknowledgeAnnouncement = async ({
 module.exports = {
   createAnnouncement,
   listAnnouncements,
+  getAnnouncement,
   remindAnnouncement,
   listMine,
   getMine,

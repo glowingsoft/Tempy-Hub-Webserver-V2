@@ -24,6 +24,7 @@ router.use(
 
 router.get("/", controller.listAnnouncements);
 router.post("/", sendLimiter, controller.createAnnouncement);
+router.get("/:announcementId", controller.getAnnouncement);
 router.post(
   "/:announcementId/remind",
   sendLimiter,

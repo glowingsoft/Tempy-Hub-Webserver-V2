@@ -28,6 +28,13 @@ const createAnnouncement = respond(
   { statusCode: 201, translationKey: "announcement_created" },
 );
 
+const getAnnouncement = respond((req) =>
+  announcementService.getAnnouncement({
+    ...scope(req),
+    announcementId: req.params.announcementId,
+  }),
+);
+
 const remindAnnouncement = respond(
   (req) =>
     announcementService.remindAnnouncement({
@@ -40,5 +47,6 @@ const remindAnnouncement = respond(
 module.exports = {
   listAnnouncements,
   createAnnouncement,
+  getAnnouncement,
   remindAnnouncement,
 };

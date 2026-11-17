@@ -431,7 +431,9 @@ const getStaffAppDashboard = async ({ actor, organizationId, now = new Date() })
     }),
     annualLeave(staff.staffId),
     myCompliance({ actor, organizationId }),
-    listOpenShifts({ userId: actor._id, organizationId, from: now }),
+    listOpenShifts({ userId: actor._id, organizationId, from: now }).then(
+      (result) => result.data
+    ),
     documentsWaiting({
       organizationId,
       branchId: staff.branchId,

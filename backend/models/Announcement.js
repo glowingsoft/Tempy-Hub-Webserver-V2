@@ -1,8 +1,17 @@
 const mongoose = require("mongoose");
+const { MembershipRole } = require("./domainEnums");
 
 const MAX_SUBJECT_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_CATEGORY_LENGTH = 30;
+
+const AnnouncementAudience = {
+  SITE_MANAGER: MembershipRole.SITE_MANAGER,
+  LINE_MANAGER: MembershipRole.LINE_MANAGER,
+  STAFF: MembershipRole.STAFF,
+};
+
+const ANNOUNCEMENT_AUDIENCE = Object.values(AnnouncementAudience);
 
 const recipientSchema = new mongoose.Schema(
   {
@@ -53,7 +62,13 @@ const announcementSchema = new mongoose.Schema(
       trim: true,
       maxlength: MAX_CATEGORY_LENGTH,
     },
-    /** Empty means every staff member of the site. */
+    /** Who should receive it. Empty on old rows means staff of the site. */
+    audience: {
+      type: [String],
+      enum: ANNOUNCEMENT_AUDIENCE,
+      default: () => [AnnouncementAudience.STAFF],
+    },
+    /** Empty means every staff member of the site (only used when audience includes staff). */
     departmentIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
     recipients: { type: [recipientSchema], default: [] },
     remindedAt: { type: Date, default: null },
@@ -70,6 +85,8 @@ const Announcement =
 
 module.exports = {
   Announcement,
+  AnnouncementAudience,
+  ANNOUNCEMENT_AUDIENCE,
   MAX_SUBJECT_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_CATEGORY_LENGTH,

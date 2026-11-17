@@ -424,6 +424,7 @@ const EvacCheckStatus = {
   SAFE: "safe",
   MISSING: "missing",
   UNKNOWN: "unknown",
+  OFF_SITE: "offSite",
 };
 
 const DocumentScope = {

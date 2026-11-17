@@ -89,13 +89,14 @@ const signedPdfUrl = async ({
   filename,
   attachment = true,
   expiresIn = SIGNED_URL_SECONDS,
+  contentType = "application/pdf",
 }) => {
   const url = await getSignedUrl(
     getClient(),
     new GetObjectCommand({
       Bucket: requireBucket(),
       Key: key,
-      ResponseContentType: "application/pdf",
+      ResponseContentType: contentType,
       ResponseContentDisposition: `${attachment ? "attachment" : "inline"}; filename="${filename}"`,
     }),
     { expiresIn },

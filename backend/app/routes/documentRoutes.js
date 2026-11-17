@@ -7,6 +7,7 @@ const {
   requirePermission,
 } = require("@middlewares/membershipMiddleware");
 const { ModuleSlug, MembershipRole } = require("@models/domainEnums");
+const createRateLimiter = require("@utils/rateLimiter");
 const documentController = require("../controllers/documentController");
 const {
   DOCUMENTS_VIEW,
@@ -14,6 +15,12 @@ const {
 } = require("@adminServices/documents/documentAccess");
 
 const router = express.Router();
+
+router.get(
+  "/shared/:token",
+  createRateLimiter("shared-documents", 15, 60),
+  documentController.openSharedDocument,
+);
 
 router.use(
   auth,
@@ -30,6 +37,10 @@ const asManager = requireRoles([
 router.get("/folders", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listFolders);
 router.post("/folders", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.createFolder);
 router.post("/bulk-upload", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.bulkUpload);
+router.get("/visitor-library", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listVisitorDocuments);
+router.post("/qr-code", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.createQrCode);
+router.post("/:documentId/qr-link/regenerate", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.regenerateQrLink);
+router.delete("/:documentId/qr-link", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.revokeQrLink);
 
 router.get("/", requirePermission(DOCUMENTS_VIEW), documentController.listDocuments);
 router.post(

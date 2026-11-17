@@ -103,7 +103,88 @@ const bulkUpload = respond(
   { statusCode: 201, translationKey: "documents_uploaded" },
 );
 
+const publicBaseUrl = (req) =>
+  (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`).replace(
+    /\/+$/,
+    "",
+  );
+
+const listVisitorDocuments = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return documentService.listVisitorDocuments({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      keyword: req.query.keyword,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true },
+);
+
+const createQrCode = respond(
+  (req) =>
+    documentService.createQrCode({
+      actor: req.user,
+      organizationId: req.orgId,
+      documentId: req.body?.documentId,
+      link: req.body?.link,
+      caption: req.body?.caption,
+      baseUrl: publicBaseUrl(req),
+    }),
+  { translationKey: "qr_code_generated" },
+);
+
+const regenerateQrLink = respond(
+  (req) =>
+    documentService.regenerateQrLink({
+      actor: req.user,
+      organizationId: req.orgId,
+      documentId: req.params.documentId,
+      caption: req.body?.caption,
+      baseUrl: publicBaseUrl(req),
+    }),
+  { translationKey: "qr_link_regenerated" },
+);
+
+const revokeQrLink = respond(
+  (req) =>
+    documentService.revokeQrLink({
+      actor: req.user,
+      organizationId: req.orgId,
+      documentId: req.params.documentId,
+    }),
+  { translationKey: "qr_link_revoked" },
+);
+
+const unavailablePage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link unavailable</title></head><body style="font-family:Arial,sans-serif;text-align:center;padding:64px 24px;color:#1f2a44"><h1 style="font-size:22px">This link is no longer available</h1></body></html>`;
+
+/** Public, no login: what a visitor reaches by scanning a document QR. */
+const openSharedDocument = async (req, res) => {
+  try {
+    const url = await documentService.getSharedDocumentUrl({
+      token: req.params.token,
+    });
+    res.set({
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+    });
+    return res.redirect(302, url);
+  } catch (error) {
+    res.set("Cache-Control", "no-store");
+    return res.status(404).type("html").send(unavailablePage);
+  }
+};
+
 module.exports = {
+  createQrCode,
+  regenerateQrLink,
+  revokeQrLink,
+  listVisitorDocuments,
+  openSharedDocument,
   listDocuments,
   getDocument,
   signDocument,

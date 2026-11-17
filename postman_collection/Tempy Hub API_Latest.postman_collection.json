@@ -4630,6 +4630,270 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "visitor documents for qr code",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/visitor-library?keyword=&page=1&limit=20&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "visitor-library"
+                  ],
+                  "query": [
+                    {
+                      "key": "keyword",
+                      "value": ""
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                },
+                "description": "QR Code Generator picker. Visitor-facing documents of the site plus organisation-wide ones, searchable by keyword. Rows: _id, title, fileName, type, pages, updatedAt, qrActive. branchId: owner and super admin only."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "qr code of a document",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/qr-code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "qr-code"
+                  ]
+                },
+                "description": "QR Code Generator, document. Creates (or returns the live) public share link of a visitor-facing document. caption is optional. Returns {title, caption, qrPayload}; the app draws the QR from qrPayload. Copy the last part of qrPayload into the shareToken variable to try the public open request.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documentId\": \"{{documentId}}\",\n  \"caption\": \"Visiting Policy - 1 Page\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "qr code of a link",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/qr-code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "qr-code"
+                  ]
+                },
+                "description": "QR Code Generator, pasted link. https links only. Send documentId or link, not both. Returns {title, caption, qrPayload}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"link\": \"https://www.example.com/visiting\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "regenerate qr link",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/{{documentId}}/qr-link/regenerate",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "{{documentId}}",
+                    "qr-link",
+                    "regenerate"
+                  ]
+                },
+                "description": "QR Code Generator, Regenerate link. Revokes the live link and returns a new one: {title, caption, qrPayload}. The old QR shows 'This link is no longer available'.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "revoke qr link",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/{{documentId}}/qr-link",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "{{documentId}}",
+                    "qr-link"
+                  ]
+                },
+                "description": "QR Code Generator, Revoke link. Returns {documentId, qrActive: false}; 404 qr_link_not_found when there is no live link."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "open shared document (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/documents/shared/{{shareToken}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "shared",
+                    "{{shareToken}}"
+                  ]
+                },
+                "description": "What a visitor reaches by scanning the QR. No login. 302 to a short-lived read-only link of the latest version; a revoked or unknown token returns 404 with the page 'This link is no longer available'.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -33022,6 +33286,10 @@
     },
     {
       "key": "announcementId",
+      "value": ""
+    },
+    {
+      "key": "shareToken",
       "value": ""
     }
   ]

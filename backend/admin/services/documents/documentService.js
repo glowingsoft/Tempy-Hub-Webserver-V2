@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const mongoose = require("mongoose");
+const { DocumentShareLink } = require("@models/DocumentShareLink");
 const { Document } = require("@models/Document");
 const { DocumentVersion } = require("@models/DocumentVersion");
 const { DocumentCategory } = require("@models/DocumentCategory");
@@ -9,6 +11,7 @@ const { ExternalPerson } = require("@models/ExternalPerson");
 const { paginateWithFacet, keywordOr } = require("@utils/paginate");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
+const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const {
   DocumentScope,
   DocumentAudience,
@@ -21,7 +24,10 @@ const {
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./documentAccess");
-const { resolveCategoryId, ensureDocumentCategories } = require("./documentCategoryService");
+const {
+  resolveCategoryId,
+  ensureDocumentCategories,
+} = require("./documentCategoryService");
 
 const AUDIENCES = new Set(Object.values(DocumentAudience));
 const SCOPES = new Set(Object.values(DocumentScope));
@@ -35,10 +41,13 @@ const toOid = (value) => {
 
 const parseAudiences = (value) => {
   const list = Array.isArray(value) ? value : value ? [value] : [];
-  const unique = [...new Set(list.map((item) => String(item).trim()).filter(Boolean))];
+  const unique = [
+    ...new Set(list.map((item) => String(item).trim()).filter(Boolean)),
+  ];
   if (!unique.length) return [DocumentAudience.STAFF];
   for (const item of unique) {
-    if (!AUDIENCES.has(item)) throw new AppError("invalid_document_audience", 400);
+    if (!AUDIENCES.has(item))
+      throw new AppError("invalid_document_audience", 400);
   }
   return unique;
 };
@@ -49,7 +58,8 @@ const parseStoredFile = (file) => {
   }
   const key = String(file.key || "").trim();
   if (!key) throw new AppError("document_file_required", 400);
-  if (/^https?:\/\//i.test(key)) throw new AppError("document_file_key_invalid", 400);
+  if (/^https?:\/\//i.test(key))
+    throw new AppError("document_file_key_invalid", 400);
 
   const sizeBytes = Number(file.sizeBytes);
   return {
@@ -150,10 +160,7 @@ const assertCanViewDocument = (doc, standing) => {
     standing.role === MembershipRole.SITE_MANAGER ||
     standing.role === MembershipRole.LINE_MANAGER
   ) {
-    if (
-      doc.branchId &&
-      String(doc.branchId) !== String(standing.branchId)
-    ) {
+    if (doc.branchId && String(doc.branchId) !== String(standing.branchId)) {
       throw new AppError("outside_managed_branch", 403);
     }
   }
@@ -187,7 +194,10 @@ const listDocuments = async ({
   if (branchId) await assertBranchInOrganization(branchId, organizationId);
 
   const match = visibleMatch(organizationId, standing, branchId);
-  if ((categoryId && categoryId !== "all") || (category && category !== "all")) {
+  if (
+    (categoryId && categoryId !== "all") ||
+    (category && category !== "all")
+  ) {
     match.categoryId = await resolveCategoryId({
       organizationId,
       categoryId: categoryId && categoryId !== "all" ? categoryId : undefined,
@@ -196,7 +206,8 @@ const listDocuments = async ({
     });
   }
   if (audience) {
-    if (!AUDIENCES.has(audience)) throw new AppError("invalid_document_audience", 400);
+    if (!AUDIENCES.has(audience))
+      throw new AppError("invalid_document_audience", 400);
     match.audiences = audience;
   }
   if (scope && scope !== "all") {
@@ -281,7 +292,7 @@ const createDocument = async ({
           requiresSignature: requiresSignature !== false,
         },
       ],
-      { session }
+      { session },
     );
 
     const [version] = await DocumentVersion.create(
@@ -293,7 +304,7 @@ const createDocument = async ({
           uploadedBy: actor._id,
         },
       ],
-      { session }
+      { session },
     );
 
     doc.currentVersionId = version._id;
@@ -339,7 +350,8 @@ const updateDocument = async ({
       organizationId,
       categoryId,
       category,
-      fallbackToOther: categoryId === null || category === null || category === "",
+      fallbackToOther:
+        categoryId === null || category === null || category === "",
     });
   }
   if (audiences !== undefined) doc.audiences = parseAudiences(audiences);
@@ -421,7 +433,7 @@ const addDocumentVersion = async ({
           uploadedBy: actor._id,
         },
       ],
-      { session }
+      { session },
     );
     doc.currentVersionId = version._id;
     await doc.save({ session });
@@ -510,7 +522,10 @@ const listDocumentAcknowledgements = async ({
 
 const MAX_BULK_FILES = 20;
 
-const fileTitle = (name) => String(name || "").replace(/\.[^.]+$/, "").trim();
+const fileTitle = (name) =>
+  String(name || "")
+    .replace(/\.[^.]+$/, "")
+    .trim();
 
 /** The Documents screen: every active folder with its file count and the files still waiting for a signature from the site's staff. */
 const listSiteFolders = async ({ actor, organizationId, branchId }) => {
@@ -529,11 +544,29 @@ const listSiteFolders = async ({ actor, organizationId, branchId }) => {
       { $project: { title: 1 } },
     ]),
     Document.aggregate([
-      { $match: { organizationId: orgId, $or: [{ branchId: site }, { branchId: null }] } },
-      { $project: { categoryId: 1, requiresSignature: 1, audiences: 1, currentVersionId: 1 } },
+      {
+        $match: {
+          organizationId: orgId,
+          $or: [{ branchId: site }, { branchId: null }],
+        },
+      },
+      {
+        $project: {
+          categoryId: 1,
+          requiresSignature: 1,
+          audiences: 1,
+          currentVersionId: 1,
+        },
+      },
     ]),
     StaffProfile.aggregate([
-      { $match: { organizationId: orgId, branchId: site, status: StaffProfileStatus.ACTIVE } },
+      {
+        $match: {
+          organizationId: orgId,
+          branchId: site,
+          status: StaffProfileStatus.ACTIVE,
+        },
+      },
       { $project: { _id: 1 } },
     ]),
   ]);
@@ -542,25 +575,36 @@ const listSiteFolders = async ({ actor, organizationId, branchId }) => {
   const needsSignature = (doc) =>
     doc.requiresSignature !== false &&
     Boolean(doc.currentVersionId) &&
-    (doc.audiences?.length ? doc.audiences : [DocumentAudience.STAFF]).includes(DocumentAudience.STAFF);
+    (doc.audiences?.length ? doc.audiences : [DocumentAudience.STAFF]).includes(
+      DocumentAudience.STAFF,
+    );
   const signable = documents.filter(needsSignature);
   const signed =
     staffIds.length && signable.length
       ? await DocumentSignature.aggregate([
           {
             $match: {
-              documentVersionId: { $in: signable.map((doc) => doc.currentVersionId) },
+              documentVersionId: {
+                $in: signable.map((doc) => doc.currentVersionId),
+              },
               signerStaffId: { $in: staffIds },
             },
           },
-          { $group: { _id: "$documentVersionId", signers: { $addToSet: "$signerStaffId" } } },
+          {
+            $group: {
+              _id: "$documentVersionId",
+              signers: { $addToSet: "$signerStaffId" },
+            },
+          },
           { $project: { signed: { $size: "$signers" } } },
         ])
       : [];
   const signedBy = new Map(signed.map((row) => [String(row._id), row.signed]));
 
   return folders.map((folder) => {
-    const inFolder = documents.filter((doc) => String(doc.categoryId) === String(folder._id));
+    const inFolder = documents.filter(
+      (doc) => String(doc.categoryId) === String(folder._id),
+    );
     return {
       _id: folder._id,
       title: folder.title,
@@ -569,7 +613,8 @@ const listSiteFolders = async ({ actor, organizationId, branchId }) => {
         ? inFolder.filter(
             (doc) =>
               needsSignature(doc) &&
-              (signedBy.get(String(doc.currentVersionId)) || 0) < staffIds.length,
+              (signedBy.get(String(doc.currentVersionId)) || 0) <
+                staffIds.length,
           ).length
         : 0,
     };
@@ -595,7 +640,8 @@ const bulkCreateDocuments = async ({
   const failed = [];
   let firstError = null;
   for (const [index, entry] of files.entries()) {
-    const title = String(entry?.title || "").trim() || fileTitle(entry?.file?.originalName);
+    const title =
+      String(entry?.title || "").trim() || fileTitle(entry?.file?.originalName);
     try {
       const doc = await createDocument({
         actor,
@@ -618,7 +664,289 @@ const bulkCreateDocuments = async ({
   return { created, failed };
 };
 
+const QR_CAPTION_MAX = 80;
+const QR_LINK_MAX = 2000;
+const PDF_PAGE_COUNT_LIMIT = 10 * 1024 * 1024;
+const PUBLIC_AUDIENCES = [
+  DocumentAudience.VISITOR,
+  DocumentAudience.CONTRACTOR,
+];
+
+/** Best effort: null when the pages cannot be counted, undefined when the file could not be read this time. */
+const pdfPages = async (file) => {
+  if (file?.mimeType !== "application/pdf" || !file.key) return null;
+  if (file.sizeBytes > PDF_PAGE_COUNT_LIMIT) return null;
+  try {
+    const buffer = await uploadAwsService.getObject(file.key);
+    const pages = (
+      buffer.toString("latin1").match(/\/Type\s*\/Page(?![A-Za-z])/g) || []
+    ).length;
+    return pages || null;
+  } catch (error) {
+    return undefined;
+  }
+};
+
+const cleanQrLink = (value) => {
+  const text = String(value ?? "").trim();
+  let url;
+  try {
+    url = new URL(text);
+  } catch (error) {
+    throw new AppError("invalid_qr_link", 400);
+  }
+  if (url.protocol !== "https:" || text.length > QR_LINK_MAX)
+    throw new AppError("invalid_qr_link", 400);
+  return url.href;
+};
+
+const SHARED_LINK_SECONDS = 300;
+const INLINE_TYPES = /^(application\/pdf|image\/(png|jpe?g|gif|webp))$/i;
+
+const isVisitorFacing = (audiences) =>
+  (audiences || []).some((audience) => PUBLIC_AUDIENCES.includes(audience));
+
+const fileType = (file) => {
+  const mime = String(file?.mimeType || "").toLowerCase();
+  const name = String(file?.originalName || "").toLowerCase();
+  if (mime === "application/pdf" || name.endsWith(".pdf")) return "PDF";
+  if (mime.startsWith("image/")) return "Image";
+  if (mime.includes("word") || /\.docx?$/.test(name)) return "Word";
+  return name.includes(".") ? name.split(".").pop().toUpperCase() : "File";
+};
+
+/** The page counts are worked out once per file version and kept, so the picker does not read every PDF each time. */
+const fillPages = async (rows) => {
+  const missing = rows.filter(
+    (row) =>
+      row._version?.file?.mimeType === "application/pdf" &&
+      row._version.file.pages === undefined,
+  );
+  for (let at = 0; at < missing.length; at += 5) {
+    await Promise.all(
+      missing.slice(at, at + 5).map(async (row) => {
+        const pages = await pdfPages(row._version.file);
+        if (pages === undefined) return;
+        row._version.file.pages = pages || 0;
+        await DocumentVersion.updateOne(
+          { _id: row._version._id },
+          { $set: { "file.pages": pages || 0 } },
+        );
+      }),
+    );
+  }
+};
+
+/** The QR picker: the documents marked for visitors or contractors at this site, plus the organisation-wide ones. */
+const listVisitorDocuments = async ({
+  actor,
+  organizationId,
+  branchId,
+  keyword,
+  page,
+  limit,
+  skip,
+}) => {
+  const standing = await actorStanding(actor, organizationId);
+  const siteId = scopeBranchFilter(standing, branchId);
+  if (!siteId) throw new AppError("branch_scope_required", 400);
+  await assertBranchInOrganization(siteId, organizationId);
+
+  const match = {
+    organizationId: toOid(organizationId),
+    $or: [{ branchId: toOid(siteId) }, { branchId: null }],
+    audiences: { $in: PUBLIC_AUDIENCES },
+    currentVersionId: { $ne: null },
+  };
+  const search = keywordOr(keyword, ["title"], { trim: true });
+  if (search) match.$and = [{ $or: search }];
+
+  const { data, meta } = await paginateWithFacet({
+    model: Document,
+    match,
+    page,
+    limit,
+    skip,
+    sort: { title: 1 },
+    extraDataStages: versionLookup,
+  });
+  await fillPages(data);
+  const active = await DocumentShareLink.find({
+    documentId: { $in: data.map((row) => row._id) },
+    active: true,
+  })
+    .select("documentId")
+    .lean();
+  const shared = new Set(active.map((row) => String(row.documentId)));
+
+  return {
+    data: data.map((row) => {
+      const file = row._version?.file || null;
+      return {
+        _id: row._id,
+        title: row.title,
+        fileName: file?.originalName || row.title,
+        type: fileType(file),
+        pages: file?.pages || null,
+        updatedAt: row.updatedAt,
+        qrActive: shared.has(String(row._id)),
+      };
+    }),
+    meta,
+  };
+};
+
+const shareUrl = (baseUrl, token) =>
+  `${String(baseUrl).replace(/\/+$/, "")}/api/v1/app/documents/shared/${token}`;
+
+const activeShareLink = async ({ documentId, actor, organizationId }) => {
+  const existing = await DocumentShareLink.findOne({
+    documentId,
+    active: true,
+  }).lean();
+  if (existing) return existing;
+  try {
+    const created = await DocumentShareLink.create({
+      organizationId,
+      documentId,
+      token: crypto.randomBytes(32).toString("base64url"),
+      createdBy: actor._id,
+    });
+    return created.toObject();
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
+    return DocumentShareLink.findOne({ documentId, active: true }).lean();
+  }
+};
+
+const cleanCaption = (caption) => {
+  const label = String(caption ?? "").trim();
+  if (label.length > QR_CAPTION_MAX)
+    throw new AppError("invalid_qr_caption", 400, { max: QR_CAPTION_MAX });
+  return label;
+};
+
+const visitorDocument = async ({ actor, organizationId, documentId }) => {
+  const doc = await getDocument({ actor, organizationId, documentId });
+  if (!isVisitorFacing(doc.audiences))
+    throw new AppError("document_not_public", 400);
+  if (!doc.file?.key) throw new AppError("document_file_required", 400);
+  return doc;
+};
+
+const documentQr = async ({ doc, actor, organizationId, label, baseUrl }) => {
+  const link = await activeShareLink({
+    documentId: doc._id,
+    actor,
+    organizationId,
+  });
+  const pages = await pdfPages(doc.file);
+  return {
+    title: doc.file.originalName || doc.title,
+    caption:
+      label ||
+      (pages
+        ? `${doc.title} - ${pages} Page${pages === 1 ? "" : "s"}`
+        : doc.title),
+    qrPayload: shareUrl(baseUrl, link.token),
+  };
+};
+
+/**
+ * The QR Code Generator screen. A visitor-facing document gets a public, read-only share link (one per document, reused while it is active)
+ * that always opens its latest version; any https link is encoded as it is.
+ */
+const createQrCode = async ({
+  actor,
+  organizationId,
+  documentId,
+  link,
+  caption,
+  baseUrl,
+}) => {
+  const hasDocument =
+    documentId !== undefined && documentId !== null && documentId !== "";
+  const hasLink = link !== undefined && link !== null && link !== "";
+  if (hasDocument === hasLink) throw new AppError("qr_source_required", 400);
+  const label = cleanCaption(caption);
+
+  if (hasDocument) {
+    const doc = await visitorDocument({ actor, organizationId, documentId });
+    return documentQr({ doc, actor, organizationId, label, baseUrl });
+  }
+  const target = cleanQrLink(link);
+  return {
+    title: target,
+    caption: label || new URL(target).hostname,
+    qrPayload: target,
+  };
+};
+
+/** Replaces the document's share link with a new one; the old link, and any QR printed from it, stops working. */
+const regenerateQrLink = async ({
+  actor,
+  organizationId,
+  documentId,
+  caption,
+  baseUrl,
+}) => {
+  const label = cleanCaption(caption);
+  const doc = await visitorDocument({ actor, organizationId, documentId });
+  await DocumentShareLink.updateMany(
+    { documentId: doc._id, active: true },
+    { $set: { active: false, revokedAt: new Date(), revokedBy: actor._id } },
+  );
+  return documentQr({ doc, actor, organizationId, label, baseUrl });
+};
+
+const revokeQrLink = async ({ actor, organizationId, documentId }) => {
+  const doc = await getDocument({ actor, organizationId, documentId });
+  const result = await DocumentShareLink.updateOne(
+    { documentId: doc._id, active: true },
+    { $set: { active: false, revokedAt: new Date(), revokedBy: actor._id } },
+  );
+  if (!result.modifiedCount) throw new AppError("qr_link_not_found", 404);
+  return { documentId: doc._id, qrActive: false };
+};
+
+/** What a scan of a document QR opens: a short-lived, read-only link to the latest version, or nothing once the link is revoked or the document is no longer for visitors. */
+const getSharedDocumentUrl = async ({ token }) => {
+  const unavailable = new AppError("qr_link_unavailable", 404);
+  const value = String(token || "");
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(value)) throw unavailable;
+  const link = await DocumentShareLink.findOne({
+    token: value,
+    active: true,
+  }).lean();
+  if (!link) throw unavailable;
+
+  const [row] = await Document.aggregate([
+    { $match: { _id: link.documentId, organizationId: link.organizationId } },
+    { $limit: 1 },
+    ...versionLookup,
+  ]);
+  const file = row && versionFile(row._version);
+  if (!file || !isVisitorFacing(row.audiences)) throw unavailable;
+
+  const { url } = await uploadAwsService.signedPdfUrl({
+    key: file.key,
+    filename:
+      String(file.originalName || row.title)
+        .replace(/[^\w.\- ]+/g, "_")
+        .slice(0, 120) || "document",
+    attachment: !INLINE_TYPES.test(file.mimeType),
+    contentType: file.mimeType || "application/octet-stream",
+    expiresIn: SHARED_LINK_SECONDS,
+  });
+  return url;
+};
+
 module.exports = {
+  createQrCode,
+  regenerateQrLink,
+  revokeQrLink,
+  getSharedDocumentUrl,
+  listVisitorDocuments,
   listSiteFolders,
   bulkCreateDocuments,
   listDocuments,

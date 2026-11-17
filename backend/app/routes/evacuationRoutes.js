@@ -17,6 +17,7 @@ router.use(
 );
 
 router.get("/active", evacuationController.getActiveEvacuation);
+router.get("/me/drills", evacuationController.myDrills);
 router.post("/me/check", evacuationController.markMyself);
 
 const SITE_MANAGERS = [

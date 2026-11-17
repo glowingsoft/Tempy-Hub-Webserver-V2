@@ -84,6 +84,8 @@ const evacuationEventSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+evacuationEventSchema.index({ branchId: 1, type: 1, startedAt: -1 });
+
 const EvacuationEvent =
   mongoose.models.EvacuationEvent ||
   mongoose.model("EvacuationEvent", evacuationEventSchema);

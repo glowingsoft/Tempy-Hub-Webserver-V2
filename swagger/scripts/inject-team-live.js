@@ -86,5 +86,29 @@ spec.paths["/admin/organizations/{organizationId}/team-live"] = {
   },
 };
 
+spec.paths["/app/line-home"] = {
+  get: {
+    tags: ["line-home"],
+    summary: "Line Manager Team home",
+    description:
+      "Header, My Team Today, This Month and Recent Activity cards in one call. Role: lineManager. Today and This Month are direct reports; family photos and restricted residents are the site. See All stays GET /app/team-live/activity. tempyAgency.bids is always null (no bids store).",
+    security: bearer,
+    parameters: [orgHeader],
+    responses: { 200: ok, 403: { description: "Role not allowed" } },
+  },
+};
+
+spec.paths["/admin/organizations/{organizationId}/line-home"] = {
+  get: {
+    tags: ["line-home"],
+    summary: "Line Manager Team home (admin org scope)",
+    description:
+      "Same payload as GET /app/line-home. Role: lineManager.",
+    security: bearer,
+    parameters: [orgPath],
+    responses: { 200: ok, 403: { description: "Role not allowed" } },
+  },
+};
+
 fs.writeFileSync(FILE, JSON.stringify(spec, null, 2));
 console.log("injected team live swagger");

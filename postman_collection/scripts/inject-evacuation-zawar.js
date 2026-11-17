@@ -361,6 +361,10 @@ const adminVisitors = [
 ];
 
 const appEvac = [
+  req("my drills", "GET", ["app", "evacuations", "me", "drills"], {
+    header: orgHeader,
+    query: "page=1&limit=10",
+  }),
   req("get active evacuation", "GET", ["app", "evacuations", "active"], {
     header: orgHeader,
     query: "branchId={{branchId}}",

@@ -173,6 +173,42 @@ const assertOrganizationNameFree = async (name, excludeId) => {
   }
 };
 
+const BRANCH_STAFF_ROLES = [
+  MembershipRole.SITE_MANAGER,
+  MembershipRole.LINE_MANAGER,
+  MembershipRole.STAFF,
+];
+
+/**
+ * Owner of a new tenant cannot be someone who already works as site staff.
+ * An existing owner may still be invited to another organisation.
+ */
+const assertOwnerEmailNotStaff = async (email) => {
+  const normalisedEmail = String(email).trim().toLowerCase();
+  const existingUser = await User.findOne({ email: normalisedEmail })
+    .select("_id")
+    .lean();
+
+  const [staffMembership, pendingStaffInvite] = await Promise.all([
+    existingUser
+      ? Membership.exists({
+          userId: existingUser._id,
+          status: ActiveInactiveStatus.ACTIVE,
+          role: { $in: BRANCH_STAFF_ROLES },
+        })
+      : null,
+    StaffInvitation.exists({
+      email: normalisedEmail,
+      status: StaffInvitationStatus.PENDING,
+      role: { $in: BRANCH_STAFF_ROLES },
+    }),
+  ]);
+
+  if (staffMembership || pendingStaffInvite) {
+    throw new AppError("owner_email_already_staff", 409);
+  }
+};
+
 /**
  * Creates the organization and invites its owner.
  *
@@ -193,6 +229,7 @@ const createOrganization = async ({
 
   if (!owner?.email) throw new AppError("owner_email_required", 400);
 
+  await assertOwnerEmailNotStaff(owner.email);
   await assertOrganizationNameFree(name);
 
   // Entitlements are commercial and independent of activation: what the group
@@ -306,7 +343,24 @@ const listOrganizations = async ({ actor, page, limit, skip, keyword, status }) 
   }
 
   const or = keywordOr(keyword, ["name"], { trim: true });
-  if (or) match.$or = or;
+  if (or) {
+    const ownerOr = keywordOr(keyword, ["name", "email"], { trim: true });
+    const [ownerUserIds, pendingOwnerOrgIds] = await Promise.all([
+      User.distinct("_id", { $or: ownerOr }),
+      StaffInvitation.distinct("organizationId", {
+        role: MembershipRole.OWNER,
+        status: StaffInvitationStatus.PENDING,
+        $or: ownerOr,
+      }),
+    ]);
+    if (ownerUserIds.length) {
+      or.push({ ownerUserId: { $in: ownerUserIds } });
+    }
+    if (pendingOwnerOrgIds.length) {
+      or.push({ _id: { $in: pendingOwnerOrgIds } });
+    }
+    match.$or = or;
+  }
 
   const countMatch = { ...match };
   if (status) {

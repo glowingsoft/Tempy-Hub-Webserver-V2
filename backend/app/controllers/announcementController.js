@@ -25,6 +25,7 @@ const acknowledgeAnnouncement = respond(
     announcementService.acknowledgeAnnouncement({
       ...scope(req),
       announcementId: req.params.announcementId,
+      acknowledge: req.body?.acknowledged,
     }),
   { translationKey: "announcement_acknowledged" },
 );

@@ -647,10 +647,12 @@ const getMine = async ({
   };
 };
 
+/** Hitting this endpoint marks seen. `{ "acknowledged": true }` also marks acknowledged. */
 const acknowledgeAnnouncement = async ({
   actor,
   organizationId,
   announcementId,
+  acknowledge = false,
   now = new Date(),
 }) => {
   const { announcement, userId } = await loadMine({
@@ -664,13 +666,19 @@ const acknowledgeAnnouncement = async ({
     field: "seenAt",
     now,
   });
-  await stamp({
-    announcementId: announcement._id,
-    userId,
-    field: "acknowledgedAt",
-    now,
-  });
-  return { _id: announcement._id, seen: true, acknowledged: true };
+  if (acknowledge === true) {
+    await stamp({
+      announcementId: announcement._id,
+      userId,
+      field: "acknowledgedAt",
+      now,
+    });
+  }
+  return {
+    _id: announcement._id,
+    seen: true,
+    acknowledged: acknowledge === true || Boolean(announcement.mine?.acknowledgedAt),
+  };
 };
 
 module.exports = {

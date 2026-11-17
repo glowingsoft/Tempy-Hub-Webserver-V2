@@ -71,6 +71,11 @@ for (const FILE of FILES) {
         query: "date=2026-08-18&view=day",
       }),
     ]);
+    upsertFolder(appFolder, "Line Home", [
+      req("line home", "GET", ["app", "line-home"], {
+        header: orgHeader,
+      }),
+    ]);
   }
   if (adminPanel) {
     upsertFolder(adminPanel, "Team Live", [
@@ -97,6 +102,13 @@ for (const FILE of FILES) {
         "GET",
         ["admin", "organizations", "{{organizationId}}", "team-live", "rota"],
         { query: "date=2026-08-18&view=day" }
+      ),
+    ]);
+    upsertFolder(adminPanel, "Line Home", [
+      req(
+        "line home",
+        "GET",
+        ["admin", "organizations", "{{organizationId}}", "line-home"]
       ),
     ]);
   }

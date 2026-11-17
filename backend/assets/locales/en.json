@@ -250,6 +250,7 @@
   "password_required": "Password is required to set up your account",
   "email_required": "Email is required",
   "owner_email_required": "An owner email is required to create an organization",
+  "owner_email_already_staff": "This email already belongs to staff at an organisation. Use a different address for the owner",
   "email_invalid": "That email address is not valid",
   "organization_pending_activation": "This organization is waiting for its owner to accept their invitation",
   "permissions_must_be_array": "Permissions must be an array",

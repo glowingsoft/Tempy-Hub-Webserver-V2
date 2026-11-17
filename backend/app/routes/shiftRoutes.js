@@ -15,6 +15,7 @@ router.use(
 router.get("/my", shiftController.listMyShifts);
 router.get("/open", shiftController.listOpenShifts);
 router.get("/active", shiftController.getActiveShift);
+router.get("/:shiftId", shiftController.getMyShift);
 router.post("/:shiftId/claims", shiftController.createClaim);
 
 module.exports = router;

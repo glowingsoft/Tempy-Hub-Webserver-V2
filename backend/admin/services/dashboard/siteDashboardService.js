@@ -8,8 +8,7 @@ const { VisitSession } = require("@models/VisitSession");
 const { Resident } = require("@models/Resident");
 const { Department } = require("@models/Department");
 const { generateMeta } = require("@utils/responseUtil");
-const { escapeHtml } = require("@adminServices/family/familyNewsletterEmail");
-const { htmlToPdf } = require("@adminServices/family/familyPdfRenderer");
+const { renderCompliancePdf } = require("./compliancePdf");
 const { AttendanceDay } = require("@models/AttendanceDay");
 const {
   AdmissionStatus,
@@ -669,40 +668,6 @@ const complianceCsv = ({ scores, supervisionByDepartment, staff }) => {
   ].join("\r\n")}`;
 };
 
-const htmlTable = (head, rows) =>
-  `<table><thead><tr>${head.map((cell) => `<th>${escapeHtml(cell)}</th>`).join("")}</tr></thead><tbody>${rows
-    .map(
-      (cells) =>
-        `<tr>${cells.map((cell) => `<td>${escapeHtml(cell ?? "")}</td>`).join("")}</tr>`,
-    )
-    .join("")}</tbody></table>`;
-
-const compliancePdfHtml = (
-  { siteName, scores, supervisionByDepartment, staff },
-  day,
-) => `<!doctype html>
-<html><head><meta charset="utf-8"><style>
-@page { size: A4; margin: 16mm; }
-body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
-h1 { font-size: 20px; margin: 0 0 2px; } h2 { font-size: 14px; margin: 18px 0 6px; } p { margin: 0; color: #555; }
-table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #d9dde4; }
-th { background: #f1f3f7; }
-</style></head><body>
-<h1>Compliance</h1><p>${escapeHtml(siteName)} - ${escapeHtml(day)}</p>
-<h2>Scores</h2>${htmlTable(
-  ["Score", "Percent"],
-  SCORE_LABELS.map(([key, label]) => [label, percentText(scores[key])]),
-)}
-<h2>Supervision by department</h2>${htmlTable(
-  ["Department", "Supervision %"],
-  supervisionByDepartment.map((row) => [
-    row.department,
-    percentText(row.percent),
-  ]),
-)}
-<h2>Staff</h2>${htmlTable(STAFF_HEADERS, staff.map(staffCells))}
-</body></html>`;
-
 /** The Export CSV / PDF button of the Compliance screen: every person, not one page. */
 const exportSiteCompliance = async ({ format, ...scope }) => {
   const kind = String(format ?? "")
@@ -715,7 +680,7 @@ const exportSiteCompliance = async ({ format, ...scope }) => {
   const day = moment.utc(scope.now ?? new Date()).format("YYYY-MM-DD");
   if (kind === "csv")
     return { csv: complianceCsv(report), fileName: `compliance-${day}.csv` };
-  const { buffer } = await htmlToPdf(compliancePdfHtml(report, day));
+  const buffer = await renderCompliancePdf({ report, day });
   return { pdf: { buffer, filename: `compliance-${day}.pdf` } };
 };
 

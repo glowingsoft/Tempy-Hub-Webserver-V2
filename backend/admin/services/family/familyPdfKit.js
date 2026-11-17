@@ -18,7 +18,8 @@ const COLORS = {
 
 const PHOTO_WIDTH = 900;
 const PHOTO_QUALITY = 80;
-const TEMPLATE_DIR = path.join(__dirname, "../../../assets/pdf/family");
+const TEMPLATE_ROOT = path.join(__dirname, "../../../assets/pdf");
+const TEMPLATE_DIR = path.join(TEMPLATE_ROOT, "family");
 
 /**
  * Arimo and Tinos are the fonts the templates are set in (the same letter shapes and widths as Arial and
@@ -125,15 +126,15 @@ const photoUris = async (photos) => {
 
 const templates = new Map();
 /** Fills a template from assets/pdf/family. Everything printed with <%= %> is HTML-escaped. */
-const renderTemplate = (name, data) => {
-  if (!templates.has(name)) {
-    const filename = path.join(TEMPLATE_DIR, `${name}.ejs`);
+const renderTemplate = (name, data, directory = TEMPLATE_DIR) => {
+  const filename = path.join(directory, `${name}.ejs`);
+  if (!templates.has(filename)) {
     templates.set(
-      name,
+      filename,
       ejs.compile(fs.readFileSync(filename, "utf8"), { filename }),
     );
   }
-  return templates.get(name)({
+  return templates.get(filename)({
     colors: COLORS,
     fontCss: fontCss(),
     cssString,
@@ -150,4 +151,5 @@ module.exports = {
   prepareImage,
   photoUris,
   renderTemplate,
+  TEMPLATE_ROOT,
 };

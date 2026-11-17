@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title><%= title %></title>
+<style>
+<%- fontCss %>
+@page {
+  size: A4;
+  margin: 45pt 45pt 80pt 45pt;
+  @bottom-left { content: <%- cssString(footerLabel) %>; font: 10.5pt Arimo, Arial, sans-serif; color: <%= colors.muted %>; vertical-align: top; padding-top: 14pt; border-top: 0.8pt solid <%= colors.line %>; }
+  @bottom-right { content: "Page " counter(page); font: 10.5pt Arimo, Arial, sans-serif; color: <%= colors.muted %>; text-align: right; vertical-align: top; padding-top: 14pt; border-top: 0.8pt solid <%= colors.line %>; }
+}
+html { background: #fff; color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arimo, Arial, sans-serif; font-size: 12pt; color: <%= colors.ink %>; -webkit-print-color-adjust: exact; }
+.serif { font-family: Tinos, "Times New Roman", serif; font-weight: 700; }
+.section { margin-top: 24pt; }
+.heading { font-size: 17pt; color: <%= colors.navy %>; margin-bottom: 11pt; }
+.low { color: <%= colors.accent %>; }
+
+.header { background: <%= colors.navy %>; color: #fff; border-radius: 10pt; height: 120pt; padding: 28pt; }
+.header .home { font-size: 10pt; letter-spacing: 1.5pt; text-transform: uppercase; color: #c9d3e2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header .title { font-size: 30pt; line-height: 1.15; margin-top: 8pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header .period { font-size: 11pt; color: #c9d3e2; margin-top: 8pt; }
+
+.scores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12pt; }
+.score { background: <%= colors.soft %>; border-radius: 8pt; padding: 14pt 16pt; break-inside: avoid; }
+.score .value { font-size: 24pt; color: <%= colors.navy %>; }
+.score .label { font-size: 10pt; color: <%= colors.muted %>; margin-top: 4pt; }
+
+.department { display: flex; align-items: center; gap: 12pt; margin-bottom: 9pt; break-inside: avoid; }
+.department .name { width: 140pt; flex: none; font-size: 11pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.department .track { flex: 1; height: 8pt; background: <%= colors.soft %>; border-radius: 4pt; }
+.department .fill { height: 8pt; background: <%= colors.navy %>; border-radius: 4pt; }
+.department .percent { width: 40pt; flex: none; text-align: right; font-weight: 700; font-size: 11pt; }
+
+table { width: 100%; border-collapse: collapse; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { text-align: left; background: <%= colors.soft %>; color: <%= colors.navy %>; font-size: 9.5pt; padding: 7pt 8pt; }
+td { font-size: 10.5pt; padding: 7pt 8pt; border-bottom: 0.8pt solid <%= colors.line %>; }
+td.name { font-weight: 700; }
+th.right, td.right { text-align: right; }
+.empty { font-size: 11pt; color: <%= colors.muted %>; }
+
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="home"><%= siteName %></div>
+  <div class="title serif"><%= title %></div>
+  <div class="period"><%= dateLabel %></div>
+</div>
+
+<div class="section">
+  <div class="heading serif">Scores</div>
+  <div class="scores">
+    <% scores.forEach((score) => { %>
+    <div class="score">
+      <div class="value serif<%= score.low ? ' low' : '' %>"><%= score.value %></div>
+      <div class="label"><%= score.label %></div>
+    </div>
+    <% }) %>
+  </div>
+</div>
+
+<% if (departments.length) { %>
+<div class="section">
+  <div class="heading serif">Supervision by department</div>
+  <% departments.forEach((department) => { %>
+  <div class="department">
+    <div class="name"><%= department.name %></div>
+    <div class="track"><div class="fill" style="width: <%= department.width %>%"></div></div>
+    <div class="percent<%= department.low ? ' low' : '' %>"><%= department.value %></div>
+  </div>
+  <% }) %>
+</div>
+<% } %>
+
+<div class="section">
+  <div class="heading serif">Staff supervision</div>
+  <% if (staff.length) { %>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Frequency</th>
+        <th>This cycle</th>
+        <th>Now</th>
+        <th>Due by</th>
+        <th class="right">Supervision</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% staff.forEach((person) => { %>
+      <tr>
+        <td class="name"><%= person.name %></td>
+        <td><%= person.frequency %></td>
+        <td><%= person.cycle %></td>
+        <td><%= person.month %></td>
+        <td><%= person.dueBy %></td>
+        <td class="right<%= person.low ? ' low' : '' %>"><b><%= person.value %></b></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } else { %>
+  <div class="empty">There are no staff to show.</div>
+  <% } %>
+</div>
+</body>
+</html>

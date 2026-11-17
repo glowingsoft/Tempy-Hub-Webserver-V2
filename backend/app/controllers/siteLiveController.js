@@ -7,6 +7,7 @@ const {
 } = require("@adminServices/dashboard/siteDashboardService");
 const { sendPdf } = require("@utils/familyPdfResponse");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { isFamilyModuleActive } = require("@appServices/family/familyAccessService");
 
 const getSiteLive = async (req, res) => {
   try {
@@ -14,6 +15,8 @@ const getSiteLive = async (req, res) => {
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.query.branchId,
+      familyOn:
+        Boolean(req.isPlatformAdmin) || isFamilyModuleActive(req.organization),
     });
 
     return sendResponse({

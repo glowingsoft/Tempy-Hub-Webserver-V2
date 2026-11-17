@@ -8,6 +8,8 @@ const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
 const { Resident } = require("@models/Resident");
 const { Department } = require("@models/Department");
+const { FamilyMember } = require("@models/FamilyMember");
+const { FamilyVisit } = require("@models/FamilyVisit");
 const { PersonCategory } = require("@models/PersonCategory");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { generateMeta } = require("@utils/responseUtil");
@@ -21,6 +23,9 @@ const {
   PresenceStatus,
   AdmissionStatus,
   StaffProfileStatus,
+  FamilyMemberStatus,
+  FamilyVisitStatus,
+  FamilyVisitSource,
 } = require("@models/domainEnums");
 const { loadMyStatus } = require("./myStatus");
 const {
@@ -35,6 +40,8 @@ const visitorInvitationService = require("@adminServices/visitors/visitorInvitat
 const kioskService = require("@adminServices/kiosk/kioskService");
 const attendanceService = require("@adminServices/attendance/attendanceService");
 const signOutReminder = require("./signOutReminder");
+const { getAttention } = require("@adminServices/family/familyWallActivityService");
+const { getWallGazetteCard } = require("@adminServices/family/familyGazetteCard");
 const {
   ACTIVITY_PREVIEW_LIMIT,
   listSiteActivity,
@@ -58,17 +65,32 @@ const shapeKiosk = (row) => ({
   receptionIdentifier: row.receptionIdentifier || "",
   presence: row.presence || "offline",
   lastHeartbeatAt: row.lastHeartbeatAt || null,
+  lastCheckInAt: row.lastCheckInAt || null,
   kioskMode: row.kioskMode || null,
 });
 
-const getSiteLive = async ({ actor, organizationId, branchId }) => {
+const getSiteLive = async ({
+  actor,
+  organizationId,
+  branchId,
+  familyOn = false,
+}) => {
   const liveBranchId = await resolveLiveBranchId({
     actor,
     organizationId,
     branchId,
   });
 
-  const [onSite, evacuation, walkIns, planned, kiosks, myStatus, activity] =
+  const [
+    onSite,
+    evacuation,
+    walkIns,
+    planned,
+    kiosks,
+    myStatus,
+    activity,
+    homeCards,
+  ] =
     await Promise.all([
       evacuationService.getOnSiteSummary({
         organizationId,
@@ -113,6 +135,11 @@ const getSiteLive = async ({ actor, organizationId, branchId }) => {
         limit: ACTIVITY_PREVIEW_LIMIT,
         skip: 0,
       }),
+      getHomeCards({
+        organizationId,
+        branchId: liveBranchId,
+        familyOn,
+      }),
     ]);
 
   return {
@@ -143,6 +170,9 @@ const getSiteLive = async ({ actor, organizationId, branchId }) => {
       items: activity.data,
       hasMore: (activity.meta?.totalRecords || 0) > ACTIVITY_PREVIEW_LIMIT,
     },
+    cards: homeCards.cards,
+    family: homeCards.family,
+    agency: null,
   };
 };
 
@@ -437,6 +467,62 @@ const loadMissedSignOuts = async (branchIds, lookbackDays, todayStart) => {
       status: row.autoClosed ? "autoSignedOut" : "stillSignedIn",
     }))
     .sort((a, b) => new Date(b.signedInAt) - new Date(a.signedInAt));
+};
+
+const familyCards = async ({ organizationId, branchId, now }) => {
+  const scope = {
+    organizationId: toId(organizationId),
+    branchId: toId(branchId),
+  };
+  const [attention, gazette, joins, visits] = await Promise.all([
+    getAttention({ organizationId, branchId }),
+    getWallGazetteCard({ organizationId, branchId, now }),
+    FamilyMember.countDocuments({
+      ...scope,
+      status: FamilyMemberStatus.PENDING,
+    }),
+    FamilyVisit.countDocuments({
+      ...scope,
+      source: FamilyVisitSource.FAMILY,
+      status: FamilyVisitStatus.REQUESTED,
+      endAt: { $gt: now },
+    }),
+  ]);
+  return {
+    photos: attention.pendingUploads.count,
+    joins,
+    visits,
+    reports: attention.reportedPosts.count,
+    gazette: gazette?.scheduled
+      ? {
+          number: gazette.number,
+          closesInDays: gazette.closesInDays,
+          residentsWithNoContent: gazette.residents.noContent,
+        }
+      : null,
+  };
+};
+
+/** The Site home cards: residents out, people who did not sign out since yesterday, restricted residents and the Family card. */
+const getHomeCards = async ({ organizationId, branchId, familyOn }) => {
+  const branchIds = [toId(branchId)];
+  const [residentsOut, restricted, missed, family] = await Promise.all([
+    Resident.countDocuments(residentMatch(organizationId, branchIds, true)),
+    Resident.countDocuments({
+      organizationId: toId(organizationId),
+      branchId: { $in: branchIds },
+      admissionStatus: AdmissionStatus.ADMITTED,
+      restricted: true,
+    }),
+    loadMissedSignOuts(branchIds, 1, startOfToday()),
+    familyOn
+      ? familyCards({ organizationId, branchId, now: new Date() })
+      : null,
+  ]);
+  return {
+    cards: { residentsOut, didNotSignOut: missed.length, restricted },
+    family,
+  };
 };
 
 const resolvePeopleScope = async ({ actor, organizationId, branchId }) => {

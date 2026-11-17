@@ -7266,7 +7266,8 @@
                       "value": "{{branchId}}"
                     }
                   ]
-                }
+                },
+                "description": "Site home (Site tab). branchId: owner and super admin only. Besides branch, onSite, evacuation, walkInsAwaiting, kiosks, kioskMeta, plannedVisits, myStatus and recentActivity it returns cards {residentsOut, didNotSignOut, restricted}, family {photos, joins, visits, reports, gazette {number, closesInDays, residentsWithNoContent} | null} (null when the family module is off) and agency (null for now)."
               },
               "response": [
                 {

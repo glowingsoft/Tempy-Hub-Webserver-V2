@@ -4276,7 +4276,7 @@
                     }
                   ]
                 },
-                "description": "Announcements screen (manager). Per card: _id, branchId, subject, category, audience, recipients (count), seen, acknowledged, allAcknowledged, createdAt. The people of each announcement are in the detail call. branchId query is optional: without it owner and super admin see every site; a site manager always sees only their site."
+                "description": "Announcements screen (manager). Per card: _id, branchId, branchName, subject, category, audience, recipients (count), seen, acknowledged, allAcknowledged, createdAt. The people of each announcement are in the detail call. branchId query is optional: without it owner and super admin see every site; a site manager always sees only their site."
               },
               "response": []
             },
@@ -4312,7 +4312,7 @@
                     "{{announcementId}}"
                   ]
                 },
-                "description": "Detail of one announcement for its sender. Returns the full description, audience, counts (recipients, seen, acknowledged, allAcknowledged), remindedAt and people [{userId, name, email, photoUrl, seen, acknowledged, seenAt, acknowledgedAt}]. Does not mark anything as seen. 404 announcement_not_found."
+                "description": "Detail of one announcement for its sender. Returns branchName, the full description, audience, counts (recipients, seen, acknowledged, allAcknowledged), remindedAt and people [{userId, name, email, photoUrl, seen, acknowledged, seenAt, acknowledgedAt}]. Does not mark anything as seen. 404 announcement_not_found."
               },
               "response": []
             },

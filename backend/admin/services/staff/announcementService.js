@@ -9,6 +9,7 @@ const {
 const { StaffProfile } = require("@models/StaffProfile");
 const { Membership } = require("@models/Membership");
 const { Department } = require("@models/Department");
+const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { NotificationExp, NotificationTypes } = require("@models/Notifications");
@@ -122,7 +123,9 @@ const loadRecipients = async ({
           branchId: siteId,
           status: StaffProfileStatus.ACTIVE,
           userId: { $nin: exclude },
-          ...(departments.length ? { departmentIds: { $in: departments } } : {}),
+          ...(departments.length
+            ? { departmentIds: { $in: departments } }
+            : {}),
         },
       },
       { $group: { _id: "$userId" } },
@@ -227,12 +230,26 @@ const cardStagesOf = ({ detail = false } = {}) => [
       as: "departments",
     },
   },
+  {
+    $lookup: {
+      from: Branch.collection.name,
+      localField: "branchId",
+      foreignField: "_id",
+      as: "branch",
+    },
+  },
+  {
+    $addFields: {
+      branchName: { $ifNull: [{ $arrayElemAt: ["$branch.name", 0] }, ""] },
+    },
+  },
   ...(detail ? [recipientUsersLookup] : []),
   ...createdByLookup,
   {
     $project: {
       _id: 1,
       branchId: 1,
+      branchName: 1,
       subject: 1,
       category: 1,
       createdAt: 1,
@@ -254,10 +271,7 @@ const cardStages = cardStagesOf();
 const audienceLabelOf = (roles, departmentNames) => {
   const ordered = AUDIENCE_ORDER.filter((role) => roles.includes(role));
   const names = [...departmentNames].sort();
-  if (
-    ordered.length === 1 &&
-    ordered[0] === AnnouncementAudience.STAFF
-  ) {
+  if (ordered.length === 1 && ordered[0] === AnnouncementAudience.STAFF) {
     return names.length ? names.join(", ") : ALL_STAFF;
   }
   const rolePart = ordered.map((role) => AUDIENCE_LABEL[role]).join(", ");
@@ -268,9 +282,10 @@ const audienceLabelOf = (roles, departmentNames) => {
 };
 
 const cardOf = ({ departments = [], audience, people, createdBy, ...row }) => {
-  const roles = Array.isArray(audience) && audience.length
-    ? AUDIENCE_ORDER.filter((role) => audience.includes(role))
-    : [...DEFAULT_AUDIENCE];
+  const roles =
+    Array.isArray(audience) && audience.length
+      ? AUDIENCE_ORDER.filter((role) => audience.includes(role))
+      : [...DEFAULT_AUDIENCE];
   return {
     ...row,
     audience: roles,
@@ -343,6 +358,7 @@ const createAnnouncement = async ({
   const siteId = toObjectId(
     await resolveLiveBranchId({ actor, organizationId, branchId }),
   );
+  const branch = await Branch.findById(siteId).select("name").lean();
   const audience = cleanAudience(audienceInput);
   const departments = await cleanDepartmentIds({
     value: departmentIds,
@@ -386,6 +402,8 @@ const createAnnouncement = async ({
     .map((department) => department.name);
   return cardOf({
     _id: created._id,
+    branchId: created.branchId,
+    branchName: branch?.name || "",
     subject: created.subject,
     category: created.category,
     createdAt: created.createdAt,

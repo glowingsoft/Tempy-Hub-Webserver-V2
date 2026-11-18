@@ -5,6 +5,7 @@ const homeRoutes = require("./homeRoutes");
 const staffRoutes = require("./staffRoutes");
 const siteLiveRoutes = require("./siteLiveRoutes");
 const teamLiveRoutes = require("./teamLiveRoutes");
+const lineHomeRoutes = require("./lineHomeRoutes");
 const usersRoutes = require("./userRoutes");
 const settingsRoutes = require("./settingsRoutes");
 const supportRoutes = require("./supportRoutes");
@@ -51,6 +52,7 @@ router.use("/home", homeRoutes);
 router.use("/staff", staffRoutes);
 router.use("/site-live", siteLiveRoutes);
 router.use("/team-live", teamLiveRoutes);
+router.use("/line-home", lineHomeRoutes);
 router.use("/users", usersRoutes);
 
 module.exports = router;

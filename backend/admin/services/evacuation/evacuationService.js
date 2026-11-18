@@ -280,6 +280,91 @@ const shapeKiosk = (kiosk) => {
   };
 };
 
+/** Statuses that mean this person has already responded (seeded rows stay unknown). */
+const RESPONDED_CHECK_STATUSES = [
+  EvacCheckStatus.SAFE,
+  EvacCheckStatus.MISSING,
+  EvacCheckStatus.OFF_SITE,
+];
+
+/** One lookup for this user's staff profile + their EvacCheck on the event. */
+const selfCheckLookupPipeline = (userId) => {
+  const userOid = toObjectId(userId);
+  return [
+    {
+      $lookup: {
+        from: COLLECTIONS.staffProfiles,
+        let: { orgId: "$branchDoc.organizationId" },
+        pipeline: [
+          {
+            $match: {
+              userId: userOid,
+              status: StaffProfileStatus.ACTIVE,
+            },
+          },
+          {
+            $match: {
+              $expr: { $eq: ["$organizationId", "$$orgId"] },
+            },
+          },
+          { $limit: 1 },
+          { $project: { _id: 1 } },
+        ],
+        as: "_selfProfile",
+      },
+    },
+    {
+      $lookup: {
+        from: COLLECTIONS.evacChecks,
+        let: {
+          eventId: "$_id",
+          profileId: { $arrayElemAt: ["$_selfProfile._id", 0] },
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$evacuationEventId", "$$eventId"] },
+                  { $eq: ["$personKind", EvacPersonKind.STAFF] },
+                  { $eq: ["$personId", "$$profileId"] },
+                ],
+              },
+            },
+          },
+          {
+            $match: { status: { $in: RESPONDED_CHECK_STATUSES } },
+          },
+          { $limit: 1 },
+          {
+            $project: {
+              _id: 1,
+              evacuationEventId: 1,
+              personKind: 1,
+              personId: 1,
+              status: 1,
+              markedAt: 1,
+              locationLabel: 1,
+              geo: 1,
+              lastSeenLabel: 1,
+              lastSeenAt: 1,
+              updatedAt: 1,
+            },
+          },
+        ],
+        as: "_selfEvacCheck",
+      },
+    },
+    {
+      $addFields: {
+        evacCheck: { $gt: [{ $size: "$_selfEvacCheck" }, 0] },
+        check: { $ifNull: [{ $arrayElemAt: ["$_selfEvacCheck", 0] }, null] },
+      },
+    },
+    { $unset: ["_selfProfile", "_selfEvacCheck"] },
+  ];
+};
+
 const formatEventDoc = (doc, { includeFamilyAlert = false } = {}) => {
   if (!doc) return null;
   const { branchDoc, statRows, rollcall, familyAlert, kiosk, kiosks, ...event } =
@@ -727,6 +812,7 @@ const loadEventWithBranchAndStats = async ({
   includeChecks = false,
   includeFamilyAlert = false,
   many = false,
+  selfUserId = null,
 }) => {
   const pipeline = [{ $match: match }, { $sort: { startedAt: -1 } }, { $limit: 1 }];
   pipeline.push(...branchLookupPipeline, ...kioskLookupPipeline);
@@ -743,6 +829,10 @@ const loadEventWithBranchAndStats = async ({
     pipeline.push(...rollcallDetailLookup("$_id"));
   } else if (includeStats) {
     pipeline.push(...rollcallStatsPipeline("$_id"));
+  }
+
+  if (selfUserId) {
+    pipeline.push(...selfCheckLookupPipeline(selfUserId));
   }
 
   const docs = await EvacuationEvent.aggregate(pipeline);
@@ -801,12 +891,23 @@ const startEvacuation = async ({
   });
 };
 
+const withSelfCheck = (data, selfUserId) => {
+  if (!selfUserId) return data;
+  if (!data) return {};
+  return {
+    ...data,
+    evacCheck: Boolean(data.evacCheck),
+    check: data.check || null,
+  };
+};
+
 const getActiveEvacuation = async ({
   organizationId,
   branchId,
   includeStats = true,
   actor = null,
   type,
+  selfUserId = null,
 }) => {
   if (branchId) {
     const branchOid = toObjectId(branchId);
@@ -817,11 +918,13 @@ const getActiveEvacuation = async ({
       const standing = await actorStanding(actor, organizationId);
       assertSiteManagerBranch(standing, branchOid);
     }
-    return loadEventWithBranchAndStats({
+    const data = await loadEventWithBranchAndStats({
       match: activeEvacuationMatch({ branchId: branchOid, type }),
       organizationId: null,
       includeStats,
+      selfUserId,
     });
+    return withSelfCheck(data, selfUserId);
   }
 
   const standing =
@@ -841,16 +944,18 @@ const getActiveEvacuation = async ({
       .select("_id")
       .lean();
     branchIds = orgBranches.map((row) => row._id);
-    if (!branchIds.length) return null;
+    if (!branchIds.length) return withSelfCheck(null, selfUserId);
   } else {
-    return null;
+    return withSelfCheck(null, selfUserId);
   }
 
-  return loadEventWithBranchAndStats({
+  const data = await loadEventWithBranchAndStats({
     match: activeEvacuationMatch({ branchIds, type }),
     organizationId,
     includeStats,
+    selfUserId,
   });
+  return withSelfCheck(data, selfUserId);
 };
 
 const getEvacuationEvent = async ({
@@ -1734,6 +1839,57 @@ const drillScoreMeta = (expected, done) => ({
   windowMonths: DRILL_WINDOW_MONTHS,
 });
 
+const durationUnit = (count, one, many) =>
+  `${count} ${count === 1 ? one : many}`;
+
+const drillDurationLabel = (seconds) => {
+  if (seconds == null || !Number.isFinite(Number(seconds))) return null;
+  const total = Math.max(0, Math.round(Number(seconds)));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  if (mins === 0) return durationUnit(secs, "second", "seconds");
+  if (secs === 0) return durationUnit(mins, "min", "mins");
+  return `${durationUnit(mins, "min", "mins")} ${durationUnit(
+    secs,
+    "second",
+    "seconds"
+  )}`;
+};
+
+const withDrillDurationLabel = (rows) =>
+  (rows || []).map((row) => ({
+    ...row,
+    durationLabel: drillDurationLabel(row.durationSeconds),
+  }));
+
+const drillDurationSeconds = {
+  $cond: [
+    {
+      $and: [
+        { $ne: ["$event.closedAt", null] },
+        { $ne: ["$event.startedAt", null] },
+      ],
+    },
+    {
+      $max: [
+        0,
+        {
+          $round: [
+            {
+              $divide: [
+                { $subtract: ["$event.closedAt", "$event.startedAt"] },
+                1000,
+              ],
+            },
+            0,
+          ],
+        },
+      ],
+    },
+    null,
+  ],
+};
+
 /** Mock drills this staff marked on, last 12 months, one aggregation. */
 const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
@@ -1758,36 +1914,41 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
   const since = new Date();
   since.setUTCMonth(since.getUTCMonth() - DRILL_WINDOW_MONTHS);
 
-  const [result] = await EvacuationEvent.aggregate([
+  const [result] = await EvacCheck.aggregate([
     {
       $match: {
-        branchId: profile.branchId,
-        type: EvacuationType.MOCK,
-        startedAt: { $gte: since },
+        personKind: EvacPersonKind.STAFF,
+        personId: profile._id,
       },
     },
     {
       $lookup: {
-        from: COLLECTIONS.evacChecks,
-        let: { eventId: "$_id" },
+        from: COLLECTIONS.evacuations,
+        localField: "evacuationEventId",
+        foreignField: "_id",
         pipeline: [
           {
             $match: {
-              $expr: { $eq: ["$evacuationEventId", "$$eventId"] },
-              personKind: EvacPersonKind.STAFF,
-              personId: profile._id,
+              branchId: profile.branchId,
+              type: EvacuationType.MOCK,
+              startedAt: { $gte: since },
             },
           },
           {
-            $project: { status: 1, locationLabel: 1, markedAt: 1 },
+            $project: {
+              startedAt: 1,
+              closedAt: 1,
+              type: 1,
+              status: 1,
+              branchId: 1,
+            },
           },
-          { $limit: 1 },
         ],
-        as: "check",
+        as: "event",
       },
     },
-    { $unwind: "$check" },
-    { $sort: { startedAt: -1 } },
+    { $unwind: "$event" },
+    { $sort: { "event.startedAt": -1 } },
     {
       $facet: {
         score: [
@@ -1798,7 +1959,7 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
               done: {
                 $sum: {
                   $cond: [
-                    { $eq: ["$check.status", EvacCheckStatus.SAFE] },
+                    { $eq: ["$status", EvacCheckStatus.SAFE] },
                     1,
                     0,
                   ],
@@ -1808,17 +1969,17 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
           },
         ],
         total: [
-          { $match: { "check.status": EvacCheckStatus.SAFE } },
+          { $match: { status: EvacCheckStatus.SAFE } },
           { $count: "count" },
         ],
         rows: [
-          { $match: { "check.status": EvacCheckStatus.SAFE } },
+          { $match: { status: EvacCheckStatus.SAFE } },
           { $skip: skip },
           { $limit: limit },
           {
             $lookup: {
               from: COLLECTIONS.branches,
-              localField: "branchId",
+              localField: "event.branchId",
               foreignField: "_id",
               pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
               as: "branch",
@@ -1827,42 +1988,16 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
           {
             $project: {
               _id: 0,
-              evacuationEventId: "$_id",
-              startedAt: 1,
-              closedAt: 1,
-              durationSeconds: {
-                $cond: [
-                  {
-                    $and: [
-                      { $ne: ["$closedAt", null] },
-                      { $ne: ["$startedAt", null] },
-                    ],
-                  },
-                  {
-                    $max: [
-                      0,
-                      {
-                        $round: [
-                          {
-                            $divide: [
-                              { $subtract: ["$closedAt", "$startedAt"] },
-                              1000,
-                            ],
-                          },
-                          0,
-                        ],
-                      },
-                    ],
-                  },
-                  null,
-                ],
-              },
-              type: 1,
-              status: 1,
+              evacuationEventId: "$event._id",
+              startedAt: "$event.startedAt",
+              closedAt: "$event.closedAt",
+              durationSeconds: drillDurationSeconds,
+              type: "$event.type",
+              status: "$event.status",
               attended: { $literal: true },
-              checkStatus: "$check.status",
-              locationLabel: "$check.locationLabel",
-              markedAt: "$check.markedAt",
+              checkStatus: "$status",
+              locationLabel: 1,
+              markedAt: 1,
               branch: { $arrayElemAt: ["$branch", 0] },
             },
           },
@@ -1875,7 +2010,7 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
   const total = result?.total?.[0]?.count ?? 0;
 
   return {
-    data: result?.rows || [],
+    data: withDrillDurationLabel(result?.rows),
     meta: {
       ...generateMeta(page, limit, total),
       fireDrills: drillScoreMeta(score?.expected ?? 0, score?.done ?? 0),

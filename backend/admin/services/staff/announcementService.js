@@ -297,11 +297,11 @@ const cardOf = ({ departments = [], audience, people, createdBy, ...row }) => {
     createdBy: createdByOf(createdBy),
     ...(people
       ? {
-          people: people.map((person) => ({
-            ...person,
-            photoUrl: toPublicImageUrl(person.photoUrl) || "",
-          })),
-        }
+        people: people.map((person) => ({
+          ...person,
+          photoUrl: toPublicImageUrl(person.photoUrl) || "",
+        })),
+      }
       : {}),
   };
 };
@@ -698,6 +698,40 @@ const getMine = async ({
     createdBy: createdByOf(createdBy),
     seen: true,
     acknowledged: Boolean(mine?.acknowledgedAt),
+  };
+};
+
+/** Hitting this endpoint marks seen. `{ "acknowledged": true }` also marks acknowledged. */
+const acknowledgeAnnouncement = async ({
+  actor,
+  organizationId,
+  announcementId,
+  acknowledge = false,
+  now = new Date(),
+}) => {
+  const { announcement, userId } = await loadMine({
+    actor,
+    organizationId,
+    announcementId,
+  });
+  await stamp({
+    announcementId: announcement._id,
+    userId,
+    field: "seenAt",
+    now,
+  });
+  if (acknowledge === true) {
+    await stamp({
+      announcementId: announcement._id,
+      userId,
+      field: "acknowledgedAt",
+      now,
+    });
+  }
+  return {
+    _id: announcement._id,
+    seen: true,
+    acknowledged: acknowledge === true || Boolean(announcement.mine?.acknowledgedAt),
   };
 };
 

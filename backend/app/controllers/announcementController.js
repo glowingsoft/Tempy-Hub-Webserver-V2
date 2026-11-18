@@ -20,7 +20,18 @@ const getMine = respond((req) =>
   }),
 );
 
+const acknowledgeAnnouncement = respond(
+  (req) =>
+    announcementService.acknowledgeAnnouncement({
+      ...scope(req),
+      announcementId: req.params.announcementId,
+      acknowledge: req.body?.acknowledged,
+    }),
+  { translationKey: "announcement_acknowledged" },
+);
+
 module.exports = {
   listMine,
   getMine,
+  acknowledgeAnnouncement
 };

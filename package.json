@@ -24,7 +24,8 @@
     "swagger:validate": "node -e \"JSON.parse(require('fs').readFileSync('swagger/swagger_output.json','utf8')); console.log('swagger_output.json OK')\"",
     "postman:normalize": "node postman_collection/scripts/normalize-collection.js",
     "postman:build": "npm run postman:normalize && npm run postman:validate",
-    "postman:validate": "node postman_collection/scripts/validate-postman.js"
+    "postman:validate": "node postman_collection/scripts/validate-postman.js",
+    "test": "node --require ./tests/register-aliases.js --test tests/*.test.js"
   },
   "keywords": [],
   "author": "Zawar Ahmad",

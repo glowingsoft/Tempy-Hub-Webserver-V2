@@ -18,6 +18,7 @@ const staffDashboardSettingsController = require("../controllers/staffDashboardS
 const ownerDashboardController = require("../controllers/ownerDashboardController");
 const siteDashboardController = require("../controllers/siteDashboardController");
 const lineDashboardController = require("../controllers/lineDashboardController");
+const lineHomeController = require("../controllers/lineHomeController");
 const staffDashboardController = require("../controllers/staffDashboardController");
 
 const branchController = require("../controllers/branchController");
@@ -120,6 +121,18 @@ scoped.get(
   "/line-dashboard",
   requireRoles([MembershipRole.LINE_MANAGER]),
   lineDashboardController.getDashboard,
+);
+
+scoped.get(
+  "/line-home",
+  requireRoles([MembershipRole.LINE_MANAGER]),
+  lineHomeController.getHome,
+);
+
+scoped.get(
+  "/line-home/today",
+  requireRoles([MembershipRole.LINE_MANAGER]),
+  lineHomeController.getToday,
 );
 
 scoped.get(

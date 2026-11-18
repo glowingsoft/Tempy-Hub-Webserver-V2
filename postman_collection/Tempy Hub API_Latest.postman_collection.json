@@ -4230,6 +4230,180 @@
           "name": "Announcements",
           "item": [
             {
+              "name": "list announcements (manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements?page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true,
+                      "description": "Optional. Owner and super admin: omit for every site, or set to one site. Site manager is always their own site."
+                    }
+                  ]
+                },
+                "description": "Announcements screen (manager). Per card: _id, branchId, branchName, subject, category, audience, recipients (count), seen, acknowledged, allAcknowledged, createdAt. The people of each announcement are in the detail call. branchId query is optional: without it owner and super admin see every site; a site manager always sees only their site."
+              },
+              "response": []
+            },
+            {
+              "name": "announcement detail (manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.eql(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements/{{announcementId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements",
+                    "{{announcementId}}"
+                  ]
+                },
+                "description": "Detail of one announcement for its sender. Returns branchName, the full description, audience, counts (recipients, seen, acknowledged, allAcknowledged), remindedAt and people [{userId, name, email, photoUrl, seen, acknowledged, seenAt, acknowledgedAt}]. Does not mark anything as seen. 404 announcement_not_found."
+              },
+              "response": []
+            },
+            {
+              "name": "create announcement (send to all)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const body = pm.response.json();",
+                      "if (body.data && body.data._id) pm.collectionVariables.set(\"announcementId\", body.data._id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements"
+                  ]
+                },
+                "description": "Create Announcement screen. audience is siteManager, lineManager, and/or staff (defaults to staff). departmentIds only apply when staff is in audience; empty means all staff of the site. Returns the card. Saves announcementId.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subject\": \"Half-term Visiting\",\n  \"description\": \"Visiting hours change this week.\",\n  \"category\": \"Clinical\",\n  \"audience\": [\"staff\"],\n  \"departmentIds\": [],\n  \"branchId\": \"{{branchId}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "remind who has not acknowledged",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements/{{announcementId}}/remind",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements",
+                    "{{announcementId}}",
+                    "remind"
+                  ]
+                },
+                "description": "'Remind the 7 who haven't' link. Returns {reminded}. 409 when everyone acknowledged, 429 within an hour of the last reminder."
+              },
+              "response": []
+            },
+            {
               "name": "my announcements (staff)",
               "event": [
                 {

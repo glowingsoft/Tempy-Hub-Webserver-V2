@@ -9,9 +9,5 @@ router.use(auth, requireMembership());
 
 router.get("/mine", controller.listMine);
 router.get("/mine/:announcementId", controller.getMine);
-router.post(
-  "/mine/:announcementId/acknowledge",
-  controller.acknowledgeAnnouncement,
-);
 
 module.exports = router;

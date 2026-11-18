@@ -20,9 +20,7 @@ const familySettingsSchema = new mongoose.Schema(
       /** The first day of an issue; every later issue starts a whole number of cycles after it. */
       anchorDate: { type: Date, default: null },
     },
-    /** Reminds families before the gazette message deadline. */
     deadlineReminder: { type: Boolean, default: true },
-    /** Whether the home's families see the community wall. */
     communityWall: { type: Boolean, default: true },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -53,7 +53,6 @@ const externalPersonSchema = new mongoose.Schema(
     /** Use null when unset — never "" — so sparse unique indexes stay valid. */
     qrToken: { type: String, default: null },
     nfcTagId: { type: String, default: null },
-    /** Shown once at the next kiosk sign-in after a manager closed a missed sign-out. */
     signOutReminder: {
       pending: { type: Boolean, default: false },
       missedSignInAt: { type: Date, default: null },

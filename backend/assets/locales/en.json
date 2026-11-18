@@ -659,7 +659,6 @@
   "invalid_quiet_hours": "Quiet hours need a start and an end time (HH:mm) that differ",
   "announcement_created": "Announcement sent",
   "announcement_reminded": "Reminder sent",
-  "announcement_acknowledged": "Announcement acknowledged",
   "announcement_not_found": "Announcement not found",
   "announcement_no_recipients": "There is no one to send this announcement to",
   "invalid_announcement_audience": "Choose site managers, line managers, or staff",

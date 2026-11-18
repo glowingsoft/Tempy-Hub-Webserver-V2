@@ -6,7 +6,6 @@ const storedFileSchema = new mongoose.Schema(
     originalName: { type: String, default: "", trim: true },
     mimeType: { type: String, default: "", trim: true },
     sizeBytes: { type: Number, default: 0, min: 0 },
-    /** Counted the first time it is needed; 0 means the pages could not be counted. */
     pages: { type: Number, min: 0 },
   },
   { _id: false }

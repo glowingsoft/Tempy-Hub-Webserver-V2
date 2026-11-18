@@ -14,7 +14,6 @@ const { toObjectId } = require("./familyPipeline");
 const CHUNK = 500;
 const ANSWERING_ROLES = [MembershipRole.SITE_MANAGER, MembershipRole.LINE_MANAGER];
 
-/** `preference` is a switch of the Notifications screen: a manager who turned it off is left out. */
 const managersOf = async ({ organizationId, branchId }, preference) => {
   const rows = await Membership.aggregate([
     {

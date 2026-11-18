@@ -162,7 +162,6 @@ const revokeQrLink = respond(
 
 const unavailablePage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link unavailable</title></head><body style="font-family:Arial,sans-serif;text-align:center;padding:64px 24px;color:#1f2a44"><h1 style="font-size:22px">This link is no longer available</h1></body></html>`;
 
-/** Public, no login: what a visitor reaches by scanning a document QR. */
 const openSharedDocument = async (req, res) => {
   try {
     const url = await documentService.getSharedDocumentUrl({

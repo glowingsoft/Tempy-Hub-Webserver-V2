@@ -26,7 +26,6 @@ const recipientSchema = new mongoose.Schema(
   { _id: false },
 );
 
-/** A message from a site manager to the staff of a site (or some of its departments), with who has seen and acknowledged it. */
 const announcementSchema = new mongoose.Schema(
   {
     organizationId: {
@@ -68,7 +67,6 @@ const announcementSchema = new mongoose.Schema(
       enum: ANNOUNCEMENT_AUDIENCE,
       default: () => [AnnouncementAudience.STAFF],
     },
-    /** Empty means every staff member of the site (only used when audience includes staff). */
     departmentIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
     recipients: { type: [recipientSchema], default: [] },
     remindedAt: { type: Date, default: null },

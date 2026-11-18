@@ -4445,7 +4445,7 @@
                     }
                   ]
                 },
-                "description": "Staff app list. meta.unread counts the ones not opened."
+                "description": "Staff app list. Each row: _id, branchName, subject, category, createdAt, createdBy, seen, acknowledged. meta.unread counts the ones not opened."
               },
               "response": []
             },
@@ -4482,45 +4482,7 @@
                     "{{announcementId}}"
                   ]
                 },
-                "description": "Opening marks it seen. Returns subject, description, category, seen, acknowledged."
-              },
-              "response": []
-            },
-            {
-              "name": "acknowledge announcement (staff)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/app/announcements/mine/{{announcementId}}/acknowledge",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "app",
-                    "announcements",
-                    "mine",
-                    "{{announcementId}}",
-                    "acknowledge"
-                  ]
-                },
-                "description": "Marks it seen and acknowledged."
+                "description": "Opening marks it seen. Returns _id, branchName, subject, description, category, createdAt, createdBy, seen, acknowledged."
               },
               "response": []
             }

@@ -503,7 +503,6 @@ const familyCards = async ({ organizationId, branchId, now }) => {
   };
 };
 
-/** The Site home cards: residents out, people who did not sign out since yesterday, restricted residents and the Family card. */
 const getHomeCards = async ({ organizationId, branchId, familyOn }) => {
   const branchIds = [toId(branchId)];
   const [residentsOut, restricted, missed, family] = await Promise.all([
@@ -994,10 +993,6 @@ const loadDepartments = async (organizationId, branchIds) =>
     { $project: { _id: 1, name: 1 } },
   ]);
 
-/**
- * Directory screen of the manager app: Staff, Residents, Contractors & Pros and Archived tabs.
- * Archived holds staff who have left and residents who were deactivated, newest first.
- */
 const listDirectory = async ({
   actor,
   organizationId,

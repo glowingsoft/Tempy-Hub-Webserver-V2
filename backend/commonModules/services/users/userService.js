@@ -448,7 +448,6 @@ const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const isPlainObject = (value) =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
-/** The Notifications screen: the switches of the signed-in person and their quiet hours (null means Off). */
 const getNotificationPreferences = async ({ userId }) => {
   const [row] = await User.aggregate([
     { $match: { _id: new mongoose.Types.ObjectId(String(userId)) } },

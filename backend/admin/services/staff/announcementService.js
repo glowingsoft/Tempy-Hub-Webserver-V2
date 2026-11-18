@@ -220,16 +220,7 @@ const peopleProject = {
   },
 };
 
-/** The list cards; the detail adds the full message and who has seen and acknowledged it. */
-const cardStagesOf = ({ detail = false } = {}) => [
-  {
-    $lookup: {
-      from: Department.collection.name,
-      localField: "departmentIds",
-      foreignField: "_id",
-      as: "departments",
-    },
-  },
+const branchNameStages = [
   {
     $lookup: {
       from: Branch.collection.name,
@@ -243,6 +234,18 @@ const cardStagesOf = ({ detail = false } = {}) => [
       branchName: { $ifNull: [{ $arrayElemAt: ["$branch.name", 0] }, ""] },
     },
   },
+];
+
+const cardStagesOf = ({ detail = false } = {}) => [
+  {
+    $lookup: {
+      from: Department.collection.name,
+      localField: "departmentIds",
+      foreignField: "_id",
+      as: "departments",
+    },
+  },
+  ...branchNameStages,
   ...(detail ? [recipientUsersLookup] : []),
   ...createdByLookup,
   {
@@ -326,7 +329,6 @@ const notify = async ({ receivers, announcementId, actorId, title, text }) => {
   }
 };
 
-/** The Create Announcement screen: sent to chosen site roles, or only to chosen departments when staff are included. */
 const createAnnouncement = async ({
   actor,
   organizationId,
@@ -417,7 +419,6 @@ const createAnnouncement = async ({
   });
 };
 
-/** The Announcements screen: newest first, with how many have seen and acknowledged each one. */
 const listAnnouncements = async ({
   actor,
   organizationId,
@@ -468,7 +469,6 @@ const listAnnouncements = async ({
   };
 };
 
-/** The detail of one announcement for its sender: the full message and who has seen and acknowledged it. */
 const getAnnouncement = async ({ actor, organizationId, announcementId }) => {
   if (!isValidObjectId(announcementId))
     throw new AppError("announcement_not_found", 404);
@@ -489,7 +489,6 @@ const getAnnouncement = async ({ actor, organizationId, announcementId }) => {
   return cardOf(row);
 };
 
-/** "Remind the 7 who haven't": notifies only the people who have not acknowledged yet, once an hour at most. */
 const remindAnnouncement = async ({
   actor,
   organizationId,
@@ -571,7 +570,6 @@ const mineOf = (userId) => ({
   ],
 });
 
-/** The staff member's own announcements, newest first. meta.read / meta.unread cover the whole list, not just this page. */
 const listMine = async ({ actor, organizationId, page, limit, skip }) => {
   const userId = toObjectId(actor._id);
   const match = {
@@ -606,10 +604,12 @@ const listMine = async ({ actor, organizationId, page, limit, skip }) => {
       ],
     },
     extraDataStages: [
+      ...branchNameStages,
       ...createdByLookup,
       {
         $project: {
           _id: 1,
+          branchName: 1,
           subject: 1,
           category: 1,
           createdAt: 1,
@@ -646,9 +646,11 @@ const loadMine = async ({ actor, organizationId, announcementId }) => {
         "recipients.userId": userId,
       },
     },
+    ...branchNameStages,
     ...createdByLookup,
     {
       $project: {
+        branchName: 1,
         subject: 1,
         description: 1,
         category: 1,
@@ -673,7 +675,6 @@ const stamp = ({ announcementId, userId, field, now }) =>
     },
   );
 
-/** Opening an announcement marks it seen. */
 const getMine = async ({
   actor,
   organizationId,
@@ -700,32 +701,6 @@ const getMine = async ({
   };
 };
 
-const acknowledgeAnnouncement = async ({
-  actor,
-  organizationId,
-  announcementId,
-  now = new Date(),
-}) => {
-  const { announcement, userId } = await loadMine({
-    actor,
-    organizationId,
-    announcementId,
-  });
-  await stamp({
-    announcementId: announcement._id,
-    userId,
-    field: "seenAt",
-    now,
-  });
-  await stamp({
-    announcementId: announcement._id,
-    userId,
-    field: "acknowledgedAt",
-    now,
-  });
-  return { _id: announcement._id, seen: true, acknowledged: true };
-};
-
 module.exports = {
   createAnnouncement,
   listAnnouncements,
@@ -733,5 +708,4 @@ module.exports = {
   remindAnnouncement,
   listMine,
   getMine,
-  acknowledgeAnnouncement,
 };

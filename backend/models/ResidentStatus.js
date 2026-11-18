@@ -1,11 +1,6 @@
 const mongoose = require("mongoose");
 const { ResidentDischargeReason } = require("./domainEnums");
 
-/**
- * What the site manager app records about a resident beyond admission: the
- * Restricted and Out flags and the discharge details. Kept apart from Resident
- * so the resident responses the admin web already uses do not change.
- */
 const residentStatusSchema = new mongoose.Schema(
   {
     residentId: {

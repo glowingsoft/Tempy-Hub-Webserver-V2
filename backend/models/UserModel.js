@@ -61,7 +61,6 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
-    /** Only what the person changed is stored; anything missing follows the default. */
     notificationPreferences: {
       shiftClaims: Boolean,
       leaveAndSickness: Boolean,

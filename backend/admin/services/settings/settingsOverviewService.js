@@ -91,7 +91,6 @@ const loadEmergencyNotifyOffsite = async (organizationId) => {
   return Boolean(row?.value);
 };
 
-/** The Family Settings screen of the manager app: gazette and safety are read-only unless the caller is an org admin. */
 const getFamilyScreen = async (context) => {
   const { organizationId } = context;
   const [{ visits, access }, family, emergencyNotifyOffsite] = await Promise.all([

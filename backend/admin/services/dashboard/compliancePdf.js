@@ -53,10 +53,6 @@ const viewOf = ({ siteName, scores, supervisionByDepartment, staff }, day) => {
   };
 };
 
-/**
- * Renders the compliance report the way the template shows it: header, the four scores, supervision by
- * department as bars, and a table of every person's supervision standing with a page footer.
- */
 const renderCompliancePdf = async ({ report, day }) => {
   const html = renderTemplate("compliance", viewOf(report, day), TEMPLATE_ROOT);
   return (await htmlToPdf(html)).buffer;

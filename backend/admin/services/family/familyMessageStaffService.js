@@ -220,7 +220,6 @@ const emailFamily = async ({ userIds, subject, text }) => {
   return emailed;
 };
 
-/** audience is all (every next of kin), selected (next of kin of residentIds), family (everyone linked to residentIds) or people (recipientIds); conversationId sends to one contact. */
 const sendMessage = async ({
   actor,
   organizationId,

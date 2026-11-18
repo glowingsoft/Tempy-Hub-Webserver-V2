@@ -438,8 +438,6 @@ async function runDBBootstrap() {
             );
         }
 
-        // A stored null clientEventId blocks every other check on the sparse unique
-        // index, so roll call seeding inserted nothing. Unset the nulls.
         const clearedEvac = await EvacCheck.updateMany(
             { clientEventId: null },
             { $unset: { clientEventId: "" } }

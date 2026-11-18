@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-/** A public, read-only link to one document's latest version; one row per link, so who made it and when is kept after it is revoked. */
 const documentShareLinkSchema = new mongoose.Schema(
   {
     organizationId: {

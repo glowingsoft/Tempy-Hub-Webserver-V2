@@ -527,7 +527,6 @@ const fileTitle = (name) =>
     .replace(/\.[^.]+$/, "")
     .trim();
 
-/** The Documents screen: every active folder with its file count and the files still waiting for a signature from the site's staff. */
 const listSiteFolders = async ({ actor, organizationId, branchId }) => {
   const standing = await actorStanding(actor, organizationId);
   const siteId = scopeBranchFilter(standing, branchId);
@@ -621,7 +620,6 @@ const listSiteFolders = async ({ actor, organizationId, branchId }) => {
   });
 };
 
-/** Bulk Upload: files already uploaded to storage become documents of one folder; a file that fails is reported and the rest still go in. */
 const bulkCreateDocuments = async ({
   actor,
   organizationId,
@@ -672,7 +670,6 @@ const PUBLIC_AUDIENCES = [
   DocumentAudience.CONTRACTOR,
 ];
 
-/** Best effort: null when the pages cannot be counted, undefined when the file could not be read this time. */
 const pdfPages = async (file) => {
   if (file?.mimeType !== "application/pdf" || !file.key) return null;
   if (file.sizeBytes > PDF_PAGE_COUNT_LIMIT) return null;
@@ -715,7 +712,6 @@ const fileType = (file) => {
   return name.includes(".") ? name.split(".").pop().toUpperCase() : "File";
 };
 
-/** The page counts are worked out once per file version and kept, so the picker does not read every PDF each time. */
 const fillPages = async (rows) => {
   const missing = rows.filter(
     (row) =>
@@ -737,7 +733,6 @@ const fillPages = async (rows) => {
   }
 };
 
-/** The QR picker: the documents marked for visitors or contractors at this site, plus the organisation-wide ones. */
 const listVisitorDocuments = async ({
   actor,
   organizationId,
@@ -852,10 +847,6 @@ const documentQr = async ({ doc, actor, organizationId, label, baseUrl }) => {
   };
 };
 
-/**
- * The QR Code Generator screen. A visitor-facing document gets a public, read-only share link (one per document, reused while it is active)
- * that always opens its latest version; any https link is encoded as it is.
- */
 const createQrCode = async ({
   actor,
   organizationId,
@@ -882,7 +873,6 @@ const createQrCode = async ({
   };
 };
 
-/** Replaces the document's share link with a new one; the old link, and any QR printed from it, stops working. */
 const regenerateQrLink = async ({
   actor,
   organizationId,
@@ -909,7 +899,6 @@ const revokeQrLink = async ({ actor, organizationId, documentId }) => {
   return { documentId: doc._id, qrActive: false };
 };
 
-/** What a scan of a document QR opens: a short-lived, read-only link to the latest version, or nothing once the link is revoked or the document is no longer for visitors. */
 const getSharedDocumentUrl = async ({ token }) => {
   const unavailable = new AppError("qr_link_unavailable", 404);
   const value = String(token || "");

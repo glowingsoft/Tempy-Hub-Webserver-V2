@@ -52,7 +52,6 @@ const residentSchema = new mongoose.Schema(
     visitorPasscodeRequired: { type: Boolean, default: false },
     visitorPasscodeHash: { type: String, default: null, select: false },
     visitorPasscodeSetAt: { type: Date, default: null },
-    /** Visiting restriction set by the site manager. */
     restricted: { type: Boolean, default: false },
     restrictedReason: { type: String, default: "" },
     restrictedAt: { type: Date, default: null },
@@ -61,7 +60,6 @@ const residentSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
-    /** Currently out of the home. */
     isOut: { type: Boolean, default: false },
     outDestination: { type: String, default: "" },
     outNote: { type: String, default: "" },
@@ -72,7 +70,6 @@ const residentSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
-    /** Filled when the site manager deactivates the resident with a reason. */
     discharge: {
       reason: {
         type: String,

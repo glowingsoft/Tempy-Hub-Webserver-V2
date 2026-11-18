@@ -55,7 +55,6 @@ const attendanceDaySchema = new mongoose.Schema(
     workedMinutes: { type: Number, default: null },
     /** True when the session was closed by auto-checkout, not a staff punch. */
     autoClosed: { type: Boolean, default: false },
-    /** Set when a manager dealt with a missed sign-out from the People screen. */
     signOutResolvedAt: { type: Date, default: null },
     signOutResolvedByUserId: {
       type: mongoose.Schema.Types.ObjectId,

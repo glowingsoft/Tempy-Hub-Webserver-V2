@@ -389,7 +389,6 @@ const RETENTION_MONTHS = 12;
 const hoursAndMinutes = (minutes) =>
   `${Math.floor((minutes ?? 0) / 60)} hr ${(minutes ?? 0) % 60} min`;
 
-/** Statistics screen of the manager app: visits in the period and the site's workforce movement. */
 const getSiteStatistics = async ({
   actor,
   organizationId,
@@ -525,7 +524,6 @@ const cycleProgress = ({ startDate, nextDueAt, now, timezone }) => {
   };
 };
 
-/** Compliance screen of the manager app: the four scores, supervision by department and each person's supervision standing. */
 const buildSiteCompliance = async ({
   actor,
   organizationId,
@@ -668,7 +666,6 @@ const complianceCsv = ({ scores, supervisionByDepartment, staff }) => {
   ].join("\r\n")}`;
 };
 
-/** The Export CSV / PDF button of the Compliance screen: every person, not one page. */
 const exportSiteCompliance = async ({ format, ...scope }) => {
   const kind = String(format ?? "")
     .trim()

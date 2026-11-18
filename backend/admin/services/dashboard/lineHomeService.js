@@ -1,7 +1,6 @@
 const moment = require("moment-timezone");
 const { toObjectId } = require("@appServices/family/familyPipeline");
 const { AppError } = require("@services/_errors/AppError");
-const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { StaffProfile } = require("@models/StaffProfile");
 const { AttendanceDay } = require("@models/AttendanceDay");
@@ -12,12 +11,10 @@ const { Resident } = require("@models/Resident");
 const { SupervisionRecord } = require("@models/SupervisionRecord");
 const {
   MembershipRole,
-  PresenceStatus,
   PunctualityStatus,
   LeaveRequestStatus,
   ShiftStatus,
   ShiftClaimStatus,
-  StaffProfileStatus,
   AdmissionStatus,
   ComplianceMeetingStatus,
 } = require("@models/domainEnums");
@@ -38,38 +35,7 @@ const { supervisionStanding } = require("@adminServices/supervision/supervisionS
 const { effectiveIntervals } = require("@adminServices/appraisal/cycle");
 const { User } = require("@models/UserModel");
 
-const ON_SITE = [PresenceStatus.ON_SITE, PresenceStatus.ON_BREAK];
 const ROTA_WINDOW_DAYS = 14;
-
-const dayKey = (value, tz) => moment.tz(value, tz).format("YYYY-MM-DD");
-
-const headerOf = async ({ actor, standing, organizationId, todayWork }) => {
-  const [branch, profile] = await Promise.all([
-    Branch.findById(standing.branchId).select("name").lean(),
-    StaffProfile.findOne({
-      userId: actor._id,
-      organizationId,
-      status: StaffProfileStatus.ACTIVE,
-    })
-      .select("_id")
-      .lean(),
-  ]);
-  const live = profile
-    ? await AttendanceDay.exists({
-        staffId: profile._id,
-        workDate: todayWork,
-        presenceStatus: { $in: ON_SITE },
-      })
-    : false;
-
-  return {
-    name: actor.name || "",
-    photoUrl: actor.profileIcon || "",
-    siteName: branch?.name || "",
-    role: standing.role,
-    live: Boolean(live),
-  };
-};
 
 const thisMonthOf = async ({ teamIds, from, to }) => {
   const fromDay = from.format("YYYY-MM-DD");
@@ -331,7 +297,6 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
   if (!standing.branchId) throw new AppError("branch_scope_required", 400);
 
   const tz = await loadTimezone(standing);
-  const todayWork = new Date(`${dayKey(now, tz)}T00:00:00.000Z`);
   const teamIds = await loadTeamIds({ actor, organizationId, standing });
   const ids = teamIds.map((id) => toObjectId(id));
   const daily = resolvePeriod("daily", tz);
@@ -339,9 +304,8 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
   const orgOid = toObjectId(organizationId);
   const branchOid = toObjectId(standing.branchId);
 
-  const [header, today, thisMonth, leavePending, shiftClaim, supervisions, family, rota, restricted] =
+  const [today, thisMonth, leavePending, shiftClaim, supervisions, family, rota, restricted] =
     await Promise.all([
-      headerOf({ actor, standing, organizationId, todayWork }),
       loadTeamCounts({
         teamIds,
         from: daily.from,
@@ -369,7 +333,6 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
     ]);
 
   return {
-    header,
     today: {
       onShift: today.onShift,
       checkedIn: today.checkedIn,

@@ -1,9 +1,16 @@
 
-function getFullImageUrl(imagePath, baseUrl = process.env.S3_BASE_URL || "") {
-  if (imagePath && !imagePath.startsWith("http")) {
-    return baseUrl + imagePath;
+function s3BaseUrl() {
+  const base = process.env.S3_BASE_URL || "";
+  if (!base) return "";
+  return base.endsWith("/") ? base : `${base}/`;
+}
+
+function getFullImageUrl(imagePath, baseUrl = s3BaseUrl()) {
+  const trimmed = imagePath == null ? "" : String(imagePath).trim();
+  if (trimmed && !trimmed.startsWith("http")) {
+    return baseUrl + trimmed;
   }
-  return imagePath || baseUrl + "noimage.png";
+  return trimmed || `${baseUrl}noimage.png`;
 }
 
 function toPublicImageUrl(value) {

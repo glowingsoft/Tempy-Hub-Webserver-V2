@@ -5,7 +5,7 @@ const {
   requireRoles,
 } = require("@middlewares/membershipMiddleware");
 const { MembershipRole } = require("@models/domainEnums");
-const { getHome } = require("../../admin/controllers/lineHomeController");
+const { getHome, getToday } = require("../../admin/controllers/lineHomeController");
 
 const router = express.Router();
 
@@ -15,6 +15,7 @@ router.use(
   requireRoles([MembershipRole.LINE_MANAGER]),
 );
 
+router.get("/today", getToday);
 router.get("/", getHome);
 
 module.exports = router;

@@ -34,6 +34,7 @@ const getActiveEvacuation = async (req, res) => {
       branchId: req.query.branchId,
       type: req.query.type,
       includeStats: false,
+      selfUserId: req.user._id,
     });
 
     return sendResponse({

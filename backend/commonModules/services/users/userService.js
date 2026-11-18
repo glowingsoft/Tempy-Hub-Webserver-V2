@@ -12,6 +12,7 @@ const { Department } = require("@models/Department");
 const { Organization } = require("@models/Organization");
 const { StaffProfileStatus } = require("@models/domainEnums");
 const { formatUserResponse } = require("@utils/userResponseUtil");
+const { getFullImageUrl } = require("@utils/imageHelper");
 const { userCache } = require("@config/nodeCache");
 const { AppError } = require("@services/_errors/AppError");
 
@@ -198,7 +199,7 @@ const linkedStaffSummary = (staff) =>
         employeeCode: staff.employeeCode || "",
         name: staff.name || "",
         email: staff.email || "",
-        image: staff.image || "",
+        image: getFullImageUrl(staff.image),
       }
     : null;
 
@@ -211,6 +212,7 @@ const staffCardFromRow = (profile, {
   supervisor,
 }) => ({
     ...profile,
+    photoUrl: getFullImageUrl(profile.photoUrl),
     organization: organization
       ? {
           _id: organization._id,

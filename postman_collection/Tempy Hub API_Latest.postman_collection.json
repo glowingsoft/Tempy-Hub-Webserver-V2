@@ -11602,6 +11602,55 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "my team today",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/line-home/today?tab=onShift&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "line-home",
+                    "today"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "onShift"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         }
@@ -30484,6 +30533,52 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "my team today",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/line-home/today?tab=onShift&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "line-home",
+                    "today"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "onShift"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -30553,7 +30648,7 @@
                       "pm.test(\"Line home fetched\", function () {",
                       "    pm.response.to.have.status(200);",
                       "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.have.all.keys(\"header\", \"today\", \"thisMonth\", \"activity\");",
+                      "    pm.expect(data).to.have.all.keys(\"today\", \"thisMonth\", \"activity\");",
                       "    pm.expect(data.today).to.include.keys(\"onShift\", \"checkedIn\", \"late\", \"onSite\");",
                       "    pm.expect(data.thisMonth).to.include.keys(\"attendancePercent\", \"onTimePercent\", \"sicknessPercent\", \"mostLate\");",
                       "    pm.expect(data.activity).to.include.keys(\"leave\", \"shiftClaim\", \"supervisions\", \"familyPhotos\", \"tempyAgency\", \"teamRota\", \"restrictedResidents\");",
@@ -30575,7 +30670,7 @@
                     "line-home"
                   ]
                 },
-                "description": "Line Manager Team home (Figma). Line manager only; everyone else gets 403. No query. header: name, photoUrl, siteName, role (lineManager), live (on site today). today (direct reports): onShift, checkedIn, late, onSite. thisMonth (direct reports, calendar month): attendancePercent, onTimePercent, sicknessPercent, mostLate {staffId, name, lateDays} or null. activity cards: leave.pending, shiftClaim {pending, preview {staffId, name, startsAt, endsAt}|null}, supervisions {dueThisMonth, overdue, overdueName}, familyPhotos.pending (site), tempyAgency {openTonight, bids always null}, teamRota {windowDays: 14, daysToBook}, restrictedResidents.count (site). See All is GET /app/team-live/activity. Own shifts stay GET /app/shifts/my."
+                "description": "Line Manager Team home (Figma). Line manager only; everyone else gets 403. No query. Name, photo, site and role come from login. today (direct reports): onShift, checkedIn, late, onSite. thisMonth (direct reports, calendar month): attendancePercent, onTimePercent, sicknessPercent, mostLate {staffId, name, lateDays} or null. activity cards: leave.pending, shiftClaim {pending, preview {staffId, name, startsAt, endsAt}|null}, supervisions {dueThisMonth, overdue, overdueName}, familyPhotos.pending (site), tempyAgency {openTonight, bids always null}, teamRota {windowDays: 14, daysToBook}, restrictedResidents.count (site). See All is GET /app/team-live/activity. Own shifts stay GET /app/shifts/my."
               },
               "response": []
             },
@@ -30590,7 +30685,7 @@
                       "pm.test(\"Line home fetched\", function () {",
                       "    pm.response.to.have.status(200);",
                       "    const data = pm.response.json().data;",
-                      "    pm.expect(data).to.have.all.keys(\"header\", \"today\", \"thisMonth\", \"activity\");",
+                      "    pm.expect(data).to.have.all.keys(\"today\", \"thisMonth\", \"activity\");",
                       "});"
                     ]
                   }
@@ -30612,6 +30707,57 @@
                   ]
                 },
                 "description": "Same payload as GET /app/line-home, org in the path. Line manager only."
+              },
+              "response": []
+            },
+            {
+              "name": "my team today",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"My Team Today fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.data).to.be.an(\"array\");",
+                      "    pm.expect(body.meta).to.include.keys(\"tab\", \"counts\", \"uncoveredNightShift\");",
+                      "    pm.expect(body.meta.counts).to.include.keys(\"onShift\", \"checkedIn\", \"late\", \"sick\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/line-home/today?tab=onShift&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "line-home",
+                    "today"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "onShift"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "My Team Today. Line manager only. Query: tab (onShift, checkedIn, late or sick; default onShift; 400 invalid_today_tab), page, limit. data is the active tab. Each row: staffId, name, photoUrl, jobTitle, startsAt, endsAt, clockInAt, lateMinutes, sickReportedAt, clockedIn. meta.counts is all four chips (unique people). meta.uncoveredNightShift is true when an open night shift (18:00+) has no staff (Request Agency Cover). Direct reports only."
               },
               "response": []
             },

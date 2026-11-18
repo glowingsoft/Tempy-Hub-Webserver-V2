@@ -130,6 +130,12 @@ scoped.get(
 );
 
 scoped.get(
+  "/line-home/today",
+  requireRoles([MembershipRole.LINE_MANAGER]),
+  lineHomeController.getToday,
+);
+
+scoped.get(
   "/site-live/activity",
   requireRoles(MANAGERS),
   siteLiveController.getSiteLiveActivity,

@@ -280,6 +280,91 @@ const shapeKiosk = (kiosk) => {
   };
 };
 
+/** Statuses that mean this person has already responded (seeded rows stay unknown). */
+const RESPONDED_CHECK_STATUSES = [
+  EvacCheckStatus.SAFE,
+  EvacCheckStatus.MISSING,
+  EvacCheckStatus.OFF_SITE,
+];
+
+/** One lookup for this user's staff profile + their EvacCheck on the event. */
+const selfCheckLookupPipeline = (userId) => {
+  const userOid = toObjectId(userId);
+  return [
+    {
+      $lookup: {
+        from: COLLECTIONS.staffProfiles,
+        let: { orgId: "$branchDoc.organizationId" },
+        pipeline: [
+          {
+            $match: {
+              userId: userOid,
+              status: StaffProfileStatus.ACTIVE,
+            },
+          },
+          {
+            $match: {
+              $expr: { $eq: ["$organizationId", "$$orgId"] },
+            },
+          },
+          { $limit: 1 },
+          { $project: { _id: 1 } },
+        ],
+        as: "_selfProfile",
+      },
+    },
+    {
+      $lookup: {
+        from: COLLECTIONS.evacChecks,
+        let: {
+          eventId: "$_id",
+          profileId: { $arrayElemAt: ["$_selfProfile._id", 0] },
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$evacuationEventId", "$$eventId"] },
+                  { $eq: ["$personKind", EvacPersonKind.STAFF] },
+                  { $eq: ["$personId", "$$profileId"] },
+                ],
+              },
+            },
+          },
+          {
+            $match: { status: { $in: RESPONDED_CHECK_STATUSES } },
+          },
+          { $limit: 1 },
+          {
+            $project: {
+              _id: 1,
+              evacuationEventId: 1,
+              personKind: 1,
+              personId: 1,
+              status: 1,
+              markedAt: 1,
+              locationLabel: 1,
+              geo: 1,
+              lastSeenLabel: 1,
+              lastSeenAt: 1,
+              updatedAt: 1,
+            },
+          },
+        ],
+        as: "_selfEvacCheck",
+      },
+    },
+    {
+      $addFields: {
+        evacCheck: { $gt: [{ $size: "$_selfEvacCheck" }, 0] },
+        check: { $ifNull: [{ $arrayElemAt: ["$_selfEvacCheck", 0] }, null] },
+      },
+    },
+    { $unset: ["_selfProfile", "_selfEvacCheck"] },
+  ];
+};
+
 const formatEventDoc = (doc, { includeFamilyAlert = false } = {}) => {
   if (!doc) return null;
   const { branchDoc, statRows, rollcall, familyAlert, kiosk, kiosks, ...event } =
@@ -727,6 +812,7 @@ const loadEventWithBranchAndStats = async ({
   includeChecks = false,
   includeFamilyAlert = false,
   many = false,
+  selfUserId = null,
 }) => {
   const pipeline = [{ $match: match }, { $sort: { startedAt: -1 } }, { $limit: 1 }];
   pipeline.push(...branchLookupPipeline, ...kioskLookupPipeline);
@@ -743,6 +829,10 @@ const loadEventWithBranchAndStats = async ({
     pipeline.push(...rollcallDetailLookup("$_id"));
   } else if (includeStats) {
     pipeline.push(...rollcallStatsPipeline("$_id"));
+  }
+
+  if (selfUserId) {
+    pipeline.push(...selfCheckLookupPipeline(selfUserId));
   }
 
   const docs = await EvacuationEvent.aggregate(pipeline);
@@ -801,12 +891,23 @@ const startEvacuation = async ({
   });
 };
 
+const withSelfCheck = (data, selfUserId) => {
+  if (!selfUserId) return data;
+  if (!data) return {};
+  return {
+    ...data,
+    evacCheck: Boolean(data.evacCheck),
+    check: data.check || null,
+  };
+};
+
 const getActiveEvacuation = async ({
   organizationId,
   branchId,
   includeStats = true,
   actor = null,
   type,
+  selfUserId = null,
 }) => {
   if (branchId) {
     const branchOid = toObjectId(branchId);
@@ -817,11 +918,13 @@ const getActiveEvacuation = async ({
       const standing = await actorStanding(actor, organizationId);
       assertSiteManagerBranch(standing, branchOid);
     }
-    return loadEventWithBranchAndStats({
+    const data = await loadEventWithBranchAndStats({
       match: activeEvacuationMatch({ branchId: branchOid, type }),
       organizationId: null,
       includeStats,
+      selfUserId,
     });
+    return withSelfCheck(data, selfUserId);
   }
 
   const standing =
@@ -841,16 +944,18 @@ const getActiveEvacuation = async ({
       .select("_id")
       .lean();
     branchIds = orgBranches.map((row) => row._id);
-    if (!branchIds.length) return null;
+    if (!branchIds.length) return withSelfCheck(null, selfUserId);
   } else {
-    return null;
+    return withSelfCheck(null, selfUserId);
   }
 
-  return loadEventWithBranchAndStats({
+  const data = await loadEventWithBranchAndStats({
     match: activeEvacuationMatch({ branchIds, type }),
     organizationId,
     includeStats,
+    selfUserId,
   });
+  return withSelfCheck(data, selfUserId);
 };
 
 const getEvacuationEvent = async ({

@@ -140,6 +140,9 @@ docs/
 # Local helper scripts (not part of the app)
 /scripts/
 
+# Local unit tests
+/tests/
+
 # Spreadsheets
 *.xlsx
 *.xls

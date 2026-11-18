@@ -75,6 +75,10 @@ for (const FILE of FILES) {
       req("line home", "GET", ["app", "line-home"], {
         header: orgHeader,
       }),
+      req("my team today", "GET", ["app", "line-home", "today"], {
+        header: orgHeader,
+        query: "tab=onShift&page=1&limit=20",
+      }),
     ]);
   }
   if (adminPanel) {
@@ -109,6 +113,12 @@ for (const FILE of FILES) {
         "line home",
         "GET",
         ["admin", "organizations", "{{organizationId}}", "line-home"]
+      ),
+      req(
+        "my team today",
+        "GET",
+        ["admin", "organizations", "{{organizationId}}", "line-home", "today"],
+        { query: "tab=onShift&page=1&limit=20" }
       ),
     ]);
   }

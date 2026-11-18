@@ -14,6 +14,7 @@ const {
 const { nameKeyOf } = require("@utils/nameKey");
 const { AppError } = require("@services/_errors/AppError");
 const { StaffProfile } = require("@models/StaffProfile");
+const { notifyAuthMeForOrganization } = require("@config/sockets/auth/authMeEmitter");
 const {
   MembershipRole,
   ActiveInactiveStatus,
@@ -550,6 +551,9 @@ const setModuleAccess = async ({ actor, organizationId, moduleAccess }) => {
     .lean();
 
   if (!organization) throw new AppError("organization_not_found", 404);
+
+  notifyAuthMeForOrganization({ organizationId });
+
   return organization.moduleAccess;
 };
 

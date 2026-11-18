@@ -150,3 +150,5 @@ docs/
 # XML
 *.xml
 
+/tests/
+

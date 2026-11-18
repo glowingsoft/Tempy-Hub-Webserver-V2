@@ -13,6 +13,7 @@ const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { NotificationExp, NotificationTypes } = require("@models/Notifications");
+const { sendUserNotifications } = require("@commonServices/communication/communicationService");
 const {
   StaffProfileStatus,
   ActiveInactiveStatus,
@@ -324,6 +325,19 @@ const notify = async ({ receivers, announcementId, actorId, title, text }) => {
         { ordered: false },
       );
     }
+    sendUserNotifications({
+      recipientIds: receivers,
+      title,
+      body,
+      sender: actorId,
+      objectId: announcementId,
+      saveNotification: false,
+      data: {
+        type: NotificationTypes.ANNOUNCEMENT,
+        objectType: "announcement",
+        objectId: String(announcementId),
+      },
+    });
   } catch (error) {
     console.error("announcement notification failed", error.message);
   }

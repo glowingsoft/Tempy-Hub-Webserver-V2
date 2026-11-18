@@ -468,7 +468,7 @@ const assertNotOnSickOrAbsence = async (staffId, at) => {
   const dayEnd = moment.tz(at, DEFAULT_TZ).endOf("day").toDate();
   const blocking = await LeaveRequest.exists({
     staffId,
-    leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE] },
+    leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE, LeaveType.ANNUAL] },
     status: {
       $in: [
         LeaveRequestStatus.PENDING,
@@ -1106,6 +1106,7 @@ const clockInForStaff = async ({
   const clockInAt = occurredAt ? new Date(occurredAt) : new Date();
   const workDate = startOfUtcDay(clockInAt);
   await assertNotAlreadyClockedIn(staffProfile._id);
+  await assertNotOnSickOrAbsence(staffProfile._id, clockInAt);
 
   const existingByEvent = await findByClientEventId(eventId);
   assertClientEventAvailable(existingByEvent, staffProfile._id);

@@ -160,6 +160,8 @@ const updateUserProfile = async (req, res) => {
     distanceUnit,
     currencySymbol,
     currencyCode,
+    emergencyContactName,
+    emergencyContactPhone,
   } = req.body;
 
   try {
@@ -172,6 +174,8 @@ const updateUserProfile = async (req, res) => {
       distanceUnit,
       currencySymbol,
       currencyCode,
+      emergencyContactName,
+      emergencyContactPhone,
       allowCurrencyUpdate: true,
       organizationId: req.orgId || req.header("x-org-id"),
     });

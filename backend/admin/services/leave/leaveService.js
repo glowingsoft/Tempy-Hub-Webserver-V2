@@ -8,6 +8,7 @@ const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
 const { Shift } = require("@models/Shift");
+const { AttendanceDay } = require("@models/AttendanceDay");
 const {
   paginateWithFacet,
   facetCount,
@@ -40,6 +41,12 @@ const assertKnownLeaveType = (leaveType) => {
 const FULL_TIME_WEEKLY_HOURS = 37.5;
 const DEFAULT_FULL_YEAR_HOLIDAY_DAYS = 10;
 const DEFAULT_TZ = "Europe/London";
+
+const startOfUtcDay = (date) => {
+  const d = new Date(date);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+};
 
 const siteTimezone = async (branchId) => {
   if (!branchId) return DEFAULT_TZ;
@@ -553,7 +560,8 @@ const createLeaveRequest = async ({
   const profile = await requireStaffProfile(userId, organizationId);
   await assertLeaveRequestsEnabled(profile, organizationId);
   assertKnownLeaveType(leaveType);
-  const dates = parseLeaveDates(startDate, endDate);
+  const timezone = await siteTimezone(profile.branchId);
+  const dates = parseLeaveDates(startDate, endDate, { timezone });
   const days = assertLeaveTotalDays(totalDays, dates.calendarDays);
   assertHolidaySpan(leaveType || LeaveType.ANNUAL, dates.calendarDays);
 
@@ -562,6 +570,19 @@ const createLeaveRequest = async ({
   if (!STAFF_REQUESTABLE_TYPES.includes(type)) {
     throw new AppError("staff_leave_type_not_allowed", 400);
   }
+
+  const today = moment.tz(timezone).startOf("day");
+  if (
+    !today.isBefore(moment(dates.startDate).tz(timezone).startOf("day")) &&
+    !today.isAfter(moment(dates.endDate).tz(timezone).startOf("day"))
+  ) {
+    const clockedIn = await AttendanceDay.exists({
+      staffId: profile._id,
+      $or: [{ workDate: startOfUtcDay(new Date()) }, { clockOutAt: null }],
+    });
+    if (clockedIn) throw new AppError("leave_already_clocked_in", 409);
+  }
+
   await assertNoOverlap(profile._id, dates.startDate, dates.endDate);
   await assertSufficientBalance({
     staffId: profile._id,
@@ -616,6 +637,12 @@ const requireShiftForSickness = async ({
   if (shiftDay.isBefore(today)) {
     throw new AppError("sickness_shift_in_the_past", 400);
   }
+
+  const clockedIn = await AttendanceDay.exists({
+    staffId,
+    shiftId: shift._id,
+  });
+  if (clockedIn) throw new AppError("sickness_already_clocked_in", 409);
 
   return shift;
 };

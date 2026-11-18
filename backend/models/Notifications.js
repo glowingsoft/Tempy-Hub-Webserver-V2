@@ -90,6 +90,9 @@ NotificationSchema.pre("save", function (next) {
   next();
 });
 
+NotificationSchema.index({ receiverId: 1, createdAt: -1 });
+NotificationSchema.index({ receiverId: 1, isRead: 1 });
+
 // Export both Notification model and NotificationTypes enum
 const NotificationExp = mongoose.model("Notification", NotificationSchema);
 module.exports = {

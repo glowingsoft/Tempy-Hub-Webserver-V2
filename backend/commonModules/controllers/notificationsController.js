@@ -31,6 +31,7 @@ const readNotification = async (req, res) => {
   try {
     const data = await notificationService.readNotification({
       notificationId: req.params.id,
+      receiverId: req.user._id,
     });
     return sendResponse({
       res,
@@ -43,7 +44,24 @@ const readNotification = async (req, res) => {
   }
 };
 
+const readAllNotifications = async (req, res) => {
+  try {
+    const data = await notificationService.readAllNotifications({
+      receiverId: req.user._id,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "notifications_marked_read_success",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "notification_mark_read_error");
+  }
+};
+
 module.exports = {
   getNotifications,
   readNotification,
+  readAllNotifications,
 };

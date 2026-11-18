@@ -1,16 +1,33 @@
 const moment = require("moment-timezone");
-const { NotificationExp } = require("@models/Notifications");
+const {
+  NotificationExp,
+  NotificationTypes,
+} = require("@models/Notifications");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
+const { getFullImageUrl } = require("@utils/imageHelper");
+
+/** Own screens + APIs; still stored for push. */
+const INBOX_EXCLUDED_OBJECT_TYPES = ["announcement"];
+const INBOX_EXCLUDED_TYPES = [NotificationTypes.ANNOUNCEMENT];
+
+const inboxMatch = (receiverId) => ({
+  receiverId,
+  objectType: { $nin: INBOX_EXCLUDED_OBJECT_TYPES },
+  type: { $nin: INBOX_EXCLUDED_TYPES },
+});
 
 const getNotifications = async ({ receiverId, page, limit, timezone }) => {
-  const [notifications, totalNotifications] = await Promise.all([
-    NotificationExp.find({ receiverId })
+  const match = inboxMatch(receiverId);
+  const [notifications, totalNotifications, unread] = await Promise.all([
+    NotificationExp.find(match)
       .populate("subjectId", "_id name profileIcon")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(limit),
-    NotificationExp.countDocuments({ receiverId }),
+      .limit(limit)
+      .lean(),
+    NotificationExp.countDocuments(match),
+    NotificationExp.countDocuments({ ...match, isRead: false }),
   ]);
 
   const userTimezone = timezone || "UTC";
@@ -33,7 +50,13 @@ const getNotifications = async ({ receiverId, page, limit, timezone }) => {
       type,
       objectId,
       objectType,
-      subject: subjectId,
+      subject: subjectId
+        ? {
+            _id: subjectId._id,
+            name: subjectId.name || "",
+            profileIcon: getFullImageUrl(subjectId.profileIcon),
+          }
+        : null,
       title,
       body,
       data: notificationData,
@@ -44,13 +67,16 @@ const getNotifications = async ({ receiverId, page, limit, timezone }) => {
 
   return {
     data,
-    meta: generateMeta(page, limit, totalNotifications),
+    meta: {
+      ...generateMeta(page, limit, totalNotifications),
+      unread,
+    },
   };
 };
 
-const readNotification = async ({ notificationId }) => {
-  const notification = await NotificationExp.findByIdAndUpdate(
-    notificationId,
+const readNotification = async ({ notificationId, receiverId }) => {
+  const notification = await NotificationExp.findOneAndUpdate(
+    { _id: notificationId, receiverId },
     { isRead: true },
     { new: true }
   );
@@ -62,7 +88,20 @@ const readNotification = async ({ notificationId }) => {
   return notification;
 };
 
+const readAllNotifications = async ({ receiverId }) => {
+  const result = await NotificationExp.updateMany(
+    { ...inboxMatch(receiverId), isRead: false },
+    { $set: { isRead: true, updatedAt: new Date() } },
+  );
+
+  return {
+    unread: 0,
+    marked: result.modifiedCount ?? 0,
+  };
+};
+
 module.exports = {
   getNotifications,
   readNotification,
+  readAllNotifications,
 };

@@ -212,6 +212,8 @@ const staffCardFromRow = (profile, {
   supervisor,
 }) => ({
     ...profile,
+    emergencyContactName: profile.emergencyContactName || "",
+    emergencyContactPhone: profile.emergencyContactPhone || "",
     photoUrl: getFullImageUrl(profile.photoUrl),
     organization: organization
       ? {
@@ -415,6 +417,9 @@ const getOtherUserProfile = async ({ userId }) => {
   return response;
 };
 
+const optionalStaffText = (value) =>
+  value == null ? "" : String(value).trim();
+
 const updateUserProfile = async ({
   userId,
   name,
@@ -424,6 +429,8 @@ const updateUserProfile = async ({
   distanceUnit,
   currencySymbol,
   currencyCode,
+  emergencyContactName,
+  emergencyContactPhone,
   allowCurrencyUpdate = false,
   organizationId,
 }) => {
@@ -478,23 +485,37 @@ const updateUserProfile = async ({
     };
   }
 
+  const staffUpdate = {};
+  if (organizationId && mongoose.Types.ObjectId.isValid(organizationId)) {
+    if (phoneNumber) staffUpdate.phone = phoneNumber;
+    if (profileIcon) staffUpdate.photoUrl = profileIcon;
+    if (emergencyContactName !== undefined) {
+      staffUpdate.emergencyContactName = optionalStaffText(emergencyContactName);
+    }
+    if (emergencyContactPhone !== undefined) {
+      const contactPhone = optionalStaffText(emergencyContactPhone).replace(
+        /\s+/g,
+        ""
+      );
+      if (contactPhone && !validator.isMobilePhone(contactPhone)) {
+        throw new AppError("invalid_phone_1", 400);
+      }
+      staffUpdate.emergencyContactPhone = contactPhone;
+    }
+  }
+
   await user.save();
   userCache.del(userId.toString());
 
-  if (organizationId && mongoose.Types.ObjectId.isValid(organizationId)) {
-    const staffUpdate = {};
-    if (phoneNumber) staffUpdate.phone = phoneNumber;
-    if (profileIcon) staffUpdate.photoUrl = profileIcon;
-    if (Object.keys(staffUpdate).length) {
-      await StaffProfile.updateOne(
-        {
-          userId,
-          organizationId,
-          status: StaffProfileStatus.ACTIVE,
-        },
-        { $set: staffUpdate }
-      );
-    }
+  if (Object.keys(staffUpdate).length) {
+    await StaffProfile.updateOne(
+      {
+        userId,
+        organizationId,
+        status: StaffProfileStatus.ACTIVE,
+      },
+      { $set: staffUpdate }
+    );
   }
 
   return withStaffCard(

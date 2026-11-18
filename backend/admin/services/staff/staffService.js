@@ -40,6 +40,18 @@ const {
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+const trimmedOrEmpty = (value) =>
+  value == null ? "" : String(value).trim();
+
+const applyEmergencyContact = (target, { emergencyContactName, emergencyContactPhone }) => {
+  if (emergencyContactName !== undefined) {
+    target.emergencyContactName = trimmedOrEmpty(emergencyContactName);
+  }
+  if (emergencyContactPhone !== undefined) {
+    target.emergencyContactPhone = trimmedOrEmpty(emergencyContactPhone);
+  }
+};
+
 const organizationSummary = (organization) =>
   organization
     ? {
@@ -860,6 +872,8 @@ const staffLookups = [
       reportsToStaffId: { $ifNull: ["$reportsToStaffId", null] },
       supervisionIntervalMonths: { $ifNull: ["$supervisionIntervalMonths", null] },
       appraisalIntervalMonths: { $ifNull: ["$appraisalIntervalMonths", null] },
+      emergencyContactName: { $ifNull: ["$emergencyContactName", ""] },
+      emergencyContactPhone: { $ifNull: ["$emergencyContactPhone", ""] },
     },
   },
   {
@@ -885,6 +899,8 @@ const createStaffProfile = async ({
   startDate,
   contractedWeeklyHours,
   phone,
+  emergencyContactName,
+  emergencyContactPhone,
   photoUrl,
   bannerUrl,
   ward,
@@ -960,18 +976,22 @@ const createStaffProfile = async ({
       role: membership.role,
     });
 
-    if (pinHash || phone || photoUrl || bannerUrl || ward || locationLabel || status) {
-      if (pinHash) profile.pinHash = pinHash;
-      if (phone) profile.phone = phone;
-      if (photoUrl) profile.photoUrl = photoUrl;
-      if (bannerUrl) profile.bannerUrl = bannerUrl;
-      if (ward) profile.ward = ward;
-      if (locationLabel) profile.locationLabel = locationLabel;
-      if (status) {
-        profile.status = status;
-        profile.inactiveAt =
-          status === StaffProfileStatus.INACTIVE ? new Date() : null;
-      }
+    applyEmergencyContact(profile, {
+      emergencyContactName,
+      emergencyContactPhone,
+    });
+    if (pinHash) profile.pinHash = pinHash;
+    if (phone) profile.phone = phone;
+    if (photoUrl) profile.photoUrl = photoUrl;
+    if (bannerUrl) profile.bannerUrl = bannerUrl;
+    if (ward) profile.ward = ward;
+    if (locationLabel) profile.locationLabel = locationLabel;
+    if (status) {
+      profile.status = status;
+      profile.inactiveAt =
+        status === StaffProfileStatus.INACTIVE ? new Date() : null;
+    }
+    if (profile.isModified()) {
       await profile.save();
     }
 
@@ -1198,6 +1218,8 @@ const updateStaffProfile = async ({
   startDate,
   contractedWeeklyHours,
   phone,
+  emergencyContactName,
+  emergencyContactPhone,
   photoUrl,
   bannerUrl,
   ward,
@@ -1278,6 +1300,10 @@ const updateStaffProfile = async ({
     profile.contractedWeeklyHours = Number(contractedWeeklyHours);
   }
   if (phone !== undefined) profile.phone = phone;
+  applyEmergencyContact(profile, {
+    emergencyContactName,
+    emergencyContactPhone,
+  });
   if (photoUrl !== undefined) profile.photoUrl = photoUrl;
   if (bannerUrl !== undefined) profile.bannerUrl = bannerUrl;
   if (ward !== undefined) profile.ward = ward;

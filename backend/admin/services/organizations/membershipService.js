@@ -16,6 +16,7 @@ const {
   getPermission,
   enabledModuleSlugs,
   withDefaultStaffPermissions,
+  ROLES_WITH_ALL_PERMISSIONS,
 } = require("./permissionCatalogue");
 const { StaffProfile } = require("@models/StaffProfile");
 const {
@@ -577,7 +578,8 @@ const updateMembership = async ({
 
   assertMayGrant(standing, { role: nextRole, branchId: nextBranchId });
 
-  if (permissions !== undefined) {
+  const inheritsOrgAccess = ROLES_WITH_ALL_PERMISSIONS.includes(nextRole);
+  if (permissions !== undefined && !inheritsOrgAccess) {
     const organization = await Organization.findById(organizationId)
       .select("moduleAccess")
       .lean();
@@ -601,7 +603,11 @@ const updateMembership = async ({
 
   membership.role = nextRole;
   membership.branchId = nextBranchId;
-  if (permissions !== undefined) membership.permissions = permissions;
+  if (inheritsOrgAccess) {
+    membership.permissions = [];
+  } else if (permissions !== undefined) {
+    membership.permissions = permissions;
+  }
   if (status !== undefined && status !== membership.status) {
     membership.status = status;
     membership.deactivatedAt =
@@ -698,7 +704,9 @@ const inviteMember = async ({
   const scopedBranchId = branchId || null;
 
   assertMayGrant(standing, { role, branchId: scopedBranchId });
-  assertPermissionsGrantable(standing, permissions, organization);
+  if (!ROLES_WITH_ALL_PERMISSIONS.includes(role)) {
+    assertPermissionsGrantable(standing, permissions, organization);
+  }
   const resolvedPermissions = withDefaultStaffPermissions(
     role,
     organization,
@@ -982,7 +990,7 @@ const updateInvitation = async ({
   assertMayGrant(standing, { role: nextRole, branchId: nextBranchId });
   if (hasBranch) await assertBranchInOrganization(nextBranchId, organizationId);
 
-  if (hasPermissions) {
+  if (hasPermissions && !ROLES_WITH_ALL_PERMISSIONS.includes(nextRole)) {
     const organization = await Organization.findById(organizationId)
       .select("moduleAccess")
       .lean();
@@ -1049,7 +1057,11 @@ const updateInvitation = async ({
   if (hasName) invitation.name = String(name || "").trim();
   if (hasRole) invitation.role = nextRole;
   if (hasBranch) invitation.branchId = nextBranchId;
-  if (hasPermissions) invitation.permissions = permissions || [];
+  if (ROLES_WITH_ALL_PERMISSIONS.includes(nextRole)) {
+    invitation.permissions = [];
+  } else if (hasPermissions) {
+    invitation.permissions = permissions || [];
+  }
   if (hasBranchManager) invitation.isBranchManager = Boolean(isBranchManager);
 
   await invitation.save();

@@ -100,6 +100,10 @@ attendanceDaySchema.index(
   { shiftId: 1 },
   { sparse: true, partialFilterExpression: { shiftId: { $type: "objectId" } } },
 );
+attendanceDaySchema.index(
+  { staffId: 1, shiftId: 1 },
+  { partialFilterExpression: { shiftId: { $type: "objectId" } } },
+);
 
 const AttendanceDay =
   mongoose.models.AttendanceDay ||

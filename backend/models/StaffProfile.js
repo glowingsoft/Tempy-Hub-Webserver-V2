@@ -54,6 +54,8 @@ const staffProfileSchema = new mongoose.Schema(
     /** Weekly contracted hours; used for holiday pro-rata (full-time default 37.5). */
     contractedWeeklyHours: { type: Number, default: 37.5, min: 0 },
     phone: { type: String, default: "" },
+    emergencyContactName: { type: String, default: "", trim: true },
+    emergencyContactPhone: { type: String, default: "", trim: true },
     photoUrl: { type: String, default: "" },
     bannerUrl: { type: String, default: "" },
     qrToken: { type: String, required: true, unique: true },

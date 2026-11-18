@@ -79,17 +79,18 @@ const enabledModuleSlugs = (organization) =>
   );
 
 /**
- * Roles that answer every permission check by virtue of the role itself, so
- * their stored `Membership.permissions` is always empty. See requirePermission.
- * Site Manager runs one site; branch scope is enforced in services, not here.
+ * These roles inherit every licensed org module (menu + requirePermission).
+ * Stored Membership.permissions is unused. Line Manager is the exception.
+ * Site Manager is still branch-scoped in services, not here.
  */
 const ROLES_WITH_ALL_PERMISSIONS = [
   MembershipRole.SUPER_ADMIN,
   MembershipRole.OWNER,
   MembershipRole.SITE_MANAGER,
+  MembershipRole.STAFF,
 ];
 
-/** Staff and line managers always receive these unless the module is not bought. */
+/** Staff inherit these for every person in the org (not stored per membership). */
 const DEFAULT_STAFF_PERMISSION_KEYS = [
   permissionKey(ModuleSlug.DOCUMENTS_ESIGN, PermissionVerb.VIEW),
   permissionKey(ModuleSlug.DOCUMENTS_ESIGN, PermissionVerb.APPROVE),
@@ -99,12 +100,7 @@ const withDefaultStaffPermissions = (role, organization, permissions) => {
   if (ROLES_WITH_ALL_PERMISSIONS.includes(role)) return [];
 
   const merged = new Set(Array.isArray(permissions) ? permissions : []);
-  if (
-    role !== MembershipRole.STAFF &&
-    role !== MembershipRole.LINE_MANAGER
-  ) {
-    return [...merged];
-  }
+  if (role !== MembershipRole.LINE_MANAGER) return [...merged];
 
   const enabled = enabledModuleSlugs(organization);
   for (const key of DEFAULT_STAFF_PERMISSION_KEYS) {
@@ -121,6 +117,12 @@ const withDefaultStaffPermissions = (role, organization, permissions) => {
  * access is bought and allowed to lapse over the life of an organization, and a
  * stored list would quietly drift out of step with it.
  */
+const licensedKeys = (keys, enabled) =>
+  keys.filter((key) => {
+    const entry = getPermission(key);
+    return entry && enabled.has(entry.moduleSlug);
+  });
+
 const effectivePermissions = (membership, organization) => {
   const enabled = enabledModuleSlugs(organization);
 
@@ -130,10 +132,7 @@ const effectivePermissions = (membership, organization) => {
     );
   }
 
-  return (membership?.permissions || []).filter((key) => {
-    const entry = getPermission(key);
-    return entry && enabled.has(entry.moduleSlug);
-  });
+  return licensedKeys(membership?.permissions || [], enabled);
 };
 
 /**

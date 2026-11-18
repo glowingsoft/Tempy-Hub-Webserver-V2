@@ -25,7 +25,8 @@
     "postman:normalize": "node postman_collection/scripts/normalize-collection.js",
     "postman:build": "npm run postman:normalize && npm run postman:validate",
     "postman:validate": "node postman_collection/scripts/validate-postman.js",
-    "test": "node --require ./tests/register-aliases.js --test tests/*.test.js"
+    "test": "node --require ./tests/register-aliases.js --test tests/*.test.js",
+    "backfill:staff-permissions": "node backend/scripts/backfillStaffDefaultPermissions.js"
   },
   "keywords": [],
   "author": "Zawar Ahmad",

@@ -11,6 +11,7 @@ const {
 } = require("@models/domainEnums");
 const {
   ROLES_WITH_ALL_PERMISSIONS,
+  effectivePermissions,
 } = require("@adminServices/organizations/permissionCatalogue");
 
 const toObjectId = (value) =>
@@ -204,7 +205,7 @@ const requireRoles = (allowedRoles = []) => (req, res, next) => {
   return next();
 };
 
-/** Owner, platform admin, and site manager bypass granular permission checks. */
+/** Owner, platform admin, site manager, and staff inherit licensed org modules. */
 const requirePermission = (permission) => (req, res, next) => {
   if (!req.membership) {
     return sendResponse({
@@ -214,11 +215,12 @@ const requirePermission = (permission) => (req, res, next) => {
     });
   }
 
-  const { role, permissions = [] } = req.membership;
+  const { role } = req.membership;
 
   if (
+    req.isPlatformAdmin ||
     ROLES_WITH_ALL_PERMISSIONS.includes(role) ||
-    permissions.includes(permission)
+    effectivePermissions(req.membership, req.organization).includes(permission)
   ) {
     return next();
   }

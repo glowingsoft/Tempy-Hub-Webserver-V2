@@ -2423,7 +2423,19 @@ const notificationRequests = [
       "});",
     ],
     description:
-      "The signed-in user's notifications, newest first (a family token or a staff token). Query: page, limit. Each row has _id, type, title, body, objectType and objectId (what to open when it is tapped), subject (who caused it), isRead and timeSince. Family types: newMessage (objectId is the conversationId), familyNewPost, familyUploadApproved, familyUploadRejected, familyUploadPending, familyNewsletter, familyGazette, familyGazetteReminder, familyVisit (objectId is the visit), familyJoinRequest and familyAccess. In-app only: nothing is sent to the phone's notification tray. Sets notificationId.",
+      "The signed-in user's notifications, newest first (a family token or a staff token). Query: page, limit. Each row has _id, type, title, body, objectType and objectId (what to open when it is tapped), subject (who caused it; profileIcon is S3_BASE_URL/noimage.png when empty), isRead and timeSince. meta.unread is the inbox unread count for the bell (same filter as the list, announcements excluded); totalRecords is every inbox row. Family types: newMessage (objectId is the conversationId), familyNewPost, familyUploadApproved, familyUploadRejected, familyUploadPending, familyNewsletter, familyGazette, familyGazetteReminder, familyVisit (objectId is the visit), familyJoinRequest and familyAccess. In-app only: nothing is sent to the phone's notification tray. Sets notificationId.",
+  }),
+  req("notifications read all", "PUT", ["notifications", "read-all"], {
+    tests: [
+      'pm.test("Notifications marked read", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("unread", "marked");',
+      "    pm.expect(data.unread).to.eql(0);",
+      "});",
+    ],
+    description:
+      "Marks every inbox notification for the signed-in user as read (same filter as GET /notifications; announcements stay out). No body. data: unread (always 0) and marked (how many were unread). Family or staff token.",
   }),
   req("notifications read", "PUT", ["notifications", "{{notificationId}}", "read"], {
     tests: [
@@ -2440,7 +2452,7 @@ const notificationRequests = [
 collection.item = collection.item.filter((i) => i.name !== "Notifications");
 collection.item.push({
   name: "Notifications",
-  description: "The notification list and marking a notification as read. Works with a family token or a staff token.",
+  description: "The notification list, mark one as read, and mark all as read. Works with a family token or a staff token.",
   item: notificationRequests,
 });
 

@@ -4566,6 +4566,57 @@
                 "description": "Opening marks it seen. Returns _id, branchName, subject, description, category, createdAt, createdBy, seen, acknowledged."
               },
               "response": []
+            },
+            {
+              "name": "acknowledge announcement (staff)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/announcements/mine/{{announcementId}}/acknowledge",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "announcements",
+                    "mine",
+                    "{{announcementId}}",
+                    "acknowledge"
+                  ]
+                },
+                "description": "Marks the announcement as seen. Send {\"acknowledged\": true} to also mark it acknowledged; without it only seen is set. Returns {_id, seen, acknowledged}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"acknowledged\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
             }
           ]
         },

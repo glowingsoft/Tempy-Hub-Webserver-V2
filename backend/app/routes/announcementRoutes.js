@@ -22,6 +22,10 @@ router.use(auth, requireMembership());
 
 router.get("/mine", controller.listMine);
 router.get("/mine/:announcementId", controller.getMine);
+router.post(
+  "/mine/:announcementId/acknowledge",
+  controller.acknowledgeAnnouncement,
+);
 
 router.get("/", asManager, controller.listAnnouncements);
 router.post("/", sendLimiter, asManager, controller.createAnnouncement);

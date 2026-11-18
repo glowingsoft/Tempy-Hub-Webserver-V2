@@ -2,6 +2,7 @@ const { MembershipRole } = require("@models/domainEnums");
 const { AppError } = require("@services/_errors/AppError");
 const { Organization } = require("@models/Organization");
 const { toObjectId } = require("@appServices/family/familyPipeline");
+const { ROLES_WITH_ALL_PERMISSIONS } = require("@adminServices/organizations/permissionCatalogue");
 const {
   FAMILY_VIEW,
   FAMILY_MANAGE,
@@ -17,7 +18,7 @@ const SECTIONS = ["billing", "family", "visits"];
 
 const accessOf = ({ actor, role, permissions = [], organization, organizationId }, permission) => {
   const platform = actor?.userType === "admin";
-  const allowed = platform || ORG_ADMINS.includes(role) || permissions.includes(permission);
+  const allowed = platform || ROLES_WITH_ALL_PERMISSIONS.includes(role) || permissions.includes(permission);
   const familyOn = Boolean(organizationId) && (platform || isFamilyModuleActive(organization));
   return {
     billing: platform,

@@ -5,7 +5,9 @@ const FILE = collectionFile();
 const collection = JSON.parse(fs.readFileSync(FILE, "utf8"));
 
 const adminPanel = collection.item.find((i) => i.name === "Admin Panel");
+const appFolder = collection.item.find((i) => i.name === "App");
 if (!adminPanel) throw new Error("Admin Panel folder not found");
+if (!appFolder) throw new Error("App folder not found");
 
 const testOk = {
   listen: "test",
@@ -72,6 +74,19 @@ const upsertFolder = (parent, folderName, requests) => {
   return folder;
 };
 
+const saveStaffDocumentId = {
+  listen: "test",
+  script: {
+    type: "text/javascript",
+    exec: [
+      'pm.test("OK", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));',
+      "const json = pm.response.json();",
+      "const row = Array.isArray(json.data) ? json.data[0] : json.data;",
+      'if (row && row._id) pm.collectionVariables.set("documentId", row._id);',
+    ],
+  },
+};
+
 const saveCategoryId = {
   listen: "test",
   script: {
@@ -123,6 +138,30 @@ upsertFolder(adminPanel, "Document Categories", [
       "document-categories",
       "{{documentCategoryId}}",
     ]
+  ),
+]);
+
+upsertFolder(appFolder, "Documents", [
+  req(
+    "GET /app/documents",
+    "GET",
+    ["app", "documents"],
+    { test: saveStaffDocumentId, query: "page=1&limit=10&signed=" }
+  ),
+  req(
+    "GET /app/documents/:documentId",
+    "GET",
+    ["app", "documents", "{{documentId}}"]
+  ),
+  req(
+    "POST /app/documents/:documentId/sign",
+    "POST",
+    ["app", "documents", "{{documentId}}", "sign"],
+    {
+      body: {
+        signatureUrl: "https://example.com/signatures/staff-sign.png",
+      },
+    }
   ),
 ]);
 
@@ -206,4 +245,4 @@ if (!vars.find((v) => v.key === "documentCategoryId")) {
 collection.variable = vars;
 
 fs.writeFileSync(FILE, JSON.stringify(collection, null, 2));
-console.log("postman: Admin Panel > Documents");
+console.log("postman: App > Documents + Admin Panel > Documents");

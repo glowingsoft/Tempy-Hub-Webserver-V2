@@ -88,6 +88,7 @@ if (!appFolder.item.some((i) => i.name === "Rota")) {
       req("my shifts", "GET", ["app", "shifts", "my"], { header: orgHeader }),
       req("open shifts", "GET", ["app", "shifts", "open"], { header: orgHeader }),
       req("active shift", "GET", ["app", "shifts", "active"], { header: orgHeader }),
+      req("get my shift", "GET", ["app", "shifts", "{{shiftId}}"], { header: orgHeader }),
       req("claim shift", "POST", ["app", "shifts", "{{shiftId}}", "claims"], {
         header: orgHeader,
         body: { note: "Available for cover" },

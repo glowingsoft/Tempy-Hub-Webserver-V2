@@ -161,6 +161,19 @@ spec.paths["/app/shifts/open"] = {
   },
 };
 
+spec.paths["/app/shifts/{shiftId}"] = {
+  get: {
+    tags: rotaTag,
+    summary: "Staff shift detail (own assigned or visible open shift)",
+    security: bearer,
+    parameters: [
+      { name: "shiftId", in: "path", required: true, schema: { type: "string" } },
+      orgHeader,
+    ],
+    responses: { 200: ok, 403: { description: "Forbidden" }, 404: { description: "Not found" } },
+  },
+};
+
 spec.paths["/app/shifts/active"] = {
   get: {
     tags: rotaTag,

@@ -36,6 +36,7 @@ const {
   ActiveInactiveStatus,
   StaffInvitationStatus,
 } = require("@models/domainEnums");
+const { notifyAuthMeForUser } = require("@config/sockets/auth/authMeEmitter");
 const {
   STAFF_PROFILE_ROLES,
   assertRoleMayHaveStaffProfile,
@@ -614,6 +615,11 @@ const updateMembership = async ({
     throw error;
   }
 
+  notifyAuthMeForUser({
+    userId: membership.userId,
+    organizationId,
+  });
+
   return getMembership({ membershipId, organizationId });
 };
 
@@ -634,6 +640,12 @@ const deactivateMembership = async ({ actor, membershipId, organizationId }) => 
   membership.status = ActiveInactiveStatus.INACTIVE;
   membership.deactivatedAt = new Date();
   await membership.save();
+
+  notifyAuthMeForUser({
+    userId: membership.userId,
+    organizationId,
+  });
+
   return membership.toObject();
 };
 

@@ -9,23 +9,10 @@ const formatUserResponse = (
   includeFields = [],
   excludeFields = []
 ) => {
-  var pIcon = null;
-  if (
-    userObject.profileIcon
-  ) {
-    pIcon = userObject.profileIcon;
-  }
-
-  // Attach base URL to profileIcon
-  if (pIcon) {
-    pIcon  = getFullImageUrl(pIcon);
-  }
-
-
   const response = {
     basicInfo: {
       _id: userObject._id,
-      profileIcon: pIcon,
+      profileIcon: getFullImageUrl(userObject.profileIcon),
       name: userObject.name,
       email: userObject.email,
       phoneNumber: userObject.phoneNumber,

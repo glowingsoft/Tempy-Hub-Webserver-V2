@@ -54,6 +54,25 @@ const listOpenShifts = async (req, res) => {
   }
 };
 
+const getMyShift = async (req, res) => {
+  try {
+    const data = await shiftService.getMyShift({
+      userId: req.user._id,
+      organizationId: req.orgId,
+      shiftId: req.params.shiftId,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const getActiveShift = async (req, res) => {
   try {
     const data = await shiftService.getActiveShift({
@@ -114,6 +133,7 @@ const withdrawClaim = async (req, res) => {
 module.exports = {
   listMyShifts,
   listOpenShifts,
+  getMyShift,
   getActiveShift,
   createClaim,
   withdrawClaim,

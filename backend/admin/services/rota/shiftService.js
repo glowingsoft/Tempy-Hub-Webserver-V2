@@ -618,6 +618,36 @@ const getShift = async ({ shiftId, organizationId }) => {
   return withDetails;
 };
 
+const isOpenVisibleToStaff = (shift, profile) =>
+  shift.status === ShiftStatus.OPEN &&
+  !shift.staffId &&
+  (shift.visibility === ShiftVisibility.ORGANIZATION ||
+    String(shift.branchId) === String(profile.branchId));
+
+const getMyShift = async ({ userId, organizationId, shiftId }) => {
+  const profile = await requireStaffProfile(userId, organizationId);
+  const shift = await getShiftOrThrow(shiftId, organizationId);
+  const assigned = String(shift.staffId || "") === String(profile._id);
+
+  if (!assigned && !isOpenVisibleToStaff(shift, profile)) {
+    throw new AppError("shift_not_visible", 403);
+  }
+
+  const [withDetails] = await attachShiftDetails([shift]);
+  if (!isOpenVisibleToStaff(shift, profile)) return withDetails;
+
+  const myClaim = await ShiftClaim.findOne({
+    shiftId: shift._id,
+    staffId: profile._id,
+    status: { $in: OPEN_CLAIM_STATUSES },
+  })
+    .select("_id status note createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return { ...withDetails, myClaim: myClaim || null };
+};
+
 const updateShift = async ({
   actor,
   shiftId,
@@ -868,15 +898,12 @@ const createClaim = async ({ userId, organizationId, shiftId, note }) => {
   const profile = await requireStaffProfile(userId, organizationId);
   const shift = await getShiftOrThrow(shiftId, organizationId);
 
-  if (shift.status !== ShiftStatus.OPEN || shift.staffId) {
-    throw new AppError("shift_not_open", 400);
+  if (!isOpenVisibleToStaff(shift, profile)) {
+    if (shift.status !== ShiftStatus.OPEN || shift.staffId) {
+      throw new AppError("shift_not_open", 400);
+    }
+    throw new AppError("shift_not_visible", 403);
   }
-
-  const visible =
-    shift.visibility === ShiftVisibility.ORGANIZATION ||
-    String(shift.branchId) === String(profile.branchId);
-
-  if (!visible) throw new AppError("shift_not_visible", 403);
 
   const existing = await ShiftClaim.findOne({
     shiftId,
@@ -1185,6 +1212,7 @@ module.exports = {
   createShift,
   listShifts,
   getShift,
+  getMyShift,
   updateShift,
   listMyShifts,
   listStaffShiftsInRange,

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const { StaffProfile } = require("@models/StaffProfile");
+const { User } = require("@models/UserModel");
 const { facetCount } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
@@ -41,6 +42,27 @@ const visibleMatch = (organizationId, branchId) => ({
   $or: [{ branchId }, { branchId: null }],
 });
 
+const uploaderLookup = [
+  {
+    $lookup: {
+      from: User.collection.name,
+      localField: "_version.uploadedBy",
+      foreignField: "_id",
+      pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+      as: "_uploader",
+    },
+  },
+];
+
+const uploadedByOf = (row) => {
+  const uploader = row._uploader?.[0];
+  if (uploader) {
+    return { _id: uploader._id, name: uploader.name || "" };
+  }
+  const id = row._version?.uploadedBy;
+  return id ? { _id: id, name: "" } : null;
+};
+
 const signatureLookup = (staffId) => [
   {
     $lookup: {
@@ -64,8 +86,11 @@ const signatureLookup = (staffId) => [
 const shapeStaffDocument = (row) => {
   const base = shapeDocument(row);
   const signature = row._signature?.[0] || null;
+  const uploadedBy = uploadedByOf(row);
   return {
     ...base,
+    uploadedBy,
+    version: base.version ? { ...base.version, uploadedBy } : null,
     signed: Boolean(signature),
     signedAt: signature?.signedAt || null,
   };
@@ -114,6 +139,7 @@ const listStaffDocuments = async ({
         { $skip: skip },
         { $limit: limit },
         ...versionLookup,
+        ...uploaderLookup,
       ],
       totalCount: [{ $count: "count" }],
     },
@@ -138,6 +164,7 @@ const getStaffDocument = async ({ actor, organizationId, documentId }) => {
     },
     { $limit: 1 },
     ...versionLookup,
+    ...uploaderLookup,
     ...signatureLookup(staff._id),
   ]);
   if (!row) throw new AppError("document_not_found", 404);

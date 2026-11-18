@@ -60,6 +60,16 @@ const getMine = respond((req) =>
   }),
 );
 
+const acknowledgeAnnouncement = respond(
+  (req) =>
+    announcementService.acknowledgeAnnouncement({
+      ...scope(req),
+      announcementId: req.params.announcementId,
+      acknowledge: req.body?.acknowledged,
+    }),
+  { translationKey: "announcement_acknowledged" },
+);
+
 module.exports = {
   listAnnouncements,
   getAnnouncement,
@@ -67,4 +77,5 @@ module.exports = {
   remindAnnouncement,
   listMine,
   getMine,
+  acknowledgeAnnouncement,
 };

@@ -1,6 +1,7 @@
 const { attachRedisAdapter } = require("./socketRedisAdapter");
 const { orderSocketHandler } = require("./orders/orderSocketHandler");
 const { kioskSocketHandler } = require("./kiosk/kioskSocketHandler");
+const { authSocketHandler } = require("./auth/authSocketHandler");
 const chatSocketHandler = require("../../commonModules/chatModule/sockets/chatSocketHandler");
 
 function initializeSockets(io) {
@@ -8,6 +9,7 @@ function initializeSockets(io) {
 
   kioskSocketHandler(io.of("/kiosk"));
   chatSocketHandler(io.of("/chat"));
+  authSocketHandler(io.of("/auth"));
 
   // orderSocketHandler(io.of("/staff/orders"), "staff");
   // orderSocketHandler(io.of("/admin/orders"), "admin");
@@ -17,6 +19,7 @@ function initializeSockets(io) {
   console.log("🚀 Order sockets initialized");
   console.log("🚀 Kiosk sockets initialized on /kiosk");
   console.log("🚀 Chat sockets initialized on /chat");
+  console.log("🚀 Auth sockets initialized on /auth");
 }
 
 

@@ -12,6 +12,7 @@ const { Department } = require("@models/Department");
 const { Organization } = require("@models/Organization");
 const { StaffProfileStatus } = require("@models/domainEnums");
 const { formatUserResponse } = require("@utils/userResponseUtil");
+const { getFullImageUrl } = require("@utils/imageHelper");
 const { userCache } = require("@config/nodeCache");
 const { AppError } = require("@services/_errors/AppError");
 
@@ -191,8 +192,27 @@ const getUserWithPopulatedFields = async (userId, fieldsToPopulate = []) => {
   }
 };
 
-const staffCardFromRow = (profile, { branch, jobTitle, departments, organization }) => ({
+const linkedStaffSummary = (staff) =>
+  staff
+    ? {
+        _id: staff._id,
+        employeeCode: staff.employeeCode || "",
+        name: staff.name || "",
+        email: staff.email || "",
+        image: getFullImageUrl(staff.image),
+      }
+    : null;
+
+const staffCardFromRow = (profile, {
+  branch,
+  jobTitle,
+  departments,
+  organization,
+  reportsTo,
+  supervisor,
+}) => ({
     ...profile,
+    photoUrl: getFullImageUrl(profile.photoUrl),
     organization: organization
       ? {
           _id: organization._id,
@@ -217,6 +237,8 @@ const staffCardFromRow = (profile, { branch, jobTitle, departments, organization
       name: d.name,
       branchId: d.branchId || null,
     })),
+    reportsTo,
+    supervisor,
 });
 
 const loadStaffCardsForUser = async (userId, organizationId) => {
@@ -237,8 +259,17 @@ const loadStaffCardsForUser = async (userId, organizationId) => {
   const departmentIds = [
     ...new Set(profiles.flatMap((p) => (p.departmentIds || []).map(String))),
   ];
+  const linkedStaffIds = [
+    ...new Set(
+      profiles
+        .flatMap((p) => [p.reportsToStaffId, p.supervisorStaffId])
+        .filter(Boolean)
+        .map(String)
+    ),
+  ].map((id) => new mongoose.Types.ObjectId(id));
 
-  const [organizations, branches, jobTitles, departments] = await Promise.all([
+  const [organizations, branches, jobTitles, departments, linkedStaff] =
+    await Promise.all([
     Organization.find({ _id: { $in: orgIds } }).select("name status").lean(),
     Branch.find({ _id: { $in: branchIds } })
       .select("name code status timezone")
@@ -251,12 +282,46 @@ const loadStaffCardsForUser = async (userId, organizationId) => {
           .select("name branchId")
           .lean()
       : [],
+    linkedStaffIds.length
+      ? StaffProfile.aggregate([
+          { $match: { _id: { $in: linkedStaffIds } } },
+          {
+            $lookup: {
+              from: User.collection.name,
+              localField: "userId",
+              foreignField: "_id",
+              pipeline: [
+                {
+                  $project: {
+                    name: 1,
+                    email: 1,
+                    image: { $ifNull: ["$profileIcon", ""] },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: "user",
+            },
+          },
+          {
+            $project: {
+              employeeCode: 1,
+              name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+              email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+              image: { $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""] },
+            },
+          },
+        ])
+      : [],
   ]);
 
   const orgById = new Map(organizations.map((o) => [String(o._id), o]));
   const branchById = new Map(branches.map((b) => [String(b._id), b]));
   const jobById = new Map(jobTitles.map((j) => [String(j._id), j]));
   const deptById = new Map(departments.map((d) => [String(d._id), d]));
+  const linkedById = new Map(
+    linkedStaff.map((row) => [String(row._id), linkedStaffSummary(row)])
+  );
 
   return profiles.map((profile) =>
     staffCardFromRow(profile, {
@@ -268,6 +333,12 @@ const loadStaffCardsForUser = async (userId, organizationId) => {
       departments: (profile.departmentIds || [])
         .map((id) => deptById.get(String(id)))
         .filter(Boolean),
+      reportsTo: profile.reportsToStaffId
+        ? linkedById.get(String(profile.reportsToStaffId)) || null
+        : null,
+      supervisor: profile.supervisorStaffId
+        ? linkedById.get(String(profile.supervisorStaffId)) || null
+        : null,
     })
   );
 };

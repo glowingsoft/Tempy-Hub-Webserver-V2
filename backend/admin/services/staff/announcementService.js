@@ -415,7 +415,6 @@ const createAnnouncement = async ({
     recipients: receivers.length,
     seen: 0,
     acknowledged: 0,
-    people: [],
   });
 };
 

@@ -95,6 +95,16 @@ app.get("/api", (req, res) => {
   });
 });
 
+app.get("/api/v1", (req, res) => {
+  res.json({
+    name: "Tempy Hub API",
+    version: "v1",
+    status: "running",
+    health: "/health",
+    docs: "/api/v1/docs",
+  });
+});
+
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",

@@ -470,11 +470,7 @@ const assertNotOnSickOrAbsence = async (staffId, at) => {
     staffId,
     leaveType: { $in: [LeaveType.SICK, LeaveType.ABSENCE, LeaveType.ANNUAL] },
     status: {
-      $in: [
-        LeaveRequestStatus.PENDING,
-        LeaveRequestStatus.APPROVED,
-        LeaveRequestStatus.CLOSED,
-      ],
+      $in: [LeaveRequestStatus.APPROVED, LeaveRequestStatus.CLOSED],
     },
     startDate: { $lte: dayEnd },
     endDate: { $gte: dayStart },

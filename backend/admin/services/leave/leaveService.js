@@ -4,6 +4,7 @@ const { notifyStaff, notifyOrgManagers, dayOf, whenOf } = require("../staff/staf
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { LeaveEntitlement } = require("@models/LeaveEntitlement");
 const { StaffProfile } = require("@models/StaffProfile");
+const { JobTitle } = require("@models/JobTitle");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
@@ -223,6 +224,18 @@ const remainingDays = (entitlement) => {
   );
 };
 
+const roundDays = (value) => Math.round(Number(value) * 10) / 10;
+
+const balanceAfterOf = (request, entitlement) => {
+  if (!usesHolidayBalance(request.leaveType)) return null;
+  const remaining = remainingDays(entitlement);
+  const held =
+    request.status === LeaveRequestStatus.APPROVED ||
+    request.status === LeaveRequestStatus.CLOSED;
+  const after = held ? remaining : remaining - Number(request.totalDays || 0);
+  return roundDays(Math.max(0, after));
+};
+
 const SCORE_LEAVE_TYPES = [LeaveType.SICK, LeaveType.ABSENCE];
 
 const parseScoreRange = (from, to) => {
@@ -425,10 +438,22 @@ const attachLeaveRequestDetails = async (requests, { withOrganization = false } 
             },
           },
           {
+            $lookup: {
+              from: JobTitle.collection.name,
+              localField: "jobTitleId",
+              foreignField: "_id",
+              pipeline: [{ $project: { name: 1 } }],
+              as: "jobTitle",
+            },
+          },
+          {
             $project: {
               employeeCode: 1,
               name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
               email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+              jobTitle: {
+                $ifNull: [{ $arrayElemAt: ["$jobTitle.name", 0] }, ""],
+              },
             },
           },
         ],
@@ -461,6 +486,33 @@ const attachLeaveRequestDetails = async (requests, { withOrganization = false } 
     userLookup("recordedByUserId", "recordedByUser"),
     userLookup("createdBy", "createdByUser"),
     {
+      $lookup: {
+        from: Shift.collection.name,
+        let: { staffId: "$staffId", from: "$startDate", to: "$endDate" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$staffId", "$$staffId"] },
+                  { $eq: ["$status", ShiftStatus.SCHEDULED] },
+                  {
+                    $lt: [
+                      "$startsAt",
+                      { $add: ["$$to", 24 * 60 * 60 * 1000] },
+                    ],
+                  },
+                  { $gt: ["$endsAt", "$$from"] },
+                ],
+              },
+            },
+          },
+          { $count: "n" },
+        ],
+        as: "clash",
+      },
+    },
+    {
       $addFields: {
         staff: { $ifNull: [{ $arrayElemAt: ["$staff", 0] }, null] },
         branch: { $ifNull: [{ $arrayElemAt: ["$branch", 0] }, null] },
@@ -470,11 +522,47 @@ const attachLeaveRequestDetails = async (requests, { withOrganization = false } 
         decidedByUser: { $ifNull: [{ $arrayElemAt: ["$decidedByUser", 0] }, null] },
         recordedByUser: { $ifNull: [{ $arrayElemAt: ["$recordedByUser", 0] }, null] },
         createdByUser: { $ifNull: [{ $arrayElemAt: ["$createdByUser", 0] }, null] },
+        clashingShifts: {
+          $ifNull: [{ $arrayElemAt: ["$clash.n", 0] }, 0],
+        },
       },
     },
+    { $project: { clash: 0 } },
   ]);
 
-  const byId = new Map(rows.map((row) => [String(row._id), row]));
+  const entitlementKeys = [];
+  const seenEntitlement = new Set();
+  for (const row of rows) {
+    if (!usesHolidayBalance(row.leaveType) || !row.staffId) continue;
+    const year = entitlementYearFromDate(row.startDate);
+    const key = `${row.staffId}:${year}`;
+    if (seenEntitlement.has(key)) continue;
+    seenEntitlement.add(key);
+    entitlementKeys.push({ staffId: row.staffId, year, leaveType: LeaveType.ANNUAL });
+  }
+
+  const entitlements = entitlementKeys.length
+    ? await LeaveEntitlement.find({ $or: entitlementKeys }).lean()
+    : [];
+  const entitlementByKey = new Map(
+    entitlements.map((row) => [
+      `${row.staffId}:${row.year}:${row.leaveType}`,
+      row,
+    ]),
+  );
+
+  const byId = new Map(
+    rows.map((row) => {
+      const year = entitlementYearFromDate(row.startDate);
+      const entitlement = entitlementByKey.get(
+        `${row.staffId}:${year}:${LeaveType.ANNUAL}`,
+      );
+      return [
+        String(row._id),
+        { ...row, balanceAfter: balanceAfterOf(row, entitlement) },
+      ];
+    }),
+  );
   return requests.map((request) => byId.get(String(request._id)) || request);
 };
 

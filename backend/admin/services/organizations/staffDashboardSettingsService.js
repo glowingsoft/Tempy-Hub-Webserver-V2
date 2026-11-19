@@ -122,9 +122,11 @@ const getStaffDashboardSettingsForStaff = async ({
   const allowPhoneCheckIn = Boolean(branch?.settings?.allowPhoneCheckIn);
   const enableLeaveRequests = branch?.settings?.enableLeaveRequests !== false;
 
+  const checkInEligible =
+    configured.checkIn && attendanceOn && allowPhoneCheckIn;
+
   const cards = {
-    [StaffDashboardCard.CHECK_IN]:
-      configured.checkIn && attendanceOn && allowPhoneCheckIn,
+    [StaffDashboardCard.CHECK_IN]: true,
     [StaffDashboardCard.PENDING_LEAVE]:
       configured.pendingLeave && leaveOn && enableLeaveRequests,
   };

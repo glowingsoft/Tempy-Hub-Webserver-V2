@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const { User } = require("@models/UserModel");
 const { AuthAudience } = require("@models/domainEnums");
 const { getUserRoom, getOrgRoom } = require("./authSocketRooms");
+const { notifyAuthMeForUser } = require("./authMeEmitter");
 
 const ALLOWED_AUDIENCES = [AuthAudience.STAFF, AuthAudience.FAMILY];
 const BLOCKED_STATUSES = ["restricted", "suspended"];
@@ -38,6 +39,12 @@ const authSocketHandler = (io) => {
         socket.data.organizationId = String(organizationId);
         socket.join(getOrgRoom(organizationId));
       }
+
+      notifyAuthMeForUser({
+        userId: socket.data.userId,
+        organizationId: socket.data.organizationId,
+        audience: socket.data.audience,
+      });
     } catch {
       return socket.disconnect(true);
     }

@@ -1188,10 +1188,14 @@ const getLeaveRequest = async ({ requestId, organizationId, actor }) => {
 
   if (actor) {
     const standing = await actorStanding(actor, organizationId);
-    assertMayManageStaff(
+    await assertMayApproveForStaff({
       standing,
-      request.branchId || (await staffBranchForScope(request.staffId))
-    );
+      actor,
+      organizationId,
+      branchId:
+        request.branchId || (await staffBranchForScope(request.staffId)),
+      targetStaffId: request.staffId,
+    });
   }
 
   const [enriched] = await attachLeaveRequestDetails([request], {

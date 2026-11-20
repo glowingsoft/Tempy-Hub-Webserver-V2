@@ -48,6 +48,7 @@ const documentController = require("../controllers/documentController");
 const requirementController = require("../controllers/requirementController");
 const familyOrganizationRoutes = require("./familyOrganizationRoutes");
 const {
+  ROTA_VIEW,
   ROTA_MANAGE,
   ROTA_APPROVE,
 } = require("@adminServices/rota/shiftAccess");
@@ -509,16 +510,16 @@ scoped.get(
 );
 scoped.get(
   "/shift-claims",
-  requireRoles(MANAGERS),
+  requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.ROTA_SCHEDULING),
-  requirePermission(ROTA_APPROVE),
+  requirePermission(ROTA_VIEW),
   shiftController.listClaims,
 );
 scoped.get(
   "/shift-claims/:claimId",
-  requireRoles(MANAGERS),
+  requireRoles(TEAM_APPROVER_ROLES),
   requireModule(ModuleSlug.ROTA_SCHEDULING),
-  requirePermission(ROTA_APPROVE),
+  requirePermission(ROTA_VIEW),
   shiftController.getClaim,
 );
 

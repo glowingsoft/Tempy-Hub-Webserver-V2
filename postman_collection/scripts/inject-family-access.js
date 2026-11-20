@@ -2267,8 +2267,26 @@ const siteDashboardRequests = [
   }),
 ];
 
+const lineOrgHeader = [{ key: "x-org-id", value: "{{organizationId}}" }];
+const lineHomeActivityKeys =
+  '"leave", "shiftClaim", "supervisions", "familyPhotos", "tempyAgency", "teamRota", "ownShifts", "restrictedResidents"';
+const lineHomeDescription =
+  "Line Manager Team home (Figma). Line manager only; everyone else gets 403. No query. Name, photo, site and role come from login. today (direct reports): onShift, checkedIn, late, onSite. thisMonth (direct reports, calendar month): attendancePercent, onTimePercent, sicknessPercent, mostLate {staffId, name, lateDays} or null. activity cards: leave.pending, shiftClaim {pending, preview {staffId, name, startsAt, endsAt}|null}, supervisions {dueThisMonth, overdue, overdueName}, familyPhotos.pending (site), tempyAgency {openTonight, bids always null}, teamRota {windowDays: 14, daysToBook}, ownShifts {next {shiftId, startsAt, endsAt}|null, upcoming, hoursThisWeek, pendingLeave} (tap GET /app/shifts/my), restrictedResidents.count (site). See All is GET /app/team-live/activity.";
+const todayDescription =
+  "My Team Today. Line manager only. Query: tab (onShift, checkedIn, late or sick; default onShift; 400 invalid_today_tab), page, limit. data is the active tab. Each row: staffId, name, photoUrl, jobTitle, startsAt, endsAt, clockInAt, lateMinutes, sickReportedAt, clockedIn. meta.counts is all four chips (unique people). meta.uncoveredNightShift is true when an open night shift (18:00+) has no staff (Request Agency Cover). Direct reports only.";
+const todayTests = [
+  'pm.test("My Team Today fetched", function () {',
+  "    pm.response.to.have.status(200);",
+  "    const body = pm.response.json();",
+  '    pm.expect(body.data).to.be.an("array");',
+  '    pm.expect(body.meta).to.include.keys("tab", "counts", "uncoveredNightShift");',
+  '    pm.expect(body.meta.counts).to.include.keys("onShift", "checkedIn", "late", "sick");',
+  "});",
+];
+
 const lineDashboardRequests = [
   req("line manager home", "GET", ["app", "line-home"], {
+    header: lineOrgHeader,
     tests: [
       'pm.test("Line home fetched", function () {',
       "    pm.response.to.have.status(200);",
@@ -2276,11 +2294,11 @@ const lineDashboardRequests = [
       '    pm.expect(data).to.have.all.keys("today", "thisMonth", "activity");',
       '    pm.expect(data.today).to.include.keys("onShift", "checkedIn", "late", "onSite");',
       '    pm.expect(data.thisMonth).to.include.keys("attendancePercent", "onTimePercent", "sicknessPercent", "mostLate");',
-      '    pm.expect(data.activity).to.include.keys("leave", "shiftClaim", "supervisions", "familyPhotos", "tempyAgency", "teamRota", "restrictedResidents");',
+      `    pm.expect(data.activity).to.include.keys(${lineHomeActivityKeys});`,
+      '    pm.expect(data.activity.ownShifts).to.include.keys("next", "upcoming", "hoursThisWeek", "pendingLeave");',
       "});",
     ],
-    description:
-      "Line Manager Team home (Figma). Line manager only; everyone else gets 403. No query. Name, photo, site and role come from login. today (direct reports): onShift, checkedIn, late, onSite. thisMonth (direct reports, calendar month): attendancePercent, onTimePercent, sicknessPercent, mostLate {staffId, name, lateDays} or null. activity cards: leave.pending, shiftClaim {pending, preview {staffId, name, startsAt, endsAt}|null}, supervisions {dueThisMonth, overdue, overdueName}, familyPhotos.pending (site), tempyAgency {openTonight, bids always null}, teamRota {windowDays: 14, daysToBook}, restrictedResidents.count (site). See All is GET /app/team-live/activity. Own shifts stay GET /app/shifts/my.",
+    description: lineHomeDescription,
   }),
   req("line manager home (admin)", "GET", ["admin", "organizations", "{{organizationId}}", "line-home"], {
     tests: [
@@ -2288,23 +2306,57 @@ const lineDashboardRequests = [
       "    pm.response.to.have.status(200);",
       "    const data = pm.response.json().data;",
       '    pm.expect(data).to.have.all.keys("today", "thisMonth", "activity");',
+      `    pm.expect(data.activity).to.include.keys(${lineHomeActivityKeys});`,
       "});",
     ],
     description: "Same payload as GET /app/line-home, org in the path. Line manager only.",
   }),
   req("my team today", "GET", ["app", "line-home", "today"], {
+    header: lineOrgHeader,
     query: "tab=onShift&page=1&limit=20",
+    tests: todayTests,
+    description: todayDescription,
+  }),
+  req("my team today checked in", "GET", ["app", "line-home", "today"], {
+    header: lineOrgHeader,
+    query: "tab=checkedIn&page=1&limit=20",
+    tests: todayTests,
+    description: todayDescription,
+  }),
+  req("my team today late", "GET", ["app", "line-home", "today"], {
+    header: lineOrgHeader,
+    query: "tab=late&page=1&limit=20",
+    tests: todayTests,
+    description: todayDescription,
+  }),
+  req("my team today sick", "GET", ["app", "line-home", "today"], {
+    header: lineOrgHeader,
+    query: "tab=sick&page=1&limit=20",
+    tests: todayTests,
+    description: todayDescription,
+  }),
+  req("my team today (admin)", "GET", ["admin", "organizations", "{{organizationId}}", "line-home", "today"], {
+    query: "tab=onShift&page=1&limit=20",
+    tests: todayTests,
+    description: "Same payload as GET /app/line-home/today. Role: lineManager.",
+  }),
+  req("team live rota", "GET", ["app", "team-live", "rota"], {
+    header: lineOrgHeader,
+    query: "date=2026-10-20&view=day",
     tests: [
-      'pm.test("My Team Today fetched", function () {',
+      'pm.test("Team rota fetched", function () {',
       "    pm.response.to.have.status(200);",
-      "    const body = pm.response.json();",
-      "    pm.expect(body.data).to.be.an(\"array\");",
-      '    pm.expect(body.meta).to.include.keys("tab", "counts", "uncoveredNightShift");',
-      '    pm.expect(body.meta.counts).to.include.keys("onShift", "checkedIn", "late", "sick");',
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("view", "from", "to", "items");',
+      "    pm.expect(data.items).to.be.an(\"array\");",
       "});",
     ],
     description:
-      "My Team Today. Line manager only. Query: tab (onShift, checkedIn, late or sick; default onShift; 400 invalid_today_tab), page, limit. data is the active tab. Each row: staffId, name, photoUrl, jobTitle, startsAt, endsAt, clockInAt, lateMinutes, sickReportedAt, clockedIn. meta.counts is all four chips (unique people). meta.uncoveredNightShift is true when an open night shift (18:00+) has no staff (Request Agency Cover). Direct reports only.",
+      "Team Rota Day/Week list. Line manager. Query: date (YYYY-MM-DD), view (day or week; 400 invalid_view), departmentId (My team filter). Assigned shifts only: staffName, department, startsAt, endsAt, clockInAt, chip (late, sick or null). Open/Book/Agency is GET /app/shifts/open. Totals 9 shifts / 72h are not on this payload.",
+  }),
+  req("team live rota (admin)", "GET", ["admin", "organizations", "{{organizationId}}", "team-live", "rota"], {
+    query: "date=2026-10-20&view=day",
+    description: "Same payload as GET /app/team-live/rota.",
   }),
   req("line manager dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "line-dashboard"], {
     tests: [

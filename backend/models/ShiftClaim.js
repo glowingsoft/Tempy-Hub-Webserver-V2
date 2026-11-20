@@ -63,6 +63,7 @@ shiftClaimSchema.index(
     },
   }
 );
+shiftClaimSchema.index({ organizationId: 1, staffId: 1, createdAt: -1 });
 shiftClaimSchema.index({ clientEventId: 1 }, { unique: true, sparse: true });
 
 const ShiftClaim =

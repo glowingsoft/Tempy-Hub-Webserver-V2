@@ -1,19 +1,41 @@
+const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { AppError } = require("@services/_errors/AppError");
+const { Shift } = require("@models/Shift");
 const { StaffProfile } = require("@models/StaffProfile");
+const { User } = require("@models/UserModel");
+const { Department } = require("@models/Department");
+const { JobTitle } = require("@models/JobTitle");
+const { AttendanceDay } = require("@models/AttendanceDay");
+const { LeaveRequest } = require("@models/LeaveRequest");
 const { Branch } = require("@models/Branch");
 const {
   ShiftStatus,
   LeaveType,
+  LeaveRequestStatus,
   PunctualityStatus,
+  MembershipRole,
 } = require("@models/domainEnums");
-const { actorStanding } = require("@adminServices/staff/staffAccess");
-const shiftService = require("@adminServices/rota/shiftService");
-const attendanceService = require("@adminServices/attendance/attendanceService");
+const {
+  actorStanding,
+  resolveSubordinateStaffIds,
+} = require("@adminServices/staff/staffAccess");
 
 const DEFAULT_TZ = "Europe/London";
 const VIEWS = ["day", "week"];
-const SHIFT_PAGE_SIZE = 500;
+const SICK_STATUSES = [
+  LeaveRequestStatus.PENDING,
+  LeaveRequestStatus.APPROVED,
+  LeaveRequestStatus.CLOSED,
+];
+const ROTA_SHIFT_STATUSES = [
+  ShiftStatus.OPEN,
+  ShiftStatus.SCHEDULED,
+  ShiftStatus.COMPLETED,
+];
+
+const toOid = (value) =>
+  value ? new mongoose.Types.ObjectId(String(value)) : null;
 
 const loadTimezone = async (standing) => {
   if (!standing.branchId) return DEFAULT_TZ;
@@ -46,32 +68,10 @@ const resolveRange = ({ date, view, tz }) => {
   };
 };
 
-const chipFromCell = (cell) => {
-  if (!cell || cell.kind === "empty") return null;
-  if (cell.kind === "leave" && cell.leaveType === LeaveType.SICK) return "sick";
-  if (cell.punctualityStatus === PunctualityStatus.LATE) return "late";
-  return null;
-};
-
-const cellsByStaffDate = (rota) => {
-  const map = new Map();
-  for (const week of rota.weeks || []) {
-    for (const row of week.staff || []) {
-      const staffId = String(row.staff?._id || "");
-      for (const [workDate, cell] of Object.entries(row.days || {})) {
-        map.set(`${staffId}:${workDate}`, cell);
-      }
-    }
-  }
-  return map;
-};
-
-const departmentName = (profile) => {
-  const first = profile?.departmentIds?.[0];
-  if (!first) return "";
-  if (typeof first === "object") return first.name || "";
-  return "";
-};
+const assignedMatch = (teamIds) => ({
+  staffId: { $in: teamIds },
+  status: { $in: [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED] },
+});
 
 const getTeamRota = async ({
   actor,
@@ -83,83 +83,229 @@ const getTeamRota = async ({
   const standing = await actorStanding(actor, organizationId);
   const tz = await loadTimezone(standing);
   const range = resolveRange({ date, view, tz });
-  const fromIso = range.from.toISOString();
-  const toIso = range.to.toISOString();
+  const orgOid = toOid(organizationId);
+  const branchOid = toOid(standing.branchId);
+  const departmentOid = toOid(departmentId);
 
-  const [shifts, rota] = await Promise.all([
-    shiftService.listShifts({
+  const match = {
+    organizationId: orgOid,
+    status: { $in: ROTA_SHIFT_STATUSES },
+    startsAt: { $lt: range.to.toDate() },
+    endsAt: { $gt: range.from.toDate() },
+  };
+  if (branchOid) match.branchId = branchOid;
+
+  if (standing.role === MembershipRole.LINE_MANAGER) {
+    const teamIds = await resolveSubordinateStaffIds({
+      userId: actor._id,
       organizationId,
-      actor,
-      from: range.from.clone().subtract(12, "hours").toISOString(),
-      to: toIso,
-      page: 1,
-      limit: SHIFT_PAGE_SIZE,
-      skip: 0,
-    }),
-    attendanceService.listAttendanceRota({
-      organizationId,
-      actor,
-      from: range.from.format("YYYY-MM-DD"),
-      to: range.to.format("YYYY-MM-DD"),
-      timezone: tz,
-    }),
-  ]);
-
-  const overlapping = (shifts.data || []).filter((shift) => {
-    if (!shift.staffId) return false;
-    if (
-      shift.status !== ShiftStatus.SCHEDULED &&
-      shift.status !== ShiftStatus.COMPLETED
-    ) {
-      return false;
-    }
-    const starts = new Date(shift.startsAt);
-    const ends = new Date(shift.endsAt);
-    return starts < range.to.toDate() && ends > range.from.toDate();
-  });
-
-  const staffIds = [
-    ...new Set(overlapping.map((shift) => String(shift.staffId))),
-  ];
-  const profiles = staffIds.length
-    ? await StaffProfile.find({ _id: { $in: staffIds } })
-        .select("departmentIds")
-        .populate("departmentIds", "name")
-        .lean()
-    : [];
-  const profileById = new Map(profiles.map((row) => [String(row._id), row]));
-  const cells = cellsByStaffDate(rota);
-
-  const items = [];
-  for (const shift of overlapping) {
-    const staffId = String(shift.staffId);
-    const profile = profileById.get(staffId);
-    if (
-      departmentId &&
-      !(profile?.departmentIds || []).some(
-        (dept) => String(dept._id || dept) === String(departmentId)
-      )
-    ) {
-      continue;
-    }
-
-    const workDate = moment(shift.startsAt).tz(tz).format("YYYY-MM-DD");
-    const cell = cells.get(`${staffId}:${workDate}`);
-
-    items.push({
-      shiftId: shift._id,
-      staffId: shift.staffId,
-      staffName: shift.staff?.name || "",
-      department: departmentName(profile),
-      workDate,
-      startsAt: shift.startsAt,
-      endsAt: shift.endsAt,
-      clockInAt: cell?.clockInAt || null,
-      chip: chipFromCell(cell),
     });
+    const teamOids = teamIds.map((id) => toOid(id));
+    match.$or = [
+      ...(teamOids.length ? [assignedMatch(teamOids)] : []),
+      { staffId: null, status: ShiftStatus.OPEN },
+    ];
+    if (!match.$or.length) {
+      return {
+        view: range.view,
+        from: range.from.format("YYYY-MM-DD"),
+        to: range.to.format("YYYY-MM-DD"),
+        items: [],
+      };
+    }
+    delete match.status;
   }
 
-  items.sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  const items = await Shift.aggregate([
+    { $match: match },
+    {
+      $addFields: {
+        workDate: {
+          $dateFromString: {
+            dateString: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$startsAt",
+                timezone: tz,
+              },
+            },
+            timezone: "UTC",
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: StaffProfile.collection.name,
+        localField: "staffId",
+        foreignField: "_id",
+        pipeline: [
+          { $project: { userId: 1, departmentIds: 1, jobTitleId: 1, photoUrl: 1 } },
+          { $limit: 1 },
+        ],
+        as: "staffDoc",
+      },
+    },
+    { $unwind: { path: "$staffDoc", preserveNullAndEmptyArrays: true } },
+    ...(departmentOid
+      ? [
+          {
+            $match: {
+              $or: [
+                { staffId: null },
+                { "staffDoc.departmentIds": departmentOid },
+              ],
+            },
+          },
+        ]
+      : []),
+    {
+      $lookup: {
+        from: User.collection.name,
+        localField: "staffDoc.userId",
+        foreignField: "_id",
+        pipeline: [{ $project: { name: 1, profileIcon: 1 } }, { $limit: 1 }],
+        as: "userDoc",
+      },
+    },
+    {
+      $lookup: {
+        from: Department.collection.name,
+        localField: "staffDoc.departmentIds",
+        foreignField: "_id",
+        pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+        as: "departmentDoc",
+      },
+    },
+    {
+      $lookup: {
+        from: JobTitle.collection.name,
+        localField: "staffDoc.jobTitleId",
+        foreignField: "_id",
+        pipeline: [{ $project: { name: 1 } }, { $limit: 1 }],
+        as: "jobTitleDoc",
+      },
+    },
+    {
+      $lookup: {
+        from: AttendanceDay.collection.name,
+        let: { shiftId: "$_id", staffId: "$staffId", workDate: "$workDate" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $eq: ["$shiftId", "$$shiftId"] },
+                  {
+                    $and: [
+                      { $eq: ["$staffId", "$$staffId"] },
+                      { $eq: ["$workDate", "$$workDate"] },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+          { $sort: { clockInAt: -1 } },
+          { $limit: 1 },
+        ],
+        as: "attendance",
+      },
+    },
+    {
+      $lookup: {
+        from: LeaveRequest.collection.name,
+        let: {
+          shiftId: "$_id",
+          staffId: "$staffId",
+          workDate: "$workDate",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$staffId", "$$staffId"] },
+                  { $eq: ["$leaveType", LeaveType.SICK] },
+                  { $in: ["$status", SICK_STATUSES] },
+                  { $lte: ["$startDate", "$$workDate"] },
+                  {
+                    $gte: [
+                      "$endDate",
+                      "$$workDate",
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+          { $sort: { createdAt: 1 } },
+          { $limit: 1 },
+        ],
+        as: "sick",
+      },
+    },
+    {
+      $addFields: {
+        attendance: { $arrayElemAt: ["$attendance", 0] },
+        sick: { $arrayElemAt: ["$sick", 0] },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        shiftId: "$_id",
+        staffId: { $ifNull: ["$staffId", null] },
+        staffName: { $ifNull: [{ $arrayElemAt: ["$userDoc.name", 0] }, ""] },
+        photoUrl: {
+          $ifNull: [
+            "$staffDoc.photoUrl",
+            { $ifNull: [{ $arrayElemAt: ["$userDoc.profileIcon", 0] }, ""] },
+          ],
+        },
+        jobTitle: {
+          $ifNull: [{ $arrayElemAt: ["$jobTitleDoc.name", 0] }, ""],
+        },
+        department: {
+          $ifNull: [{ $arrayElemAt: ["$departmentDoc.name", 0] }, ""],
+        },
+        workDate: {
+          $dateToString: {
+            format: "%Y-%m-%d",
+            date: "$startsAt",
+            timezone: tz,
+          },
+        },
+        startsAt: 1,
+        endsAt: 1,
+        status: 1,
+        visibility: 1,
+        urgentCover: { $ifNull: ["$urgentCover", false] },
+        clockInAt: { $ifNull: ["$attendance.clockInAt", null] },
+        clockOutAt: { $ifNull: ["$attendance.clockOutAt", null] },
+        punctualityStatus: {
+          $ifNull: ["$attendance.punctualityStatus", null],
+        },
+        presenceStatus: { $ifNull: ["$attendance.presenceStatus", null] },
+        chip: {
+          $cond: [
+            { $ifNull: ["$sick._id", false] },
+            "sick",
+            {
+              $cond: [
+                {
+                  $eq: ["$attendance.punctualityStatus", PunctualityStatus.LATE],
+                },
+                "late",
+                null,
+              ],
+            },
+          ],
+        },
+      },
+    },
+    { $sort: { startsAt: 1 } },
+  ]);
 
   return {
     view: range.view,

@@ -91,7 +91,7 @@ spec.paths["/app/line-home"] = {
     tags: ["line-home"],
     summary: "Line Manager Team home",
     description:
-      "My Team Today, This Month and Recent Activity cards in one call. Role: lineManager. Name, photo, site and role come from login. Today and This Month are direct reports; family photos and restricted residents are the site. See All stays GET /app/team-live/activity. tempyAgency.bids is always null (no bids store).",
+      "My Team Today, This Month and Recent Activity cards in one call. Role: lineManager. Name, photo, site and role come from login. Today and This Month are direct reports; family photos and restricted residents are the site. activity.ownShifts is the My Own Shifts card {next, upcoming, hoursThisWeek, pendingLeave}; tap GET /app/shifts/my. See All stays GET /app/team-live/activity. tempyAgency.bids is always null (no bids store).",
     security: bearer,
     parameters: [orgHeader],
     responses: { 200: ok, 403: { description: "Role not allowed" } },

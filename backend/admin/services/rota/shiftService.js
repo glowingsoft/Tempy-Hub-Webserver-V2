@@ -1027,6 +1027,21 @@ const listClaims = async ({
     if (standing.branchId) {
       match.branchId = standing.branchId;
     }
+    const inScope = await applyLineManagerStaffScope({
+      match,
+      standing,
+      actor,
+      organizationId,
+    });
+    if (!inScope) {
+      return {
+        data: [],
+        meta: {
+          ...generateMeta(page, limit, 0),
+          counts: emptyShiftClaimStatusCounts(),
+        },
+      };
+    }
   }
 
   const countMatch = { ...match };
@@ -1061,6 +1076,13 @@ const getClaim = async ({ actor, organizationId, claimId }) => {
   };
   const standing = await actorStanding(actor, organizationId);
   if (standing.branchId) match.branchId = standing.branchId;
+  const inScope = await applyLineManagerStaffScope({
+    match,
+    standing,
+    actor,
+    organizationId,
+  });
+  if (!inScope) throw new AppError("shift_claim_not_found", 404);
 
   const [claim] = await ShiftClaim.aggregate([
     { $match: match },

@@ -79,6 +79,18 @@ for (const FILE of FILES) {
         header: orgHeader,
         query: "tab=onShift&page=1&limit=20",
       }),
+      req("my team today checked in", "GET", ["app", "line-home", "today"], {
+        header: orgHeader,
+        query: "tab=checkedIn&page=1&limit=20",
+      }),
+      req("my team today late", "GET", ["app", "line-home", "today"], {
+        header: orgHeader,
+        query: "tab=late&page=1&limit=20",
+      }),
+      req("my team today sick", "GET", ["app", "line-home", "today"], {
+        header: orgHeader,
+        query: "tab=sick&page=1&limit=20",
+      }),
     ]);
   }
   if (adminPanel) {
@@ -119,6 +131,18 @@ for (const FILE of FILES) {
         "GET",
         ["admin", "organizations", "{{organizationId}}", "line-home", "today"],
         { query: "tab=onShift&page=1&limit=20" }
+      ),
+      req(
+        "my team today late",
+        "GET",
+        ["admin", "organizations", "{{organizationId}}", "line-home", "today"],
+        { query: "tab=late&page=1&limit=20" }
+      ),
+      req(
+        "my team today sick",
+        "GET",
+        ["admin", "organizations", "{{organizationId}}", "line-home", "today"],
+        { query: "tab=sick&page=1&limit=20" }
       ),
     ]);
   }

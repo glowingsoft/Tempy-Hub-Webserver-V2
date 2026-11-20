@@ -17,6 +17,7 @@ const {
   ShiftClaimStatus,
   AdmissionStatus,
   ComplianceMeetingStatus,
+  StaffProfileStatus,
 } = require("@models/domainEnums");
 const { actorStanding } = require("@adminServices/staff/staffAccess");
 const {
@@ -289,6 +290,88 @@ const rotaWindowOf = async ({ organizationId, branchId, tz, now }) => {
   };
 };
 
+const emptyOwnShifts = () => ({
+  next: null,
+  upcoming: 0,
+  hoursThisWeek: 0,
+  pendingLeave: 0,
+});
+
+const ownShiftsOf = async ({ actor, organizationId, tz, now }) => {
+  const profile = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId: toObjectId(organizationId),
+    status: StaffProfileStatus.ACTIVE,
+  })
+    .select("_id")
+    .lean();
+  if (!profile) return emptyOwnShifts();
+
+  const staffId = profile._id;
+  const week = resolvePeriod("weekly", tz);
+  const from = moment.tz(now, tz).startOf("day");
+  const upcomingTo = from.clone().add(ROTA_WINDOW_DAYS, "days").endOf("day");
+  const mine = {
+    staffId,
+    status: { $in: [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED] },
+  };
+
+  const [facet, pendingLeave] = await Promise.all([
+    Shift.aggregate([
+      { $match: mine },
+      {
+        $facet: {
+          next: [
+            { $match: { startsAt: { $gte: now }, status: ShiftStatus.SCHEDULED } },
+            { $sort: { startsAt: 1 } },
+            { $limit: 1 },
+            { $project: { _id: 0, shiftId: "$_id", startsAt: 1, endsAt: 1 } },
+          ],
+          upcoming: [
+            {
+              $match: {
+                startsAt: { $gte: from.toDate(), $lte: upcomingTo.toDate() },
+              },
+            },
+            { $count: "count" },
+          ],
+          weekHours: [
+            {
+              $match: {
+                startsAt: { $lte: week.to.toDate() },
+                endsAt: { $gte: week.from.toDate() },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                minutes: {
+                  $sum: {
+                    $divide: [{ $subtract: ["$endsAt", "$startsAt"] }, 60000],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]),
+    LeaveRequest.countDocuments({
+      staffId,
+      status: LeaveRequestStatus.PENDING,
+    }),
+  ]);
+
+  const row = facet[0] || {};
+  const minutes = row.weekHours?.[0]?.minutes || 0;
+  return {
+    next: row.next?.[0] || null,
+    upcoming: row.upcoming?.[0]?.count || 0,
+    hoursThisWeek: Math.round((minutes / 60) * 10) / 10,
+    pendingLeave,
+  };
+};
+
 const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
   const standing = await actorStanding(actor, organizationId);
   if (standing.role !== MembershipRole.LINE_MANAGER) {
@@ -304,7 +387,17 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
   const orgOid = toObjectId(organizationId);
   const branchOid = toObjectId(standing.branchId);
 
-  const [today, thisMonth, leavePending, shiftClaim, supervisions, family, rota, restricted] =
+  const [
+    today,
+    thisMonth,
+    leavePending,
+    shiftClaim,
+    supervisions,
+    family,
+    rota,
+    restricted,
+    ownShifts,
+  ] =
     await Promise.all([
       loadTeamCounts({
         teamIds,
@@ -330,6 +423,7 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
         admissionStatus: AdmissionStatus.ADMITTED,
         restricted: true,
       }),
+      ownShiftsOf({ actor, organizationId, tz, now }),
     ]);
 
   return {
@@ -347,6 +441,7 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
       familyPhotos: { pending: family.pendingUploads.count },
       tempyAgency: { openTonight: rota.openTonight, bids: null },
       teamRota: { windowDays: ROTA_WINDOW_DAYS, daysToBook: rota.daysToBook },
+      ownShifts,
       restrictedResidents: { count: restricted },
     },
   };

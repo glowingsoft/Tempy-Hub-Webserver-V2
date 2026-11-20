@@ -2342,20 +2342,40 @@ const lineDashboardRequests = [
   }),
   req("team live rota", "GET", ["app", "team-live", "rota"], {
     header: lineOrgHeader,
-    query: "date=2026-10-20&view=day",
+    query: "date=2026-10-20&view=day&scope=managed",
     tests: [
       'pm.test("Team rota fetched", function () {',
       "    pm.response.to.have.status(200);",
       "    const data = pm.response.json().data;",
-      '    pm.expect(data).to.include.keys("view", "from", "to", "items");',
+      '    pm.expect(data).to.include.keys("view", "scope", "from", "to", "items");',
       "    pm.expect(data.items).to.be.an(\"array\");",
       "});",
     ],
     description:
-      "Team Rota Day/Week list. Line manager. Query: date (YYYY-MM-DD), view (day or week; 400 invalid_view), departmentId (My team filter). Assigned shifts only: staffName, department, startsAt, endsAt, clockInAt, chip (late, sick or null). Open/Book/Agency is GET /app/shifts/open. Totals 9 shifts / 72h are not on this payload.",
+      "Team Rota Day/Week. Query: date, view (day|week|person), scope (personal=my shifts, managed=my team; default managed for LM; 400 invalid_rota_scope). departmentId only with managed.",
+  }),
+  req("team live rota by person", "GET", ["app", "team-live", "rota"], {
+    header: lineOrgHeader,
+    query: "date=2026-10-20&view=person&scope=managed",
+    tests: [
+      'pm.test("Team rota by person fetched", function () {',
+      "    pm.response.to.have.status(200);",
+      "    const data = pm.response.json().data;",
+      '    pm.expect(data).to.include.keys("view", "scope", "from", "to", "people", "overContracted");',
+      '    pm.expect(data.view).to.eql("person");',
+      "    pm.expect(data.people).to.be.an(\"array\");",
+      "});",
+    ],
+    description:
+      "Team Rota By Person tab. Same route as Day/Week. Query: date (ISO week of that date), view=person, departmentId. Each people[] row: staffId, name, photoUrl, scheduledHours, contractedHours, overContracted. overContracted[] drives the footer (e.g. Sam is over contracted hours). Bar fill = scheduledHours / contractedHours.",
+  }),
+  req("team live rota my shifts", "GET", ["app", "team-live", "rota"], {
+    header: lineOrgHeader,
+    query: "date=2026-10-20&view=week&scope=personal",
+    description: "My own shifts. Same route; scope=personal. people[] is one row when view=person.",
   }),
   req("team live rota (admin)", "GET", ["admin", "organizations", "{{organizationId}}", "team-live", "rota"], {
-    query: "date=2026-10-20&view=day",
+    query: "date=2026-10-20&view=day&scope=managed",
     description: "Same payload as GET /app/team-live/rota.",
   }),
   req("line manager dashboard", "GET", ["admin", "organizations", "{{organizationId}}", "line-dashboard"], {

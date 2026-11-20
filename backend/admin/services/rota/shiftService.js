@@ -26,6 +26,7 @@ const {
 const {
   actorStanding,
   assertMayManageStaff,
+  assertMayApproveForStaff,
   assertBranchInOrganization,
   scopeBranchFilter,
   applyLineManagerStaffScope,
@@ -1092,7 +1093,13 @@ const getClaim = async ({ actor, organizationId, claimId }) => {
   return claim;
 };
 
-const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) => {
+const approveClaim = async ({
+  actor,
+  organizationId,
+  claimId,
+  decisionNote,
+  managerStaffId = null,
+}) => {
   const claim = await ShiftClaim.findOne({
     _id: claimId,
     organizationId,
@@ -1110,7 +1117,14 @@ const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) =>
   if (!shift) throw new AppError("shift_not_open", 400);
 
   const standing = await actorStanding(actor, organizationId);
-  assertMayManageStaff(standing, shift.branchId);
+  await assertMayApproveForStaff({
+    standing,
+    actor,
+    organizationId,
+    branchId: shift.branchId,
+    targetStaffId: claim.staffId,
+    managerStaffId,
+  });
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -1168,7 +1182,13 @@ const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) =>
   return { claim: claim.toObject(), shift: shiftDetails };
 };
 
-const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => {
+const rejectClaim = async ({
+  actor,
+  organizationId,
+  claimId,
+  decisionNote,
+  managerStaffId = null,
+}) => {
   const claim = await ShiftClaim.findOne({
     _id: claimId,
     organizationId,
@@ -1179,7 +1199,14 @@ const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => 
 
   const shift = await Shift.findById(claim.shiftId).select("branchId startsAt").lean();
   const standing = await actorStanding(actor, organizationId);
-  assertMayManageStaff(standing, shift?.branchId);
+  await assertMayApproveForStaff({
+    standing,
+    actor,
+    organizationId,
+    branchId: shift?.branchId || claim.branchId,
+    targetStaffId: claim.staffId,
+    managerStaffId,
+  });
 
   claim.status = ShiftClaimStatus.REJECTED;
   claim.decidedBy = actor._id;

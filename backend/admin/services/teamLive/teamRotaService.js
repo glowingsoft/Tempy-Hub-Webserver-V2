@@ -15,6 +15,7 @@ const {
   LeaveRequestStatus,
   PunctualityStatus,
   MembershipRole,
+  StaffProfileStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -22,7 +23,9 @@ const {
 } = require("@adminServices/staff/staffAccess");
 
 const DEFAULT_TZ = "Europe/London";
-const VIEWS = ["day", "week"];
+const VIEWS = ["day", "week", "person"];
+const ROTA_SCOPES = ["personal", "managed", "all"];
+const DEFAULT_CONTRACTED_HOURS = 37.5;
 const SICK_STATUSES = [
   LeaveRequestStatus.PENDING,
   LeaveRequestStatus.APPROVED,
@@ -54,7 +57,7 @@ const resolveRange = ({ date, view, tz }) => {
     : moment.tz(tz);
   if (!day.isValid()) throw new AppError("invalid_date_format", 400);
 
-  if (key === "week") {
+  if (key === "week" || key === "person") {
     return {
       view: key,
       from: day.clone().startOf("isoWeek"),
@@ -73,47 +76,231 @@ const assignedMatch = (teamIds) => ({
   status: { $in: [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED] },
 });
 
+const defaultScopeForRole = (role) => {
+  if (role === MembershipRole.STAFF) return "personal";
+  if (role === MembershipRole.LINE_MANAGER) return "managed";
+  return "all";
+};
+
+const parseScope = (value, role) => {
+  const fallback = defaultScopeForRole(role);
+  if (value == null || String(value).trim() === "") return fallback;
+  const scope = String(value).trim();
+  if (!ROTA_SCOPES.includes(scope)) throw new AppError("invalid_rota_scope", 400);
+  if (role === MembershipRole.STAFF && scope !== "personal") {
+    throw new AppError("insufficient_role", 403);
+  }
+  if (role === MembershipRole.LINE_MANAGER && scope === "all") {
+    throw new AppError("insufficient_role", 403);
+  }
+  return scope;
+};
+
+const rangeMeta = (range, scope) => ({
+  view: range.view,
+  scope,
+  from: range.from.format("YYYY-MM-DD"),
+  to: range.to.format("YYYY-MM-DD"),
+});
+
+const emptyDayWeekRota = (range, scope) => ({
+  ...rangeMeta(range, scope),
+  items: [],
+});
+
+const emptyPersonRota = (range, scope) => ({
+  ...rangeMeta(range, scope),
+  people: [],
+  overContracted: [],
+});
+
+const loadOwnProfileId = async ({ actor, organizationId }) => {
+  const profile = await StaffProfile.findOne({
+    userId: actor._id,
+    organizationId,
+    status: StaffProfileStatus.ACTIVE,
+  })
+    .select("_id")
+    .lean();
+  return profile?._id || null;
+};
+
+const resolveScopedStaffIds = async ({
+  scope,
+  actor,
+  organizationId,
+}) => {
+  if (scope === "all") return { staffIds: null, includeOpen: true };
+
+  if (scope === "personal") {
+    const ownId = await loadOwnProfileId({ actor, organizationId });
+    return {
+      staffIds: ownId ? [ownId] : [],
+      includeOpen: false,
+    };
+  }
+
+  const teamIds = await resolveSubordinateStaffIds({
+    userId: actor._id,
+    organizationId,
+  });
+  return { staffIds: teamIds, includeOpen: true };
+};
+
+const roundHours = (value) => Math.round(Number(value || 0) * 10) / 10;
+
+const getTeamRotaByPerson = async ({
+  orgOid,
+  branchOid,
+  departmentOid,
+  staffIds,
+  range,
+  scope,
+}) => {
+  if (staffIds && !staffIds.length) return emptyPersonRota(range, scope);
+
+  const staffMatch = {
+    organizationId: orgOid,
+    status: StaffProfileStatus.ACTIVE,
+  };
+  if (branchOid) staffMatch.branchId = branchOid;
+  if (departmentOid) staffMatch.departmentIds = departmentOid;
+  if (staffIds) staffMatch._id = { $in: staffIds.map((id) => toOid(id)) };
+
+  const from = range.from.toDate();
+  const to = range.to.toDate();
+  const hoursMatch = {
+    organizationId: orgOid,
+    status: { $in: [ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED] },
+    startsAt: { $lt: to },
+    endsAt: { $gt: from },
+  };
+  if (branchOid) hoursMatch.branchId = branchOid;
+  if (staffIds) hoursMatch.staffId = { $in: staffIds.map((id) => toOid(id)) };
+
+  const [rows, hourRows] = await Promise.all([
+    StaffProfile.aggregate([
+      { $match: staffMatch },
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: "userId",
+          foreignField: "_id",
+          pipeline: [
+            { $project: { name: 1, email: 1, profileIcon: 1 } },
+            { $limit: 1 },
+          ],
+          as: "_user",
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          photoUrl: 1,
+          contractedWeeklyHours: 1,
+          name: { $ifNull: [{ $arrayElemAt: ["$_user.name", 0] }, ""] },
+          email: { $ifNull: [{ $arrayElemAt: ["$_user.email", 0] }, ""] },
+          icon: { $ifNull: [{ $arrayElemAt: ["$_user.profileIcon", 0] }, ""] },
+        },
+      },
+      { $sort: { name: 1 } },
+    ]),
+    Shift.aggregate([
+      { $match: hoursMatch },
+      {
+        $group: {
+          _id: "$staffId",
+          ms: { $sum: { $subtract: ["$endsAt", "$startsAt"] } },
+        },
+      },
+    ]),
+  ]);
+
+  const hoursByStaff = new Map(
+    hourRows.map((row) => [String(row._id), row.ms])
+  );
+
+  const people = rows.map((row) => {
+    const contractedHours =
+      Number(row.contractedWeeklyHours) || DEFAULT_CONTRACTED_HOURS;
+    const scheduledHours = roundHours(
+      (hoursByStaff.get(String(row._id)) || 0) / 3600000
+    );
+    return {
+      staffId: row._id,
+      name: row.name,
+      email: row.email || "",
+      photoUrl: row.photoUrl || row.icon || "",
+      contractedHours,
+      scheduledHours,
+      overContracted: contractedHours > 0 && scheduledHours > contractedHours,
+    };
+  });
+
+  return {
+    ...rangeMeta(range, scope),
+    people,
+    overContracted: people
+      .filter((row) => row.overContracted)
+      .map((row) => ({ staffId: row.staffId, name: row.name })),
+  };
+};
+
 const getTeamRota = async ({
   actor,
   organizationId,
   date,
   view,
   departmentId,
+  scope: requestedScope,
 }) => {
   const standing = await actorStanding(actor, organizationId);
   const tz = await loadTimezone(standing);
   const range = resolveRange({ date, view, tz });
+  const scope = parseScope(requestedScope, standing.role);
   const orgOid = toOid(organizationId);
   const branchOid = toOid(standing.branchId);
-  const departmentOid = toOid(departmentId);
+  const departmentOid =
+    scope === "personal" ? null : toOid(departmentId);
+
+  const { staffIds, includeOpen } = await resolveScopedStaffIds({
+    scope,
+    actor,
+    organizationId,
+  });
+
+  if (range.view === "person") {
+    return getTeamRotaByPerson({
+      orgOid,
+      branchOid,
+      departmentOid,
+      staffIds,
+      range,
+      scope,
+    });
+  }
+
+  if (staffIds && !staffIds.length && !includeOpen) {
+    return emptyDayWeekRota(range, scope);
+  }
 
   const match = {
     organizationId: orgOid,
-    status: { $in: ROTA_SHIFT_STATUSES },
     startsAt: { $lt: range.to.toDate() },
     endsAt: { $gt: range.from.toDate() },
   };
   if (branchOid) match.branchId = branchOid;
 
-  if (standing.role === MembershipRole.LINE_MANAGER) {
-    const teamIds = await resolveSubordinateStaffIds({
-      userId: actor._id,
-      organizationId,
-    });
-    const teamOids = teamIds.map((id) => toOid(id));
+  const staffOids = staffIds ? staffIds.map((id) => toOid(id)) : null;
+
+  if (staffOids) {
     match.$or = [
-      ...(teamOids.length ? [assignedMatch(teamOids)] : []),
-      { staffId: null, status: ShiftStatus.OPEN },
+      ...(staffOids.length ? [assignedMatch(staffOids)] : []),
+      ...(includeOpen ? [{ staffId: null, status: ShiftStatus.OPEN }] : []),
     ];
-    if (!match.$or.length) {
-      return {
-        view: range.view,
-        from: range.from.format("YYYY-MM-DD"),
-        to: range.to.format("YYYY-MM-DD"),
-        items: [],
-      };
-    }
-    delete match.status;
+    if (!match.$or.length) return emptyDayWeekRota(range, scope);
+  } else {
+    match.status = { $in: ROTA_SHIFT_STATUSES };
   }
 
   const items = await Shift.aggregate([
@@ -164,7 +351,7 @@ const getTeamRota = async ({
         from: User.collection.name,
         localField: "staffDoc.userId",
         foreignField: "_id",
-        pipeline: [{ $project: { name: 1, profileIcon: 1 } }, { $limit: 1 }],
+        pipeline: [{ $project: { name: 1, email: 1, profileIcon: 1 } }, { $limit: 1 }],
         as: "userDoc",
       },
     },
@@ -257,6 +444,7 @@ const getTeamRota = async ({
         shiftId: "$_id",
         staffId: { $ifNull: ["$staffId", null] },
         staffName: { $ifNull: [{ $arrayElemAt: ["$userDoc.name", 0] }, ""] },
+        email: { $ifNull: [{ $arrayElemAt: ["$userDoc.email", 0] }, ""] },
         photoUrl: {
           $ifNull: [
             "$staffDoc.photoUrl",
@@ -308,9 +496,7 @@ const getTeamRota = async ({
   ]);
 
   return {
-    view: range.view,
-    from: range.from.format("YYYY-MM-DD"),
-    to: range.to.format("YYYY-MM-DD"),
+    ...rangeMeta(range, scope),
     items,
   };
 };

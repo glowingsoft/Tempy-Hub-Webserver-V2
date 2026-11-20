@@ -46,6 +46,63 @@ spec.paths["/app/team-live"] = {
   },
 };
 
+spec.paths["/app/team-live/rota"] = {
+  get: {
+    tags: ["team-live"],
+    summary: "Team Rota (Day / Week / By Person)",
+    description:
+      "Team Rota. Query: date (YYYY-MM-DD), view (day, week, person; 400 invalid_view), scope (personal = my shifts, managed = my team, all = site; default managed for lineManager, all for site/owner; 400 invalid_rota_scope; LM cannot use all). departmentId only with managed/all. Day/week: items[]. Person: people[] scheduledHours vs contractedHours plus overContracted[].",
+    security: bearer,
+    parameters: [
+      orgHeader,
+      { name: "date", in: "query", schema: { type: "string", format: "date" } },
+      {
+        name: "view",
+        in: "query",
+        schema: { type: "string", enum: ["day", "week", "person"], default: "day" },
+      },
+      {
+        name: "scope",
+        in: "query",
+        schema: {
+          type: "string",
+          enum: ["personal", "managed", "all"],
+        },
+      },
+      { name: "departmentId", in: "query", schema: { type: "string" } },
+    ],
+    responses: { 200: ok, 403: { description: "Role not allowed" } },
+  },
+};
+
+spec.paths["/admin/organizations/{organizationId}/team-live/rota"] = {
+  get: {
+    tags: ["team-live"],
+    summary: "Team Rota (admin org scope)",
+    description: "Same payload as GET /app/team-live/rota.",
+    security: bearer,
+    parameters: [
+      orgPath,
+      { name: "date", in: "query", schema: { type: "string", format: "date" } },
+      {
+        name: "view",
+        in: "query",
+        schema: { type: "string", enum: ["day", "week", "person"], default: "day" },
+      },
+      {
+        name: "scope",
+        in: "query",
+        schema: {
+          type: "string",
+          enum: ["personal", "managed", "all"],
+        },
+      },
+      { name: "departmentId", in: "query", schema: { type: "string" } },
+    ],
+    responses: { 200: ok },
+  },
+};
+
 spec.paths["/app/team-live/activity"] = {
   get: {
     tags: ["team-live"],

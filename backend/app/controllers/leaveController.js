@@ -34,6 +34,7 @@ const createLeaveRequest = async (req, res) => {
       totalDays: req.body.totalDays,
       reason: req.body.reason,
       attachmentUrl: req.body.attachmentUrl,
+      branchId: req.body.branchId,
     });
 
     return sendResponse({

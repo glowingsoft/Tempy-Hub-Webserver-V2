@@ -94,6 +94,8 @@ const ROLES_WITH_ALL_PERMISSIONS = [
 const DEFAULT_STAFF_PERMISSION_KEYS = [
   permissionKey(ModuleSlug.DOCUMENTS_ESIGN, PermissionVerb.VIEW),
   permissionKey(ModuleSlug.DOCUMENTS_ESIGN, PermissionVerb.APPROVE),
+  permissionKey(ModuleSlug.ROTA_SCHEDULING, PermissionVerb.VIEW),
+  permissionKey(ModuleSlug.ROTA_SCHEDULING, PermissionVerb.APPROVE),
 ];
 
 const withDefaultStaffPermissions = (role, organization, permissions) => {
@@ -132,7 +134,14 @@ const effectivePermissions = (membership, organization) => {
     );
   }
 
-  return licensedKeys(membership?.permissions || [], enabled);
+  return licensedKeys(
+    withDefaultStaffPermissions(
+      membership?.role,
+      organization,
+      membership?.permissions
+    ),
+    enabled
+  );
 };
 
 /**

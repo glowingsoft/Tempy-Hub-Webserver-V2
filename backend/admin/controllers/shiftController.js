@@ -185,6 +185,7 @@ const approveClaim = async (req, res) => {
       organizationId: req.orgId,
       claimId: req.params.claimId,
       decisionNote: req.body.decisionNote,
+      managerStaffId: req.staffProfile?._id,
     });
 
     return sendResponse({
@@ -205,6 +206,7 @@ const rejectClaim = async (req, res) => {
       organizationId: req.orgId,
       claimId: req.params.claimId,
       decisionNote: req.body.decisionNote,
+      managerStaffId: req.staffProfile?._id,
     });
 
     return sendResponse({

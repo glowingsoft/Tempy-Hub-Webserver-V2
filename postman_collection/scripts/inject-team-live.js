@@ -68,7 +68,15 @@ for (const FILE of FILES) {
       }),
       req("team live rota", "GET", ["app", "team-live", "rota"], {
         header: orgHeader,
-        query: "date=2026-08-18&view=day",
+        query: "date=2026-08-18&view=day&scope=managed",
+      }),
+      req("team live rota my shifts", "GET", ["app", "team-live", "rota"], {
+        header: orgHeader,
+        query: "date=2026-08-18&view=week&scope=personal",
+      }),
+      req("team live rota by person", "GET", ["app", "team-live", "rota"], {
+        header: orgHeader,
+        query: "date=2026-10-20&view=person&scope=managed",
       }),
     ]);
     upsertFolder(appFolder, "Line Home", [
@@ -118,6 +126,12 @@ for (const FILE of FILES) {
         "GET",
         ["admin", "organizations", "{{organizationId}}", "team-live", "rota"],
         { query: "date=2026-08-18&view=day" }
+      ),
+      req(
+        "team live rota by person (admin)",
+        "GET",
+        ["admin", "organizations", "{{organizationId}}", "team-live", "rota"],
+        { query: "date=2026-10-20&view=person" }
       ),
     ]);
     upsertFolder(adminPanel, "Line Home", [

@@ -5,10 +5,14 @@ const {
   requireRoles,
   requireModule,
   requirePermission,
+  hasReportsIf,
 } = require("@middlewares/membershipMiddleware");
 const { MembershipRole, ModuleSlug } = require("@models/domainEnums");
 const shiftController = require("../controllers/shiftController");
-const { ROTA_APPROVE } = require("@adminServices/rota/shiftAccess");
+const {
+  ROTA_APPROVE,
+  TEAM_APPROVER_ROLES,
+} = require("@adminServices/rota/shiftAccess");
 
 const router = express.Router();
 
@@ -18,21 +22,17 @@ router.use(
   requireModule(ModuleSlug.ROTA_SCHEDULING)
 );
 
-const MANAGERS = [
-  MembershipRole.SUPER_ADMIN,
-  MembershipRole.OWNER,
-  MembershipRole.SITE_MANAGER,
-];
-
 router.post(
   "/:claimId/approve",
-  requireRoles(MANAGERS),
+  requireRoles(TEAM_APPROVER_ROLES),
+  hasReportsIf([MembershipRole.LINE_MANAGER]),
   requirePermission(ROTA_APPROVE),
   shiftController.approveClaim
 );
 router.post(
   "/:claimId/reject",
-  requireRoles(MANAGERS),
+  requireRoles(TEAM_APPROVER_ROLES),
+  hasReportsIf([MembershipRole.LINE_MANAGER]),
   requirePermission(ROTA_APPROVE),
   shiftController.rejectClaim
 );

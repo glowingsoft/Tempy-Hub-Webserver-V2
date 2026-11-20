@@ -53,6 +53,7 @@ const getTeamRota = async (req, res) => {
       date: req.query.date,
       view: req.query.view,
       departmentId: req.query.departmentId,
+      scope: req.query.scope,
     });
 
     return sendResponse({

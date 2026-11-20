@@ -572,6 +572,16 @@ const assertObjectId = (value) => {
   }
 };
 
+const resolveLeaveBranchId = (profile, branchId) => {
+  const staffBranch = profile.branchId || null;
+  if (branchId == null || String(branchId).trim() === "") return staffBranch;
+  assertObjectId(branchId);
+  if (staffBranch && String(staffBranch) !== String(branchId)) {
+    throw new AppError("invalid_branch_id", 400);
+  }
+  return branchId;
+};
+
 const getLeaveRequestOrThrow = async (requestId, organizationId) => {
   assertObjectId(requestId);
   const request = await LeaveRequest.findById(requestId).lean();
@@ -644,8 +654,10 @@ const createLeaveRequest = async ({
   totalDays,
   reason,
   attachmentUrl,
+  branchId,
 }) => {
   const profile = await requireStaffProfile(userId, organizationId);
+  const leaveBranchId = resolveLeaveBranchId(profile, branchId);
   await assertLeaveRequestsEnabled(profile, organizationId);
   assertKnownLeaveType(leaveType);
   const timezone = await siteTimezone(profile.branchId);
@@ -683,6 +695,7 @@ const createLeaveRequest = async ({
   const request = await LeaveRequest.create({
     staffId: profile._id,
     organizationId,
+    branchId: leaveBranchId,
     leaveType: type,
     startDate: dates.startDate,
     endDate: dates.endDate,
@@ -1356,8 +1369,10 @@ const recordManagerLeave = async ({
   endDate,
   totalDays,
   reason,
+  branchId,
 }) => {
   const profile = await getStaffProfileOrThrow(staffId, organizationId);
+  const leaveBranchId = resolveLeaveBranchId(profile, branchId);
   assertKnownLeaveType(leaveType);
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, profile.branchId);
@@ -1382,6 +1397,7 @@ const recordManagerLeave = async ({
         {
           staffId: profile._id,
           organizationId,
+          branchId: leaveBranchId,
           leaveType: type,
           startDate: dates.startDate,
           endDate: dates.endDate,

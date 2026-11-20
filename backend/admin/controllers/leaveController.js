@@ -116,6 +116,7 @@ const recordManagerLeave = async (req, res) => {
       endDate: req.body.endDate,
       totalDays: req.body.totalDays,
       reason: req.body.reason,
+      branchId: req.body.branchId,
     });
 
     return sendResponse({

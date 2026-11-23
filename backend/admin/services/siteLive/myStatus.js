@@ -20,7 +20,9 @@ const loadMyStatus = async ({ userId, organizationId }) => {
     });
     return myStatusFromAttendance(today);
   } catch (error) {
-    if (error.translationKey === "staff_profile_not_found") return null;
+    if (error.translationKey === "staff_profile_not_found") {
+      return myStatusFromAttendance(null);
+    }
     throw error;
   }
 };

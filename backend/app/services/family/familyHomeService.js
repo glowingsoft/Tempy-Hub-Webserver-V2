@@ -8,6 +8,7 @@ const { resolveFamilyResidents } = require("./familyAccessService");
 const { getNextVisit } = require("./familyVisitService");
 const { nextGazette } = require("./familyGazetteService");
 const { unreadTotal } = require("./familyMessageService");
+const { getCurrentHandover } = require("./familyHandoverService");
 const { namesOf } = require("./familyNotify");
 const { listTimeline } = require("./familyTimelineService");
 const { listWall } = require("./familyWallService");
@@ -16,18 +17,13 @@ const HomeTab = { FAMILY: "family", WALL: "wall" };
 const HOME_TABS = Object.values(HomeTab);
 
 /**
- * family: only the approved posts this resident's family uploaded (no home wall posts).
+ * family: this resident's timeline: the approved family uploads and the home posts tagged to the resident.
  * wall: every post this site's families may see, as on the Community Wall.
  */
 const feedOf = async ({ tab, active, residents, userId, paging }) => {
   const feed =
     tab === HomeTab.FAMILY
-      ? await listTimeline({
-          link: active,
-          userId,
-          ...paging,
-          familyPostsOnly: true,
-        })
+      ? await listTimeline({ link: active, links: residents, userId, ...paging })
       : await listWall({ link: active, links: residents, userId, ...paging });
   return { tab, items: feed.data, meta: feed.meta };
 };
@@ -43,7 +39,9 @@ const greetingOf = ({ name, timezone, now }) => {
       : hour < AFTERNOON_UNTIL
         ? "Good afternoon"
         : "Good evening";
-  const first = String(name || "").trim().split(/\s+/)[0];
+  const first = String(name || "")
+    .trim()
+    .split(/\s+/)[0];
   return first ? `${part}, ${first}` : part;
 };
 
@@ -83,13 +81,7 @@ const noticesOf = ({ visiting, pendingRequests }) => [
 ];
 
 /** The Home Family tab in one call, for the resident being viewed (the first one when none is named). */
-const getHome = async ({
-  user,
-  residentId,
-  tab,
-  paging,
-  now = new Date(),
-}) => {
+const getHome = async ({ user, residentId, tab, paging, now = new Date() }) => {
   if (tab !== undefined && !HOME_TABS.includes(tab))
     throw new AppError("invalid_home_tab", 400);
   if (
@@ -119,23 +111,27 @@ const getHome = async ({
     messages,
     pendingRequests,
     names,
+    handover,
     feed,
-  ] =
-    await Promise.all([
-      getNextVisit({ link, userId: user._id, now }),
-      nextGazette({ link, now }),
-      NotificationExp.countDocuments({
-        receiverId: user._id,
-        isRead: false,
-        isDeleted: { $ne: true },
-      }),
-      unreadTotal(user._id),
-      active.isNextOfKin ? pendingRequestsOf(active) : 0,
-      namesOf(active),
-      tab
-        ? feedOf({ tab, active, residents, userId: user._id, paging })
-        : undefined,
-    ]);
+  ] = await Promise.all([
+    getNextVisit({ link, userId: user._id, now }),
+    nextGazette({ link, now }),
+    NotificationExp.countDocuments({
+      receiverId: user._id,
+      isRead: false,
+      isDeleted: { $ne: true },
+    }),
+    unreadTotal(user._id),
+    active.isNextOfKin ? pendingRequestsOf(active) : 0,
+    namesOf(active),
+    getCurrentHandover({
+      userId: user._id,
+      residentId: String(active.residentId),
+    }),
+    tab
+      ? feedOf({ tab, active, residents, userId: user._id, paging })
+      : undefined,
+  ]);
 
   return {
     greeting: greetingOf({ name: user.name, timezone: names.timezone, now }),
@@ -150,6 +146,7 @@ const getHome = async ({
       pendingRequests,
     }),
     unread: { notifications, messages },
+    handover,
     // Only present when ?tab= is sent, so the plain home response is unchanged.
     ...(feed ? { feed } : {}),
   };

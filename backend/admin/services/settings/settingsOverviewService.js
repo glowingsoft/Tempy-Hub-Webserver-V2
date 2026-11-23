@@ -13,7 +13,11 @@ const familySettingsService = require("@adminServices/family/familySettingsServi
 const familyVisitStaffService = require("@adminServices/family/familyVisitStaffService");
 const billingUsageService = require("@adminServices/billing/billingUsageService");
 
-const ORG_ADMINS = [MembershipRole.OWNER, MembershipRole.SUPER_ADMIN];
+const GAZETTE_EDITORS = [
+  MembershipRole.OWNER,
+  MembershipRole.SUPER_ADMIN,
+  MembershipRole.SITE_MANAGER,
+];
 const SECTIONS = ["billing", "family", "visits"];
 
 const accessOf = ({ actor, role, permissions = [], organization, organizationId }, permission) => {
@@ -22,7 +26,7 @@ const accessOf = ({ actor, role, permissions = [], organization, organizationId 
   const familyOn = Boolean(organizationId) && (platform || isFamilyModuleActive(organization));
   return {
     billing: platform,
-    family: familyOn && allowed && (platform || ORG_ADMINS.includes(role)),
+    family: familyOn && allowed && (platform || GAZETTE_EDITORS.includes(role)),
     visits: familyOn && allowed && (platform || FAMILY_STAFF_ROLES.includes(role)),
   };
 };

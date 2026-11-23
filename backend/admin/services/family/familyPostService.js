@@ -753,6 +753,13 @@ const updatePost = async ({
   return row;
 };
 
+const setPinned = async ({ actor, organizationId, postId, pinned }) => {
+  if (typeof pinned !== "boolean") throw new AppError("invalid_pinned_flag", 400);
+  const post = await loadOpenPost({ actor, organizationId, postId });
+  await FamilyPost.updateOne({ _id: post._id }, { $set: { isPinned: pinned } });
+  return getPostRow(post._id);
+};
+
 const nextState = ({ post, status, scheduledAt }) => {
   if (post.status === FamilyPostStatus.PUBLISHED) {
     if (
@@ -855,5 +862,6 @@ module.exports = {
   listAuthors,
   createPost,
   updatePost,
+  setPinned,
   removePost,
 };

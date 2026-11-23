@@ -4617,6 +4617,38 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "list departments (site manager)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/departments",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "departments"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true,
+                      "description": "owner / super admin only; a site manager gets own site"
+                    }
+                  ]
+                },
+                "description": "Active departments of the site (plus organisation-wide ones), sorted. Use the _id values as departmentIds when creating an announcement."
+              },
+              "response": []
             }
           ]
         },
@@ -9635,6 +9667,24 @@
                           "value": "{{residentId}}",
                           "description": "The resident being viewed; the first one when left out",
                           "disabled": true
+                        },
+                        {
+                          "key": "tab",
+                          "value": "family",
+                          "description": "family (this resident's timeline) or wall (community wall). Leave out for the home without a feed",
+                          "disabled": true
+                        },
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "description": "Feed page, used with tab",
+                          "disabled": true
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "description": "Feed page size, used with tab",
+                          "disabled": true
                         }
                       ]
                     },
@@ -10487,6 +10537,45 @@
                     }
                   },
                   "response": []
+                },
+                {
+                  "name": "pin or unpin post (site manager)",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-posts/{{postId}}/pin",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-posts",
+                        "{{postId}}",
+                        "pin"
+                      ]
+                    },
+                    "description": "Site manager, owner or super admin only. pinned true pins the post to the top of the wall and the Family tab, false unpins. Use the postId of a home wall post.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"pinned\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
                 }
               ]
             }
@@ -10898,7 +10987,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
+                  "raw": "{\n  \"gazette\": {\n    \"issueEveryDays\": 14,\n    \"messageCap\": 30,\n    \"anchorDate\": \"2026-11-30\",\n    \"deadlineReminder\": true,\n    \"communityWall\": true\n  },\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"maxPartySize\": 4,\n    \"daysAhead\": 14,\n    \"visitingHours\": {\n      \"start\": \"09:00\",\n      \"end\": \"18:00\"\n    },\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"

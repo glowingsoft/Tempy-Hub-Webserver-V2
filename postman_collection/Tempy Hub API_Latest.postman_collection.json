@@ -7859,7 +7859,7 @@
               "response": []
             },
             {
-              "name": "export compliance (csv or pdf)",
+              "name": "export compliance (csv and pdf)",
               "event": [
                 {
                   "listen": "test",
@@ -7880,7 +7880,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/site-live/compliance/export?format=csv&branchId={{branchId}}",
+                  "raw": "{{url}}/app/site-live/compliance/export?branchId={{branchId}}",
                   "host": [
                     "{{url}}"
                   ],
@@ -7892,20 +7892,39 @@
                   ],
                   "query": [
                     {
-                      "key": "format",
-                      "value": "csv",
-                      "description": "csv or pdf"
-                    },
-                    {
                       "key": "branchId",
                       "value": "{{branchId}}",
                       "description": "Owner and super admin only"
                     }
                   ]
                 },
-                "description": "Export CSV / PDF button of the Compliance screen. Downloads compliance-YYYY-MM-DD.csv or .pdf with the four scores, supervision by department and every active person of the site. 400 invalid_export_format when format is missing or not csv or pdf. In Postman use Send and Download for the file."
+                "description": "Generates both compliance exports and returns short-lived pdfUrl and csvUrl links, plus each file name and expiration time. Open either URL to download the matching file; the link redirects to its signed S3 object and expires after five minutes."
               },
-              "response": []
+              "response": [
+                {
+                  "name": "Both compliance download links",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": "{{url}}/app/site-live/compliance/export?branchId={{branchId}}"
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"pdfUrl\": \"https://api.example.com/api/v1/app/site-live/compliance/download/eyJrIjoiY29tcGxpYW5jZS1leHBvcnRzL2V4YW1wbGUucGRmIn0.signature\",\n    \"pdfFileName\": \"compliance-2026-11-24.pdf\",\n    \"pdfExpiresAt\": \"2026-11-24T12:05:00.000Z\",\n    \"csvUrl\": \"https://api.example.com/api/v1/app/site-live/compliance/download/eyJrIjoiY29tcGxpYW5jZS1leHBvcnRzL2V4YW1wbGUuY3N2In0.signature\",\n    \"csvFileName\": \"compliance-2026-11-24.csv\",\n    \"csvExpiresAt\": \"2026-11-24T12:05:00.000Z\"\n  }\n}"
+                }
+              ]
             }
           ]
         },

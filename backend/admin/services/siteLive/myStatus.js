@@ -20,7 +20,12 @@ const loadMyStatus = async ({ userId, organizationId }) => {
     });
     return myStatusFromAttendance(today);
   } catch (error) {
-    if (error.translationKey === "staff_profile_not_found") {
+    // Manager memberships (including site managers) do not require a StaffProfile.
+    // Treat the attendance service's missing-profile error as a normal status.
+    if (
+      error?.translationKey === "staff_profile_not_found" ||
+      error?.message === "staff_profile_not_found"
+    ) {
       return myStatusFromAttendance(null);
     }
     throw error;

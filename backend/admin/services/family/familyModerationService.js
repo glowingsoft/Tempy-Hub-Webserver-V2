@@ -133,6 +133,7 @@ const queueStages = [
       residentName: { $ifNull: ["$resident.name", ""] },
       roomNumber: { $ifNull: ["$resident.roomNumber", ""] },
       residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
+      residentHasPhotoConsent: { $eq: ["$resident.photographyConsent", true] },
       authorId: 1,
       authorName: { $ifNull: ["$author.name", ""] },
       authorEmail: { $ifNull: ["$author.email", ""] },

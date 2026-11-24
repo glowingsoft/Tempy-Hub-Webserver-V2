@@ -12220,6 +12220,54 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Approvals",
+          "item": [
+            {
+              "name": "list approvals",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals?tab=all&page=1&limit=20&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "all",
+                      "description": "all, visitors, shifts, leave, photos or joins"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                },
+        "description": "Site manager approval cards. tab can be all, visitors (family visit requests), shifts, leave, photos or joins. Each item includes tab, status, source record fields, and card {title, subtitle, badges, photoUrl, photos where relevant}; meta includes pending counts and available tabs. The shifts queue contains staff shift claims."
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },

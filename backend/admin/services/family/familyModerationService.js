@@ -161,6 +161,7 @@ const listUploads = async ({
   residentId,
   status,
   keyword,
+  residentMustExist = false,
   page,
   limit,
   skip,
@@ -190,6 +191,32 @@ const listUploads = async ({
     limit,
     skip,
     sort: { createdAt: wanted === FamilyUploadStatus.PENDING ? 1 : -1 },
+    preStages: residentMustExist
+      ? [
+          {
+            $lookup: {
+              from: Resident.collection.name,
+              let: { residentId: "$residentId" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { $eq: ["$_id", "$$residentId"] },
+                        { $eq: ["$organizationId", toObjectId(organizationId)] },
+                      ],
+                    },
+                  },
+                },
+                { $project: { _id: 1 } },
+                { $limit: 1 },
+              ],
+              as: "approvalResident",
+            },
+          },
+          { $match: { "approvalResident.0": { $exists: true } } },
+        ]
+      : [],
     extraFacets: {
       ...allCountFacet(base),
       statusCounts: [
@@ -212,6 +239,24 @@ const listUploads = async ({
       oldestPendingAt: result.oldestPending?.[0]?.createdAt ?? null,
     },
   };
+};
+
+const getUpload = async ({ actor, organizationId, uploadId }) => {
+  if (!isValidObjectId(uploadId)) throw new AppError("upload_not_found", 404);
+  const [upload] = await FamilyUpload.aggregate([
+    {
+      $match: {
+        _id: toObjectId(uploadId),
+        organizationId: toObjectId(organizationId),
+      },
+    },
+    ...queueStages,
+  ]);
+  if (!upload) throw new AppError("upload_not_found", 404);
+
+  const standing = await actorStanding(actor, organizationId);
+  assertMayAccessResidents(standing, upload.branchId);
+  return upload;
 };
 
 /** A site or line manager can only decide for their own site; 409 if another manager decided first. */
@@ -384,4 +429,4 @@ const rejectUpload = async ({
   });
 };
 
-module.exports = { listUploads, approveUpload, rejectUpload, REJECT_REASONS };
+module.exports = { listUploads, getUpload, approveUpload, rejectUpload, REJECT_REASONS };

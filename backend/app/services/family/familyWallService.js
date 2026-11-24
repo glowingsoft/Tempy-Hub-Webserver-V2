@@ -4,16 +4,22 @@ const { Resident } = require("@models/Resident");
 const { FamilyPost } = require("@models/FamilyPost");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyReaction } = require("@models/FamilyReaction");
+const { FamilyPostPin } = require("@models/FamilyPostPin");
 const { FamilyPostView } = require("@models/FamilyPostView");
 const { FamilyPostReport } = require("@models/FamilyPostReport");
 const { visibleToLink, visibleToAny } = require("@utils/familyPostVisibility");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
-const { reactionStats, postPhotos } = require("./familyWallPipeline");
+const {
+  reactionStats,
+  pinnedByMe,
+  postPhotos,
+} = require("./familyWallPipeline");
 
 const MAX_SEEN_BATCH = 50;
 const MAX_REPORT_REASON = 500;
+const MAX_MY_PINS = 500;
 
 const isDuplicateKey = (error) => error?.code === 11000;
 
@@ -51,6 +57,7 @@ const wallPostStages = ({ userId, linkedResidentIds }) => [
     optional: true,
   }),
   ...reactionStats(userId),
+  ...pinnedByMe(userId),
   {
     $addFields: {
       photos: postPhotos,
@@ -85,6 +92,7 @@ const wallPostStages = ({ userId, linkedResidentIds }) => [
       taggedResidents: 1,
       audience: { $ifNull: ["$audience", "branch"] },
       isPinned: 1,
+      isPinnedByMe: 1,
       reactionCount: 1,
       reactedByMe: 1,
       createdAt: 1,
@@ -135,6 +143,53 @@ const assertPostVisible = async ({ postId, links }) => {
   ]);
   if (!post) throw new AppError("post_not_found", 404);
   return post;
+};
+
+/** My Pinned Posts: what this person saved, across every resident they are linked to, newest post first. */
+const listPinned = async ({ userId, links, page, limit, skip }) => {
+  const pins = await FamilyPostPin.find({ userId: toObjectId(userId) })
+    .sort({ createdAt: -1 })
+    .limit(MAX_MY_PINS)
+    .select("postId")
+    .lean();
+
+  return paginateWithFacet({
+    model: FamilyPost,
+    match: {
+      ...visibleToAny(links),
+      _id: { $in: pins.map((pin) => pin.postId) },
+    },
+    page,
+    limit,
+    skip,
+    sort: { createdAt: -1, _id: -1 },
+    extraDataStages: wallPostStages({
+      userId,
+      linkedResidentIds: links.map((l) => l.residentId),
+    }),
+  });
+};
+
+/** Saves or unsaves a post for the caller only. Sending the same value twice changes nothing. */
+const setPinned = async ({ userId, links, postId, pinned }) => {
+  if (typeof pinned !== "boolean") throw new AppError("invalid_pinned_flag", 400);
+  await assertPostVisible({ postId, links });
+
+  const mine = { postId: toObjectId(postId), userId: toObjectId(userId) };
+  if (pinned) {
+    try {
+      await FamilyPostPin.updateOne(
+        mine,
+        { $setOnInsert: mine },
+        { upsert: true },
+      );
+    } catch (error) {
+      if (!isDuplicateKey(error)) throw error;
+    }
+  } else {
+    await FamilyPostPin.deleteOne(mine);
+  }
+  return { postId, isPinnedByMe: pinned };
 };
 
 /** One tap. Sending it again changes nothing. */
@@ -255,6 +310,8 @@ const reportPost = async ({ userId, links, postId, reason }) => {
 
 module.exports = {
   listWall,
+  listPinned,
+  setPinned,
   addReaction,
   removeReaction,
   markSeen,

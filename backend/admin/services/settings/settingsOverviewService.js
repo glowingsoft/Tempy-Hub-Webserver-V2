@@ -108,12 +108,16 @@ const getFamilyScreen = async (context) => {
     gazette: {
       issueEveryDays: family.gazette.issueEveryDays,
       messageCap: family.gazette.messageCap,
+      anchorDate: family.gazette.anchorDate,
       deadlineReminder: family.deadlineReminder,
       communityWall: family.communityWall,
     },
     visiting: visits && {
       bookingOpen: !visits.paused,
       loungeCapacityPerSlot: visits.loungeCapacityPerSlot,
+      visitingHours: visits.visitingHours,
+      daysAhead: visits.daysAhead,
+      maxPartySize: visits.maxPartySize,
       protectedTimes: visits.protectedTimes,
     },
     safety: { emergencyNotifyOffsite },

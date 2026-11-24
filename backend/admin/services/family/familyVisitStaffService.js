@@ -80,6 +80,43 @@ const assertEnum = (value, allowed, key) => {
     throw new AppError(key, 400);
 };
 
+const visitRowStages = [
+  ...joinRequester,
+  ...joinResident,
+  {
+    $project: {
+      _id: 0,
+      id: "$_id",
+      branchId: 1,
+      residentId: 1,
+      residentName: { $ifNull: ["$resident.name", ""] },
+      source: 1,
+      status: 1,
+      startAt: 1,
+      endAt: 1,
+      partySize: 1,
+      note: 1,
+      decisionNote: 1,
+      decidedAt: 1,
+      requestedBy: {
+        $cond: [
+          { $eq: ["$source", FamilyVisitSource.FAMILY] },
+          {
+            ...personFields("requester"),
+            email: { $ifNull: ["$requester.email", ""] },
+          },
+          null,
+        ],
+      },
+      answers: {
+        going: countReplies("going"),
+        cantMakeIt: countReplies("cantMakeIt"),
+      },
+      createdAt: 1,
+    },
+  },
+];
+
 /** Visit requests and home invitations for a resident, a site, or everything the caller's role covers. */
 const listVisits = async ({
   actor,
@@ -117,42 +154,7 @@ const listVisits = async ({
     limit,
     skip,
     sort: { startAt: range === VisitRange.PAST ? -1 : 1, _id: 1 },
-    extraDataStages: [
-      ...joinRequester,
-      ...joinResident,
-      {
-        $project: {
-          _id: 0,
-          id: "$_id",
-          branchId: 1,
-          residentId: 1,
-          residentName: { $ifNull: ["$resident.name", ""] },
-          source: 1,
-          status: 1,
-          startAt: 1,
-          endAt: 1,
-          partySize: 1,
-          note: 1,
-          decisionNote: 1,
-          decidedAt: 1,
-          requestedBy: {
-            $cond: [
-              { $eq: ["$source", FamilyVisitSource.FAMILY] },
-              {
-                ...personFields("requester"),
-                email: { $ifNull: ["$requester.email", ""] },
-              },
-              null,
-            ],
-          },
-          answers: {
-            going: countReplies("going"),
-            cantMakeIt: countReplies("cantMakeIt"),
-          },
-          createdAt: 1,
-        },
-      },
-    ],
+    extraDataStages: visitRowStages,
   });
 
   if (!withVisiting) return result;
@@ -217,6 +219,24 @@ const loadVisit = async ({ actor, organizationId, visitId }) => {
   const standing = await actorStanding(actor, organizationId);
   assertMayAccessResidents(standing, visit.branchId);
   return visit;
+};
+
+const getVisit = async ({ actor, organizationId, visitId }) => {
+  const visit = await loadVisit({ actor, organizationId, visitId });
+  const [row] = await FamilyVisit.aggregate([
+    { $match: { _id: visit._id } },
+    ...visitRowStages,
+  ]);
+  return row;
+};
+
+const findVisit = async ({ actor, organizationId, visitId }) => {
+  if (!isValidObjectId(visitId)) return null;
+  const exists = await FamilyVisit.exists({
+    _id: toObjectId(visitId),
+    organizationId: toObjectId(organizationId),
+  });
+  return exists ? getVisit({ actor, organizationId, visitId }) : null;
 };
 
 const settle = async ({ actor, visit, decision, note, now }) => {
@@ -496,6 +516,8 @@ const setVisiting = ({
 module.exports = {
   VisitDecision,
   listVisits,
+  getVisit,
+  findVisit,
   inviteFamily,
   decideVisit,
   getSettings,

@@ -693,12 +693,18 @@ const getFamily = async ({ actor, organizationId, residentId }) => {
           roomNumber: 1,
           photographyConsent: 1,
           photographyConsentCheckedAt: 1,
+          photographyConsentRecordedBy: 1,
           visitorPasscodeRequired: 1,
           visitorPasscodeSetAt: 1,
         },
       },
     ]),
   ]);
+  const consentRecorder = info?.photographyConsentRecordedBy
+    ? await User.findById(info.photographyConsentRecordedBy)
+        .select("name")
+        .lean()
+    : null;
 
   const active = members.filter(
     (member) => member.status === FamilyMemberStatus.ACTIVE,
@@ -712,7 +718,12 @@ const getFamily = async ({ actor, organizationId, residentId }) => {
     },
     photoSharing: {
       agreed: Boolean(info?.photographyConsent),
-      agreedAt: info?.photographyConsentCheckedAt ?? null,
+      agreedAt: info?.photographyConsent
+        ? info.photographyConsentCheckedAt ?? null
+        : null,
+      recordedAt: info?.photographyConsentCheckedAt ?? null,
+      agreedBy: info?.photographyConsent ? resident.name : null,
+      recordedBy: consentRecorder?.name || null,
     },
     memberCount: active.length,
     nextOfKinName: active.find((member) => member.isNextOfKin)?.name ?? "",

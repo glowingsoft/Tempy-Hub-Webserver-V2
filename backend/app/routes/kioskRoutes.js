@@ -85,6 +85,10 @@ router.post("/visits/invite/verify", kioskVisitController.verifyInvite);
 router.post("/visits/invite/resend", kioskVisitController.resendInvite);
 router.post("/visits/check-in", kioskVisitController.checkIn);
 router.post("/visits/check-out", kioskVisitController.checkOut);
+router.post(
+  "/visits/:visitSessionId/feedback",
+  kioskVisitController.submitVisitorFeedback
+);
 
 router.get("/staff/search", staffSearchLimiter, kioskController.searchStaff);
 router.get("/staff/:staffId/preview", kioskController.getStaffPreview);

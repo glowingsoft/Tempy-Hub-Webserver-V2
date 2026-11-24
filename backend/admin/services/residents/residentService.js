@@ -325,6 +325,8 @@ const createResident = async ({
         : parsePhotographyConsent(photographyConsent),
     photographyConsentCheckedAt:
       photographyConsent === undefined ? null : new Date(),
+    photographyConsentRecordedBy:
+      photographyConsent === undefined ? null : actor?._id || null,
   };
 
   const level = parseCareLevel(careLevel);
@@ -381,6 +383,7 @@ const updateResident = async ({
   if (photographyConsent !== undefined) {
     update.photographyConsent = parsePhotographyConsent(photographyConsent);
     update.photographyConsentCheckedAt = new Date();
+    update.photographyConsentRecordedBy = actor?._id || null;
   }
   if (admissionStatus !== undefined) {
     update.admissionStatus = parseAdmissionStatus(admissionStatus);
@@ -551,6 +554,7 @@ const toRow = (resident, peepRecord = null) => {
     roomNumber: resident.roomNumber || "",
     photoUrl: resident.photoUrl || "",
     careLevel: resident.careLevel || null,
+    admittedAt: resident.admittedAt || null,
     admissionStatus: resident.admissionStatus,
     branchId: resident.branchId,
     peep: toPeep(peepRecord),

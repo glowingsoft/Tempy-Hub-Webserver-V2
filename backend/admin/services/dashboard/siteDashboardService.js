@@ -667,7 +667,12 @@ const complianceCsv = ({ scores, supervisionByDepartment, staff }) => {
   ].join("\r\n")}`;
 };
 
-const exportSiteCompliance = async (scope) => {
+const exportSiteCompliance = async ({ format, ...scope }) => {
+  const responseFormat = String(format ?? "url").trim().toLowerCase();
+  if (responseFormat !== "url") {
+    throw new AppError("invalid_export_format", 400, { validFormats: "url" });
+  }
+
   const report = await buildSiteCompliance(scope);
   const day = moment.utc(scope.now ?? new Date()).format("YYYY-MM-DD");
   const [csvBody, pdfBody] = await Promise.all([

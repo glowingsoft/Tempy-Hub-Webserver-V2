@@ -1,5 +1,6 @@
 const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const kioskVisitService = require("@adminServices/kiosk/kioskVisitService");
+const visitorSurveyService = require("@adminServices/visitors/visitorSurveyService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const listCategories = async (req, res) => {
@@ -128,17 +129,42 @@ const checkIn = async (req, res) => {
 
 const checkOut = async (req, res) => {
   try {
-    const data = await kioskVisitService.checkOutAtKiosk({
+    const visitSession = await kioskVisitService.checkOutAtKiosk({
       branchId: req.branchId,
       kiosk: req.kiosk,
       visitSessionId: req.body.visitSessionId,
       externalPersonId: req.body.externalPersonId,
       inviteCode: req.body.inviteCode,
     });
+    const visitorFeedback = await visitorSurveyService.getKioskVisitorSurvey({
+      organizationId: req.orgId,
+      branchId: req.branchId,
+      visitSessionId: visitSession._id,
+    });
     return sendResponse({
       res,
       statusCode: 200,
       translationKey: "visit_checked_out_successfully",
+      data: { ...visitSession, visitorFeedback },
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "something_went_wrong");
+  }
+};
+
+const submitVisitorFeedback = async (req, res) => {
+  try {
+    const data = await visitorSurveyService.createKioskVisitorSurveyResponse({
+      organizationId: req.orgId,
+      branchId: req.branchId,
+      visitSessionId: req.params.visitSessionId,
+      visitorName: req.body.visitorName,
+      answers: req.body.answers,
+    });
+    return sendResponse({
+      res,
+      statusCode: 201,
+      translationKey: "visitor_survey_response_saved",
       data,
     });
   } catch (error) {
@@ -176,5 +202,6 @@ module.exports = {
   resendInvite,
   checkIn,
   checkOut,
+  submitVisitorFeedback,
   listOnSite,
 };

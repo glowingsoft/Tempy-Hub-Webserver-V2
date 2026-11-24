@@ -179,6 +179,7 @@ const exportCompliance = async (req, res) => {
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.query.branchId,
+      format: req.query.format,
     });
     const baseUrl = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`).replace(
       /\/+$/,
@@ -191,12 +192,16 @@ const exportCompliance = async (req, res) => {
       statusCode: 200,
       translationKey: "data_fetched_successfully",
       data: {
-        pdfUrl: `${downloadUrl}/${result.pdfToken}`,
-        pdfFileName: result.pdfFileName,
-        pdfExpiresAt: result.pdfExpiresAt,
-        csvUrl: `${downloadUrl}/${result.csvToken}`,
-        csvFileName: result.csvFileName,
-        csvExpiresAt: result.csvExpiresAt,
+        pdf: {
+          url: `${downloadUrl}/${result.pdfToken}`,
+          expiresAt: result.pdfExpiresAt,
+          filename: result.pdfFileName,
+        },
+        csv: {
+          url: `${downloadUrl}/${result.csvToken}`,
+          expiresAt: result.csvExpiresAt,
+          filename: result.csvFileName,
+        },
       },
     });
   } catch (error) {

@@ -96,6 +96,12 @@ const FamilyHandoverStatus = {
   CANCELLED: "cancelled",
 };
 
+const FamilyDataExportStatus = {
+  PREPARING: "preparing",
+  READY: "ready",
+  FAILED: "failed",
+};
+
 const FamilyUploadStatus = {
   PENDING: "pending",
   APPROVED: "approved",
@@ -355,6 +361,11 @@ const KioskSetupStatus = {
   REGISTERED: "registered",
 };
 
+const KioskActivityType = {
+  CHECK_IN: "checkIn",
+  CHECK_OUT: "checkOut",
+};
+
 const KioskMode = {
   LOCKED: "locked",
   SETUP: "setup",
@@ -399,6 +410,13 @@ const EvacuationType = {
 const EvacuationStatus = {
   ACTIVE: "active",
   CLOSED: "closed",
+};
+
+const DrillKind = {
+  DAY: "day",
+  NIGHT: "night",
+  COMPARTMENT: "compartment",
+  FALSE_ALARM: "falseAlarm",
 };
 
 const FamilyAlertStatus = {
@@ -570,6 +588,7 @@ module.exports = {
   FamilyMemberStatus,
   FamilyJoinSource,
   FamilyHandoverStatus,
+  FamilyDataExportStatus,
   FamilyUploadStatus,
   FamilyVisitStatus,
   FamilyVisitSource,
@@ -610,12 +629,14 @@ module.exports = {
   VisitMethod,
   KioskSetupStatus,
   KioskMode,
+  KioskActivityType,
   KioskDeviceType,
   KioskPairingStatus,
   KioskWidgetType,
   KioskWidgetPlacement,
   KioskTextKind,
   EvacuationType,
+  DrillKind,
   EvacuationStatus,
   FamilyAlertStatus,
   FamilyUpdatePreset,

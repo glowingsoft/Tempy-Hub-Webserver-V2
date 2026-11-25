@@ -61,6 +61,8 @@ const viewOf = ({ newsletter, organizationName, images, timezone }) => {
       : [],
     notices: on.notices
       ? newsletter.notices.map((notice) => ({
+          hasPhoto: Boolean(notice.mediaId),
+          photo: notice.mediaId ? photoOf(notice.mediaId) : null,
           title: sans(notice.title),
           body: sans(notice.body),
         }))

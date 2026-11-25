@@ -11,9 +11,18 @@ const {
   receivePhotos,
 } = require("@middlewares/familyPhotoMiddleware");
 const createRateLimiter = require("@utils/rateLimiter");
+const {
+  textModerationMiddleware,
+} = require("@services/moderation/textModeration");
 const familyController = require("../controllers/familyController");
 
 const router = express.Router();
+
+// the app-wide text check runs before form-data is read, so it is run again here, on a plain object
+const moderateFormText = (req, res, next) => {
+  req.body = { ...req.body };
+  return textModerationMiddleware(req, res, next);
+};
 
 const photoLimiter = createRateLimiter("family-photos", 15, 60);
 const photoBatchLimiter = createRateLimiter("family-photo-batches", 15, 12);
@@ -32,11 +41,47 @@ const residentInBody = requireFamilyAccess({
   from: "body",
 });
 
+const dataRequestLimiter = createRateLimiter("family-data-requests", 15, 5);
+const dataPasswordLimiter = createRateLimiter("family-data-downloads", 15, 10);
+
+// the short-lived signed token in the address is the permission, so a browser can open it
+router.get("/data-request/file/:token", familyController.downloadDataFile);
+
 router.use(auth, requireAudience([AuthAudience.FAMILY]));
 
+// a person's own data, so no resident link is needed: someone removed from a family may still ask
+router.get("/data-request", familyController.getDataRequest);
+router.post(
+  "/data-request",
+  dataRequestLimiter,
+  familyController.createDataRequest,
+);
+router.post(
+  "/data-request/download",
+  dataPasswordLimiter,
+  familyController.createDataDownload,
+);
+
 router.get("/relationships", familyController.listRelationships);
+// personal settings, so no resident link is needed
+router.get(
+  "/notification-preferences",
+  familyController.getNotificationPreferences,
+);
+router.put(
+  "/notification-preferences",
+  familyController.updateNotificationPreferences,
+);
 router.get("/residents", familyController.listMyResidents);
 router.get("/home", anyResident, familyController.getHome);
+router.get("/help", residentInQuery, familyController.getHelp);
+
+router.get("/messages", requireFamilyAccess(), familyController.listInboxMessages);
+router.get(
+  "/messages/:messageId",
+  requireFamilyAccess(),
+  familyController.getInboxMessage,
+);
 
 router.get(
   "/codes/current",
@@ -188,9 +233,18 @@ router.post(
   receivePhoto,
   familyController.uploadPhoto,
 );
+router.get(
+  "/uploads/new",
+  residentInQuery,
+  familyController.getNewUploadScreen,
+);
+// JSON with mediaIds, or form-data with the photo files themselves
 router.post(
   "/uploads",
   writeLimiter,
+  requireFamilyAccess(),
+  receivePhotos,
+  moderateFormText,
   residentInBody,
   familyController.createUpload,
 );

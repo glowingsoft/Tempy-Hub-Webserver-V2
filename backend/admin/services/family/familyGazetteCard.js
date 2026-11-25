@@ -136,6 +136,12 @@ const cardOfSite = async ({ organizationId, site, rules, now }) => {
     closesInDays: Math.ceil(untilClose / DAY_MS),
     messageCap: cap,
     residents: counts,
+    issueId: built?._id ?? null,
+    byResident: residentIds.map((residentId) => ({
+      residentId,
+      hasFamily: withFamily.has(String(residentId)),
+      messageCount: messages.get(String(residentId)) ?? 0,
+    })),
   };
 };
 
@@ -186,4 +192,4 @@ const getWallGazetteCard = async ({
   };
 };
 
-module.exports = { getWallGazetteCard };
+module.exports = { getWallGazetteCard, cardOfSite, sitesOf };

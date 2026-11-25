@@ -85,6 +85,7 @@ const updateBranch = async (req, res) => {
       address: req.body.address,
       timezone: req.body.timezone,
       assemblyPoint: req.body.assemblyPoint,
+      reception: req.body.reception,
       settings: req.body.settings,
       emergencyPin: req.body.emergencyPin,
       status: req.body.status,

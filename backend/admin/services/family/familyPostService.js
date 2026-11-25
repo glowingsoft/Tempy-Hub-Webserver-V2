@@ -17,7 +17,11 @@ const {
 const { audienceLabelOf } = require("@utils/familyPostVisibility");
 const { getWallGazetteCard } = require("./familyGazetteCard");
 const moment = require("moment-timezone");
-const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  allCountFacet,
+} = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const {
   actorStanding,
@@ -191,6 +195,7 @@ const assertMediaUsable = async ({ userId, mediaIds, postId = null }) => {
         _id: { $in: mediaIds.map(toObjectId) },
         uploadedBy: toObjectId(userId),
         uploadId: null,
+        newsletterId: null,
         postId: { $in: postId ? [null, toObjectId(postId)] : [null] },
       },
     },

@@ -314,6 +314,36 @@ const staffInvitationEmailTemplate = ({
   </html>
 `;
 
+const familyDataReadyEmailTemplate = ({ name, appUrl, expiresAt }) => {
+  const safe = (value) =>
+    String(value || "").replace(
+      /[&<>"']/g,
+      (char) => `&#${char.charCodeAt(0)};`,
+    );
+  const until = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/London",
+  }).format(expiresAt);
+  return `
+  <!DOCTYPE html>
+  <html>
+    <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #333;">
+      <div style="margin: 20px;">
+        <h2>Your data is ready</h2>
+        <p>Hello${name ? ` ${safe(name)}` : ""},</p>
+        <p>The copy of your data that you asked for is ready.</p>
+        <p><a href="${safe(appUrl)}">Open ${APP_NAME}</a>, sign in and download it.</p>
+        <p>It is available until ${until} and only from your account.</p>
+        <p>If you did not ask for this, change your password and tell the home.</p>
+        <p style="color: #888;">&copy; ${currentYear} ${APP_NAME}. All rights reserved.</p>
+      </div>
+    </body>
+  </html>
+`;
+};
+
 const familyInvitationEmailTemplate = ({
   inviteeName,
   residentName,
@@ -449,6 +479,7 @@ module.exports = {
   stripeEmailTemplate,
   staffInvitationEmailTemplate,
   familyInvitationEmailTemplate,
+  familyDataReadyEmailTemplate,
   visitorInvitationEmailTemplate,
   visitorAccountInvitationEmailTemplate,
 };

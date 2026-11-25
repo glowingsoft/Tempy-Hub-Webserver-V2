@@ -1,6 +1,7 @@
 const { User } = require("@models/UserModel");
 const { Organization } = require("@models/Organization");
 const { FamilyMember } = require("@models/FamilyMember");
+const { Resident } = require("@models/Resident");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const { FamilyMemberStatus } = require("@models/domainEnums");
@@ -104,12 +105,16 @@ const withActions = (member, canManage) => ({
 });
 
 /** The next of kin also sees (and can act on) people who asked to join; everyone else sees active members only. */
-const listMembers = async ({ userId, link }) => {
+const listMembers = async ({ userId, link, links = [link] }) => {
   const canManage = Boolean(link.isNextOfKin);
   const visibleStatuses = canManage
     ? [FamilyMemberStatus.ACTIVE, FamilyMemberStatus.PENDING]
     : [FamilyMemberStatus.ACTIVE];
 
+  const [resident] = await Resident.aggregate([
+    { $match: { _id: toObjectId(link.residentId) } },
+    { $project: { name: 1 } },
+  ]);
   const members = await FamilyMember.aggregate([
     {
       $match: {
@@ -135,7 +140,12 @@ const listMembers = async ({ userId, link }) => {
 
   return {
     residentId: link.residentId,
+    // whose family this is
+    name: resident?.name || "",
+    residentName: resident?.name || "",
     canManage,
+    // the caller, across every resident they are linked to, not only the one being viewed
+    isNextOfKinOfAnyFamily: links.some((row) => Boolean(row.isNextOfKin)),
     members: members.map((member) => withActions(member, canManage)),
   };
 };

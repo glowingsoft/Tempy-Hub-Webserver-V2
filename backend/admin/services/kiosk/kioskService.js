@@ -10,6 +10,7 @@ const {
 } = require("@adminServices/staff/staffAccess");
 const { generateMeta } = require("@utils/responseUtil");
 const { Kiosk } = require("@models/Kiosk");
+const { recordKioskActivity } = require("./kioskActivityService");
 const { KioskPairingSession } = require("@models/KioskPairingSession");
 const { BranchActivationCode } = require("@models/BranchActivationCode");
 const { Branch } = require("@models/Branch");
@@ -45,6 +46,7 @@ const {
   EvacuationStatus,
   ExternalPersonType,
   BadgeType,
+  KioskActivityType,
 } = require("@models/domainEnums");
 
 const MIN_SEARCH_LENGTH = 2;
@@ -846,6 +848,12 @@ const confirmPairingAndClockIn = async ({
       }
     );
     touchLastCheckIn(kioskId);
+    recordKioskActivity({
+      kioskId,
+      branchId,
+      type: KioskActivityType.CHECK_IN,
+      externalPersonId: session.externalPersonId,
+    });
     return { kind: "contractor", visit };
   }
 
@@ -876,6 +884,7 @@ const confirmPairingAndClockIn = async ({
   );
 
   touchLastCheckIn(kioskId);
+  recordKioskActivity({ kioskId, branchId, type: KioskActivityType.CHECK_IN, userId: profile.userId });
   return attendance;
 };
 
@@ -1346,6 +1355,7 @@ const clockInAtKiosk = async ({
   });
 
   touchLastCheckIn(kioskId);
+  recordKioskActivity({ kioskId, branchId, type: KioskActivityType.CHECK_IN, userId: profile.userId });
   return attendance;
 };
 
@@ -1378,6 +1388,7 @@ const clockOutAtKiosk = async ({
   });
 
   touchLastCheckIn(kioskId);
+  recordKioskActivity({ kioskId, branchId, type: KioskActivityType.CHECK_OUT, userId: profile.userId });
   return attendance;
 };
 

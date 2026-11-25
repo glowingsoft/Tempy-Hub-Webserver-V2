@@ -15,6 +15,12 @@ const FAQSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    /** "family" questions are shown on the family app's Help & Contact screen. */
+    audience: {
+      type: String,
+      enum: ["general", "family"],
+      default: "general",
+    },
   },
   {
     timestamps: true,

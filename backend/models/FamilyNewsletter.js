@@ -65,6 +65,8 @@ const familyNewsletterSchema = new mongoose.Schema(
         _id: false,
         title: { type: String, required: true },
         body: { type: String, default: "" },
+        storyId: { type: String, default: "" },
+        mediaId: objectId("FamilyMedia", { default: null }),
       },
     ],
     newResidents: [

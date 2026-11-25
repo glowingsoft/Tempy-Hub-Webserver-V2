@@ -993,6 +993,15 @@ const loadDepartments = async (organizationId, branchIds) =>
     { $project: { _id: 1, name: 1 } },
   ]);
 
+const listSiteDepartments = async ({ actor, organizationId, branchId }) => {
+  const liveBranchId = await resolveLiveBranchId({
+    actor,
+    organizationId,
+    branchId,
+  });
+  return loadDepartments(organizationId, [liveBranchId]);
+};
+
 const listDirectory = async ({
   actor,
   organizationId,
@@ -1079,4 +1088,5 @@ module.exports = {
   checkOutPerson,
   listDirectory,
   loadDepartments,
+  listSiteDepartments,
 };

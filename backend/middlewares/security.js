@@ -32,7 +32,7 @@ const securityMiddleware = (app, options = {}) => {
       crossOriginOpenerPolicy: { policy: "same-origin" },
       crossOriginResourcePolicy: { policy: "cross-origin" },
       hsts: { maxAge: 31536000, includeSubDomains: true },
-    })
+    }),
   );
 
   // Prevent HTTP Parameter Pollution
@@ -42,15 +42,15 @@ const securityMiddleware = (app, options = {}) => {
   app.use(compression());
 
   // Rate Limiting
-  const limiter = rateLimit({
-    windowMs: rateLimitWindow,
-    max: rateLimitMax,
-    message: {
-      status: 429,
-      message: "Too many requests from this IP, please try again later",
-    },
-  });
-  app.use(limiter);
+  // const limiter = rateLimit({
+  //   windowMs: rateLimitWindow,
+  //   max: rateLimitMax,
+  //   message: {
+  //     status: 429,
+  //     message: "Too many requests from this IP, please try again later",
+  //   },
+  // });
+  // app.use(limiter);
 
   // Body parser limits (Express)
   app.use(express.json({ limit: maxRequestSize }));
@@ -95,13 +95,12 @@ const securityMiddleware = (app, options = {}) => {
     next();
   });
 
-
-
   // Optional: Admin IP whitelist for sensitive routes
   if (adminIPWhitelist.length > 0) {
     app.use("/api/admin", (req, res, next) => {
       const clientIP =
-        req.headers["x-forwarded-for"]?.split(",")[0] || req.connection.remoteAddress;
+        req.headers["x-forwarded-for"]?.split(",")[0] ||
+        req.connection.remoteAddress;
       if (!adminIPWhitelist.includes(clientIP)) {
         return res.status(403).json({ message: "Access denied for this IP" });
       }
@@ -112,7 +111,12 @@ const securityMiddleware = (app, options = {}) => {
   // Optional: Log suspicious requests
   app.use((req, res, next) => {
     if (!req.ip || !req.method || !req.path) {
-      console.warn("Suspicious request detected:", req.ip, req.method, req.path);
+      console.warn(
+        "Suspicious request detected:",
+        req.ip,
+        req.method,
+        req.path,
+      );
     }
     next();
   });

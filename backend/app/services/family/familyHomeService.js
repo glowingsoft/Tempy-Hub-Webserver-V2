@@ -1,13 +1,12 @@
-const { FamilyMember } = require("@models/FamilyMember");
 const { NotificationExp } = require("@models/Notifications");
-const { FamilyMemberStatus } = require("@models/domainEnums");
 const { AppError } = require("@services/_errors/AppError");
 const moment = require("moment-timezone");
-const { toObjectId, isValidObjectId } = require("./familyPipeline");
+const { isValidObjectId } = require("./familyPipeline");
 const { resolveFamilyResidents } = require("./familyAccessService");
 const { getNextVisit } = require("./familyVisitService");
-const { nextGazette } = require("./familyGazetteService");
+const { nextGazette, listGazettes } = require("./familyGazetteService");
 const { unreadTotal } = require("./familyMessageService");
+const { getCurrentHandover } = require("./familyHandoverService");
 const { namesOf } = require("./familyNotify");
 const { listTimeline } = require("./familyTimelineService");
 const { listWall } = require("./familyWallService");
@@ -16,20 +15,43 @@ const HomeTab = { FAMILY: "family", WALL: "wall" };
 const HOME_TABS = Object.values(HomeTab);
 
 /**
- * family: only the approved posts this resident's family uploaded (no home wall posts).
+ * family: this resident's timeline: the approved family uploads and the home posts tagged to the resident.
  * wall: every post this site's families may see, as on the Community Wall.
  */
 const feedOf = async ({ tab, active, residents, userId, paging }) => {
   const feed =
     tab === HomeTab.FAMILY
-      ? await listTimeline({
-          link: active,
-          userId,
-          ...paging,
-          familyPostsOnly: true,
-        })
+      ? await listTimeline({ link: active, links: residents, userId, ...paging })
       : await listWall({ link: active, links: residents, userId, ...paging });
   return { tab, items: feed.data, meta: feed.meta };
+};
+
+const GAZETTE_FEED_TYPE = "gazette";
+
+/**
+ * Puts the Discover Gazette card in the wall feed where its printed date falls among the posts
+ * (newest first, after any pinned ones). A page only carries it when it belongs there: before the
+ * first post older than it, or at the end of the last page. totalRecords still counts posts only.
+ */
+const withGazette = ({ feed, gazette }) => {
+  if (!feed || feed.tab !== HomeTab.WALL || !gazette?.printedAt) return feed;
+
+  const printed = new Date(gazette.printedAt).getTime();
+  const card = { type: GAZETTE_FEED_TYPE, ...gazette };
+  const items = [...feed.items];
+  const at = items.findIndex(
+    (post) => !post.isPinned && new Date(post.createdAt).getTime() <= printed,
+  );
+
+  if (at !== -1) items.splice(at, 0, card);
+  else if (feed.meta.currentPage >= feed.meta.totalPages) items.push(card);
+  else return feed;
+  return { ...feed, items };
+};
+
+const latestGazetteOf = async ({ link }) => {
+  const { data } = await listGazettes({ link, page: 1, limit: 1, skip: 0 });
+  return data?.[0] || null;
 };
 
 const MORNING_UNTIL = 12;
@@ -43,53 +65,14 @@ const greetingOf = ({ name, timezone, now }) => {
       : hour < AFTERNOON_UNTIL
         ? "Good afternoon"
         : "Good evening";
-  const first = String(name || "").trim().split(/\s+/)[0];
+  const first = String(name || "")
+    .trim()
+    .split(/\s+/)[0];
   return first ? `${part}, ${first}` : part;
 };
 
-const pendingRequestsOf = async ({ residentId }) => {
-  const [row] = await FamilyMember.aggregate([
-    {
-      $match: {
-        residentId: toObjectId(residentId),
-        status: FamilyMemberStatus.PENDING,
-      },
-    },
-    { $count: "count" },
-  ]);
-  return row?.count ?? 0;
-};
-
-const noticesOf = ({ visiting, pendingRequests }) => [
-  ...(visiting.paused
-    ? [
-        {
-          type: "visitingPaused",
-          title: "Visiting is paused",
-          message: visiting.reason || "Visits can't be booked right now.",
-        },
-      ]
-    : []),
-  ...(pendingRequests
-    ? [
-        {
-          type: "joinRequests",
-          title: "Join requests to review",
-          message: `${pendingRequests} ${pendingRequests === 1 ? "person has" : "people have"} asked to join the family.`,
-          count: pendingRequests,
-        },
-      ]
-    : []),
-];
-
 /** The Home Family tab in one call, for the resident being viewed (the first one when none is named). */
-const getHome = async ({
-  user,
-  residentId,
-  tab,
-  paging,
-  now = new Date(),
-}) => {
+const getHome = async ({ user, residentId, tab, paging, now = new Date() }) => {
   if (tab !== undefined && !HOME_TABS.includes(tab))
     throw new AppError("invalid_home_tab", 400);
   if (
@@ -115,27 +98,32 @@ const getHome = async ({
   const [
     nextVisit,
     gazette,
+    latestGazette,
     notifications,
     messages,
-    pendingRequests,
     names,
-    feed,
-  ] =
-    await Promise.all([
-      getNextVisit({ link, userId: user._id, now }),
-      nextGazette({ link, now }),
-      NotificationExp.countDocuments({
-        receiverId: user._id,
-        isRead: false,
-        isDeleted: { $ne: true },
-      }),
-      unreadTotal(user._id),
-      active.isNextOfKin ? pendingRequestsOf(active) : 0,
-      namesOf(active),
-      tab
-        ? feedOf({ tab, active, residents, userId: user._id, paging })
-        : undefined,
-    ]);
+    handover,
+    wallOrTimeline,
+  ] = await Promise.all([
+    getNextVisit({ link, userId: user._id, now }),
+    nextGazette({ link, now }),
+    latestGazetteOf({ link }),
+    NotificationExp.countDocuments({
+      receiverId: user._id,
+      isRead: false,
+      isDeleted: { $ne: true },
+    }),
+    unreadTotal(user._id),
+    namesOf(active),
+    getCurrentHandover({
+      userId: user._id,
+      residentId: String(active.residentId),
+    }),
+    tab
+      ? feedOf({ tab, active, residents, userId: user._id, paging })
+      : undefined,
+  ]);
+  const feed = withGazette({ feed: wallOrTimeline, gazette: latestGazette });
 
   return {
     greeting: greetingOf({ name: user.name, timezone: names.timezone, now }),
@@ -145,11 +133,8 @@ const getHome = async ({
     nextVisit: nextVisit.visit,
     visiting: nextVisit.visiting,
     gazette,
-    notices: noticesOf({
-      visiting: nextVisit.visiting,
-      pendingRequests,
-    }),
     unread: { notifications, messages },
+    handover,
     // Only present when ?tab= is sent, so the plain home response is unchanged.
     ...(feed ? { feed } : {}),
   };

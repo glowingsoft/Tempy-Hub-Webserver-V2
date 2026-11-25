@@ -67,6 +67,7 @@ const paginateWithFacet = async ({
   skip,
   sort = { createdAt: -1 },
   applyLimit = true,
+  preStages = [],
   extraDataStages = [],
   extraFacets = {},
 }) => {
@@ -79,6 +80,7 @@ const paginateWithFacet = async ({
   const hasExtraFacets = Object.keys(extraFacets).length > 0;
   const pipeline = hasExtraFacets
     ? [
+        ...preStages,
         {
           $facet: {
             data: [{ $match: match }, ...sortAndPage],
@@ -88,6 +90,7 @@ const paginateWithFacet = async ({
         },
       ]
     : [
+        ...preStages,
         { $match: match },
         {
           $facet: {

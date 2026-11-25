@@ -4,6 +4,7 @@ const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyPost } = require("@models/FamilyPost");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyMember } = require("@models/FamilyMember");
+const { Resident } = require("@models/Resident");
 const { FamilyUploadStatus, FamilyPostStatus } = require("@models/domainEnums");
 const { facetCount } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
@@ -23,13 +24,21 @@ const photoUrl = {
 
 const isUpload = { $eq: ["$kind", TimelineItemType.UPLOAD] };
 
-const itemStages = ({ residentId, userId }) => [
+const itemStages = ({ residentId, userId, linkedResidentIds }) => [
   {
     $lookup: {
       from: FamilyMedia.collection.name,
       localField: "mediaIds",
       foreignField: "_id",
       as: "media",
+    },
+  },
+  {
+    $lookup: {
+      from: Resident.collection.name,
+      localField: "taggedResidentIds",
+      foreignField: "_id",
+      as: "tagged",
     },
   },
   ...joinOne({
@@ -78,6 +87,19 @@ const itemStages = ({ residentId, userId }) => [
       authorRelationship: {
         $ifNull: [{ $arrayElemAt: ["$authorLink.relationship", 0] }, ""],
       },
+      taggedResidents: {
+        $map: {
+          input: {
+            $filter: {
+              input: "$tagged",
+              as: "resident",
+              cond: { $in: ["$$resident._id", linkedResidentIds] },
+            },
+          },
+          as: "resident",
+          in: { residentId: "$$resident._id", name: "$$resident.name" },
+        },
+      },
     },
   },
   {
@@ -95,8 +117,10 @@ const itemStages = ({ residentId, userId }) => [
       title: { $ifNull: ["$title", ""] },
       message: 1,
       photos: 1,
+      taggedResidents: 1,
       reactionCount: { $cond: [isUpload, 0, "$reactionCount"] },
       reactedByMe: { $cond: [isUpload, false, "$reactedByMe"] },
+      isPinned: { $eq: ["$isPinned", true] },
       publishedAt: "$sortAt",
     },
   },
@@ -105,6 +129,7 @@ const itemStages = ({ residentId, userId }) => [
 /** Approved uploads and tagged wall posts for the resident, newest first. `link` is the caller's active link, so a removed member sees nothing. */
 const listTimeline = async ({
   link,
+  links,
   userId,
   page,
   limit,
@@ -118,6 +143,7 @@ const listTimeline = async ({
     {
       $project: {
         kind: { $literal: TimelineItemType.UPLOAD },
+        isPinned: { $literal: false },
         sortAt: "$decidedAt",
         authorId: 1,
         branchId: 1,
@@ -129,39 +155,47 @@ const listTimeline = async ({
     ...(familyPostsOnly
       ? []
       : [
-    {
-      $unionWith: {
-        coll: FamilyPost.collection.name,
-        pipeline: [
           {
-            $match: {
-              organizationId: toObjectId(link.organizationId),
-              taggedResidentIds: residentId,
-              status: FamilyPostStatus.PUBLISHED,
+            $unionWith: {
+              coll: FamilyPost.collection.name,
+              pipeline: [
+                {
+                  $match: {
+                    organizationId: toObjectId(link.organizationId),
+                    taggedResidentIds: residentId,
+                    status: FamilyPostStatus.PUBLISHED,
+                  },
+                },
+                {
+                  $project: {
+                    kind: { $literal: TimelineItemType.WALL_POST },
+                    isPinned: 1,
+                    sortAt: "$createdAt",
+                    authorId: 1,
+                    branchId: 1,
+                    title: 1,
+                    message: 1,
+                    mediaIds: 1,
+                    taggedResidentIds: 1,
+                  },
+                },
+              ],
             },
           },
-          {
-            $project: {
-              kind: { $literal: TimelineItemType.WALL_POST },
-              sortAt: "$createdAt",
-              authorId: 1,
-              branchId: 1,
-              title: 1,
-              message: 1,
-              mediaIds: 1,
-            },
-          },
-        ],
-      },
-    },
-    ]),
+        ]),
     {
       $facet: {
         data: [
-          { $sort: { sortAt: -1, _id: -1 } },
+          { $sort: { isPinned: -1, sortAt: -1, _id: -1 } },
           { $skip: skip },
           { $limit: limit },
-          ...itemStages({ residentId, userId }),
+          ...itemStages({
+            residentId,
+            userId,
+            linkedResidentIds: (links || [link]).map((row) =>
+              toObjectId(row.residentId),
+            ),
+          }),
         ],
         totalCount: [{ $count: "count" }],
       },

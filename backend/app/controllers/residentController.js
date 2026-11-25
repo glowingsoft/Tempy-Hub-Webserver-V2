@@ -1,6 +1,8 @@
 const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const { respondByAction } = require("@utils/controllerResponse");
 const residentService = require("@adminServices/residents/residentService");
+const residentScreenService = require("@adminServices/residents/residentScreenService");
+const peepRecordService = require("@adminServices/peep/peepRecordService");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyModerationService = require("@adminServices/family/familyModerationService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
@@ -43,6 +45,62 @@ const getResident = respond("data_fetched_successfully", (req) =>
   residentService.getManagerResident(scope(req)),
 );
 
+const getResidentScreen = respond("data_fetched_successfully", async (req) => {
+  const tab = String(req.query.tab || "profile").trim().toLowerCase();
+  const residentScope = scope(req);
+  const resident = await residentService.getManagerResident(residentScope);
+
+  if (tab === "profile") {
+    return {
+      tab,
+      resident,
+      details: {
+        residentId: resident._id,
+        roomNumber: resident.roomNumber,
+        admissionStatus: resident.admissionStatus,
+        careLevel: resident.careLevel,
+        movedInAt: resident.admittedAt ?? null,
+        inHome: !resident.out?.active,
+        restrictedContacts: resident.restriction?.active ?? false,
+      },
+      ...(await residentScreenService.profileScreen({ resident })),
+    };
+  }
+
+  if (tab === "peep") {
+    const peep = await peepRecordService.getPeepRecordByResident(residentScope);
+    return {
+      tab,
+      resident: { _id: resident._id, name: resident.name },
+      peep,
+      ...residentScreenService.peepScreen({ resident, peep }),
+    };
+  }
+
+  if (tab === "family") {
+    const family = await familyStaffService.getFamily(residentScope);
+    const screen = residentScreenService.familyScreen({ family });
+    return {
+      tab,
+      resident: family.resident,
+      family: { ...family, ...screen },
+    };
+  }
+
+  const { AppError } = require("@services/_errors/AppError");
+  throw new AppError("invalid_resident_screen_tab", 400, {
+    validTabs: "profile,peep,family",
+  });
+});
+
+const getPeepRecord = respond("data_fetched_successfully", (req) =>
+  peepRecordService.getPeepRecordByResident({
+    actor: req.user,
+    organizationId: req.orgId,
+    residentId: req.params.residentId,
+  }),
+);
+
 const deactivateResident = respond("resident_deactivated", (req) =>
   residentService.deactivateResident({
     ...scope(req),
@@ -71,6 +129,10 @@ const removeFamilyMember = respond("family_member_removed", (req) =>
 
 const createFamilyCode = respond("family_code_created", (req) =>
   familyStaffService.createCode(scope(req)),
+);
+
+const getFamilyCode = respond("data_fetched_successfully", (req) =>
+  familyStaffService.getCode(scope(req)),
 );
 
 const setVisitingPassword = respond(
@@ -117,10 +179,13 @@ const updateFamilyPhoto = respondByAction({
 module.exports = {
   listResidents,
   getResident,
+  getResidentScreen,
+  getPeepRecord,
   deactivateResident,
   getFamily,
   setNextOfKin,
   removeFamilyMember,
+  getFamilyCode,
   createFamilyCode,
   setVisitingPassword,
   updateFamilyPhoto,

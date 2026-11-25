@@ -14,9 +14,13 @@ const {
   getStatistics,
   getCompliance,
   exportCompliance,
+  downloadComplianceExport,
 } = require("../controllers/siteLiveController");
 
 const router = express.Router();
+
+// The signed token is a short-lived bearer link, so this download route is public.
+router.get("/compliance/download/:token", downloadComplianceExport);
 
 router.use(
   auth,

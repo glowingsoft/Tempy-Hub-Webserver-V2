@@ -433,7 +433,7 @@ const attachLeaveRequestDetails = async (requests, { withOrganization = false } 
               from: User.collection.name,
               localField: "userId",
               foreignField: "_id",
-              pipeline: [{ $project: { _id: 1, name: 1, email: 1 } }],
+              pipeline: [{ $project: { _id: 1, name: 1, email: 1, profileIcon: 1 } }],
               as: "user",
             },
           },
@@ -451,6 +451,9 @@ const attachLeaveRequestDetails = async (requests, { withOrganization = false } 
               employeeCode: 1,
               name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
               email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+              profileIcon: {
+                $ifNull: [{ $arrayElemAt: ["$user.profileIcon", 0] }, ""],
+              },
               jobTitle: {
                 $ifNull: [{ $arrayElemAt: ["$jobTitle.name", 0] }, ""],
               },

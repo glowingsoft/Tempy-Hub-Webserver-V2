@@ -44,6 +44,11 @@ const residentSchema = new mongoose.Schema(
     qrToken: { type: String, default: null },
     photographyConsent: { type: Boolean, default: false },
     photographyConsentCheckedAt: { type: Date, default: null },
+    photographyConsentRecordedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     /**
      * Safeguarding: when set, a visitor or staff member must produce this
      * code before discussing or visiting the resident. Bcrypt-hashed. Never

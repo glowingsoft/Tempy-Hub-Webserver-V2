@@ -1,4 +1,6 @@
 const puppeteer = require("puppeteer");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const MAX_PAGES = Number(process.env.PDF_MAX_CONCURRENT) || 3;
 const LOAD_TIMEOUT_MS = 30_000;
@@ -6,13 +8,42 @@ const PDF_TIMEOUT_MS = 60_000;
 
 let browserPromise = null;
 
+const resolveBrowserExecutable = () => {
+  const configuredPath = process.env.PDF_BROWSER_PATH;
+  if (configuredPath) {
+    if (!fs.existsSync(configuredPath)) {
+      throw new Error(`PDF_BROWSER_PATH does not point to an existing browser executable: ${configuredPath}`);
+    }
+    return configuredPath;
+  }
+
+  const bundledPath = puppeteer.executablePath();
+  if (fs.existsSync(bundledPath)) return bundledPath;
+
+  // Puppeteer's browser download can be absent in local Windows installs (for example,
+  // when install scripts were skipped). Use a standard Chrome installation in that case.
+  if (process.platform === "win32") {
+    const candidates = [
+      path.join(process.env.PROGRAMFILES || "C:\\Program Files", "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)", "Google", "Chrome", "Application", "chrome.exe"),
+      path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
+    ];
+    const systemChrome = candidates.find((candidate) => fs.existsSync(candidate));
+    if (systemChrome) return systemChrome;
+  }
+
+  throw new Error(
+    `No PDF browser executable found. Install Puppeteer's browser with "npx puppeteer browsers install chrome" or set PDF_BROWSER_PATH to an installed Chrome/Chromium executable. Expected bundled path: ${bundledPath}`,
+  );
+};
+
 // The browser starts once and is reused; it is started again if it ever closes or crashes.
 const getBrowser = () => {
   if (!browserPromise) {
     browserPromise = puppeteer
       .launch({
         headless: true,
-        executablePath: process.env.PDF_BROWSER_PATH || undefined,
+        executablePath: resolveBrowserExecutable(),
         // Chromium's sandbox is only switched off where the host cannot run it (some containers), by explicit choice.
         args:
           process.env.PDF_BROWSER_NO_SANDBOX === "true"

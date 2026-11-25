@@ -5,9 +5,9 @@ const {
   getSiteCompliance,
   exportSiteCompliance,
 } = require("@adminServices/dashboard/siteDashboardService");
-const { sendPdf } = require("@utils/familyPdfResponse");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { isFamilyModuleActive } = require("@appServices/family/familyAccessService");
+const { signedUrlFromShortToken } = require("@commonServices/uploads/uploadAwsService");
 
 const getSiteLive = async (req, res) => {
   try {
@@ -181,24 +181,46 @@ const exportCompliance = async (req, res) => {
       branchId: req.query.branchId,
       format: req.query.format,
     });
+    const baseUrl = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`).replace(
+      /\/+$/,
+      "",
+    );
+    const downloadUrl = `${baseUrl}/api/v1/app/site-live/compliance/download`;
 
-    if (result.csv != null) {
-      res.set({
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${result.fileName}"`,
-        "Cache-Control": "private, no-store",
-        "X-Content-Type-Options": "nosniff",
-      });
-      return res.status(200).send(result.csv);
-    }
-    return await sendPdf({ req, res, pdf: result.pdf, attachment: true });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data: {
+        pdf: {
+          url: `${downloadUrl}/${result.pdfToken}`,
+          expiresAt: result.pdfExpiresAt,
+          filename: result.pdfFileName,
+        },
+        csv: {
+          url: `${downloadUrl}/${result.csvToken}`,
+          expiresAt: result.csvExpiresAt,
+          filename: result.csvFileName,
+        },
+      },
+    });
   } catch (error) {
     return handleServiceError(res, error, "some_thing_went_wrong");
   }
 };
 
+const downloadComplianceExport = async (req, res) => {
+  try {
+    const { url } = await signedUrlFromShortToken(req.params.token);
+    return res.redirect(302, url);
+  } catch (error) {
+    return res.sendStatus(error.statusCode || 404);
+  }
+};
+
 module.exports = {
   exportCompliance,
+  downloadComplianceExport,
   getCompliance,
   getStatistics,
   getSiteLive,

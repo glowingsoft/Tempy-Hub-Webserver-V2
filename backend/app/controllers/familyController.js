@@ -477,6 +477,31 @@ const listWall = respond(
   { paged: true },
 );
 
+const listPinnedPosts = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyWallService.listPinned({
+      userId: req.user._id,
+      links: req.familyLinks,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true },
+);
+
+const setPostPinned = respond(
+  (req) =>
+    familyWallService.setPinned({
+      userId: req.user._id,
+      links: req.familyLinks,
+      postId: req.params.postId,
+      pinned: req.body.pinned,
+    }),
+  { translationKey: "post_pin_saved" },
+);
+
 const addReaction = respond(
   (req) =>
     familyWallService.addReaction({
@@ -573,6 +598,8 @@ module.exports = {
   getVisitPass,
   updateVisitPass,
   listWall,
+  listPinnedPosts,
+  setPostPinned,
   addReaction,
   removeReaction,
   markPostsSeen,

@@ -91,6 +91,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    passwordChangedAt: { type: Date, default: null },
     accountState: {
       userType: {
         type: String,
@@ -261,6 +262,7 @@ userSchema.pre("save", async function (next) {
   if (user.isModified("password")) {
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(user.password, salt);
+    user.passwordChangedAt = new Date();
   }
   // Convert the email to lowercase before saving
   if (user.isModified("email")) {

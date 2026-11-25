@@ -149,6 +149,13 @@ router.get(
 );
 
 router.get("/wall", residentInQuery, familyController.listWall);
+router.get("/wall/pinned", anyResident, familyController.listPinnedPosts);
+router.put(
+  "/wall/:postId/pin",
+  writeLimiter,
+  requireFamilyAccess(),
+  familyController.setPostPinned,
+);
 router.put("/wall/seen", requireFamilyAccess(), familyController.markPostsSeen);
 router.post(
   "/wall/:postId/report",

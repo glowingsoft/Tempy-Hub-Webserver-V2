@@ -1,3 +1,4 @@
+const { randomUUID } = require("node:crypto");
 const { toObjectId } = require("@appServices/family/familyPipeline");
 const { AppError } = require("@services/_errors/AppError");
 const { Branch } = require("@models/Branch");
@@ -35,6 +36,7 @@ const {
   listSiteActivity,
 } = require("@adminServices/siteLive/siteActivityQuery");
 const { complianceSnapshot, openShifts } = require("./ownerDashboardService");
+const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 
 const ACTIVITY_PERIODS = ["thisWeek", "thisMonth", "thisYear"];
 const ACTIVITY_TZ = "Europe/London";
@@ -449,7 +451,7 @@ const getSiteStatistics = async ({
 };
 
 const percentOf = (part, whole) =>
-  whole > 0 ? Math.round((part / whole) * 100) : null;
+  whole > 0 ? Math.round((part / whole) * 100) : 0;
 
 const meetingPercent = (standings) =>
   percentOf(
@@ -568,7 +570,7 @@ const buildSiteCompliance = async ({
         photoUrl: person?.photoUrl || "",
         intervalMonths: standing.intervalMonths,
         customInterval: Boolean(member.supervisionIntervalMonths),
-        percent: standing.score,
+        percent: standing.score ?? 0,
         completedThisCycle: standing.completedThisCycle,
         expectedThisCycle: standing.expectedThisCycle,
         ...cycleProgress({
@@ -612,7 +614,6 @@ const getSiteCompliance = async ({ page, limit, skip, ...scope }) => {
   };
 };
 
-const EXPORT_FORMATS = ["csv", "pdf"];
 const SCORE_LABELS = [
   ["supervision", "Supervision"],
   ["appraisal", "Appraisal"],
@@ -667,18 +668,46 @@ const complianceCsv = ({ scores, supervisionByDepartment, staff }) => {
 };
 
 const exportSiteCompliance = async ({ format, ...scope }) => {
-  const kind = String(format ?? "")
-    .trim()
-    .toLowerCase();
-  if (!EXPORT_FORMATS.includes(kind))
-    throw new AppError("invalid_export_format", 400);
+  const responseFormat = String(format ?? "url").trim().toLowerCase();
+  if (responseFormat !== "url") {
+    throw new AppError("invalid_export_format", 400, { validFormats: "url" });
+  }
 
   const report = await buildSiteCompliance(scope);
   const day = moment.utc(scope.now ?? new Date()).format("YYYY-MM-DD");
-  if (kind === "csv")
-    return { csv: complianceCsv(report), fileName: `compliance-${day}.csv` };
-  const buffer = await renderCompliancePdf({ report, day });
-  return { pdf: { buffer, filename: `compliance-${day}.pdf` } };
+  const [csvBody, pdfBody] = await Promise.all([
+    Promise.resolve(Buffer.from(complianceCsv(report), "utf8")),
+    renderCompliancePdf({ report, day }),
+  ]);
+
+  const uploadAndSign = async ({ format, body, contentType }) => {
+    const fileName = `compliance-${day}.${format}`;
+    const key = `compliance-exports/${randomUUID()}.${format}`;
+    await uploadAwsService.putObject({ key, body, contentType });
+    const { token, expiresAt } = uploadAwsService.createShortDownloadToken({
+      key,
+      filename: fileName,
+      contentType,
+    });
+    return { token, expiresAt, fileName };
+  };
+
+  const [csv, pdf] = await Promise.all([
+    uploadAndSign({
+      format: "csv",
+      body: csvBody,
+      contentType: "text/csv; charset=utf-8",
+    }),
+    uploadAndSign({ format: "pdf", body: pdfBody, contentType: "application/pdf" }),
+  ]);
+  return {
+    pdfToken: pdf.token,
+    pdfFileName: pdf.fileName,
+    pdfExpiresAt: pdf.expiresAt,
+    csvToken: csv.token,
+    csvFileName: csv.fileName,
+    csvExpiresAt: csv.expiresAt,
+  };
 };
 
 module.exports = {

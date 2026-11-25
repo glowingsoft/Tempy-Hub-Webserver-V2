@@ -1,6 +1,28 @@
 const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const { camelCase } = require("lodash");
+const { getFullImageUrl } = require("@utils/imageHelper");
+
+const isProfileImageField = (field) =>
+  /^(profileIcon|photoUrl|image|avatarUrl)$/i.test(field) ||
+  /(?:Photo|Image|Avatar)Url$/i.test(field);
+
+const withImageFallbacks = (value) => {
+  if (Array.isArray(value)) return value.map(withImageFallbacks);
+  if (!value || typeof value !== "object" || value instanceof Date) return value;
+  if (value._bsontype || Buffer.isBuffer(value)) return value;
+  if (typeof value.toObject === "function") {
+    return withImageFallbacks(value.toObject());
+  }
+
+  const normalized = {};
+  for (const [key, fieldValue] of Object.entries(value)) {
+    normalized[key] = isProfileImageField(key)
+      ? getFullImageUrl(fieldValue)
+      : withImageFallbacks(fieldValue);
+  }
+  return normalized;
+};
 
 /**
  * Sends a JSON response with optional status code, message, data, and meta information.
@@ -64,13 +86,12 @@ const sendResponse = ({
   }
   // Include data in the response if provided
   if (data !== undefined && data !== null) {
-    // logger.log("Response Data:", data);
-    response.data = data;
+    response.data = withImageFallbacks(data);
   }
 
   // Include meta information if provided
   if (meta) {
-    response.meta = meta;
+    response.meta = withImageFallbacks(meta);
   }
   if (process.env.NODE_ENV === "dev" || process.env.NODE_ENV === "localhost") {
     if (error !== null && error !== undefined) {

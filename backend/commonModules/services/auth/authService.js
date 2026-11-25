@@ -19,6 +19,7 @@ const { FamilyMember } = require("@models/FamilyMember");
 const {
   isStaffAccount,
   resolveFamilyResidents,
+  listFamilyMemberships,
   resolveAccessState,
 } = require("@appServices/family/familyAccessService");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
@@ -33,11 +34,11 @@ const {
   FamilyMemberStatus,
   MembershipRole,
 } = require("@models/domainEnums");
-  const {
-    assertSurfaceAccess,
-    normalizeSurface,
-    surfaceFromAccess,
-  } = require("./surfaceAccess");
+const {
+  assertSurfaceAccess,
+  normalizeSurface,
+  surfaceFromAccess,
+} = require("./surfaceAccess");
 const { loadStaffCardsForUser } = require("@commonServices/users/userService");
 
 const register = async ({
@@ -189,7 +190,7 @@ const resolveStaffAccess = async (user) => {
     .lean();
 
   const byOrganization = new Map(
-    organizations.map((org) => [String(org._id), org])
+    organizations.map((org) => [String(org._id), org]),
   );
 
   const definitions = await ModuleDefinition.find({ active: true })
@@ -239,12 +240,20 @@ const slimMemberships = (memberships = []) =>
     branchId: row.branchId || null,
     role: row.role,
     organizationName: row.organizationName || "",
+    ...(row.role === "family"
+      ? {
+          branchName: row.branchName || "",
+          residentId: row.residentId,
+          relationship: row.relationship,
+          isNextOfKin: Boolean(row.isNextOfKin),
+        }
+      : {}),
   }));
 
 const membershipForOrg = (memberships = [], organizationId) => {
   if (organizationId) {
     const match = memberships.find(
-      (row) => String(row.organizationId) === String(organizationId)
+      (row) => String(row.organizationId) === String(organizationId),
     );
     if (match) return match;
   }
@@ -259,6 +268,7 @@ const slimAccessForLogin = (access) => {
     memberships: slimMemberships(access.memberships),
   };
   if (access.residents != null) slim.residents = access.residents;
+  if (access.resident !== undefined) slim.resident = access.resident;
   if (access.accessState != null) slim.accessState = access.accessState;
   return slim;
 };
@@ -276,14 +286,19 @@ const slimAccessForMe = (access, organizationId) => {
 };
 
 const resolveFamilyAccess = async (user) => {
-  const residents = await resolveFamilyResidents(user._id);
+  const [residents, memberships] = await Promise.all([
+    resolveFamilyResidents(user._id),
+    listFamilyMemberships(user._id),
+  ]);
   return {
     isPlatformAdmin: false,
-    memberships: [],
     highestRole: null,
     defaultSurface: "familyApp",
     ...emptyStaffAccessFields(),
+    memberships,
     residents,
+    // the resident the app opens on (the one flagged isActive); null until the member is linked
+    resident: residents.find((row) => row.isActive) || null,
     accessState: await resolveAccessState(user._id, residents.length),
   };
 };
@@ -416,7 +431,12 @@ const login = async ({
 
   const token = user.generateAuthToken(audience, resolvedSurface);
 
-  const response = formatUserResponse(user, token, [], ["resetToken", "otpInfo"]);
+  const response = formatUserResponse(
+    user,
+    token,
+    [],
+    ["resetToken", "otpInfo"],
+  );
   response.audience = audience;
   response.surface = resolvedSurface || null;
   response.role =
@@ -431,7 +451,7 @@ const login = async ({
   const primaryOrgId = access?.memberships?.[0]?.organizationId;
   response.staffProfile =
     staffProfiles.find(
-      (row) => String(row.organizationId) === String(primaryOrgId)
+      (row) => String(row.organizationId) === String(primaryOrgId),
     ) ||
     staffProfiles[0] ||
     null;
@@ -460,11 +480,11 @@ const generateOtp = async ({ email, phoneNumber, type }) => {
     let user;
     if (type === "email") {
       user = await User.findOne({ email: email.toLowerCase() }).select(
-        "email accountState otpInfo"
+        "email accountState otpInfo",
       );
     } else if (type === "phoneNumber") {
       user = await User.findOne({ phoneNumber }).select(
-        "phoneNumber accountState otpInfo"
+        "phoneNumber accountState otpInfo",
       );
     }
 
@@ -518,11 +538,11 @@ const verifyOtp = async ({ email, phoneNumber, type, otp }) => {
     let user;
     if (type === "email") {
       user = await User.findOne({ email: email.toLowerCase() }).select(
-        "email accountState otpInfo verificationStatus timezone"
+        "email accountState otpInfo verificationStatus timezone",
       );
     } else if (type === "phoneNumber") {
       user = await User.findOne({ phoneNumber }).select(
-        "phoneNumber accountState otpInfo verificationStatus timezone"
+        "phoneNumber accountState otpInfo verificationStatus timezone",
       );
     }
 
@@ -614,7 +634,7 @@ const changePassword = async ({ userId, oldPassword, newPassword }) => {
 const logout = async ({ userId, deviceId }) => {
   await Devices.updateOne(
     { userId: userId },
-    { $pull: { devices: { deviceId: deviceId } } }
+    { $pull: { devices: { deviceId: deviceId } } },
   );
 };
 
@@ -624,7 +644,8 @@ const deleteAccount = async ({ userId, email }) => {
     status: FamilyMemberStatus.ACTIVE,
     isNextOfKin: true,
   });
-  if (nextOfKin) throw new AppError("next_of_kin_must_hand_over_to_delete", 409);
+  if (nextOfKin)
+    throw new AppError("next_of_kin_must_hand_over_to_delete", 409);
 
   const randomEmail = `deleted_user_${userId}_${Date.now()}@example.com`;
 
@@ -638,7 +659,7 @@ const deleteAccount = async ({ userId, email }) => {
         "accountState.finalDeletionDate": new Date(),
       },
     },
-    { new: true }
+    { new: true },
   );
 
   await Devices.updateOne({ userId: userId }, { $set: { devices: [] } });
@@ -730,7 +751,11 @@ const socialAuth = async ({
 /**
  * Profile plus the module menu for one organisation (x-org-id, else first membership).
  */
-const me = async ({ userId, audience = AuthAudience.STAFF, organizationId }) => {
+const me = async ({
+  userId,
+  audience = AuthAudience.STAFF,
+  organizationId,
+}) => {
   const user = await User.findById(userId);
 
   if (!user) {

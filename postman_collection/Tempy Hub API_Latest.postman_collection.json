@@ -1333,7 +1333,7 @@
                     "login"
                   ]
                 },
-                "description": "Same login as every other surface with audience=family. Fails with 403 family_profile_not_found when the account has no active family link."
+                "description": "Same login as every other surface with audience=family. access has residents (every linked resident, with isActive), resident (the one the app opens on: the isActive one, null until the member is linked) and accessState. Fails with 403 family_profile_not_found for a staff account."
               },
               "response": []
             },
@@ -3808,6 +3808,105 @@
               "response": []
             },
             {
+              "name": "get resident screen tab",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/screen?tab=profile",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "screen"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "profile",
+                      "description": "profile, peep or family"
+                    }
+                  ]
+                },
+                "description": "Resident screen of the manager app. tab profile, peep or family. Returns the tab's screen fields (header, detailRows, careNotes, nextOfKin, today; floorPlanCard and rows; family members with subtitle, tag and requestId) on top of what it returned before."
+              },
+              "response": []
+            },
+            {
+              "name": "get resident screen (family tab)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/screen?tab=family",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "screen"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "family",
+                      "description": "profile, peep or family"
+                    }
+                  ]
+                },
+                "description": "Resident screen of the manager app. tab profile, peep or family. Returns the tab's screen fields (header, detailRows, careNotes, nextOfKin, today; floorPlanCard and rows; family members with subtitle, tag and requestId) on top of what it returned before."
+              },
+              "response": []
+            },
+            {
+              "name": "get resident screen (peep tab)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/screen?tab=peep",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "screen"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "peep",
+                      "description": "profile, peep or family"
+                    }
+                  ]
+                },
+                "description": "Resident screen of the manager app. tab profile, peep or family. Returns the tab's screen fields (header, detailRows, careNotes, nextOfKin, today; floorPlanCard and rows; family members with subtitle, tag and requestId) on top of what it returned before."
+              },
+              "response": []
+            },
+            {
               "name": "deactivate resident (reason and message)",
               "event": [
                 {
@@ -4165,6 +4264,33 @@
               "response": []
             },
             {
+              "name": "get current family code",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/family/code",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "family",
+                    "code"
+                  ]
+                },
+                "description": "Get the active family join code for a resident. Site managers need the family module and FAMILY_VIEW permission. Returns {residentId, code, expiresAt, createdAt}; code and dates are null if no active code exists."
+              },
+              "response": []
+            },
+            {
               "name": "make new family code",
               "event": [
                 {
@@ -4302,6 +4428,32 @@
                   ]
                 },
                 "description": "Reject This Photo sheet. action: approve or reject. reason (reject only): another_resident, poor_quality or not_appropriate; note is optional and the family sees both. The residentId must be the resident of the photo. 409 upload_already_decided when another manager decided first."
+              },
+              "response": []
+            },
+            {
+              "name": "get resident PEEP detail",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/residents/{{residentId}}/peep-record",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "residents",
+                    "{{residentId}}",
+                    "peep-record"
+                  ]
+                },
+                "description": "Full PEEP tab details for a resident: floor plan and pinned location, mobility, assistance, equipment, responsible staff, review date, consent status, MCA notes and evacuation strategy. Requires peepFloorPlan.view and the PEEP module."
               },
               "response": []
             }
@@ -4615,6 +4767,38 @@
                     }
                   }
                 }
+              },
+              "response": []
+            },
+            {
+              "name": "list departments (site manager)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/departments",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "departments"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true,
+                      "description": "owner / super admin only; a site manager gets own site"
+                    }
+                  ]
+                },
+                "description": "Active departments of the site (plus organisation-wide ones), sorted. Use the _id values as departmentIds when creating an announcement."
               },
               "response": []
             }
@@ -5100,7 +5284,7 @@
                 "description": "register kiosk",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"activationCode\": \"{{activationCode}}\",\n  \"deviceId\": \"postman-kiosk-1\",\n  \"adminPin\": \"1234\",\n  \"locationLabel\": \"Reception\"\n}",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"activationCode\": \"{{activationCode}}\",\n  \"deviceId\": \"{{deviceId}}\",\n  \"adminPin\": \"{{adminPin}}\",\n  \"locationLabel\": \"Reception\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -5143,7 +5327,7 @@
                 "description": "kiosk session",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"deviceId\": \"postman-kiosk-1\",\n  \"adminPin\": \"1234\"\n}",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"deviceId\": \"{{deviceId}}\",\n  \"adminPin\": \"{{adminPin}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -6794,6 +6978,28 @@
                     }
                   },
                   "response": []
+                },
+                {
+                  "name": "POST /app/kiosk/visits/{{visitSessionId}}/feedback",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      { "key": "x-kiosk-token", "value": "{{kioskToken}}" },
+                      { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"answers\": [\n    { \"questionId\": \"{{expectedVisitQuestionId}}\", \"value\": \"Yes\" },\n    { \"questionId\": \"{{whoVisitedQuestionId}}\", \"value\": \"Margaret And Amy\" },\n    { \"questionId\": \"{{ratingQuestionId}}\", \"value\": 5 },\n    { \"questionId\": \"{{commentsQuestionId}}\", \"value\": \"Lovely afternoon, the lounge was warm and staff were so kind.\" }\n  ]\n}",
+                      "options": { "raw": { "language": "json" } }
+                    },
+                    "url": {
+                      "raw": "{{url}}/app/kiosk/visits/{{visitSessionId}}/feedback",
+                      "host": [ "{{url}}" ],
+                      "path": [ "app", "kiosk", "visits", "{{visitSessionId}}", "feedback" ]
+                    },
+                    "description": "Submit the visitor's answers after checkout. The checkout response contains the enabled flag, question IDs and prompts. The visitSessionId belongs to the completed kiosk checkout."
+                  },
+                  "response": []
                 }
               ]
             },
@@ -7827,7 +8033,7 @@
               "response": []
             },
             {
-              "name": "export compliance (csv or pdf)",
+              "name": "export compliance (csv and pdf)",
               "event": [
                 {
                   "listen": "test",
@@ -7848,7 +8054,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/site-live/compliance/export?format=csv&branchId={{branchId}}",
+                  "raw": "{{url}}/app/site-live/compliance/export?branchId={{branchId}}&format=url",
                   "host": [
                     "{{url}}"
                   ],
@@ -7860,20 +8066,44 @@
                   ],
                   "query": [
                     {
-                      "key": "format",
-                      "value": "csv",
-                      "description": "csv or pdf"
-                    },
-                    {
                       "key": "branchId",
                       "value": "{{branchId}}",
                       "description": "Owner and super admin only"
+                    },
+                    {
+                      "key": "format",
+                      "value": "url",
+                      "description": "Returns both short-lived download links and file metadata"
                     }
                   ]
                 },
-                "description": "Export CSV / PDF button of the Compliance screen. Downloads compliance-YYYY-MM-DD.csv or .pdf with the four scores, supervision by department and every active person of the site. 400 invalid_export_format when format is missing or not csv or pdf. In Postman use Send and Download for the file."
+                "description": "Generates both compliance exports. With format=url, response data contains pdf and csv objects, each with url, expiresAt and filename. Open either short-lived URL to download its file."
               },
-              "response": []
+              "response": [
+                {
+                  "name": "Both compliance download links",
+                  "originalRequest": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": "{{url}}/app/site-live/compliance/export?branchId={{branchId}}&format=url"
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "cookie": [],
+                  "body": "{\n  \"message\": \"Data fetched successfully\",\n  \"data\": {\n    \"pdf\": {\n      \"url\": \"https://api.example.com/api/v1/app/site-live/compliance/download/<signed-token>\",\n      \"expiresAt\": \"2026-11-24T12:05:00.000Z\",\n      \"filename\": \"compliance-2026-11-24.pdf\"\n    },\n    \"csv\": {\n      \"url\": \"https://api.example.com/api/v1/app/site-live/compliance/download/<signed-token>\",\n      \"expiresAt\": \"2026-11-24T12:05:00.000Z\",\n      \"filename\": \"compliance-2026-11-24.csv\"\n    }\n  }\n}"
+                }
+              ]
             }
           ]
         },
@@ -8583,7 +8813,7 @@
                             "join"
                           ]
                         },
-                        "description": "Send Join Request: body code and relationship (one of the values from relationship options). Creates a pending request for the next of kin or the home to approve. Errors: 400 invalid_relationship, 404/410/429 for the code, 409 join_request_pending (one at a time), 409 family_link_exists, 409 email_used_by_staff. Figma screen: Join A Family. Notification: New join request goes to the resident's next of kin and the site's site and line managers.",
+                        "description": "Send Join Request: body code and relationship (one of the values from relationship options). Creates a pending request for the next of kin or the home to approve. Errors: 400 invalid_relationship, 404/410/429 for the code, 409 join_request_pending (one at a time; the error's data.requestId is the pending request, which can be cancelled with cancel join request), 409 family_link_exists, 409 email_used_by_staff. Figma screen: Join A Family. Notification: New join request goes to the resident's next of kin and the site's site and line managers.",
                         "body": {
                           "mode": "raw",
                           "raw": "{\n  \"code\": \"{{familyCode}}\",\n  \"relationship\": \"grandson\"\n}",
@@ -9609,8 +9839,7 @@
                           "pm.test(\"Home fetched\", function () {",
                           "    pm.response.to.have.status(200);",
                           "    const data = pm.response.json().data;",
-                          "    pm.expect(data).to.include.keys(\"greeting\", \"homeName\", \"resident\", \"residents\", \"nextVisit\", \"visiting\", \"gazette\", \"notices\", \"unread\");",
-                          "    pm.expect(data.notices).to.be.an(\"array\");",
+                          "    pm.expect(data).to.include.keys(\"greeting\", \"homeName\", \"resident\", \"residents\", \"nextVisit\", \"visiting\", \"gazette\", \"unread\");",
                           "});"
                         ]
                       }
@@ -9635,10 +9864,28 @@
                           "value": "{{residentId}}",
                           "description": "The resident being viewed; the first one when left out",
                           "disabled": true
+                        },
+                        {
+                          "key": "tab",
+                          "value": "family",
+                          "description": "family (this resident's timeline) or wall (community wall). Leave out for the home without a feed",
+                          "disabled": true
+                        },
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "description": "Feed page, used with tab",
+                          "disabled": true
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "description": "Feed page size, used with tab",
+                          "disabled": true
                         }
                       ]
                     },
-                    "description": "The Home Family tab in one call. Optional query: residentId (the resident being viewed; the first one when left out; 400 invalid_resident_id, 404 resident_not_found for one that is not mine). Returns greeting (Good morning, Sarah: by the time of day at the resident's home), homeName, resident (the one shown), residents (the header dropdown, with isActive), nextVisit (the Your Next Visit card, null when there is none), visiting {paused, reason, since}, gazette (the Gazette Due card: scheduled, issue, remaining), notices (banners: visitingPaused when the home has paused visiting; joinRequests, with a count, for a next of kin who has requests to review) and unread {notifications, messages} for the badges. The pieces are the same as resident, visits/next and gazettes/next, so the app can still call those on their own. Family token."
+                    "description": "The Home screen in one call. Optional query: residentId (the resident being viewed; the first one when left out; 400 invalid_resident_id, 404 resident_not_found for one that is not mine) and tab (family or wall; adds the feed; 400 invalid_home_tab). Returns greeting (Good morning, Sarah: by the time of day at the resident's home), homeName, resident (the one shown), residents (the header dropdown, with isActive), nextVisit (the Your Next Visit card, null when there is none), visiting {paused, reason, since}, gazette (the Gazette Due card: scheduled, issue, remaining), unread {notifications, messages} for the badges and handover (the pending next-of-kin handover, null when there is none). With tab it also returns feed {tab, items, meta}. On tab=wall the newest printed gazette is one of the items, as {type: gazette, gazetteId, issueNumber, title, printedAt} (the Discover Gazette card), placed among the posts by its printed date; posts have no type. meta counts posts only, so a page can hold one extra item. The pieces are the same as resident, visits/next and gazettes/next, so the app can still call those on their own. Family token."
                   },
                   "response": []
                 }
@@ -10323,7 +10570,7 @@
                         }
                       ]
                     },
-                    "description": "Home Family Tab, Community Wall: the home's published posts, pinned first then newest. Query: residentId (required, it picks the home), page, limit. Each post has homeName, authorName, message, photos, isPinned, reactionCount, reactedByMe and taggedResidents (only residents you are linked to). Sets postId from the first post for the reaction requests."
+                    "description": "Home Family Tab, Community Wall: the home's published posts, pinned first then newest. Query: residentId (required, it picks the home), page, limit. Each post has homeName, authorName, message, photos, isPinned (the home's own pin, shown first), isPinnedByMe (whether you pinned it for yourself, see pin or unpin post (for me)), reactionCount, reactedByMe and taggedResidents (only residents you are linked to). Sets postId from the first post for the reaction requests."
                   },
                   "response": []
                 },
@@ -10485,6 +10732,96 @@
                         }
                       }
                     }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "pin or unpin post (for me)",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Pin saved\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.have.property(\"isPinnedByMe\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/wall/{{postId}}/pin",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "wall",
+                        "{{postId}}",
+                        "pin"
+                      ]
+                    },
+                    "description": "Pin a wall post for yourself only, like a bookmark. Body: pinned (true or false). It does not move the post for anyone else (the home's own pin is isPinned). Sending the same value twice changes nothing. Returns postId and isPinnedByMe. 404 for a removed post or one at a home you are not linked to.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"pinned\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "my pinned posts",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Pinned posts listed\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/wall/pinned?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "wall",
+                        "pinned"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        }
+                      ]
+                    },
+                    "description": "My Pinned Posts: the posts you pinned for yourself, newest first, across every resident you are linked to (no residentId needed). Same post shape as the wall, with isPinnedByMe true. Query: page, limit."
                   },
                   "response": []
                 }
@@ -10898,7 +11235,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
+                  "raw": "{\n  \"gazette\": {\n    \"issueEveryDays\": 14,\n    \"messageCap\": 30,\n    \"anchorDate\": \"2026-11-30\",\n    \"deadlineReminder\": true,\n    \"communityWall\": true\n  },\n  \"visiting\": {\n    \"bookingOpen\": true,\n    \"loungeCapacityPerSlot\": 4,\n    \"maxPartySize\": 4,\n    \"daysAhead\": 14,\n    \"visitingHours\": {\n      \"start\": \"09:00\",\n      \"end\": \"18:00\"\n    },\n    \"protectedTimes\": [\n      {\n        \"start\": \"12:00\",\n        \"end\": \"13:30\",\n        \"label\": \"Lunch\"\n      },\n      {\n        \"start\": \"17:00\",\n        \"end\": \"18:00\",\n        \"label\": \"Dinner\"\n      }\n    ]\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -12107,6 +12444,568 @@
                       "value": "20"
                     }
                   ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Approvals",
+          "item": [
+            {
+              "name": "list approvals",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals?tab=all&page=1&limit=20&branchId={{branchId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "all",
+                      "description": "all, visitors, shifts, leave, photos or joins"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}"
+                    }
+                  ]
+                },
+                "description": "Site manager approval cards. tab can be all, visitors (family visit requests), shifts, leave, photos or joins. Each item includes tab, status, source record fields, and card {title, subtitle, badges, photoUrl, photos where relevant}; meta includes pending counts and available tabs. The shifts queue contains staff shift claims."
+              },
+              "response": []
+            },
+            {
+              "name": "approval detail",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals/detail?type=visitorEntry&itemId={{visitSessionId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals",
+                    "detail"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "visitorEntry",
+                      "description": "visitorEntry, shiftClaim, leaveRequest, familyPhoto or familyLink"
+                    },
+                    {
+                      "key": "itemId",
+                      "value": "{{visitSessionId}}",
+                      "description": "ID of the visit session, shift claim, leave request, family upload or resident"
+                    }
+                  ]
+                },
+                "description": "Detail of one item in the approvals list. type visitorEntry (a family visit request, or a kiosk walk-in with the Approval Request screen fields), shiftClaim, familyLink (itemId is the join request id), leaveRequest or familyPhoto. itemId is the id of the list item."
+              },
+              "response": []
+            },
+            {
+              "name": "approval detail (shift claim)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals/detail?type=shiftClaim&itemId={{shiftClaimId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals",
+                    "detail"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "shiftClaim",
+                      "description": "visitorEntry, shiftClaim, leaveRequest, familyPhoto or familyLink"
+                    },
+                    {
+                      "key": "itemId",
+                      "value": "{{shiftClaimId}}",
+                      "description": "ID of the visit session, shift claim, leave request, family upload or resident"
+                    }
+                  ]
+                },
+                "description": "Shift Claim screen: staff, shiftLabel, hoursThisWeek, contractedHours, visaHourCap and canDecide, on top of the claim. Buttons: POST /app/shift-claims/:id/approve and /reject."
+              },
+              "response": []
+            },
+            {
+              "name": "approval detail (join request)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals/detail?type=familyLink&itemId={{requestId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals",
+                    "detail"
+                  ],
+                  "query": [
+                    {
+                      "key": "type",
+                      "value": "familyLink",
+                      "description": "visitorEntry, shiftClaim, leaveRequest, familyPhoto or familyLink"
+                    },
+                    {
+                      "key": "itemId",
+                      "value": "{{requestId}}",
+                      "description": "ID of the visit session, shift claim, leave request, family upload or resident"
+                    }
+                  ]
+                },
+                "description": "Join Request screen: person, resident, relationship, code used, next of kin and the 7 day escalation. itemId is the id of the join item in the approvals list."
+              },
+              "response": []
+            },
+            {
+              "name": "approve join request (site manager)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals/join-requests/{{requestId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals",
+                    "join-requests",
+                    "{{requestId}}"
+                  ]
+                },
+                "description": "Join tab of the approvals list. requestId is the id of the join item (or requestId in the detail). action approve lets the person in, reject declines the request.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"approve\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "decline join request (site manager)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/approvals/join-requests/{{requestId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "approvals",
+                    "join-requests",
+                    "{{requestId}}"
+                  ]
+                },
+                "description": "Join tab of the approvals list. requestId is the id of the join item (or requestId in the detail). action approve lets the person in, reject declines the request.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Visitor Entry Approvals",
+          "item": [
+            {
+              "name": "approve visitor entry",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/visit-sessions/{{visitSessionId}}/approve",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "visit-sessions",
+                    "{{visitSessionId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Manager app action to approve a visitor entry."
+              },
+              "response": []
+            },
+            {
+              "name": "deny visitor entry",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/visit-sessions/{{visitSessionId}}/deny",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "visit-sessions",
+                    "{{visitSessionId}}",
+                    "deny"
+                  ]
+                },
+                "description": "Manager app action to deny a visitor entry."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Leave Approvals",
+          "item": [
+            {
+              "name": "approve leave request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/leave-approvals/{{leaveRequestId}}/approve",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "leave-approvals",
+                    "{{leaveRequestId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Manager app action for a pending leave request. decisionNote is optional."
+              },
+              "response": []
+            },
+            {
+              "name": "reject leave request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/leave-approvals/{{leaveRequestId}}/reject",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "leave-approvals",
+                    "{{leaveRequestId}}",
+                    "reject"
+                  ]
+                },
+                "description": "Manager app action for a pending leave request. decisionNote is optional."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Shift Claim Approvals",
+          "item": [
+            {
+              "name": "approve shift claim",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/shift-claims/{{shiftClaimId}}/approve",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "shift-claims",
+                    "{{shiftClaimId}}",
+                    "approve"
+                  ]
+                },
+                "description": "Manager app action for a pending shift claim. decisionNote is optional."
+              },
+              "response": []
+            },
+            {
+              "name": "reject shift claim",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/shift-claims/{{shiftClaimId}}/reject",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "shift-claims",
+                    "{{shiftClaimId}}",
+                    "reject"
+                  ]
+                },
+                "description": "Manager app action for a pending shift claim. decisionNote is optional."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Visitor Feedback",
+          "item": [
+            {
+              "name": "visitor feedback screen",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/visitor-feedback?branchId={{branchId}}&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "visitor-feedback"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "description": "Optional branch filter; site managers are scoped to their assigned branch."
+                    },
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                },
+                "description": "Visitor Feedback screen: settings (switch and Send To Me By), thisMonth summary and the latest responses. Optional page and limit. Site manager sees their own site."
+              },
+              "response": []
+            },
+            {
+              "name": "save visitor feedback settings",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/visitor-feedback/settings",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "visitor-feedback",
+                    "settings"
+                  ]
+                },
+                "description": "enabled turns Ask Visitors At Check-Out on or off. sendBy is notification, email or both. Send only what changed.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": true,\n  \"sendBy\": \"notification\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
                 }
               },
               "response": []
@@ -27250,7 +28149,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"hostStaffId\": \"{{staffId}}\",\n  \"visitorName\": \"Jane Visitor\",\n  \"stayDuration\": \"45 minutes\",\n  \"answers\": [\n    {\n      \"questionId\": \"{{visitorSurveyQuestionId}}\",\n      \"value\": \"Yes\"\n    }\n  ]\n}",
+                  "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"hostStaffId\": \"{{staffId}}\",\n  \"visitorName\": \"Jane Visitor\",\n  \"stayDuration\": \"45 minutes\",\n  \"answers\": [\n    { \"questionId\": \"{{expectedVisitQuestionId}}\", \"value\": \"Yes\" },\n    { \"questionId\": \"{{whoVisitedQuestionId}}\", \"value\": \"Margaret And Amy\" },\n    { \"questionId\": \"{{ratingQuestionId}}\", \"value\": 5 },\n    { \"questionId\": \"{{commentsQuestionId}}\", \"value\": \"Lovely afternoon, the lounge was warm and staff were so kind.\" }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"

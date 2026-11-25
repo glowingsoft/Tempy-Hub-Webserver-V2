@@ -4,6 +4,7 @@ const { Membership } = require("@models/Membership");
 const { User } = require("@models/UserModel");
 const { Branch } = require("@models/Branch");
 const { StaffProfile } = require("@models/StaffProfile");
+const { ExternalPerson } = require("@models/ExternalPerson");
 const { VisitSession } = require("@models/VisitSession");
 const { VisitorSurveyQuestion } = require("@models/VisitorSurveyQuestion");
 const { VisitorSurveyResponse } = require("@models/VisitorSurveyResponse");
@@ -17,6 +18,7 @@ const {
   VisitorSurveyQuestionType,
   VisitorSurveyQuestionSource,
   VisitorSurveyResponseSource,
+  VisitSessionStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -26,6 +28,7 @@ const {
 const SETTINGS_ROLES = new Set([
   MembershipRole.SUPER_ADMIN,
   MembershipRole.OWNER,
+  MembershipRole.SITE_MANAGER,
 ]);
 
 const LOG_ROLES = new Set([
@@ -356,6 +359,53 @@ const answerValue = (value) => {
   return String(value).trim();
 };
 
+const collectSurveyAnswers = async (organizationId, answers) => {
+  if (!Array.isArray(answers)) {
+    throw new AppError("visitor_survey_answers_required", 400);
+  }
+  const orgId = await ensureQuestions(organizationId);
+  const questions = await VisitorSurveyQuestion.find({
+    organizationId: orgId,
+    active: true,
+  }).lean();
+  const byId = new Map(questions.map((row) => [String(row._id), row]));
+  const given = new Map();
+
+  for (const item of answers) {
+    const question = byId.get(String(item.questionId || ""));
+    if (!question) throw new AppError("visitor_survey_question_not_found", 400);
+    given.set(String(question._id), answerValue(item.value));
+  }
+  for (const question of questions) {
+    if (question.required && !given.has(String(question._id))) {
+      throw new AppError("visitor_survey_answer_required", 400);
+    }
+    if (question.required && given.get(String(question._id)) === "") {
+      throw new AppError("visitor_survey_answer_required", 400);
+    }
+  }
+
+  const storedAnswers = questions
+    .filter((question) => given.has(String(question._id)))
+    .map((question) => ({
+      questionId: question._id,
+      key: question.key,
+      prompt: question.prompt,
+      value: given.get(String(question._id)),
+    }));
+  const pick = (key) => storedAnswers.find((row) => row.key === key)?.value ?? "";
+  const ratingRaw = pick("rating");
+  const rating = ratingRaw === "" || ratingRaw == null ? null : Number(ratingRaw);
+
+  return {
+    orgId,
+    storedAnswers,
+    rating: Number.isFinite(rating) ? rating : null,
+    whoVisited: String(pick("whoVisited") || ""),
+    comments: String(pick("comments") || ""),
+  };
+};
+
 const notifyManagers = async ({
   organizationId,
   branchId,
@@ -381,7 +431,7 @@ const notifyManagers = async ({
   const memberships = await Membership.find(match).select("userId").lean();
   const receiverIds = [
     ...new Set(memberships.map((row) => String(row.userId))),
-  ].filter((id) => id !== String(actor._id));
+  ].filter((id) => !actor?._id || id !== String(actor._id));
   if (!receiverIds.length) return null;
 
   const bits = [`Visitor feedback from ${response.visitorName}`];
@@ -404,7 +454,7 @@ const notifyManagers = async ({
     await NotificationExp.insertMany(
       receiverIds.map((receiverId) => ({
         type: NotificationTypes.VISITOR_SURVEY,
-        subjectId: actor._id,
+        subjectId: actor?._id || null,
         objectId: response._id,
         objectType: "VisitorSurveyResponse",
         receiverId,
@@ -476,45 +526,8 @@ const createVisitorSurveyResponse = async ({
 
   const name = String(visitorName || "").trim();
   if (!name) throw new AppError("name_required", 400);
-  if (!Array.isArray(answers)) throw new AppError("visitor_survey_answers_required", 400);
-
-  const orgId = await ensureQuestions(organizationId);
-  const questions = await VisitorSurveyQuestion.find({
-    organizationId: orgId,
-    active: true,
-  }).lean();
-  const byId = new Map(questions.map((row) => [String(row._id), row]));
-
-  const given = new Map();
-  for (const item of answers) {
-    const question = byId.get(String(item.questionId || ""));
-    if (!question) throw new AppError("visitor_survey_question_not_found", 400);
-    given.set(String(question._id), answerValue(item.value));
-  }
-
-  for (const question of questions) {
-    if (!question.required) continue;
-    const value = given.get(String(question._id));
-    if (value === undefined || value === "") {
-      throw new AppError("visitor_survey_answer_required", 400);
-    }
-  }
-
-  const storedAnswers = questions
-    .filter((question) => given.has(String(question._id)))
-    .map((question) => ({
-      questionId: question._id,
-      key: question.key,
-      prompt: question.prompt,
-      value: given.get(String(question._id)),
-    }));
-
-  const pick = (key) =>
-    storedAnswers.find((row) => row.key === key)?.value ?? "";
-
-  const ratingRaw = pick("rating");
-  const rating =
-    ratingRaw === "" || ratingRaw == null ? null : Number(ratingRaw);
+  const survey = await collectSurveyAnswers(organizationId, answers);
+  const { orgId, storedAnswers, rating, whoVisited, comments } = survey;
 
   const organization = await loadOrganization(organizationId);
   const settings = presentSettings(organization.settings?.visitorSurvey);
@@ -539,8 +552,8 @@ const createVisitorSurveyResponse = async ({
     stayDuration: stayDuration ? String(stayDuration).trim() : "",
     answers: storedAnswers,
     rating: Number.isFinite(rating) ? rating : null,
-    whoVisited: String(pick("whoVisited") || ""),
-    comments: String(pick("comments") || ""),
+    whoVisited,
+    comments,
     source: Object.values(VisitorSurveyResponseSource).includes(source)
       ? source
       : VisitorSurveyResponseSource.ADMIN_MANUAL,
@@ -552,6 +565,127 @@ const createVisitorSurveyResponse = async ({
       organizationId: orgId,
       branchId: row.branchId,
       actor,
+      response: row,
+      settings,
+    });
+    if (notifiedAt) {
+      row.notifiedAt = notifiedAt;
+      await row.save();
+    }
+  } catch (error) {
+    const log = global.logger;
+    if (log?.error) log.error("visitor survey notify failed", { error: error.message });
+    else console.error("visitor survey notify failed", error);
+  }
+
+  return row.toObject();
+};
+
+const getKioskVisitorSurvey = async ({
+  organizationId,
+  branchId,
+  visitSessionId,
+}) => {
+  const branchOid = toOid(branchId, "invalid_branch_id");
+  await assertBranchInOrganization(branchOid, organizationId);
+  const session = await VisitSession.findOne({
+    _id: toOid(visitSessionId, "invalid_visit_session_id"),
+    branchId: branchOid,
+    status: VisitSessionStatus.CHECKED_OUT,
+    checkOutAt: { $ne: null },
+  })
+    .select("_id")
+    .lean();
+  if (!session) throw new AppError("visit_session_not_found", 404);
+
+  const organization = await loadOrganization(organizationId);
+  const settings = presentSettings(organization.settings?.visitorSurvey);
+  if (!settings.enabled) return { enabled: false, visitSessionId: session._id };
+
+  const orgId = await ensureQuestions(organizationId);
+  const questions = await VisitorSurveyQuestion.find({
+    organizationId: orgId,
+    active: true,
+  })
+    .sort({ sortOrder: 1, createdAt: 1 })
+    .lean();
+  return {
+    enabled: true,
+    visitSessionId: session._id,
+    questions: questions.map(shapeQuestion),
+  };
+};
+
+const createKioskVisitorSurveyResponse = async ({
+  organizationId,
+  branchId,
+  visitSessionId,
+  visitorName,
+  answers,
+}) => {
+  const branchOid = toOid(branchId, "invalid_branch_id");
+  const sessionId = toOid(visitSessionId, "invalid_visit_session_id");
+  await assertBranchInOrganization(branchOid, organizationId);
+  const session = await VisitSession.findOne({
+    _id: sessionId,
+    branchId: branchOid,
+    status: VisitSessionStatus.CHECKED_OUT,
+    checkOutAt: { $ne: null },
+  }).lean();
+  if (!session) throw new AppError("visit_session_not_found", 404);
+
+  if (await VisitorSurveyResponse.exists({ visitSessionId: sessionId })) {
+    throw new AppError("visitor_feedback_already_submitted", 409);
+  }
+
+  const organization = await loadOrganization(organizationId);
+  const settings = presentSettings(organization.settings?.visitorSurvey);
+  if (!settings.enabled) throw new AppError("visitor_feedback_disabled", 403);
+
+  const survey = await collectSurveyAnswers(organizationId, answers);
+  const person = session.externalPersonId
+    ? await ExternalPerson.findOne({
+        _id: session.externalPersonId,
+        branchId: branchOid,
+      })
+        .select("name")
+        .lean()
+    : null;
+  const name = String(visitorName || person?.name || "Visitor").trim();
+  const durationMs =
+    session.checkInAt && session.checkOutAt
+      ? Math.max(0, session.checkOutAt.getTime() - session.checkInAt.getTime())
+      : 0;
+  const totalMinutes = Math.round(durationMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const stayDuration = hours
+    ? minutes
+      ? `${hours}h ${minutes}m`
+      : `${hours}h`
+    : `${minutes}m`;
+
+  const row = await VisitorSurveyResponse.create({
+    organizationId: survey.orgId,
+    branchId: branchOid,
+    visitSessionId: sessionId,
+    externalPersonId: session.externalPersonId || null,
+    hostStaffId: session.hostStaffId || null,
+    visitorName: name,
+    stayDuration,
+    answers: survey.storedAnswers,
+    rating: survey.rating,
+    whoVisited: survey.whoVisited,
+    comments: survey.comments,
+    source: VisitorSurveyResponseSource.KIOSK,
+    submittedByUserId: null,
+  });
+
+  try {
+    const notifiedAt = await notifyManagers({
+      organizationId: survey.orgId,
+      branchId: branchOid,
+      actor: null,
       response: row,
       settings,
     });
@@ -795,5 +929,7 @@ module.exports = {
   listVisitorSurveyQuestions,
   saveVisitorSurveyQuestions,
   createVisitorSurveyResponse,
+  getKioskVisitorSurvey,
+  createKioskVisitorSurveyResponse,
   listVisitorSurveyResponses,
 };

@@ -97,6 +97,30 @@ const listActiveLinks = (userId) =>
     },
   ]);
 
+const listFamilyMemberships = (userId) =>
+  FamilyMember.aggregate([
+    ...activeLinkStages(userId),
+    ...joinOne({
+      from: Branch,
+      localField: "branchId",
+      as: "branch",
+      optional: true,
+    }),
+    {
+      $project: {
+        _id: 1,
+        organizationId: 1,
+        branchId: { $ifNull: ["$branchId", null] },
+        role: { $literal: "family" },
+        organizationName: { $ifNull: ["$organization.name", ""] },
+        branchName: { $ifNull: ["$branch.name", ""] },
+        residentId: 1,
+        relationship: 1,
+        isNextOfKin: { $eq: ["$isNextOfKin", true] },
+      },
+    },
+  ]);
+
 const pickActiveResidentId = (rows, requestedId) =>
   rows.some((row) => String(row.residentId) === String(requestedId))
     ? String(requestedId)
@@ -173,6 +197,7 @@ module.exports = {
   moduleActiveStage,
   familyModuleOrganizationIds,
   listActiveLinks,
+  listFamilyMemberships,
   resolveFamilyResidents,
   resolveAccessState,
   isStaffAccount,

@@ -1,4 +1,5 @@
 const { FamilyReaction } = require("@models/FamilyReaction");
+const { FamilyPostPin } = require("@models/FamilyPostPin");
 const { toObjectId } = require("./familyPipeline");
 
 /** reactionCount and, for the caller, reactedByMe, joined onto rows whose _id is a wall post. */
@@ -43,6 +44,32 @@ const reactionStats = (userId = null) => [
   },
 ];
 
+/** isPinnedByMe: whether the caller saved this post for themselves (not the staff pin, isPinned). */
+const pinnedByMe = (userId = null) => [
+  {
+    $lookup: {
+      from: FamilyPostPin.collection.name,
+      let: { postId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$postId", "$$postId"] },
+                { $eq: ["$userId", userId ? toObjectId(userId) : null] },
+              ],
+            },
+          },
+        },
+        { $limit: 1 },
+        { $project: { _id: 1 } },
+      ],
+      as: "myPin",
+    },
+  },
+  { $addFields: { isPinnedByMe: { $gt: [{ $size: "$myPin" }, 0] } } },
+];
+
 /** Wall posts show the photo as uploaded; only family uploads are ever blurred. */
 const postPhotos = {
   $map: {
@@ -52,4 +79,4 @@ const postPhotos = {
   },
 };
 
-module.exports = { reactionStats, postPhotos };
+module.exports = { reactionStats, pinnedByMe, postPhotos };

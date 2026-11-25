@@ -10,7 +10,13 @@ const { Branch } = require("@models/Branch");
 const { JobTitle } = require("@models/JobTitle");
 const { Department } = require("@models/Department");
 const { Organization } = require("@models/Organization");
-const { StaffProfileStatus } = require("@models/domainEnums");
+const { Membership } = require("@models/Membership");
+const { FamilyMember } = require("@models/FamilyMember");
+const {
+  StaffProfileStatus,
+  ActiveInactiveStatus,
+  FamilyMemberStatus,
+} = require("@models/domainEnums");
 const { formatUserResponse } = require("@utils/userResponseUtil");
 const { getFullImageUrl } = require("@utils/imageHelper");
 const { userCache } = require("@config/nodeCache");
@@ -22,7 +28,7 @@ let currenciesData = null;
 try {
   const currenciesFilePath = path.join(
     __dirname,
-    "../../../assets/currencies/currencies.json"
+    "../../../assets/currencies/currencies.json",
   );
   if (fs.existsSync(currenciesFilePath)) {
     currenciesData = JSON.parse(fs.readFileSync(currenciesFilePath, "utf8"));
@@ -86,13 +92,13 @@ const addOrUpdateSubscription = async ({ userId, type }) => {
     throw new AppError(
       "Invalid subscription type. Valid types are: " +
         validSubscriptionTypes.join(", "),
-      400
+      400,
     );
   }
 
   const user = await User.findById(userId).select("subscriptions");
   const existingSubscription = user.subscriptions.find(
-    (sub) => sub.type === type
+    (sub) => sub.type === type,
   );
 
   if (existingSubscription) {
@@ -127,7 +133,7 @@ const addOrUpdateSubscription = async ({ userId, type }) => {
 const removeSubscription = async ({ userId, subscriptionId }) => {
   const user = await User.findById(userId).select("subscriptions");
   const subscriptionIndex = user.subscriptions.findIndex(
-    (sub) => sub._id.toString() === subscriptionId
+    (sub) => sub._id.toString() === subscriptionId,
   );
   if (subscriptionIndex === -1) {
     throw new AppError("subscription_not", 404);
@@ -161,7 +167,7 @@ const getSubscriptions = async ({ userId }) => {
           return moment(currentSub.endDate).isAfter(moment(maxSub.endDate))
             ? currentSub
             : maxSub;
-        }
+        },
       );
 
       subscriptions.forEach((sub) => {
@@ -203,44 +209,40 @@ const linkedStaffSummary = (staff) =>
       }
     : null;
 
-const staffCardFromRow = (profile, {
-  branch,
-  jobTitle,
-  departments,
-  organization,
+const staffCardFromRow = (
+  profile,
+  { branch, jobTitle, departments, organization, reportsTo, supervisor },
+) => ({
+  ...profile,
+  emergencyContactName: profile.emergencyContactName || "",
+  emergencyContactPhone: profile.emergencyContactPhone || "",
+  photoUrl: getFullImageUrl(profile.photoUrl),
+  organization: organization
+    ? {
+        _id: organization._id,
+        name: organization.name,
+        status: organization.status,
+      }
+    : null,
+  branch: branch
+    ? {
+        _id: branch._id,
+        name: branch.name,
+        code: branch.code,
+        status: branch.status,
+        timezone: branch.timezone,
+      }
+    : null,
+  jobTitle: jobTitle
+    ? { _id: jobTitle._id, name: jobTitle.name, level: jobTitle.level }
+    : null,
+  departments: (departments || []).map((d) => ({
+    _id: d._id,
+    name: d.name,
+    branchId: d.branchId || null,
+  })),
   reportsTo,
   supervisor,
-}) => ({
-    ...profile,
-    emergencyContactName: profile.emergencyContactName || "",
-    emergencyContactPhone: profile.emergencyContactPhone || "",
-    photoUrl: getFullImageUrl(profile.photoUrl),
-    organization: organization
-      ? {
-          _id: organization._id,
-          name: organization.name,
-          status: organization.status,
-        }
-      : null,
-    branch: branch
-      ? {
-          _id: branch._id,
-          name: branch.name,
-          code: branch.code,
-          status: branch.status,
-          timezone: branch.timezone,
-        }
-      : null,
-    jobTitle: jobTitle
-      ? { _id: jobTitle._id, name: jobTitle.name, level: jobTitle.level }
-      : null,
-    departments: (departments || []).map((d) => ({
-      _id: d._id,
-      name: d.name,
-      branchId: d.branchId || null,
-    })),
-    reportsTo,
-    supervisor,
 });
 
 const loadStaffCardsForUser = async (userId, organizationId) => {
@@ -266,63 +268,67 @@ const loadStaffCardsForUser = async (userId, organizationId) => {
       profiles
         .flatMap((p) => [p.reportsToStaffId, p.supervisorStaffId])
         .filter(Boolean)
-        .map(String)
+        .map(String),
     ),
   ].map((id) => new mongoose.Types.ObjectId(id));
 
   const [organizations, branches, jobTitles, departments, linkedStaff] =
     await Promise.all([
-    Organization.find({ _id: { $in: orgIds } }).select("name status").lean(),
-    Branch.find({ _id: { $in: branchIds } })
-      .select("name code status timezone")
-      .lean(),
-    jobTitleIds.length
-      ? JobTitle.find({ _id: { $in: jobTitleIds } }).select("name level").lean()
-      : [],
-    departmentIds.length
-      ? Department.find({ _id: { $in: departmentIds } })
-          .select("name branchId")
-          .lean()
-      : [],
-    linkedStaffIds.length
-      ? StaffProfile.aggregate([
-          { $match: { _id: { $in: linkedStaffIds } } },
-          {
-            $lookup: {
-              from: User.collection.name,
-              localField: "userId",
-              foreignField: "_id",
-              pipeline: [
-                {
-                  $project: {
-                    name: 1,
-                    email: 1,
-                    image: { $ifNull: ["$profileIcon", ""] },
+      Organization.find({ _id: { $in: orgIds } })
+        .select("name status")
+        .lean(),
+      Branch.find({ _id: { $in: branchIds } })
+        .select("name code status timezone")
+        .lean(),
+      jobTitleIds.length
+        ? JobTitle.find({ _id: { $in: jobTitleIds } })
+            .select("name level")
+            .lean()
+        : [],
+      departmentIds.length
+        ? Department.find({ _id: { $in: departmentIds } })
+            .select("name branchId")
+            .lean()
+        : [],
+      linkedStaffIds.length
+        ? StaffProfile.aggregate([
+            { $match: { _id: { $in: linkedStaffIds } } },
+            {
+              $lookup: {
+                from: User.collection.name,
+                localField: "userId",
+                foreignField: "_id",
+                pipeline: [
+                  {
+                    $project: {
+                      name: 1,
+                      email: 1,
+                      image: { $ifNull: ["$profileIcon", ""] },
+                    },
                   },
-                },
-                { $limit: 1 },
-              ],
-              as: "user",
+                  { $limit: 1 },
+                ],
+                as: "user",
+              },
             },
-          },
-          {
-            $project: {
-              employeeCode: 1,
-              name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
-              email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
-              image: { $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""] },
+            {
+              $project: {
+                employeeCode: 1,
+                name: { $ifNull: [{ $arrayElemAt: ["$user.name", 0] }, ""] },
+                email: { $ifNull: [{ $arrayElemAt: ["$user.email", 0] }, ""] },
+                image: { $ifNull: [{ $arrayElemAt: ["$user.image", 0] }, ""] },
+              },
             },
-          },
-        ])
-      : [],
-  ]);
+          ])
+        : [],
+    ]);
 
   const orgById = new Map(organizations.map((o) => [String(o._id), o]));
   const branchById = new Map(branches.map((b) => [String(b._id), b]));
   const jobById = new Map(jobTitles.map((j) => [String(j._id), j]));
   const deptById = new Map(departments.map((d) => [String(d._id), d]));
   const linkedById = new Map(
-    linkedStaff.map((row) => [String(row._id), linkedStaffSummary(row)])
+    linkedStaff.map((row) => [String(row._id), linkedStaffSummary(row)]),
   );
 
   return profiles.map((profile) =>
@@ -341,7 +347,7 @@ const loadStaffCardsForUser = async (userId, organizationId) => {
       supervisor: profile.supervisorStaffId
         ? linkedById.get(String(profile.supervisorStaffId)) || null
         : null,
-    })
+    }),
   );
 };
 
@@ -353,9 +359,52 @@ const loadStaffCard = async (userId, organizationId) => {
   return card || null;
 };
 
+const loadWorkplaceNames = async (userId, organizationId) => {
+  if (!organizationId || !mongoose.Types.ObjectId.isValid(organizationId)) {
+    return { organizationName: null, branchName: null };
+  }
+  const [organization, membership] = await Promise.all([
+    Organization.findById(organizationId).select("name").lean(),
+    Membership.findOne({
+      userId,
+      organizationId,
+      status: ActiveInactiveStatus.ACTIVE,
+    })
+      .select("branchId")
+      .lean(),
+  ]);
+  const branchId =
+    membership?.branchId ||
+    (membership
+      ? null
+      : (
+          await FamilyMember.findOne({
+            userId,
+            organizationId,
+            status: FamilyMemberStatus.ACTIVE,
+          })
+            .sort({ createdAt: 1 })
+            .select("branchId")
+            .lean()
+        )?.branchId);
+  const branch = branchId
+    ? await Branch.findById(branchId).select("name").lean()
+    : null;
+  return {
+    organizationName: organization?.name || null,
+    branchName: branch?.name || null,
+  };
+};
+
 const withStaffCard = async (payload, userId, organizationId) => {
   if (!organizationId) return payload;
-  payload.staffProfile = await loadStaffCard(userId, organizationId);
+  const [staffProfile, names] = await Promise.all([
+    loadStaffCard(userId, organizationId),
+    loadWorkplaceNames(userId, organizationId),
+  ]);
+  payload.staffProfile = staffProfile;
+  payload.organizationName = names.organizationName;
+  payload.branchName = names.branchName;
   return payload;
 };
 
@@ -379,17 +428,15 @@ const getUserProfile = async ({
     throw new AppError("user_not", 404);
   }
 
-  return withStaffCard(
-    formatUserResponse(user, null, [], ["resetToken"]),
-    userId,
-    organizationId
-  );
+  const payload = formatUserResponse(user, null, [], ["resetToken"]);
+  payload.lastPasswordChangeAt = user.passwordChangedAt || null;
+  return withStaffCard(payload, userId, organizationId);
 };
 
 const getOtherUserProfile = async ({ userId }) => {
   const [user, recentReviews] = await Promise.all([
     User.findById(userId).select(
-      "profileIcon name phoneNumber verificationStatus.phoneNumber"
+      "profileIcon name phoneNumber verificationStatus.phoneNumber",
     ),
     Review.find({ object: userId, reviewType: "user" })
       .sort({ createdAt: -1 })
@@ -405,7 +452,7 @@ const getOtherUserProfile = async ({ userId }) => {
     user,
     null,
     [],
-    ["resetToken", "accountState", "metadata"]
+    ["resetToken", "accountState", "metadata"],
   );
 
   response.contactInfo = {
@@ -452,7 +499,7 @@ const updateUserProfile = async ({
       throw new AppError("currency_list_error", 500);
     }
     const currency = currenciesData.find(
-      (c) => c.symbol === currencySymbol && c.code === currencyCode
+      (c) => c.symbol === currencySymbol && c.code === currencyCode,
     );
     if (!currency) {
       throw new AppError("invalid_currency", 400);
@@ -490,12 +537,13 @@ const updateUserProfile = async ({
     if (phoneNumber) staffUpdate.phone = phoneNumber;
     if (profileIcon) staffUpdate.photoUrl = profileIcon;
     if (emergencyContactName !== undefined) {
-      staffUpdate.emergencyContactName = optionalStaffText(emergencyContactName);
+      staffUpdate.emergencyContactName =
+        optionalStaffText(emergencyContactName);
     }
     if (emergencyContactPhone !== undefined) {
       const contactPhone = optionalStaffText(emergencyContactPhone).replace(
         /\s+/g,
-        ""
+        "",
       );
       if (contactPhone && !validator.isMobilePhone(contactPhone)) {
         throw new AppError("invalid_phone_1", 400);
@@ -514,14 +562,14 @@ const updateUserProfile = async ({
         organizationId,
         status: StaffProfileStatus.ACTIVE,
       },
-      { $set: staffUpdate }
+      { $set: staffUpdate },
     );
   }
 
   return withStaffCard(
     formatUserResponse(user, null, [], ["resetToken"]),
     userId,
-    organizationId
+    organizationId,
   );
 };
 
@@ -531,8 +579,19 @@ const listAllUsers = async () => {
 
 const ALWAYS_ON = ["fireEmergency", "walkInAtKiosk"];
 const PREFERENCE_SECTIONS = {
-  staffAndRota: ["shiftClaims", "leaveAndSickness", "kioskOffline", "agencyBids"],
-  family: ["photosWaiting", "joinRequests", "visitRequests", "reportedPosts", "gazetteReminders"],
+  staffAndRota: [
+    "shiftClaims",
+    "leaveAndSickness",
+    "kioskOffline",
+    "agencyBids",
+  ],
+  family: [
+    "photosWaiting",
+    "joinRequests",
+    "visitRequests",
+    "reportedPosts",
+    "gazetteReminders",
+  ],
 };
 const OFF_BY_DEFAULT = ["gazetteReminders"];
 const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -562,7 +621,11 @@ const getNotificationPreferences = async ({ userId }) => {
 
 const updateNotificationPreferences = async ({ userId, body }) => {
   if (!isPlainObject(body)) throw new AppError("nothing_to_update", 400);
-  const allowed = [...Object.keys(PREFERENCE_SECTIONS), "alwaysOn", "quietHours"];
+  const allowed = [
+    ...Object.keys(PREFERENCE_SECTIONS),
+    "alwaysOn",
+    "quietHours",
+  ];
   if (Object.keys(body).some((key) => !allowed.includes(key)))
     throw new AppError("invalid_notification_preference", 400);
 

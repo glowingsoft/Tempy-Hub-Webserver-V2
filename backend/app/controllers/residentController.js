@@ -109,9 +109,16 @@ const deactivateResident = respond("resident_deactivated", (req) =>
   }),
 );
 
-const getFamily = respond("data_fetched_successfully", (req) =>
-  familyStaffService.getFamily(scope(req)),
-);
+const getFamily = respond("data_fetched_successfully", async (req) => {
+  const family = await familyStaffService.getFamily(scope(req));
+  return {
+    ...family,
+    familyCode: {
+      hasFamilyCode: Boolean(family.familyCode.code),
+      ...family.familyCode,
+    },
+  };
+});
 
 const setNextOfKin = respond("next_of_kin_set", (req) =>
   familyStaffService.setNextOfKin({

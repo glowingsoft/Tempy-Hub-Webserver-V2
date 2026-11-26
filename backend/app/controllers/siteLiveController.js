@@ -6,6 +6,7 @@ const {
   exportSiteCompliance,
 } = require("@adminServices/dashboard/siteDashboardService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { ModuleSlug } = require("@models/domainEnums");
 const { isFamilyModuleActive } = require("@appServices/family/familyAccessService");
 const { signedUrlFromShortToken } = require("@commonServices/uploads/uploadAwsService");
 
@@ -17,6 +18,14 @@ const getSiteLive = async (req, res) => {
       branchId: req.query.branchId,
       familyOn:
         Boolean(req.isPlatformAdmin) || isFamilyModuleActive(req.organization),
+      attendanceOn:
+        Boolean(req.isPlatformAdmin) ||
+        (req.organization?.moduleAccess || []).some(
+          (entry) =>
+            entry.moduleSlug === ModuleSlug.SIGN_IN_ATTENDANCE &&
+            entry.enabled &&
+            (!entry.expiresAt || new Date(entry.expiresAt) > new Date()),
+        ),
     });
 
     return sendResponse({

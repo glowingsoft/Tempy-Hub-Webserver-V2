@@ -12,13 +12,14 @@ const myStatusFromAttendance = (today) => {
   return { label: "Normal", presenceStatus: presence };
 };
 
-const loadMyStatus = async ({ userId, organizationId }) => {
+const loadMyStatus = async ({ userId, organizationId, attendanceOn }) => {
   try {
-    const today = await attendanceService.getTodayAttendance({
-      userId,
-      organizationId,
-    });
-    return myStatusFromAttendance(today);
+    const { presenceStatus, actions } =
+      await attendanceService.getAttendanceActions({ userId, organizationId });
+    return {
+      ...myStatusFromAttendance({ attendance: { presenceStatus } }),
+      ...(attendanceOn ? actions : attendanceService.noActions),
+    };
   } catch (error) {
     // Manager memberships (including site managers) do not require a StaffProfile.
     // Treat the attendance service's missing-profile error as a normal status.
@@ -26,7 +27,10 @@ const loadMyStatus = async ({ userId, organizationId }) => {
       error?.translationKey === "staff_profile_not_found" ||
       error?.message === "staff_profile_not_found"
     ) {
-      return myStatusFromAttendance(null);
+      return {
+        ...myStatusFromAttendance(null),
+        ...attendanceService.noActions,
+      };
     }
     throw error;
   }

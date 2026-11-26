@@ -980,6 +980,59 @@ const getTodayAttendance = async ({ userId, organizationId }) => {
   };
 };
 
+const noActions = {
+  canCheckIn: false,
+  canCheckOut: false,
+  canStartBreak: false,
+  canEndBreak: false,
+};
+
+const getAttendanceActions = async ({
+  userId,
+  organizationId,
+  now = new Date(),
+}) => {
+  const profile = await requireStaffProfile(userId, organizationId);
+  const [open, latest, settings, onLeave] = await Promise.all([
+    getOpenAttendanceDay(profile._id),
+    latestAttendanceForWorkDate(profile._id, startOfUtcDay(now)),
+    getBranchSettings(profile.branchId),
+    assertNotOnSickOrAbsence(profile._id, now).then(
+      () => false,
+      (error) => {
+        if (error.translationKey === "staff_on_sick_or_absence") return true;
+        throw error;
+      },
+    ),
+  ]);
+
+  const shift = open?.shiftId
+    ? await Shift.findById(open.shiftId).select("endsAt").lean()
+    : null;
+  const expired = Boolean(
+    open && autoCheckoutDueAtMs(open, shift, settings) <= now.getTime(),
+  );
+  const session = open && !expired ? open : null;
+  const onBreak = session?.presenceStatus === PresenceStatus.ON_BREAK;
+  const stale = expired && String(latest?._id) === String(open._id);
+
+  return {
+    presenceStatus: session
+      ? session.presenceStatus
+      : stale
+        ? PresenceStatus.CHECKED_OUT
+        : latest?.presenceStatus || null,
+    actions: {
+      canCheckIn:
+        !session && !onLeave && Boolean(settings.allowPhoneCheckIn),
+      canCheckOut: Boolean(session) && !onBreak,
+      canStartBreak:
+        Boolean(session) && !onBreak && Boolean(settings.enableBreaks),
+      canEndBreak: onBreak,
+    },
+  };
+};
+
 const clockIn = async ({
   userId,
   organizationId,
@@ -3045,6 +3098,8 @@ const sicknessRateReport = async ({
 
 module.exports = {
   sicknessRateReport,
+  getAttendanceActions,
+  noActions,
   getTodayAttendance,
   getStaffAttendanceSnapshot,
   shapeStaffAttendance,

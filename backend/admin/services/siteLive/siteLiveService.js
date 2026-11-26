@@ -74,6 +74,7 @@ const getSiteLive = async ({
   organizationId,
   branchId,
   familyOn = false,
+  attendanceOn = false,
 }) => {
   const liveBranchId = await resolveLiveBranchId({
     actor,
@@ -128,7 +129,7 @@ const getSiteLive = async ({
         limit: KIOSK_LIMIT,
         skip: 0,
       }),
-      loadMyStatus({ userId: actor._id, organizationId }),
+      loadMyStatus({ userId: actor._id, organizationId, attendanceOn }),
       listSiteActivity({
         branchId: liveBranchId,
         page: 1,

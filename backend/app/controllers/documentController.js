@@ -148,7 +148,7 @@ const bulkUpload = respond(
 );
 
 const publicBaseUrl = (req) =>
-  (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`).replace(
+  (process.env.FRONTEND_URL || `${req.protocol}://${req.get("host")}`).replace(
     /\/+$/,
     "",
   );

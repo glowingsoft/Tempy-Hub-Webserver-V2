@@ -636,7 +636,7 @@ const createDataDownload = respond((req) =>
     userId: req.user._id,
     password: req.body?.password,
     baseUrl: (
-      process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`
+      process.env.FRONTEND_URL || `${req.protocol}://${req.get("host")}`
     ).replace(/\/+$/, ""),
   }),
 );

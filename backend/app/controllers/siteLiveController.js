@@ -181,7 +181,7 @@ const exportCompliance = async (req, res) => {
       branchId: req.query.branchId,
       format: req.query.format,
     });
-    const baseUrl = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`).replace(
+    const baseUrl = (process.env.FRONTEND_URL || `${req.protocol}://${req.get("host")}`).replace(
       /\/+$/,
       "",
     );

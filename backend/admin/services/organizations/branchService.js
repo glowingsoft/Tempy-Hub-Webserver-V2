@@ -322,10 +322,6 @@ const assignExistingBranchManager = async ({
     if (existing.role === MembershipRole.OWNER) {
       throw new AppError("owner_cannot_be_branch_manager", 400);
     }
-    if (existing.role !== MembershipRole.SITE_MANAGER) {
-      const hasProfile = await StaffProfile.exists({ userId, organizationId });
-      if (hasProfile) throw new AppError("manager_cannot_have_staff_profile", 400);
-    }
     existing.role = MembershipRole.SITE_MANAGER;
     existing.branchId = branchId;
     existing.status = ActiveInactiveStatus.ACTIVE;
@@ -339,9 +335,6 @@ const assignExistingBranchManager = async ({
     existing.status = ActiveInactiveStatus.ACTIVE;
     await existing.save({ validateModifiedOnly: true });
   } else {
-    const hasProfile = await StaffProfile.exists({ userId, organizationId });
-    if (hasProfile) throw new AppError("manager_cannot_have_staff_profile", 400);
-
     try {
       await Membership.create({
         userId,
@@ -359,6 +352,10 @@ const assignExistingBranchManager = async ({
   await Branch.updateOne(
     { _id: branchId, organizationId },
     { $set: { managerUserId: userId } }
+  );
+  await StaffProfile.updateOne(
+    { userId, organizationId, branchId: { $ne: branchId } },
+    { $set: { branchId } }
   );
 };
 

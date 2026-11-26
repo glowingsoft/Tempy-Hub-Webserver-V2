@@ -18,6 +18,7 @@ const {
   emptyStatusTabCounts,
 } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
+const { assertMayDecideForStaff } = require("@adminServices/staff/staffAccess");
 const {
   LeaveType,
   LeaveRequestStatus,
@@ -1231,6 +1232,11 @@ const approveLeaveRequest = async ({
     managerStaffId,
   });
 
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: request.staffId,
+  });
   const year = entitlementYearFromDate(request.startDate);
   const holidayDates = parseLeaveDates(request.startDate, request.endDate, {
     allowPast: true,
@@ -1320,6 +1326,11 @@ const rejectLeaveRequest = async ({
     managerStaffId,
   });
 
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: request.staffId,
+  });
   request.status = LeaveRequestStatus.REJECTED;
   request.decidedBy = actor._id;
   request.decidedAt = new Date();
@@ -1361,6 +1372,11 @@ const recordManagerLeave = async ({
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, profile.branchId);
 
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: profile._id,
+  });
   const dates = parseLeaveDates(startDate, endDate, { allowPast: true });
   const days = assertLeaveTotalDays(totalDays, dates.calendarDays);
 
@@ -1433,6 +1449,11 @@ const closeLeaveRequest = async ({ actor, organizationId, requestId }) => {
     request.branchId || (await staffBranchForScope(request.staffId))
   );
 
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: request.staffId,
+  });
   const year = entitlementYearFromDate(request.startDate);
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -1520,6 +1541,11 @@ const upsertEntitlement = async ({
   const profile = await getStaffProfileOrThrow(staffId, organizationId);
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, profile.branchId);
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: profile._id,
+  });
   assertKnownLeaveType(leaveType);
 
   const type = leaveType || LeaveType.ANNUAL;

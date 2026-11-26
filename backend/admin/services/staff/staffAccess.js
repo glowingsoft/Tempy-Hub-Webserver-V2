@@ -28,10 +28,11 @@ const TEAM_APPROVER_ROLES = [
   MembershipRole.LINE_MANAGER,
 ];
 
-/** Clock-in / rota profile. Owner and Site Manager are manager logins only. */
+/** Clock-in / rota profile. Owner is a manager login only. */
 const STAFF_PROFILE_ROLES = [
   MembershipRole.STAFF,
   MembershipRole.LINE_MANAGER,
+  MembershipRole.SITE_MANAGER,
 ];
 
 const isPlatformAdmin = (actor) => actor?.userType === "admin";
@@ -364,6 +365,36 @@ const assertOneActiveMembershipPerOrg = async (userId, organizationId) => {
   if (exists) throw new AppError("membership_already_exists", 409);
 };
 
+const assertMayDecideForStaff = async ({
+  standing,
+  organizationId,
+  targetStaffId,
+}) => {
+  if (
+    [MembershipRole.SUPER_ADMIN, MembershipRole.OWNER].includes(standing.role)
+  ) {
+    return;
+  }
+
+  const target = await StaffProfile.findOne({
+    _id: targetStaffId,
+    organizationId,
+  })
+    .select("userId")
+    .lean();
+  if (!target) return;
+
+  const isSiteManager = await Membership.exists({
+    userId: target.userId,
+    organizationId,
+    role: MembershipRole.SITE_MANAGER,
+    status: ActiveInactiveStatus.ACTIVE,
+  });
+  if (isSiteManager) {
+    throw new AppError("site_manager_needs_owner_approval", 403);
+  }
+};
+
 const assertRoleMayHaveStaffProfile = (role) => {
   if (!STAFF_PROFILE_ROLES.includes(role)) {
     throw new AppError("manager_cannot_have_staff_profile", 400);
@@ -378,6 +409,7 @@ module.exports = {
   assertMayManageStaff,
   assertOneActiveMembershipPerOrg,
   assertRoleMayHaveStaffProfile,
+  assertMayDecideForStaff,
   assertMayApproveForStaff,
   assertMaySuperviseStaff,
   assertBranchInOrganization,

@@ -21,6 +21,7 @@ const {
 } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
+const { assertMayDecideForStaff } = require("@adminServices/staff/staffAccess");
 const {
   CheckInMethod,
   PunctualityStatus,
@@ -1884,6 +1885,11 @@ const updateAttendanceDay = async ({
 
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, day.branchId);
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: day.staffId,
+  });
 
   if (clockInAt !== undefined) day.clockInAt = new Date(clockInAt);
   if (clockOutAt !== undefined)
@@ -1988,6 +1994,11 @@ const approveChangeRequest = async ({
     managerStaffId,
   });
 
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: day.staffId,
+  });
   const payload = request.payload || {};
   for (const key of CORRECTABLE_FIELDS) {
     if (payload[key] !== undefined) day[key] = payload[key];
@@ -2036,6 +2047,11 @@ const rejectChangeRequest = async ({
     managerStaffId,
   });
 
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: day.staffId,
+  });
   request.status = ChangeRequestStatus.REJECTED;
   request.reviewedBy = actor._id;
   await request.save();
@@ -2095,6 +2111,11 @@ const approveRosterForDay = async ({
   const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, day.branchId);
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: day.staffId,
+  });
 
   if (day.rosterRequestStatus === RosterRequestStatus.APPROVED && day.shiftId) {
     const shift = await getShift({
@@ -2137,6 +2158,11 @@ const rejectRosterForDay = async ({
   const day = await loadAttendanceDayInOrg(attendanceDayId, organizationId);
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, day.branchId);
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: day.staffId,
+  });
 
   if (day.rosterRequestStatus === RosterRequestStatus.APPROVED || day.shiftId) {
     throw new AppError("attendance_already_rostered", 409);

@@ -16,6 +16,7 @@ const {
 } = require("@utils/paginate");
 const { generateMeta } = require("@utils/responseUtil");
 const { AppError } = require("@services/_errors/AppError");
+const { assertMayDecideForStaff } = require("@adminServices/staff/staffAccess");
 const {
   ShiftStatus,
   ShiftVisibility,
@@ -1089,6 +1090,11 @@ const approveClaim = async ({ actor, organizationId, claimId, decisionNote }) =>
 
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, shift.branchId);
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: claim.staffId,
+  });
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -1158,6 +1164,11 @@ const rejectClaim = async ({ actor, organizationId, claimId, decisionNote }) => 
   const shift = await Shift.findById(claim.shiftId).select("branchId startsAt").lean();
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, shift?.branchId);
+  await assertMayDecideForStaff({
+    standing,
+    organizationId,
+    targetStaffId: claim.staffId,
+  });
 
   claim.status = ShiftClaimStatus.REJECTED;
   claim.decidedBy = actor._id;

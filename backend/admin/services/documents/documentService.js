@@ -8,7 +8,8 @@ const { DocumentSignature } = require("@models/DocumentSignature");
 const { User } = require("@models/UserModel");
 const { StaffProfile } = require("@models/StaffProfile");
 const { ExternalPerson } = require("@models/ExternalPerson");
-const { paginateWithFacet, keywordOr } = require("@utils/paginate");
+const { paginateWithFacet, keywordOr, facetCount } = require("@utils/paginate");
+const { generateMeta } = require("@utils/responseUtil");
 const { toPublicImageUrl } = require("@utils/imageHelper");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
@@ -24,6 +25,7 @@ const {
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./documentAccess");
+const { resolveSubordinates } = require("@adminServices/staff/staffAccess");
 const {
   resolveCategoryId,
   ensureDocumentCategories,
@@ -116,10 +118,138 @@ const shapeDocument = (row) => {
         }
       : null,
     file,
+    ...(row.signature ? { signature: row.signature } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 };
+
+/** Summary counts; a row can also be "noTeam", which the summary leaves out. */
+const SIGNATURE_STATUSES = ["waiting", "signed", "notRequired"];
+
+/**
+ * Active staff whose signatures a manager follows: a line manager's direct reports, a site
+ * manager's site, everyone in the organization for an owner. Null for staff, who get no counts.
+ */
+const signerPool = async (standing, actor, organizationId) => {
+  if (standing.role === MembershipRole.STAFF) return null;
+  const rows =
+    standing.role === MembershipRole.LINE_MANAGER
+      ? await resolveSubordinates({ userId: actor._id, organizationId })
+      : await StaffProfile.find({
+          organizationId,
+          ...(standing.role === MembershipRole.SITE_MANAGER
+            ? { branchId: standing.branchId }
+            : {}),
+        })
+          .select("_id branchId status")
+          .lean();
+  return rows
+    .filter((row) => row.status === StaffProfileStatus.ACTIVE)
+    .map((row) => ({ _id: row._id, branchId: row.branchId || null }));
+};
+
+/** Adds signature: { status, team, signed, toSign } against the current version. */
+const signatureStages = (pool) => [
+  {
+    $addFields: {
+      _signable: {
+        $and: [
+          { $ne: ["$requiresSignature", false] },
+          { $ne: [{ $ifNull: ["$currentVersionId", null] }, null] },
+          { $ne: ["$scope", DocumentScope.PERSONAL] },
+          {
+            $or: [
+              { $eq: [{ $size: { $ifNull: ["$audiences", []] } }, 0] },
+              { $in: [DocumentAudience.STAFF, { $ifNull: ["$audiences", []] }] },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  {
+    // A site document applies to that site's staff; an organization one to all of them.
+    $addFields: {
+      _team: {
+        $cond: [
+          "$_signable",
+          {
+            $map: {
+              input: {
+                $filter: {
+                  input: { $literal: pool },
+                  as: "person",
+                  cond: {
+                    $or: [
+                      { $eq: [{ $ifNull: ["$branchId", null] }, null] },
+                      { $eq: ["$$person.branchId", "$branchId"] },
+                    ],
+                  },
+                },
+              },
+              as: "person",
+              in: "$$person._id",
+            },
+          },
+          [],
+        ],
+      },
+    },
+  },
+  {
+    $lookup: {
+      from: DocumentSignature.collection.name,
+      let: { versionId: "$currentVersionId", team: "$_team" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$documentVersionId", "$$versionId"] },
+                { $in: ["$signerStaffId", "$$team"] },
+              ],
+            },
+          },
+        },
+        { $group: { _id: "$signerStaffId" } },
+        { $count: "count" },
+      ],
+      as: "_signed",
+    },
+  },
+  {
+    $addFields: {
+      _counts: {
+        team: { $size: "$_team" },
+        signed: { $ifNull: [{ $arrayElemAt: ["$_signed.count", 0] }, 0] },
+      },
+    },
+  },
+  {
+    $addFields: {
+      signature: {
+        status: {
+          $switch: {
+            branches: [
+              { case: { $not: ["$_signable"] }, then: "notRequired" },
+              { case: { $eq: ["$_counts.team", 0] }, then: "noTeam" },
+              {
+                case: { $lt: ["$_counts.signed", "$_counts.team"] },
+                then: "waiting",
+              },
+            ],
+            default: "signed",
+          },
+        },
+        team: "$_counts.team",
+        signed: "$_counts.signed",
+        toSign: { $subtract: ["$_counts.team", "$_counts.signed"] },
+      },
+    },
+  },
+  { $project: { _signable: 0, _team: 0, _signed: 0, _counts: 0 } },
+];
 
 const versionLookup = [
   {
@@ -223,17 +353,42 @@ const listDocuments = async ({
   const search = keywordOr(keyword, ["title"], { trim: true });
   if (search) match.$and = [...(match.$and || []), { $or: search }];
 
-  const { data, meta } = await paginateWithFacet({
-    model: Document,
-    match,
-    page,
-    limit,
-    skip,
-    sort: { createdAt: -1 },
-    extraDataStages: versionLookup,
-  });
+  const pool = await signerPool(standing, actor, organizationId);
+  const [result] = await Document.aggregate([
+    { $match: match },
+    ...(pool ? signatureStages(pool) : []),
+    {
+      $facet: {
+        data: [
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          ...versionLookup,
+        ],
+        totalCount: [{ $count: "count" }],
+        ...(pool
+          ? {
+              signatureSummary: [
+                { $group: { _id: "$signature.status", count: { $sum: 1 } } },
+              ],
+            }
+          : {}),
+      },
+    },
+  ]);
 
-  return { data: data.map(shapeDocument), meta };
+  const meta = generateMeta(page, limit, facetCount(result?.totalCount));
+  if (pool) {
+    meta.signatureSummary = Object.fromEntries(
+      SIGNATURE_STATUSES.map((status) => [status, 0]),
+    );
+    for (const row of result?.signatureSummary || []) {
+      if (row._id in meta.signatureSummary) {
+        meta.signatureSummary[row._id] = row.count;
+      }
+    }
+  }
+  return { data: (result?.data || []).map(shapeDocument), meta };
 };
 
 const getDocument = async ({ actor, organizationId, documentId }) => {
@@ -261,12 +416,20 @@ const createDocument = async ({
   const name = String(title || "").trim();
   if (!name) throw new AppError("document_title_required", 400);
 
+  // Site and line managers upload only to their own site.
   let siteId = branchId || null;
-  if (standing.role === MembershipRole.SITE_MANAGER) {
+  if (
+    standing.role === MembershipRole.SITE_MANAGER ||
+    standing.role === MembershipRole.LINE_MANAGER
+  ) {
     siteId = standing.branchId;
   }
   if (siteId) await assertBranchInOrganization(siteId, organizationId);
-  assertMayManageStaff(standing, siteId || standing.branchId);
+  if (standing.role === MembershipRole.LINE_MANAGER) {
+    if (!siteId) throw new AppError("outside_managed_branch", 403);
+  } else {
+    assertMayManageStaff(standing, siteId || standing.branchId);
+  }
 
   const storedFile = parseStoredFile(file);
   const resolvedCategoryId = await resolveCategoryId({

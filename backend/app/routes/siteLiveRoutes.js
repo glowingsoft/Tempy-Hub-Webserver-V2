@@ -22,23 +22,31 @@ const router = express.Router();
 // The signed token is a short-lived bearer link, so this download route is public.
 router.get("/compliance/download/:token", downloadComplianceExport);
 
-router.use(
-  auth,
-  requireMembership(),
-  requireRoles([
-    MembershipRole.SUPER_ADMIN,
-    MembershipRole.OWNER,
-    MembershipRole.SITE_MANAGER,
-  ]),
-);
+const SITE_MANAGERS = [
+  MembershipRole.SUPER_ADMIN,
+  MembershipRole.OWNER,
+  MembershipRole.SITE_MANAGER,
+];
+const asSiteManager = requireRoles(SITE_MANAGERS);
+// Line managers see compliance for their own team only (scoped in the service).
+const asTeamManager = requireRoles([
+  ...SITE_MANAGERS,
+  MembershipRole.LINE_MANAGER,
+]);
 
-router.get("/activity", getSiteLiveActivity);
-router.get("/people", listPeople);
-router.get("/directory", listDirectory);
-router.get("/statistics", getStatistics);
-router.get("/compliance", getCompliance);
-router.get("/compliance/export", exportCompliance);
-router.post("/people/:personKind/:recordId/check-out", checkOutPerson);
-router.get("/", getSiteLive);
+router.use(auth, requireMembership());
+
+router.get("/compliance", asTeamManager, getCompliance);
+router.get("/compliance/export", asTeamManager, exportCompliance);
+router.get("/activity", asSiteManager, getSiteLiveActivity);
+router.get("/people", asSiteManager, listPeople);
+router.get("/directory", asSiteManager, listDirectory);
+router.get("/statistics", asSiteManager, getStatistics);
+router.post(
+  "/people/:personKind/:recordId/check-out",
+  asSiteManager,
+  checkOutPerson,
+);
+router.get("/", asSiteManager, getSiteLive);
 
 module.exports = router;

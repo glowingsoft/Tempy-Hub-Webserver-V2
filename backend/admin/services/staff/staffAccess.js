@@ -227,6 +227,17 @@ const resolveSubordinates = async ({
     .lean();
 };
 
+/**
+ * A line manager's team for the team screens (Team Compliance, drill roll call):
+ * their direct reports plus the staff they supervise. A Mongo match fragment.
+ */
+const lineTeamMatch = (managerStaffId) => ({
+  $or: [
+    { reportsToStaffId: managerStaffId },
+    { supervisorStaffId: managerStaffId },
+  ],
+});
+
 const resolveSuperviseeStaffIds = async ({ userId, organizationId }) => {
   if (!userId || !organizationId) return [];
   const manager = await StaffProfile.findOne({ userId, organizationId })
@@ -384,6 +395,7 @@ module.exports = {
   scopeBranchFilter,
   resolveSubordinates,
   resolveSubordinateStaffIds,
+  lineTeamMatch,
   applyLineManagerStaffScope,
   resolveScopedStaffIds,
   resolveSuperviseeStaffIds,

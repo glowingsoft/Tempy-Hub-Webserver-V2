@@ -23,6 +23,17 @@ const { resolveLiveBranchId } = require("@adminServices/siteLive/siteLiveService
 const { actorStanding, assertMayManageStaff } = require("@adminServices/staff/staffAccess");
 const { toObjectId, isValidObjectId } = require("@appServices/family/familyPipeline");
 
+/** Log A Drill: managers as before; a line manager only at their own site. */
+const assertMayLogDrill = (standing, branchId) => {
+  if (standing.role !== MembershipRole.LINE_MANAGER) {
+    assertMayManageStaff(standing, branchId);
+    return;
+  }
+  if (!standing.branchId || String(standing.branchId) !== String(branchId)) {
+    throw new AppError("outside_managed_branch", 403);
+  }
+};
+
 const DEFAULT_TZ = "Europe/London";
 const YEARLY_TARGET = 4;
 const NIGHT_FROM = 20;
@@ -124,6 +135,7 @@ const presentHistory = (event, timezone) => {
     cause: event.cause || "",
     issues,
     residentsMoved: event.residentsMoved ?? null,
+    participants: event.participants ?? null,
     notes: event.notes || "",
   };
 };
@@ -205,6 +217,7 @@ const cleanDetails = (body) => {
     cause: text(body.cause, MAX_CAUSE, "cause"),
     notes: text(body.notes, MAX_NOTES, "notes"),
     residentsMoved: wholeNumber(body.residentsMoved, 1000, "residentsMoved"),
+    participants: wholeNumber(body.participants, 1000, "participants"),
   };
   if (body.issues !== undefined) {
     if (!Array.isArray(body.issues) || body.issues.length > MAX_ISSUES)
@@ -235,7 +248,7 @@ const logDrill = async ({ actor, organizationId, branchId, body = {}, now = new 
       ? await Branch.findOne({ _id: event.branchId, organizationId }).select("timezone").lean()
       : null;
     if (!branch) throw new AppError("evacuation_event_not_found", 404);
-    assertMayManageStaff(await actorStanding(actor, organizationId), event.branchId);
+    assertMayLogDrill(await actorStanding(actor, organizationId), event.branchId);
     if (event.status !== EvacuationStatus.CLOSED)
       throw new AppError("evacuation_still_active", 409);
 
@@ -248,7 +261,7 @@ const logDrill = async ({ actor, organizationId, branchId, body = {}, now = new 
   }
 
   const siteId = await resolveLiveBranchId({ actor, organizationId, branchId });
-  assertMayManageStaff(await actorStanding(actor, organizationId), siteId);
+  assertMayLogDrill(await actorStanding(actor, organizationId), siteId);
   const kind = assertKind(body.kind, { required: true });
   const startedAt = typeof body.startedAt === "string" ? new Date(body.startedAt) : null;
   if (!startedAt || Number.isNaN(startedAt.getTime()) || startedAt > now)

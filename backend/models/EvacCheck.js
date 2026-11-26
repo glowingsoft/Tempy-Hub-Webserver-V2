@@ -25,6 +25,12 @@ const evacCheckSchema = new mongoose.Schema(
       default: EvacCheckStatus.UNKNOWN,
     },
     markedAt: { type: Date, required: true },
+    /** Who marked the person, when someone else did (e.g. their line manager). */
+    markedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     /**
      * Where the person was when they marked safe. The label is authoritative —
      * care homes are indoors, where GPS drifts far enough that a coordinate can

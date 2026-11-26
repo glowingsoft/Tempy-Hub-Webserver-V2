@@ -1,4 +1,7 @@
 {
   "owner_email_already_used": "Este correo electrónico ya está en uso para otra organización.",
-	"data_fetched": "Recuperado con éxito"
+	"data_fetched": "Recuperado con éxito",
+  "invalid_compliance_tab": "La pestaña debe ser supervision, appraisal, competency o training",
+  "invalid_compliance_filter": "Elige un puesto o un miembro del personal, no ambos",
+  "invalid_job_title_id": "ID de puesto no válido"
 }

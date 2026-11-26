@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title><%= title %></title>
+<style>
+<%- fontCss %>
+@page {
+  size: A4;
+  margin: 45pt 45pt 80pt 45pt;
+  @bottom-left { content: <%- cssString(footerLabel) %>; font: 10.5pt Arimo, Arial, sans-serif; color: <%= colors.muted %>; vertical-align: top; padding-top: 14pt; border-top: 0.8pt solid <%= colors.line %>; }
+  @bottom-right { content: "Page " counter(page); font: 10.5pt Arimo, Arial, sans-serif; color: <%= colors.muted %>; text-align: right; vertical-align: top; padding-top: 14pt; border-top: 0.8pt solid <%= colors.line %>; }
+}
+html { background: #fff; color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arimo, Arial, sans-serif; font-size: 12pt; color: <%= colors.ink %>; -webkit-print-color-adjust: exact; }
+.serif { font-family: Tinos, "Times New Roman", serif; font-weight: 700; }
+.low { color: <%= colors.accent %>; }
+
+.header { background: <%= colors.navy %>; color: #fff; border-radius: 10pt; height: 120pt; padding: 28pt; }
+.header .home { font-size: 10pt; letter-spacing: 1.5pt; text-transform: uppercase; color: #c9d3e2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header .title { font-size: 30pt; line-height: 1.15; margin-top: 8pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.header .period { font-size: 11pt; color: #c9d3e2; margin-top: 8pt; }
+
+.tab { margin-top: 28pt; }
+.tab-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1.2pt solid <%= colors.navy %>; padding-bottom: 6pt; margin-bottom: 12pt; }
+.tab-head .name { font-size: 20pt; color: <%= colors.navy %>; }
+.tab-head .score { font-size: 20pt; color: <%= colors.navy %>; }
+.heading { font-size: 13pt; color: <%= colors.navy %>; margin: 14pt 0 9pt; }
+
+.bar { display: flex; align-items: center; gap: 12pt; margin-bottom: 9pt; break-inside: avoid; }
+.bar .name { width: 160pt; flex: none; font-size: 11pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .track { flex: 1; height: 8pt; background: <%= colors.soft %>; border-radius: 4pt; }
+.bar .fill { height: 8pt; background: <%= colors.navy %>; border-radius: 4pt; }
+.bar .percent { width: 50pt; flex: none; text-align: right; font-weight: 700; font-size: 11pt; }
+
+table { width: 100%; border-collapse: collapse; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { text-align: left; background: <%= colors.soft %>; color: <%= colors.navy %>; font-size: 9.5pt; padding: 7pt 8pt; }
+td { font-size: 10.5pt; padding: 7pt 8pt; border-bottom: 0.8pt solid <%= colors.line %>; }
+td.name { font-weight: 700; }
+th.right, td.right { text-align: right; }
+.empty { font-size: 11pt; color: <%= colors.muted %>; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="home"><%= siteName %></div>
+  <div class="title serif"><%= title %></div>
+  <div class="period"><%= dateLabel %></div>
+</div>
+
+<% const bars = (rows) => { rows.forEach((row) => { %>
+  <div class="bar">
+    <div class="name"><%= row.name %></div>
+    <div class="track"><div class="fill" style="width: <%= row.width %>%"></div></div>
+    <div class="percent<%= row.low ? ' low' : '' %>"><%= row.value %></div>
+  </div>
+<% }) } %>
+
+<% sections.forEach((section) => { %>
+<div class="tab">
+  <div class="tab-head">
+    <div class="name serif"><%= section.label %></div>
+    <div class="score serif<%= section.low ? ' low' : '' %>"><%= section.score %></div>
+  </div>
+
+  <% if (section.departments.length) { %>
+  <div class="heading serif">By department</div>
+  <% bars(section.departments) %>
+  <% } %>
+
+  <% if (section.items.length) { %>
+  <div class="heading serif">By <%= section.itemLabel.toLowerCase() %></div>
+  <% bars(section.items) %>
+  <% } %>
+
+  <div class="heading serif">Staff</div>
+  <% if (section.staff.length) { %>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Done</th><th class="right"><%= section.label %></th></tr>
+    </thead>
+    <tbody>
+      <% section.staff.forEach((person) => { %>
+      <tr>
+        <td class="name"><%= person.name %></td>
+        <td><%= person.done %></td>
+        <td class="right<%= person.low ? ' low' : '' %>"><b><%= person.value %></b></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <% } else { %>
+  <div class="empty">There are no staff to show.</div>
+  <% } %>
+</div>
+<% }) %>
+</body>
+</html>

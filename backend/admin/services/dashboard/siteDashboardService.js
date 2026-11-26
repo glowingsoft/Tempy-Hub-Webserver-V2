@@ -14,6 +14,7 @@ const { AttendanceDay } = require("@models/AttendanceDay");
 const {
   AdmissionStatus,
   ExternalPersonType,
+  MembershipRole,
   PresenceStatus,
   VisitSessionStatus,
 } = require("@models/domainEnums");
@@ -37,6 +38,10 @@ const {
 } = require("@adminServices/siteLive/siteActivityQuery");
 const { complianceSnapshot, openShifts } = require("./ownerDashboardService");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
+const {
+  actorStanding,
+  resolveSubordinateStaffIds,
+} = require("@adminServices/staff/staffAccess");
 
 const ACTIVITY_PERIODS = ["thisWeek", "thisMonth", "thisYear"];
 const ACTIVITY_TZ = "Europe/London";
@@ -540,11 +545,18 @@ const buildSiteCompliance = async ({
     { $project: { name: 1, timezone: 1 } },
   ]);
   const timezone = branch?.timezone || ACTIVITY_TZ;
+  // A line manager sees only their direct reports on their own site.
+  const standing = await actorStanding(actor, organizationId);
+  const staffIds =
+    standing.role === MembershipRole.LINE_MANAGER
+      ? await resolveSubordinateStaffIds({ userId: actor._id, organizationId })
+      : null;
   const snapshot = await complianceSnapshot({
     organization: toObjectId(organizationId),
     branchZones: new Map([[String(siteId), branch?.timezone]]),
     now,
     branchId: siteId,
+    staffIds,
   });
   const { staff, supervisionStandings, appraisalStandings } = snapshot.detail;
   const { people, departments } = await staffDetails(staff);

@@ -3817,14 +3817,14 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"kind\": \"compartment\",\n  \"startedAt\": \"2026-09-04T12:00:00.000Z\",\n  \"durationSeconds\": 360,\n  \"area\": \"East Wing\",\n  \"residentsMoved\": 9,\n  \"issues\": [],\n  \"notes\": \"\"\n}",
+                  "raw": "{\n  \"kind\": \"compartment\",\n  \"startedAt\": \"2026-09-04T12:00:00.000Z\",\n  \"durationSeconds\": 360,\n  \"area\": \"East Wing\",\n  \"participants\": 9,\n  \"residentsMoved\": 9,\n  \"issues\": [],\n  \"notes\": \"\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
                     }
                   }
                 },
-                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Log A Drill. To record one that already happened: kind (day, night, compartment or falseAlarm), startedAt (ISO, not in the future), durationSeconds (up to 86400), and optionally area (80), cause (120), issues (up to 20 texts of 200), residentsMoved (0 to 1000), notes (1000), branchId (owner). To add details to an evacuation that has ended: evacuationEventId with any of kind, area, cause, issues, residentsMoved, notes (409 evacuation_still_active while it is running; 404 evacuation_event_not_found). 400 invalid_drill_log names the field. Returns the history row (201)."
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Log A Drill. To record one that already happened: kind (day, night, compartment or falseAlarm), startedAt (ISO, not in the future), durationSeconds (up to 86400), and optionally area (80), cause (120), issues (up to 20 texts of 200), residentsMoved (0 to 1000), notes (1000), branchId (owner). To add details to an evacuation that has ended: evacuationEventId with any of kind, area, cause, issues, residentsMoved, participants, notes (409 evacuation_still_active while it is running; 404 evacuation_event_not_found). 400 invalid_drill_log names the field. Returns the history row (201)."
               },
               "response": []
             },
@@ -13444,6 +13444,715 @@
                     }
                   ]
                 }
+              },
+              "response": []
+            },
+            {
+              "name": "team compliance",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Team compliance fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().data.scores).to.be.an(\"object\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/compliance/team?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "compliance",
+                    "team"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "tab",
+                      "value": "supervision",
+                      "description": "supervision | appraisal | competency | training. Leave out for all 4.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "jobTitleId",
+                      "value": "",
+                      "description": "Dropdown 'Role: ...' (job title). Not with staffId.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "",
+                      "description": "Dropdown: one person. Not with jobTitleId.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "",
+                      "description": "Owner / super admin only (required for them).",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Team Compliance screen (Supervision / Appraisal / Competency / Training tabs). Line manager: direct reports on own site. Site manager: own site. Owner: pass branchId. Returns scores, byDepartment, byItem (competency & training), staff rows with percent + level (green >= 90, amber >= 70, red, notDue). filters (roles + staff for the dropdown) only on page 1."
+              },
+              "response": []
+            },
+            {
+              "name": "team compliance export",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Export links returned\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    const data = pm.response.json().data;",
+                      "    pm.expect(data.csv.url).to.be.a(\"string\");",
+                      "    pm.expect(data.pdf.url).to.be.a(\"string\");",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/compliance/team/export",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "compliance",
+                    "team",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "supervision",
+                      "description": "supervision | appraisal | competency | training. Leave out for all 4.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "jobTitleId",
+                      "value": "",
+                      "description": "Dropdown 'Role: ...' (job title). Not with staffId.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "staffId",
+                      "value": "",
+                      "description": "Dropdown: one person. Not with jobTitleId.",
+                      "disabled": true
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "",
+                      "description": "Owner / super admin only (required for them).",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Export CSV + PDF for the same tab and filter (all tabs when tab is left out). Returns short-lived download links."
+              },
+              "response": []
+            },
+            {
+              "name": "residents (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Residents fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/residents?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "residents"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "keyword",
+                      "value": "",
+                      "disabled": true,
+                      "description": "Search by name"
+                    }
+                  ]
+                },
+                "description": "Residents screen for the line manager (own site). Shows name, roomNumber, restricted, restrictedReason, visitorPasscodeRequired and visitorPasscode. The app /app/residents route is for site managers and above only."
+              },
+              "response": []
+            },
+            {
+              "name": "resident details (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Resident fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/residents/{{residentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "residents",
+                    "{{residentId}}"
+                  ]
+                },
+                "description": "Opened from the arrow on the Residents screen."
+              },
+              "response": []
+            },
+            {
+              "name": "resident family members (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Family members fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/family/residents/{{residentId}}/members",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "residents",
+                    "{{residentId}}",
+                    "members"
+                  ]
+                },
+                "description": "Next of kin (isNextOfKin: true) and family member count for the resident screen. Needs the Family module and family.view."
+              },
+              "response": []
+            },
+            {
+              "name": "resident verify passcode (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Passcode verified\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visitorPasscode\": \"bluebell\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/residents/{{residentId}}/verify-passcode",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "residents",
+                    "{{residentId}}",
+                    "verify-passcode"
+                  ]
+                },
+                "description": "Check button. 200 { ok: true } when correct; 403 resident_passcode_invalid when wrong; 400 resident_passcode_not_set / resident_passcode_required."
+              },
+              "response": []
+            },
+            {
+              "name": "resident change passcode (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Passcode updated\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"visitorPasscode\": \"12345\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/residents/{{residentId}}/visitor-passcode",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "residents",
+                    "{{residentId}}",
+                    "visitor-passcode"
+                  ]
+                },
+                "description": "Change password button. Sets the resident visitor passcode (password)."
+              },
+              "response": []
+            },
+            {
+              "name": "site compliance (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Site compliance fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/compliance?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "compliance"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Site compliance (supervision by department and staff). For a line manager it covers their direct reports on their own site."
+              },
+              "response": []
+            },
+            {
+              "name": "site compliance export (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Export links returned\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/site-live/compliance/export?format=url",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "site-live",
+                    "compliance",
+                    "export"
+                  ],
+                  "query": [
+                    {
+                      "key": "format",
+                      "value": "url"
+                    }
+                  ]
+                },
+                "description": "CSV + PDF download links for site compliance. Line manager: their direct reports only."
+              },
+              "response": []
+            },
+            {
+              "name": "fire drills (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Fire drills fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Fire Drills screen: tracker (progress), history and active evacuation. Line manager: own site only, needs fireDrillEvacuation.view. Starting or logging a drill is still site manager and above."
+              },
+              "response": []
+            },
+            {
+              "name": "log a drill (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Drill logged\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"day\",\n  \"startedAt\": \"2026-10-20T12:00:00Z\",\n  \"durationSeconds\": 3,\n  \"area\": \"Whole home\",\n  \"participants\": 9,\n  \"issues\": [\n    \"Door 3 slow to close\"\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/evacuations/log",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "log"
+                  ]
+                },
+                "description": "Log a Drill screen. kind: day | night | compartment | falseAlarm. startedAt (not in the future), durationSeconds required. Optional: area, cause, notes, residentsMoved, participants, issues[]. Send evacuationEventId (of an ended drill) instead to add details to it. Line manager: own site only, needs fireDrillEvacuation.manage."
+              },
+              "response": []
+            },
+            {
+              "name": "drill in progress - my team (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Team roll call fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/team?page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "team"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Drill in progress: the line manager team (direct reports + supervisees, active, own site) for one evacuation. Row: staffId, name, photoUrl, department, onSite (on the roll call when the drill started), status (safe | unknown | missing | offSite), markedAt, markedBy. meta.summary: { safe, onSite, total }. Get evacuationEventId from GET /app/evacuations/active. Needs fireDrillEvacuation.view."
+              },
+              "response": []
+            },
+            {
+              "name": "drill in progress - mark safe (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Marked safe\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/team/{{staffId}}/safe",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "team",
+                    "{{staffId}}",
+                    "safe"
+                  ]
+                },
+                "description": "Mark safe on behalf of a team member. Active drills only (409 otherwise); member must be on the team (403 not_direct_report). Pressing again changes nothing. Updates the same roll call the site manager sees. Needs fireDrillEvacuation.manage."
               },
               "response": []
             }
@@ -34775,6 +35484,65 @@
                 "description": "The line manager dashboard in one call. Line manager only, and always their own site; everyone else gets 403. No query. Attendance figures cover the last 7 days (ending today, London time) at the line manager's site. summary (the cards): shiftsLogged (attendance records of those 7 days), onTime, late, attendanceRate (the same figure as Team Attendance: on time plus late against on time, late, sick and absence), familyUploadsWaiting (pending family uploads), wallPostsThisWeek (published wall posts, Monday onwards) and messagesSent (messages sent from the site this week, a message to many families counts once). teamAttendance (the Team attendance chart): one entry per day for the last 7 days, oldest first, {date, onTime, late}."
               },
               "response": []
+            },
+            {
+              "name": "Documents",
+              "item": [
+                {
+                  "name": "list documents (line manager)",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Documents fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.be.an(\"array\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/organizations/{{organizationId}}/documents?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "organizations",
+                        "{{organizationId}}",
+                        "documents"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        }
+                      ]
+                    },
+                    "description": "Documents list for the line manager (Documents & e-sign module, documentsEsign.view). Optional filters: branchId, keyword, categoryId, audience, scope, requiresSignature."
+                  },
+                  "response": []
+                }
+              ]
             }
           ]
         },
@@ -35924,6 +36692,466 @@
               ]
             },
             "description": "Marks one notification as read; no body. Use the notificationId saved by notifications. 404 notification_not_found for an unknown id."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Today APIs - 26 Nov 2026",
+      "description": "APIs created or changed for line managers on 26 Nov 2026. Use a line manager token and x-org-id.",
+      "item": [
+        {
+          "name": "team compliance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Team compliance fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.scores).to.be.an(\"object\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/compliance/team?page=1&limit=10",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "compliance",
+                "team"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "tab",
+                  "value": "supervision",
+                  "description": "supervision | appraisal | competency | training. Leave out for all 4.",
+                  "disabled": true
+                },
+                {
+                  "key": "jobTitleId",
+                  "value": "",
+                  "description": "Dropdown 'Role: ...' (job title). Not with staffId.",
+                  "disabled": true
+                },
+                {
+                  "key": "staffId",
+                  "value": "",
+                  "description": "Dropdown: one person. Not with jobTitleId.",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "",
+                  "description": "Owner / super admin only (required for them).",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Team Compliance screen (Supervision / Appraisal / Competency / Training tabs). Line manager: direct reports on own site. Site manager: own site. Owner: pass branchId. Returns scores, byDepartment, byItem (competency & training), staff rows with percent + level (green >= 90, amber >= 70, red, notDue). filters (roles + staff for the dropdown) only on page 1."
+          },
+          "response": []
+        },
+        {
+          "name": "team compliance export",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Export links returned\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.csv.url).to.be.a(\"string\");",
+                  "    pm.expect(data.pdf.url).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/compliance/team/export",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "compliance",
+                "team",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "tab",
+                  "value": "supervision",
+                  "description": "supervision | appraisal | competency | training. Leave out for all 4.",
+                  "disabled": true
+                },
+                {
+                  "key": "jobTitleId",
+                  "value": "",
+                  "description": "Dropdown 'Role: ...' (job title). Not with staffId.",
+                  "disabled": true
+                },
+                {
+                  "key": "staffId",
+                  "value": "",
+                  "description": "Dropdown: one person. Not with jobTitleId.",
+                  "disabled": true
+                },
+                {
+                  "key": "branchId",
+                  "value": "",
+                  "description": "Owner / super admin only (required for them).",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Export CSV + PDF for the same tab and filter (all tabs when tab is left out). Returns short-lived download links."
+          },
+          "response": []
+        },
+        {
+          "name": "site compliance (line manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Site compliance fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/site-live/compliance?page=1&limit=10",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "site-live",
+                "compliance"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Site compliance (supervision by department and staff). For a line manager it covers their direct reports on their own site."
+          },
+          "response": []
+        },
+        {
+          "name": "site compliance export (line manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Export links returned\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/site-live/compliance/export?format=url",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "site-live",
+                "compliance",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "url"
+                }
+              ]
+            },
+            "description": "CSV + PDF download links for site compliance. Line manager: their direct reports only."
+          },
+          "response": []
+        },
+        {
+          "name": "fire drills (line manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Fire drills fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/evacuations?page=1&limit=10",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "evacuations"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Fire Drills screen: tracker (progress), history and active evacuation. Line manager: own site only, needs fireDrillEvacuation.view. Starting or logging a drill is still site manager and above."
+          },
+          "response": []
+        },
+        {
+          "name": "log a drill (line manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Drill logged\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"day\",\n  \"startedAt\": \"2026-10-20T12:00:00Z\",\n  \"durationSeconds\": 3,\n  \"area\": \"Whole home\",\n  \"participants\": 9,\n  \"issues\": [\n    \"Door 3 slow to close\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/app/evacuations/log",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "evacuations",
+                "log"
+              ]
+            },
+            "description": "Log a Drill screen. kind: day | night | compartment | falseAlarm. startedAt (not in the future), durationSeconds required. Optional: area, cause, notes, residentsMoved, participants, issues[]. Send evacuationEventId (of an ended drill) instead to add details to it. Line manager: own site only, needs fireDrillEvacuation.manage."
+          },
+          "response": []
+        },
+        {
+          "name": "drill in progress - my team (line manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Team roll call fetched\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/team?page=1&limit=20",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "evacuations",
+                "{{evacuationEventId}}",
+                "team"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Drill in progress: the line manager team (direct reports + supervisees, active, own site) for one evacuation. Row: staffId, name, photoUrl, department, onSite (on the roll call when the drill started), status (safe | unknown | missing | offSite), markedAt, markedBy. meta.summary: { safe, onSite, total }. Get evacuationEventId from GET /app/evacuations/active. Needs fireDrillEvacuation.view."
+          },
+          "response": []
+        },
+        {
+          "name": "drill in progress - mark safe (line manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Marked safe\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{organizationId}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/team/{{staffId}}/safe",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "app",
+                "evacuations",
+                "{{evacuationEventId}}",
+                "team",
+                "{{staffId}}",
+                "safe"
+              ]
+            },
+            "description": "Mark safe on behalf of a team member. Active drills only (409 otherwise); member must be on the team (403 not_direct_report). Pressing again changes nothing. Updates the same roll call the site manager sees. Needs fireDrillEvacuation.manage."
           },
           "response": []
         }

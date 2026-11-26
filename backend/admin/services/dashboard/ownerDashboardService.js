@@ -398,8 +398,12 @@ const complianceSnapshot = async ({
   branchZones,
   now,
   branchId = null,
+  staffIds = null,
 }) => {
-  const scope = branchId ? { branchId } : {};
+  // staffIds narrows the report to one team (a line manager's direct reports).
+  const site = branchId ? { branchId } : {};
+  const scope = { ...site, ...(staffIds ? { staffId: { $in: staffIds } } : {}) };
+  const staffScope = { ...site, ...(staffIds ? { _id: { $in: staffIds } } : {}) };
   const [staff, [org], supervisions, appraisals, assignments] =
     await Promise.all([
       StaffProfile.aggregate([
@@ -407,7 +411,7 @@ const complianceSnapshot = async ({
           $match: {
             organizationId: organization,
             status: StaffProfileStatus.ACTIVE,
-            ...scope,
+            ...staffScope,
           },
         },
         {
@@ -474,6 +478,7 @@ const complianceSnapshot = async ({
         {
           $project: {
             staffId: 1,
+            requirementId: 1,
             assignedAt: 1,
             dueDate: 1,
             requirement: {
@@ -497,6 +502,7 @@ const complianceSnapshot = async ({
     .map((row) => ({
       assignmentId: row._id,
       staffId: row.staffId,
+      requirementId: row.requirementId,
       name: row.requirement.name,
       type: row.requirement.type,
       cell: cellFromDates({

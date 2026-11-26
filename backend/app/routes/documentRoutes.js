@@ -28,15 +28,18 @@ router.use(
   requireModule(ModuleSlug.DOCUMENTS_ESIGN)
 );
 
-const asManager = requireRoles([
+const MANAGERS = [
   MembershipRole.SUPER_ADMIN,
   MembershipRole.OWNER,
   MembershipRole.SITE_MANAGER,
-]);
+];
+const asManager = requireRoles(MANAGERS);
+// Line managers upload to their own site, with documentsEsign.manage granted.
+const asUploader = requireRoles([...MANAGERS, MembershipRole.LINE_MANAGER]);
 
 router.get("/folders", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listFolders);
 router.post("/folders", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.createFolder);
-router.post("/bulk-upload", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.bulkUpload);
+router.post("/bulk-upload", asUploader, requirePermission(DOCUMENTS_MANAGE), documentController.bulkUpload);
 router.get("/visitor-library", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listVisitorDocuments);
 router.post("/qr-code", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.createQrCode);
 router.post("/:documentId/qr-link/regenerate", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.regenerateQrLink);

@@ -32,6 +32,9 @@ const SITE_MANAGERS = [
   MembershipRole.SITE_MANAGER,
 ];
 
+// Line managers: view the Fire Drills screen and log a drill, own site only (scoped in the service).
+const SITE_TEAM = [...SITE_MANAGERS, MembershipRole.LINE_MANAGER];
+
 // A site manager raises for their own site, so the app does not have to send it.
 const ownSite = (req, res, next) => {
   const own = req.membership?.role === MembershipRole.SITE_MANAGER && req.membership.branchId;
@@ -41,7 +44,7 @@ const ownSite = (req, res, next) => {
 
 router.get(
   "/",
-  requireRoles(SITE_MANAGERS),
+  requireRoles(SITE_TEAM),
   requirePermission(EVAC_VIEW),
   evacuationController.getFireDrills
 );
@@ -54,9 +57,23 @@ router.post(
 );
 router.post(
   "/log",
-  requireRoles(SITE_MANAGERS),
+  requireRoles(SITE_TEAM),
   requirePermission(EVAC_MANAGE),
   evacuationController.logDrill
+);
+// Drill in progress (line manager): their team's roll call and Mark safe on their behalf.
+const asLineManager = requireRoles([MembershipRole.LINE_MANAGER]);
+router.get(
+  "/:evacuationEventId/team",
+  asLineManager,
+  requirePermission(EVAC_VIEW),
+  evacuationController.listTeamRollcall
+);
+router.post(
+  "/:evacuationEventId/team/:staffId/safe",
+  asLineManager,
+  requirePermission(EVAC_MANAGE),
+  evacuationController.markTeamMemberSafe
 );
 router.post(
   "/:evacuationEventId/checks",

@@ -87,6 +87,8 @@ const evacuationEventSchema = new mongoose.Schema(
     cause: { type: String, default: "", trim: true },
     issues: { type: [String], default: [] },
     residentsMoved: { type: Number, default: null, min: 0 },
+    /** People taking part, as reported when the drill is logged. Not tied to live headcount. */
+    participants: { type: Number, default: null, min: 0 },
     notes: { type: String, default: "", trim: true },
     loggedManually: { type: Boolean, default: false },
   },

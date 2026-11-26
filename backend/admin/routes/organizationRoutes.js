@@ -867,7 +867,7 @@ scoped.get(
 );
 scoped.post(
   "/documents",
-  requireRoles(MANAGERS),
+  requireRoles(CATEGORY_MANAGERS),
   requireModule(ModuleSlug.DOCUMENTS_ESIGN),
   requirePermission(DOCUMENTS_MANAGE),
   documentController.createDocument,

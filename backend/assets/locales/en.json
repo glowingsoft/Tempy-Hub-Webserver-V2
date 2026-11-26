@@ -856,5 +856,8 @@
   "invalid_people_filter": "People must be all, staff, resident, visitor, contractor or professional",
   "invalid_statistics_period": "Period must be thisMonth, thisQuarter or thisYear",
   "invalid_activity_period": "Period must be thisWeek, thisMonth or thisYear",
-  "invalid_week_start": "Week start must be a date in the form YYYY-MM-DD"
+  "invalid_week_start": "Week start must be a date in the form YYYY-MM-DD",
+  "invalid_compliance_tab": "Tab must be supervision, appraisal, competency or training",
+  "invalid_compliance_filter": "Choose either a role or a staff member, not both",
+  "invalid_job_title_id": "Invalid job title id"
 }

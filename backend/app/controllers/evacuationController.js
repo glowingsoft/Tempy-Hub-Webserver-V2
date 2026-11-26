@@ -1,6 +1,7 @@
 const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const evacuationService = require("@adminServices/evacuation/evacuationService");
 const evacuationScreenService = require("@adminServices/evacuation/evacuationScreenService");
+const evacuationTeamService = require("@adminServices/evacuation/evacuationTeamService");
 const { respond } = require("@utils/controllerResponse");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const {
@@ -172,7 +173,53 @@ const logDrill = respond(
   { statusCode: 201, translationKey: "drill_logged" },
 );
 
+/** Drill in progress: the line manager's team on the roll call. */
+const listTeamRollcall = async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePaginationParams(req);
+    const { data, meta } = await evacuationTeamService.listTeamRollcall({
+      actor: req.user,
+      organizationId: req.orgId,
+      evacuationEventId: req.params.evacuationEventId,
+      page,
+      limit,
+      skip,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+/** Mark safe on behalf of a team member. */
+const markTeamMemberSafe = async (req, res) => {
+  try {
+    const data = await evacuationTeamService.markTeamMemberSafe({
+      actor: req.user,
+      organizationId: req.orgId,
+      evacuationEventId: req.params.evacuationEventId,
+      staffId: req.params.staffId,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "evac_check_saved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
+  listTeamRollcall,
+  markTeamMemberSafe,
   getFireDrills,
   raiseEvacuation,
   logDrill,

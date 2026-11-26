@@ -142,6 +142,9 @@ const getDocumentsScreen = async ({
       return {
         ...fileOf(document, version),
         status: { key: status, label: STATUS_LABELS[status] },
+        audiences: document.audiences?.length
+          ? document.audiences
+          : [DocumentAudience.STAFF],
         url: await openFileUrl({
           file: versionFile(version),
           title: document.title,

@@ -5079,7 +5079,7 @@
                     }
                   ]
                 },
-                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents view. Query: page, limit, branchId (owner and super admin only). Returns summary {total, waitingSignature} and documents [{_id, title, fileName, type, sizeBytes, createdAt, status {key signed, waiting or draft, label}, url}], newest first, with meta. draft: no staff of the site has been asked to sign. waiting: someone asked has not signed the current version. signed: all have. url opens the file for Preview and expires after 1 hour; reload the list for a fresh one."
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents view. Query: page, limit, branchId (owner and super admin only). Returns summary {total, waitingSignature} and documents [{_id, title, fileName, type, sizeBytes, createdAt, status {key signed, waiting or draft, label}, audiences (a list of staff, visitor, contractor), url}], newest first, with meta. draft: no staff of the site has been asked to sign. waiting: someone asked has not signed the current version. signed: all have. url opens the file for Preview and expires after 1 hour; reload the list for a fresh one."
               },
               "response": []
             },

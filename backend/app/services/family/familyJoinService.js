@@ -137,7 +137,6 @@ const assertCanRequest = async (userId, residentId) => {
   const pending = mine.find((link) => link.status === FamilyMemberStatus.PENDING);
   if (pending) {
     const error = new AppError("join_request_pending", 409);
-    // the app can cancel it straight away with PUT /join-requests/:id
     error.data = { requestId: pending._id };
     throw error;
   }

@@ -5,7 +5,6 @@ const { toObjectId } = require("./familyPipeline");
 
 const MAX_FAQS = 50;
 
-/** Shown until an admin adds family questions of their own. */
 const DEFAULT_FAQS = [
   {
     id: "photo",
@@ -47,7 +46,6 @@ const faqsForFamily = async () => {
   }));
 };
 
-/** Help & Contact: how to reach the reception of the resident's home, and the common questions. */
 const getHelp = async ({ link }) => {
   const [[branch], faqs] = await Promise.all([
     Branch.aggregate([

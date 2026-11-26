@@ -234,7 +234,6 @@ const uploadPhotos = respond(
   { statusCode: 201, translationKey: "photos_uploaded" },
 );
 
-// Form-data carries every field as text, so "false" and a single media id need reading as such.
 const uploadFields = (req) => {
   const { mediaIds, includeInGazette } = req.body;
   if (!req.is("multipart/form-data")) return { mediaIds, includeInGazette };
@@ -431,7 +430,6 @@ const listTimeline = respond(
   { paged: true },
 );
 
-// The Gazette screen in one call: the next issue, and a page of the printed ones (?page, ?limit).
 const getNextGazette = respond(async (req) => {
   const { page, limit, skip } = parsePaginationParams(req);
   const link = req.familyLink;
@@ -653,7 +651,6 @@ const downloadDataFile = async (req, res) => {
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
     });
-    // a broken transfer closes the connection, so a partial file is never taken as complete
     return pipeline(file.stream, res, (error) => {
       if (error) console.error("family data download stopped", error.message);
     });

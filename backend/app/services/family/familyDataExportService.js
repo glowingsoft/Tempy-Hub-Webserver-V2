@@ -16,7 +16,6 @@ const { notify, quietly } = require("./familyNotify");
 const DAY_MS = 24 * 60 * 60 * 1000;
 const KEEP_DAYS = Number(process.env.FAMILY_DATA_EXPORT_TTL_DAYS || 7);
 const LINK_MS = 5 * 60 * 1000;
-/** A build claimed longer ago than this is taken to have died with its server. */
 const STALE_CLAIM_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
 const BATCH = 5;
@@ -31,7 +30,6 @@ const userOf = async (userId) => {
 const isReady = (row, now) =>
   row?.status === FamilyDataExportStatus.READY && row.expiresAt > now;
 
-/** What the Download My Data screen shows: notRequested, preparing or ready. */
 const shapeState = ({ row, user, now }) => {
   const preparing = row?.status === FamilyDataExportStatus.PREPARING;
   const ready = isReady(row, now);
@@ -44,7 +42,6 @@ const shapeState = ({ row, user, now }) => {
     fileName: ready ? row.fileName : "",
     fileSize: ready ? row.size : 0,
     passwordRequired: Boolean(user.password),
-    // the last request could not be prepared, so the person has to ask again
     failed: row?.status === FamilyDataExportStatus.FAILED,
   };
 };
@@ -76,7 +73,6 @@ const fileNameFor = (name) => {
   return `${words.join("-") || "My"}-Data.zip`;
 };
 
-/** Tells the person by email and in the app. Neither failing undoes the finished file. */
 const announce = async ({ row, user, expiresAt }) => {
   const appUrl = frontendLink(
     "FAMILY_DATA_EXPORT_URL",
@@ -114,7 +110,6 @@ const unclaimed = (now) => ({
   ],
 });
 
-/** Builds one requested file. Safe to call twice: only the caller that claims it does the work. */
 const buildExport = async ({ requestId, now = new Date() }) => {
   const row = await FamilyDataExport.findOneAndUpdate(
     {
@@ -171,12 +166,10 @@ const buildExport = async ({ requestId, now = new Date() }) => {
   }
 };
 
-/** Starts a new copy, replacing any earlier file. One request at a time. */
 const requestExport = async ({ userId, now = new Date() }) => {
   const requestId = new mongoose.Types.ObjectId();
   let previous;
   try {
-    // a request already being prepared does not match, so the upsert hits the unique index
     previous = await FamilyDataExport.findOneAndUpdate(
       { userId, status: { $ne: FamilyDataExportStatus.PREPARING } },
       {
@@ -201,7 +194,6 @@ const requestExport = async ({ userId, now = new Date() }) => {
   }
 
   await removeFile(previous?.storageKey);
-  // the file is built after the reply; the scheduled job picks it up if this server stops first
   setImmediate(() => {
     buildExport({ requestId }).catch((error) =>
       console.error("family data export failed", error.message),
@@ -213,7 +205,6 @@ const requestExport = async ({ userId, now = new Date() }) => {
 const sign = (payload) => {
   if (!process.env.JWT_SECRET)
     throw new Error("JWT_SECRET is required for signed download links");
-  // the prefix keeps this signature from being accepted anywhere else the secret is used
   return createHmac("sha256", process.env.JWT_SECRET)
     .update(`family-data-export.${payload}`)
     .digest("base64url");
@@ -230,7 +221,6 @@ const readToken = (token, now) => {
   return data.e > now.getTime() ? data : null;
 };
 
-/** Checks the password, then gives a link to the file that works for a few minutes. */
 const createDownloadLink = async ({
   userId,
   password,
@@ -243,7 +233,6 @@ const createDownloadLink = async ({
   ]);
   if (!isReady(row, now)) throw new AppError("data_export_not_ready", 404);
 
-  // an account that only signs in with Google or Apple has no password to ask for
   if (user.password) {
     if (typeof password !== "string" || !password)
       throw new AppError("data_export_password_required", 400);
@@ -270,7 +259,6 @@ const createDownloadLink = async ({
   };
 };
 
-/** The file behind a download link; a replaced or expired copy is gone even if the link is not. */
 const openFile = async ({ token, now = new Date() }) => {
   const data = readToken(token, now);
   const row = data
@@ -290,7 +278,6 @@ const openFile = async ({ token, now = new Date() }) => {
   };
 };
 
-/** Finishes requests left behind by a server that stopped, and gives up after a few tries. */
 const processPendingExports = async ({ now = new Date() } = {}) => {
   const rows = await FamilyDataExport.find({
     status: FamilyDataExportStatus.PREPARING,
@@ -312,7 +299,6 @@ const processPendingExports = async ({ now = new Date() } = {}) => {
   }
 };
 
-/** Deletes files past their expiry. A file that cannot be deleted is kept on record and tried again. */
 const removeExpiredExports = async ({ now = new Date() } = {}) => {
   const rows = await FamilyDataExport.find({
     status: FamilyDataExportStatus.READY,

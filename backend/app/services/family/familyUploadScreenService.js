@@ -11,7 +11,6 @@ const LIMITS = {
   maxTotalSizeMb: 50,
 };
 
-/** Everything the New Upload screen shows before anything is sent. */
 const getNewUpload = async ({ userId, link }) => {
   const [residents, [consent], gazette] = await Promise.all([
     resolveFamilyResidents(userId, {
@@ -35,7 +34,6 @@ const getNewUpload = async ({ userId, link }) => {
       residentPhotoUrl: resident.residentPhotoUrl,
       homeName: resident.homeName,
     },
-    // false: only a text message can be sent
     photoSharing: consent?.photographyConsent === true,
     nextGazette: gazette,
     limits: LIMITS,

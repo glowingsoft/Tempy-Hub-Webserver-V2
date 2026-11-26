@@ -140,11 +140,9 @@ const listMembers = async ({ userId, link, links = [link] }) => {
 
   return {
     residentId: link.residentId,
-    // whose family this is
     name: resident?.name || "",
     residentName: resident?.name || "",
     canManage,
-    // the caller, across every resident they are linked to, not only the one being viewed
     isNextOfKinOfAnyFamily: links.some((row) => Boolean(row.isNextOfKin)),
     members: members.map((member) => withActions(member, canManage)),
   };

@@ -11732,7 +11732,7 @@
                         }
                       ]
                     },
-                    "description": "Messages screen: one row per message the home sent you, newest first. Each has messageId, subject (the first line when sent without one), preview, homeName, senderName, senderRole (job title, otherwise role), sentAt and isRead. meta has unread, receivesMessages (false when you are nobody's next of kin: messages go to the next of kin only) and canReply (always false). Family token."
+                    "description": "Messages screen: one row per message the home sent you, newest first. Each has messageId, subject (the first line when sent without one), preview, homeName, senderName, senderRole (job title, otherwise role), sentAt and isRead. meta has unread, receivesMessages (false when you are not a next of kin and nothing was sent to your family). The next of kin gets what the home sends them; every member gets messages sent to the whole family and canReply (always false). Family token."
                   },
                   "response": []
                 },
@@ -14997,6 +14997,104 @@
                       ]
                     },
                     "description": "Visit Requests screen. status requested, confirmed, declined, cancelled or invited; range upcoming or past. Left out, status is requested and range is upcoming. Approve or decline with PUT /app/family-visits/:id."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Private Message",
+              "item": [
+                {
+                  "name": "private message screen",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Screen fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.include.keys(\"familyName\", \"memberCount\", \"nextOfKinName\", \"canSend\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/message?residentId={{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "message"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        }
+                      ]
+                    },
+                    "description": "Private Message screen in one call: resident, familyName, memberCount (active members), nextOfKinName, members, delivery (in app is always on; email optional), limits and canSend (false when nobody is linked). Site and line managers only reach their own site. Needs family view."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "send private message",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Sent\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "    pm.expect(pm.response.json().data).to.have.property(\"recipients\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/message",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "message"
+                      ]
+                    },
+                    "description": "Send Message to every active member of the resident's family. subject optional (up to 120), message required (up to 2000), alsoEmail optional. Always delivered in the app. Returns broadcastId, sentAt, subject, familyName, recipients and emailed. 400 message_no_recipients when nobody is linked. Needs family manage.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"subject\": \"Hair Appointment Moved\",\n  \"message\": \"The hairdresser is now visiting on Thursday at 10:00.\",\n  \"alsoEmail\": false\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
                   },
                   "response": []
                 }

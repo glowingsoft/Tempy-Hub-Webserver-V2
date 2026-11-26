@@ -3,7 +3,6 @@ const { AppError } = require("@services/_errors/AppError");
 
 const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// each may be sent as "" to clear it
 const RULES = {
   name: (value) => value.length <= 100,
   email: (value) => validator.isEmail(value),
@@ -12,7 +11,6 @@ const RULES = {
   closesAt: (value) => CLOCK_TIME.test(value),
 };
 
-/** The database changes for a site's reception contact details; only the fields sent are changed. */
 const receptionChanges = (reception) => {
   const invalid = () => new AppError("invalid_reception_details", 400);
   if (!reception || typeof reception !== "object" || Array.isArray(reception))

@@ -24,7 +24,6 @@ const branchSchema = new mongoose.Schema(
     },
     emergencyPinHash: { type: String, default: "" },
     assemblyPoint: { type: String, default: "" },
-    /** How families reach this site (Help & Contact). Unset until someone fills it in. */
     reception: {
       name: String,
       email: String,

@@ -122,6 +122,9 @@ const recipientsOf = async ({
   const covered = new Set(rows.flatMap((row) => row.residents.map(String)));
   return {
     userIds: rows.map((row) => row._id),
+    residentsByUser: new Map(
+      rows.map((row) => [String(row._id), row.residents]),
+    ),
     withoutNextOfKin:
       audience === AUDIENCES.SELECTED || audience === AUDIENCES.FAMILY
         ? residentIds.filter((id) => !covered.has(String(id)))
@@ -141,6 +144,7 @@ const saveMessages = async ({
   text,
   subject,
   threads,
+  familyOf,
   now,
 }) => {
   const messages = [...threads].map(([recipientId, conversationId]) => ({
@@ -153,6 +157,12 @@ const saveMessages = async ({
     recipientId: toObjectId(recipientId),
     subject,
     messageContent: text,
+    ...(familyOf
+      ? {
+          forWholeFamily: true,
+          residentIds: familyOf.get(String(recipientId)),
+        }
+      : {}),
   }));
 
   for (const chunk of chunksOf(messages)) {
@@ -254,13 +264,14 @@ const sendMessage = async ({
     site = await resolveSite({ actor, organizationId, branchId });
   }
 
-  const { userIds, withoutNextOfKin, notReached } = await recipientsOf({
-    organizationId,
-    branchId: site.branchId,
-    audience: kind,
-    residentIds: residents,
-    recipientIds: people,
-  });
+  const { userIds, residentsByUser, withoutNextOfKin, notReached } =
+    await recipientsOf({
+      organizationId,
+      branchId: site.branchId,
+      audience: kind,
+      residentIds: residents,
+      recipientIds: people,
+    });
   if (!userIds.length) throw new AppError("message_no_recipients", 400);
 
   const org = toObjectId(organizationId);
@@ -285,6 +296,7 @@ const sendMessage = async ({
     text,
     subject: title,
     threads,
+    familyOf: kind === AUDIENCES.FAMILY ? residentsByUser : null,
     now,
   });
   await deliver({

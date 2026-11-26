@@ -2,7 +2,6 @@ const { User } = require("@models/UserModel");
 const { AppError } = require("@services/_errors/AppError");
 const { toObjectId } = require("./familyPipeline");
 
-/** The family app's Profile & Settings toggles, with what each is before the person changes it. */
 const DEFAULTS = {
   newGazette: true,
   photoDecisions: true,
@@ -13,7 +12,6 @@ const DEFAULTS = {
   alsoByEmail: false,
 };
 const ALWAYS_ON = "emergencyAlerts";
-// kept apart from the staff toggles, which share some names (gazetteReminders) with other defaults
 const STORE = "notificationPreferences.familyApp";
 
 const getPreferences = async ({ userId }) => {
@@ -24,7 +22,6 @@ const getPreferences = async ({ userId }) => {
   const stored = row?.notificationPreferences?.familyApp || {};
 
   return {
-    // the screen's header; the response turns a stored image key into its full address
     profile: {
       name: row?.name || "",
       email: row?.email || "",
@@ -40,7 +37,6 @@ const getPreferences = async ({ userId }) => {
   };
 };
 
-/** Saves only the toggles sent. The app may send emergencyAlerts back, but only as true. */
 const updatePreferences = async ({ userId, body }) => {
   if (!body || typeof body !== "object" || Array.isArray(body))
     throw new AppError("nothing_to_update", 400);

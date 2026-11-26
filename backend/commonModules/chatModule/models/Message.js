@@ -41,12 +41,16 @@ const messageSchema = new mongoose.Schema(
       maxlength: MAX_MESSAGE_LENGTH,
     },
     readAt: { type: Date, default: null },
+    forWholeFamily: { type: Boolean, default: false },
+    residentIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Resident" }],
+      default: undefined,
+    },
   },
   { timestamps: true },
 );
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
-// the family inbox: one person's messages, newest first
 messageSchema.index({ recipientId: 1, createdAt: -1 });
 messageSchema.index({ organizationId: 1, branchId: 1, broadcastId: 1 });
 messageSchema.index({ broadcastId: 1, recipientId: 1 }, { unique: true });

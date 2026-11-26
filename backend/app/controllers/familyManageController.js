@@ -4,6 +4,7 @@ const { queryId } = require("@utils/familyQuery");
 const { branchFilter } = require("@middlewares/familyMiddleware");
 const familyManageService = require("@adminServices/family/familyManageService");
 const familyNewsletterService = require("@adminServices/family/familyNewsletterService");
+const familyManageMessageService = require("@adminServices/family/familyManageMessageService");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { sendPdf } = require("@utils/familyPdfResponse");
@@ -153,7 +154,31 @@ const getNewsletterPdf = async (req, res) => {
   }
 };
 
+const getPrivateMessage = respond((req) =>
+  familyManageMessageService.getScreen({
+    organizationId: req.orgId,
+    branchScope: req.branchScope,
+    residentId: req.query.residentId,
+  }),
+);
+
+const sendPrivateMessage = respond(
+  (req) =>
+    familyManageMessageService.send({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchScope: req.branchScope,
+      residentId: req.body?.residentId,
+      subject: req.body?.subject,
+      message: req.body?.message,
+      alsoEmail: req.body?.alsoEmail,
+    }),
+  { statusCode: 201, translationKey: "message_sent" },
+);
+
 module.exports = {
+  getPrivateMessage,
+  sendPrivateMessage,
   getNewsletterPdf,
   getHome,
   getGazette,

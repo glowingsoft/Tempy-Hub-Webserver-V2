@@ -12,13 +12,6 @@ const Message = require("../../../commonModules/chatModule/models/Message");
 const familyPreferenceService = require("./familyPreferenceService");
 const { toObjectId } = require("./familyPipeline");
 
-/**
- * What goes into "Download My Data". Included: the person's own name and contact details, their
- * family memberships and settings, the photos and messages they sent, and their visits.
- * Left out: other family members, other residents, staff, and the home's own records.
- */
-
-// a resident is only ever named to someone whose link to them was approved
 const APPROVED_ONCE = new Set([
   FamilyMemberStatus.ACTIVE,
   FamilyMemberStatus.INACTIVE,
@@ -49,13 +42,11 @@ const loadRows = async (userId) => {
   return { user, links, uploads, visits, messages };
 };
 
-// the blurred copy is what the app shows its author, and it hides anyone who must not be seen
 const photoKey = (media) => media.blurredKey || media.storageKey;
 
 const isMissingObject = (error) =>
   error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404;
 
-/** Adds each photo to the zip and returns what each upload's entry should list. */
 const addPhotos = async (zip, uploads) => {
   const mediaIds = uploads.flatMap((upload) => upload.mediaIds || []);
   const media = mediaIds.length
@@ -77,7 +68,6 @@ const addPhotos = async (zip, uploads) => {
         zip.addBuffer(body, name, { compress: false });
         photos.push(name);
       } catch (error) {
-        // a photo that no longer exists is reported; anything else fails the build so it is retried
         if (!isMissingObject(error)) throw error;
         photos.push(`${name} (no longer available)`);
       }
@@ -109,7 +99,6 @@ const README = [
   "",
 ].join("\r\n");
 
-/** The finished zip for one person. */
 const buildArchive = async ({ userId, now = new Date() }) => {
   const { user, links, uploads, visits, messages } = await loadRows(userId);
   if (!user) throw new Error("data export: the account no longer exists");
@@ -133,7 +122,6 @@ const buildArchive = async ({ userId, now = new Date() }) => {
   const zip = new yazl.ZipFile();
   const photos = await addPhotos(zip, uploads);
 
-  // one row per recipient is stored; the person sent it once
   const sent = new Map(messages.map((row) => [String(row.broadcastId), row]));
 
   const data = {

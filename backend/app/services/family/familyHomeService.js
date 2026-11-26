@@ -28,11 +28,6 @@ const feedOf = async ({ tab, active, residents, userId, paging }) => {
 
 const GAZETTE_FEED_TYPE = "gazette";
 
-/**
- * Puts the Discover Gazette card in the wall feed where its printed date falls among the posts
- * (newest first, after any pinned ones). A page only carries it when it belongs there: before the
- * first post older than it, or at the end of the last page. totalRecords still counts posts only.
- */
 const withGazette = ({ feed, gazette }) => {
   if (!feed || feed.tab !== HomeTab.WALL || !gazette?.printedAt) return feed;
 

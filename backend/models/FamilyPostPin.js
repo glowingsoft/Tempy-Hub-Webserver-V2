@@ -1,10 +1,5 @@
 const mongoose = require("mongoose");
 
-/**
- * A wall post one family member saved for themselves, like a bookmark. It is not the staff pin
- * (FamilyPost.isPinned), which lifts a post to the top for everyone. One per person per post,
- * so a retry can never save it twice.
- */
 const familyPostPinSchema = new mongoose.Schema(
   {
     postId: {

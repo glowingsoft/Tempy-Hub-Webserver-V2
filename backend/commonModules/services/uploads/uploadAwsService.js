@@ -81,7 +81,6 @@ const getObject = async (key) => {
   return Buffer.from(await Body.transformToByteArray());
 };
 
-/** The file as a stream, so a large one is passed on without being held in memory. */
 const getObjectStream = async (key) => {
   const { Body } = await getClient().send(
     new GetObjectCommand({ Bucket: requireBucket(), Key: key }),

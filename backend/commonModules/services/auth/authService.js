@@ -297,7 +297,6 @@ const resolveFamilyAccess = async (user) => {
     ...emptyStaffAccessFields(),
     memberships,
     residents,
-    // the resident the app opens on (the one flagged isActive); null until the member is linked
     resident: residents.find((row) => row.isActive) || null,
     accessState: await resolveAccessState(user._id, residents.length),
   };

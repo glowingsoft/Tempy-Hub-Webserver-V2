@@ -634,7 +634,6 @@ const updateBranch = async ({
   manager,
 }) => {
   const update = {};
-  // checked first, so a bad value changes nothing
   if (reception !== undefined)
     Object.assign(update, receptionChanges(reception));
   if (name !== undefined) {

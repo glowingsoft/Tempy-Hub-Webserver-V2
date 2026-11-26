@@ -44,7 +44,6 @@ const reactionStats = (userId = null) => [
   },
 ];
 
-/** isPinnedByMe: whether the caller saved this post for themselves (not the staff pin, isPinned). */
 const pinnedByMe = (userId = null) => [
   {
     $lookup: {

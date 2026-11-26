@@ -135,11 +135,6 @@ const nextGazette = async ({ link, now = new Date() }) => {
   };
 };
 
-/**
- * The picture on each gazette's card: the same cover photo the gazette itself shows (the newest
- * message with a photo), and re-checked on every read like the rest of it. A gazette with no such
- * photo, or a resident whose photo sharing is off, gets none.
- */
 const coverUrlsOf = async ({ residentId, rows }) => {
   const shared = rows.filter((row) => row.photoConsent === true);
   const uploadIds = shared.flatMap((row) => row.uploadIds ?? []);
@@ -225,7 +220,6 @@ const listGazettes = async ({ link, page, limit, skip }) => {
           periodEnd: "$issue.periodEnd",
           residentName: { $ifNull: ["$resident.name", ""] },
           residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
-          // both only used to choose the cover, and not sent to the app
           photoConsent: "$resident.photographyConsent",
           uploadIds: 1,
           messageCount: { $size: "$uploadIds" },

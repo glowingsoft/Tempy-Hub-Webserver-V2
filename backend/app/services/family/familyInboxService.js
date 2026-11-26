@@ -10,12 +10,7 @@ const { AppError } = require("@services/_errors/AppError");
 const Conversation = require("../../../commonModules/chatModule/models/Conversation");
 const Message = require("../../../commonModules/chatModule/models/Message");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
-
-/**
- * The family app's Messages screens: one row per message the home sent, and one message opened.
- * Messages go to the next of kin only and are one-way, the same rule as the chat API and the
- * unread badge. `links` are the caller's active links, read on this request.
- */
+const { readableMatch } = require("./familyMessageAccess");
 
 const TITLE_LENGTH = 80;
 const PREVIEW_LENGTH = 140;
@@ -31,7 +26,6 @@ const ROLE_LABELS = {
 const cut = (text, max) =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
-// a message sent without a subject is titled by its first line
 const titleOf = ({ subject, messageContent }) =>
   subject ||
   cut(String(messageContent || "").split("\n")[0].trim(), TITLE_LENGTH);
@@ -40,12 +34,18 @@ const nextOfKinLinks = (links) => links.filter((link) => link.isNextOfKin);
 
 const mine = ({ userId, links }) => ({
   recipientId: toObjectId(userId),
-  branchId: {
-    $in: nextOfKinLinks(links).map((link) => toObjectId(link.branchId)),
-  },
+  ...readableMatch(links),
 });
 
-/** What to call each sender: their job title at that organization, otherwise their role there. */
+const linksAbout = ({ row, links }) => {
+  if (!row.forWholeFamily)
+    return nextOfKinLinks(links).filter(
+      (link) => String(link.branchId) === String(row.branchId),
+    );
+  const sentTo = new Set((row.residentIds || []).map(String));
+  return links.filter((link) => sentTo.has(String(link.residentId)));
+};
+
 const senderRoles = async (rows) => {
   if (!rows.length) return new Map();
   const people = {
@@ -65,7 +65,6 @@ const senderRoles = async (rows) => {
     ]),
     Membership.aggregate([
       { $match: people },
-      // an active membership is read last, so it wins over an old one
       { $sort: { status: -1 } },
       { $project: { userId: 1, organizationId: 1, role: 1 } },
     ]),
@@ -108,6 +107,8 @@ const messageStages = [
       messageContent: 1,
       readAt: 1,
       createdAt: 1,
+      forWholeFamily: 1,
+      residentIds: 1,
       homeName: { $ifNull: ["$home.name", ""] },
       senderName: { $ifNull: ["$sender.name", ""] },
     },
@@ -148,8 +149,8 @@ const listInbox = async ({ userId, links, page, limit, skip }) => {
     meta: {
       ...meta,
       unread,
-      // false: the person is nobody's next of kin, so the home does not message them
-      receivesMessages: nextOfKinLinks(links).length > 0,
+      receivesMessages:
+        nextOfKinLinks(links).length > 0 || meta.totalRecords > 0,
       canReply: false,
     },
   };
@@ -173,7 +174,6 @@ const markRead = async ({ row, now }) => {
   );
 };
 
-/** One message, which opening marks as read. Anyone else's is simply not found. */
 const getMessage = async ({ userId, links, messageId, now = new Date() }) => {
   const notFound = () => new AppError("message_not_found", 404);
   if (!isValidObjectId(messageId)) throw notFound();
@@ -184,10 +184,7 @@ const getMessage = async ({ userId, links, messageId, now = new Date() }) => {
   ]);
   if (!row) throw notFound();
 
-  // the residents this person is next of kin for at the home that wrote
-  const about = nextOfKinLinks(links).filter(
-    (link) => String(link.branchId) === String(row.branchId),
-  );
+  const about = linksAbout({ row, links });
   const [roles, residents] = await Promise.all([
     senderRoles([row]),
     Resident.aggregate([
@@ -206,7 +203,6 @@ const getMessage = async ({ userId, links, messageId, now = new Date() }) => {
     ...headerOf(row, roles),
     message: row.messageContent,
     to: residents.map((resident) => `${resident.name} Family`).join(", "),
-    // for Book A Visit
     residents: residents.map((resident) => ({
       residentId: resident._id,
       residentName: resident.name,

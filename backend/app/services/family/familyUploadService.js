@@ -646,7 +646,6 @@ const deleteUpload = async ({ userId, links, uploadId }) => {
 const rejectedDeleteAfter = (from = new Date()) =>
   new Date(from.getTime() + REJECTED_KEEP_DAYS * 24 * 60 * 60 * 1000);
 
-/** Removes photos stored for an upload that was then not created, so nothing is left behind. */
 const discardUnattached = async (mediaIds) => {
   try {
     const unused = await FamilyMedia.find({
@@ -664,16 +663,11 @@ const discardUnattached = async (mediaIds) => {
   }
 };
 
-/**
- * New Upload in one request: the photo files are stored and the upload created together. What can
- * be checked is checked before a file is stored. Without files this is createUpload.
- */
 const createUploadWithPhotos = async ({ files, ...upload }) => {
   if (!files?.length) return createUpload(upload);
 
   const { userId, link, message, mediaIds = [], clientId } = upload;
   if (clientId != null) {
-    // a resend of an upload that already arrived stores nothing again
     const [existing] = await FamilyUpload.aggregate([
       {
         $match: {
@@ -704,7 +698,6 @@ const createUploadWithPhotos = async ({ files, ...upload }) => {
       mediaIds: [...ids, ...stored.map(String)],
     });
   } finally {
-    // attached photos are left alone, so after a success this removes nothing
     await discardUnattached(stored);
   }
 };

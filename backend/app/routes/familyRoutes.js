@@ -18,7 +18,6 @@ const familyController = require("../controllers/familyController");
 
 const router = express.Router();
 
-// the app-wide text check runs before form-data is read, so it is run again here, on a plain object
 const moderateFormText = (req, res, next) => {
   req.body = { ...req.body };
   return textModerationMiddleware(req, res, next);
@@ -44,12 +43,10 @@ const residentInBody = requireFamilyAccess({
 const dataRequestLimiter = createRateLimiter("family-data-requests", 15, 5);
 const dataPasswordLimiter = createRateLimiter("family-data-downloads", 15, 10);
 
-// the short-lived signed token in the address is the permission, so a browser can open it
 router.get("/data-request/file/:token", familyController.downloadDataFile);
 
 router.use(auth, requireAudience([AuthAudience.FAMILY]));
 
-// a person's own data, so no resident link is needed: someone removed from a family may still ask
 router.get("/data-request", familyController.getDataRequest);
 router.post(
   "/data-request",
@@ -63,7 +60,6 @@ router.post(
 );
 
 router.get("/relationships", familyController.listRelationships);
-// personal settings, so no resident link is needed
 router.get(
   "/notification-preferences",
   familyController.getNotificationPreferences,
@@ -238,7 +234,6 @@ router.get(
   residentInQuery,
   familyController.getNewUploadScreen,
 );
-// JSON with mediaIds, or form-data with the photo files themselves
 router.post(
   "/uploads",
   writeLimiter,

@@ -145,7 +145,6 @@ const assertPostVisible = async ({ postId, links }) => {
   return post;
 };
 
-/** My Pinned Posts: what this person saved, across every resident they are linked to, newest post first. */
 const listPinned = async ({ userId, links, page, limit, skip }) => {
   const pins = await FamilyPostPin.find({ userId: toObjectId(userId) })
     .sort({ createdAt: -1 })
@@ -170,7 +169,6 @@ const listPinned = async ({ userId, links, page, limit, skip }) => {
   });
 };
 
-/** Saves or unsaves a post for the caller only. Sending the same value twice changes nothing. */
 const setPinned = async ({ userId, links, postId, pinned }) => {
   if (typeof pinned !== "boolean") throw new AppError("invalid_pinned_flag", 400);
   await assertPostVisible({ postId, links });

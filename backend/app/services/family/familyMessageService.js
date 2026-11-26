@@ -1,13 +1,12 @@
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
-const { FamilyMember } = require("@models/FamilyMember");
-const { FamilyMemberStatus } = require("@models/domainEnums");
 const { paginateWithFacet } = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const Conversation = require("../../../commonModules/chatModule/models/Conversation");
 const Message = require("../../../commonModules/chatModule/models/Message");
 const { toObjectId, isValidObjectId, joinOne } = require("./familyPipeline");
 const { idText } = require("./familyMessageDelivery");
+const { readableMatch, activeLinksOf } = require("./familyMessageAccess");
 
 const { ChatState } = Conversation;
 
@@ -17,26 +16,22 @@ const TABS = {
   archived: [ChatState.ARCHIVED],
 };
 
-/** Read live, so losing next-of-kin status ends access at once. */
-const homesOf = async (userId) => {
-  const rows = await FamilyMember.aggregate([
-    {
-      $match: {
-        userId: toObjectId(userId),
-        status: FamilyMemberStatus.ACTIVE,
-        isNextOfKin: true,
-      },
+const accessOf = async (userId) => {
+  const links = await activeLinksOf(userId);
+  return {
+    homes: links.map((link) => link.branchId),
+    readable: {
+      recipientId: toObjectId(userId),
+      ...readableMatch(links),
     },
-    { $group: { _id: "$branchId" } },
-  ]);
-  return rows.map((row) => row._id);
+  };
 };
 
 const ownThread = async ({ userId, conversationId }) => {
   const id = idText(conversationId);
   if (!id || !isValidObjectId(id))
     throw new AppError("conversation_not_found", 404);
-  const homes = await homesOf(userId);
+  const { homes, readable } = await accessOf(userId);
   const [thread] = await Conversation.aggregate([
     {
       $match: {
@@ -48,8 +43,11 @@ const ownThread = async ({ userId, conversationId }) => {
     ...joinOne({ from: Branch, localField: "branchId", as: "home", optional: true }),
     { $project: { branchId: 1, homeName: { $ifNull: ["$home.name", ""] } } },
   ]);
-  if (!thread) throw new AppError("conversation_not_found", 404);
-  return thread;
+  const any = thread
+    ? await Message.countDocuments({ ...readable, conversationId: thread._id })
+    : 0;
+  if (!any) throw new AppError("conversation_not_found", 404);
+  return { ...thread, readable };
 };
 
 const lastMessageOf = ({
@@ -75,29 +73,53 @@ const lastMessageOf = ({
 const listThreads = async ({ userId, tab = "inbox", page, limit, skip }) => {
   if (!Object.prototype.hasOwnProperty.call(TABS, tab))
     throw new AppError("invalid_chat_tab", 400);
-  const homes = await homesOf(userId);
+  const { homes, readable } = await accessOf(userId);
+  const summaries = await Message.aggregate([
+    { $match: readable },
+    {
+      $group: {
+        _id: "$conversationId",
+        unread: {
+          $sum: { $cond: [{ $eq: [{ $ifNull: ["$readAt", null] }, null] }, 1, 0] },
+        },
+      },
+    },
+  ]);
+  const unreadOf = new Map(summaries.map((row) => [String(row._id), row.unread]));
   const base = {
     recipientId: toObjectId(userId),
     branchId: { $in: homes },
+    _id: { $in: summaries.map((row) => row._id) },
     lastMessage: { $ne: null },
   };
 
-  const { result, data, meta } = await paginateWithFacet({
+  const { data, meta } = await paginateWithFacet({
     model: Conversation,
     match: { ...base, chatState: { $in: TABS[tab] } },
     page,
     limit,
     skip,
     sort: { lastMessageAt: -1, _id: -1 },
-    extraFacets: {
-      unread: [
-        { $match: base },
-        { $group: { _id: null, count: { $sum: "$unreadCount" } } },
-      ],
-    },
     extraDataStages: [
       ...joinOne({ from: Branch, localField: "branchId", as: "home", optional: true }),
-      ...joinOne({ from: Message, localField: "lastMessage", as: "last", optional: true }),
+      {
+        $lookup: {
+          from: Message.collection.name,
+          let: { conversationId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                ...readable,
+                $expr: { $eq: ["$conversationId", "$$conversationId"] },
+              },
+            },
+            { $sort: { createdAt: -1, _id: -1 } },
+            { $limit: 1 },
+          ],
+          as: "last",
+        },
+      },
+      { $unwind: { path: "$last", preserveNullAndEmptyArrays: true } },
       ...joinOne({ from: User, localField: "last.senderId", as: "sender", optional: true }),
       {
         $project: {
@@ -109,7 +131,6 @@ const listThreads = async ({ userId, tab = "inbox", page, limit, skip }) => {
           chatName: { $ifNull: ["$home.name", ""] },
           chatIcon: { $literal: null },
           chatState: 1,
-          unreadCount: 1,
           canMessage: { $literal: false },
           lastId: "$last._id",
           lastType: "$last.messageType",
@@ -123,23 +144,22 @@ const listThreads = async ({ userId, tab = "inbox", page, limit, skip }) => {
   });
 
   return {
-    data: data.map((row) => lastMessageOf(row)),
-    meta: { ...meta, unread: result.unread?.[0]?.count ?? 0 },
+    data: data.map((row) =>
+      lastMessageOf({
+        ...row,
+        unreadCount: unreadOf.get(String(row.conversationId)) ?? 0,
+      }),
+    ),
+    meta: {
+      ...meta,
+      unread: summaries.reduce((total, row) => total + row.unread, 0),
+    },
   };
 };
 
 const unreadTotal = async (userId) => {
-  const [row] = await Conversation.aggregate([
-    {
-      $match: {
-        recipientId: toObjectId(userId),
-        branchId: { $in: await homesOf(userId) },
-        lastMessage: { $ne: null },
-      },
-    },
-    { $group: { _id: null, count: { $sum: "$unreadCount" } } },
-  ]);
-  return row?.count ?? 0;
+  const { readable } = await accessOf(userId);
+  return Message.countDocuments({ ...readable, readAt: null });
 };
 
 const listMessages = async ({
@@ -154,7 +174,7 @@ const listMessages = async ({
 
   const { data, meta } = await paginateWithFacet({
     model: Message,
-    match: { conversationId: thread._id },
+    match: { ...thread.readable, conversationId: thread._id },
     page,
     limit,
     skip,
@@ -179,7 +199,7 @@ const listMessages = async ({
 
   if (page === 1) {
     await Message.updateMany(
-      { conversationId: thread._id, readAt: null },
+      { ...thread.readable, conversationId: thread._id, readAt: null },
       { $set: { readAt: now } },
     );
     await Conversation.updateOne(

@@ -24,6 +24,8 @@ const controller = require("../controllers/familyManageController");
 const staffController = require("../../admin/controllers/familyStaffController");
 const invitationController = require("../../admin/controllers/familyInvitationController");
 
+const messageLimiter = createRateLimiter("family-manage-messages", 15, 20);
+
 const router = express.Router();
 
 const photoLimiter = createRateLimiter("family-manage-photos", 15, 60);
@@ -68,6 +70,9 @@ router.post(
 
 router.get("/uploads", view, staffController.listUploads);
 router.get("/join-requests", view, staffController.listJoinRequests);
+
+router.get("/message", view, controller.getPrivateMessage);
+router.post("/message", messageLimiter, manage, controller.sendPrivateMessage);
 
 router.get("/posts/taggable-residents", view, controller.listTagOptions);
 router.post(

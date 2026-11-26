@@ -72,7 +72,6 @@ const userSchema = new mongoose.Schema(
       reportedPosts: Boolean,
       gazetteReminders: Boolean,
       quietHours: { start: String, end: String },
-      /** The family app's own toggles; see familyPreferenceService. */
       familyApp: {
         newGazette: Boolean,
         photoDecisions: Boolean,

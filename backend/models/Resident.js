@@ -56,6 +56,8 @@ const residentSchema = new mongoose.Schema(
      */
     visitorPasscodeRequired: { type: Boolean, default: false },
     visitorPasscodeHash: { type: String, default: null, select: false },
+    /** Encrypted copy, shown to managers and line managers in the resident list. */
+    visitorPasscodeEncrypted: { type: String, default: null, select: false },
     visitorPasscodeSetAt: { type: Date, default: null },
     restricted: { type: Boolean, default: false },
     restrictedReason: { type: String, default: "" },

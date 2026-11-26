@@ -1891,7 +1891,27 @@ const drillDurationSeconds = {
 };
 
 /** Mock drills this staff marked on, last 12 months, one aggregation. */
-const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
+/** An untouched rollcall row is "unknown" and still carries the event's start time. */
+const respondedMatch = {
+  $or: [
+    { status: { $ne: EvacCheckStatus.UNKNOWN } },
+    { $expr: { $ne: ["$markedAt", "$event.startedAt"] } },
+  ],
+};
+
+const drillCountsFrom = (rows = []) => {
+  const counts = { all: 0, [EvacuationType.MOCK]: 0, [EvacuationType.REAL]: 0 };
+  for (const row of rows) {
+    counts[row._id] = row.count;
+    counts.all += row.count;
+  }
+  return counts;
+};
+
+const myDrills = async ({ actor, organizationId, type, page, limit, skip }) => {
+  const wanted = String(type ?? "").trim() || "all";
+  if (wanted !== "all") parseEvacuationType(wanted);
+
   const orgOid = toObjectId(organizationId, "invalid_organization_id");
   const profile = await StaffProfile.findOne({
     userId: actor._id,
@@ -1906,6 +1926,7 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
     data: [],
     meta: {
       ...generateMeta(page, limit, 0),
+      counts: drillCountsFrom(),
       fireDrills: drillScoreMeta(0, 0),
     },
   };
@@ -1930,7 +1951,6 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
           {
             $match: {
               branchId: profile.branchId,
-              type: EvacuationType.MOCK,
               startedAt: { $gte: since },
             },
           },
@@ -1951,7 +1971,9 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
     { $sort: { "event.startedAt": -1 } },
     {
       $facet: {
+        // Real emergencies never change the drill score.
         score: [
+          { $match: { "event.type": EvacuationType.MOCK } },
           {
             $group: {
               _id: null,
@@ -1968,12 +1990,17 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
             },
           },
         ],
-        total: [
-          { $match: { status: EvacCheckStatus.SAFE } },
-          { $count: "count" },
+        counts: [
+          { $match: respondedMatch },
+          { $group: { _id: "$event.type", count: { $sum: 1 } } },
         ],
         rows: [
-          { $match: { status: EvacCheckStatus.SAFE } },
+          {
+            $match: {
+              ...respondedMatch,
+              ...(wanted === "all" ? {} : { "event.type": wanted }),
+            },
+          },
           { $skip: skip },
           { $limit: limit },
           {
@@ -1994,7 +2021,7 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
               durationSeconds: drillDurationSeconds,
               type: "$event.type",
               status: "$event.status",
-              attended: { $literal: true },
+              attended: { $eq: ["$status", EvacCheckStatus.SAFE] },
               checkStatus: "$status",
               locationLabel: 1,
               markedAt: 1,
@@ -2007,12 +2034,13 @@ const myDrills = async ({ actor, organizationId, page, limit, skip }) => {
   ]);
 
   const score = result?.score?.[0];
-  const total = result?.total?.[0]?.count ?? 0;
+  const counts = drillCountsFrom(result?.counts);
 
   return {
     data: withDrillDurationLabel(result?.rows),
     meta: {
-      ...generateMeta(page, limit, total),
+      ...generateMeta(page, limit, counts[wanted]),
+      counts,
       fireDrills: drillScoreMeta(score?.expected ?? 0, score?.done ?? 0),
     },
   };

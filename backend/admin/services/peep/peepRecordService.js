@@ -61,6 +61,55 @@ const defaultReviewDueAt = () => {
   return due;
 };
 
+const PEEP_TEXT_FIELDS = [
+  "supportNeeds",
+  "primaryRoute",
+  "secondaryRoute",
+  "equipmentRequired",
+  "responsibleStaff",
+  "mcaBestInterestNotes",
+  "mobilityNotes",
+  "assistanceRequired",
+  "evacuationStrategy",
+];
+const PEEP_DATE_FIELDS = ["reviewDueAt", "lastReviewedAt"];
+
+const parsePeepDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new AppError("invalid_peep_date", 400);
+  return date;
+};
+
+/** Only the fields that were sent, validated and ready to save. */
+const parsePeepFields = (input) => {
+  const fields = {};
+  const level = parsePeepLevel(input.peepLevel);
+  if (level) fields.peepLevel = level;
+  for (const key of PEEP_TEXT_FIELDS) {
+    if (input[key] !== undefined) fields[key] = trimText(input[key]) || "";
+  }
+  for (const key of PEEP_DATE_FIELDS) {
+    if (input[key] !== undefined) fields[key] = parsePeepDate(input[key]);
+  }
+  if (input.consentStatus !== undefined) {
+    if (!Object.values(PeepConsentStatus).includes(input.consentStatus)) {
+      throw new AppError("invalid_peep_consent_status", 400);
+    }
+    fields.consentStatus = input.consentStatus;
+  }
+  return fields;
+};
+
+const parseNewPeepFields = (input) => {
+  const fields = parsePeepFields(input);
+  return {
+    ...fields,
+    peepLevel: parsePeepLevel(input.peepLevel, { required: true }),
+    reviewDueAt: fields.reviewDueAt || defaultReviewDueAt(),
+  };
+};
+
 const recordShapeStages = [
   {
     $lookup: {
@@ -295,14 +344,8 @@ const createPeepRecord = async ({
   actor,
   organizationId,
   residentId,
-  peepLevel,
-  supportNeeds,
-  primaryRoute,
-  secondaryRoute,
-  equipmentRequired,
-  responsibleStaff,
-  reviewDueAt,
   consentStatus,
+  ...input
 }) => {
   const standing = await actorStanding(actor, organizationId);
   const resident = await requireAdmittedResident({
@@ -316,20 +359,14 @@ const createPeepRecord = async ({
   }
   await assertBranchInOrganization(resident.branchId, organizationId);
 
-  const level = parsePeepLevel(peepLevel, { required: true });
+  const fields = parseNewPeepFields(input);
 
   try {
     const created = await PeepRecord.create({
+      ...fields,
       organizationId,
       residentId: resident._id,
       branchId: resident.branchId,
-      peepLevel: level,
-      supportNeeds: trimText(supportNeeds) || "",
-      primaryRoute: trimText(primaryRoute) || "",
-      secondaryRoute: trimText(secondaryRoute) || "",
-      equipmentRequired: trimText(equipmentRequired) || "",
-      responsibleStaff: trimText(responsibleStaff) || "",
-      reviewDueAt: reviewDueAt ? new Date(reviewDueAt) : defaultReviewDueAt(),
       consentStatus: Object.values(PeepConsentStatus).includes(consentStatus)
         ? consentStatus
         : PeepConsentStatus.CONSENT,
@@ -345,19 +382,7 @@ const updatePeepRecord = async ({
   actor,
   organizationId,
   peepRecordId,
-  peepLevel,
-  supportNeeds,
-  primaryRoute,
-  secondaryRoute,
-  equipmentRequired,
-  responsibleStaff,
-  reviewDueAt,
-  lastReviewedAt,
-  consentStatus,
-  mcaBestInterestNotes,
-  mobilityNotes,
-  assistanceRequired,
-  evacuationStrategy,
+  ...input
 }) => {
   const existing = await PeepRecord.findOne({
     _id: peepRecordId,
@@ -368,49 +393,51 @@ const updatePeepRecord = async ({
     manage: true,
   });
 
-  const updates = {};
-  const level = parsePeepLevel(peepLevel);
-  if (level) updates.peepLevel = level;
-  if (supportNeeds !== undefined) updates.supportNeeds = trimText(supportNeeds) || "";
-  if (primaryRoute !== undefined) updates.primaryRoute = trimText(primaryRoute) || "";
-  if (secondaryRoute !== undefined) {
-    updates.secondaryRoute = trimText(secondaryRoute) || "";
-  }
-  if (equipmentRequired !== undefined) {
-    updates.equipmentRequired = trimText(equipmentRequired) || "";
-  }
-  if (responsibleStaff !== undefined) {
-    updates.responsibleStaff = trimText(responsibleStaff) || "";
-  }
-  if (reviewDueAt !== undefined) {
-    updates.reviewDueAt = reviewDueAt ? new Date(reviewDueAt) : null;
-  }
-  if (lastReviewedAt !== undefined) {
-    updates.lastReviewedAt = lastReviewedAt ? new Date(lastReviewedAt) : null;
-  }
-  if (consentStatus !== undefined) {
-    if (!Object.values(PeepConsentStatus).includes(consentStatus)) {
-      throw new AppError("invalid_peep_consent_status", 400);
-    }
-    updates.consentStatus = consentStatus;
-  }
-  if (mcaBestInterestNotes !== undefined) {
-    updates.mcaBestInterestNotes = trimText(mcaBestInterestNotes) || "";
-  }
-  if (mobilityNotes !== undefined) updates.mobilityNotes = trimText(mobilityNotes) || "";
-  if (assistanceRequired !== undefined) {
-    updates.assistanceRequired = trimText(assistanceRequired) || "";
-  }
-  if (evacuationStrategy !== undefined) {
-    updates.evacuationStrategy = trimText(evacuationStrategy) || "";
-  }
-
+  const updates = parsePeepFields(input);
   if (Object.keys(updates).length) {
     Object.assign(existing, updates);
     await existing.save();
   }
 
   return loadShapedRecord(existing._id, organizationId);
+};
+
+/**
+ * Saves the PEEP sent with a resident, in that resident's transaction: updates the
+ * resident's record, or creates it. Fields that were not sent stay as they are.
+ */
+const savePeepForResident = async ({ standing, resident, input, session }) => {
+  assertMayManageStaff(standing, resident.branchId);
+
+  const existing = await PeepRecord.findOne({ residentId: resident._id }).session(
+    session,
+  );
+  if (existing) {
+    existing.set({ ...parsePeepFields(input), branchId: resident.branchId });
+    await existing.save({ session });
+    return existing.toObject();
+  }
+
+  if (resident.admissionStatus !== AdmissionStatus.ADMITTED) {
+    throw new AppError("resident_not_admitted", 409);
+  }
+  try {
+    const [created] = await PeepRecord.create(
+      [
+        {
+          ...parseNewPeepFields(input),
+          organizationId: resident.organizationId,
+          residentId: resident._id,
+          branchId: resident.branchId,
+        },
+      ],
+      { session },
+    );
+    return created.toObject();
+  } catch (error) {
+    if (duplicateKey(error)) throw new AppError("peep_record_already_exists", 409);
+    throw error;
+  }
 };
 
 const emptyLevels = () => ({
@@ -563,5 +590,6 @@ module.exports = {
   getPeepRecordByResident,
   createPeepRecord,
   updatePeepRecord,
+  savePeepForResident,
   getPeepFloorSummary,
 };

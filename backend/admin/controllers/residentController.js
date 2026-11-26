@@ -29,6 +29,7 @@ const createResident = async (req, res) => {
       admissionStatus: req.body.admissionStatus ?? req.body.status,
       visitorPasscode: req.body.visitorPasscode,
       photographyConsent: req.body.photographyConsent,
+      peep: req.body.peep,
     });
 
     return sendResponse({
@@ -44,6 +45,7 @@ const createResident = async (req, res) => {
 
 const listResidents = async (req, res) => {
   try {
+    res.set("Cache-Control", "no-store");
     const { page, limit, skip } = parsePaginationParams(req);
     const { data, meta } = await residentService.listResidents({
       actor: req.user,
@@ -102,6 +104,7 @@ const updateResident = async (req, res) => {
       admissionStatus: req.body.admissionStatus ?? req.body.status,
       branchId: req.body.branchId,
       photographyConsent: req.body.photographyConsent,
+      peep: req.body.peep,
     });
 
     return sendResponse({

@@ -182,7 +182,6 @@ const BRANCH_STAFF_ROLES = [
 
 /**
  * Owner of a new tenant cannot be someone who already works as site staff.
- * An existing owner may still be invited to another organisation.
  */
 const assertOwnerEmailNotStaff = async (email) => {
   const normalisedEmail = String(email).trim().toLowerCase();
@@ -210,6 +209,29 @@ const assertOwnerEmailNotStaff = async (email) => {
   }
 };
 
+/** One owner email may belong to only one organization, pending or active. */
+const assertOwnerEmailFree = async (email) => {
+  const normalisedEmail = String(email).trim().toLowerCase();
+
+  const [user, pendingOrgIds] = await Promise.all([
+    User.findOne({ email: normalisedEmail }).select("_id").lean(),
+    StaffInvitation.distinct("organizationId", {
+      email: normalisedEmail,
+      role: MembershipRole.OWNER,
+      status: StaffInvitationStatus.PENDING,
+    }),
+  ]);
+
+  const taken = await Organization.exists({
+    $or: [
+      { _id: { $in: pendingOrgIds }, ownerUserId: null },
+      ...(user ? [{ ownerUserId: user._id }] : []),
+    ],
+  });
+
+  if (taken) throw new AppError("owner_email_already_used", 409);
+};
+
 /**
  * Creates the organization and invites its owner.
  *
@@ -231,6 +253,7 @@ const createOrganization = async ({
   if (!owner?.email) throw new AppError("owner_email_required", 400);
 
   await assertOwnerEmailNotStaff(owner.email);
+  await assertOwnerEmailFree(owner.email);
   await assertOrganizationNameFree(name);
 
   // Entitlements are commercial and independent of activation: what the group

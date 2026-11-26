@@ -22,11 +22,15 @@ const {
   quietly,
 } = require("@appServices/family/familyNotify");
 const {
+  RESIDENT_HANDLER_ROLES,
   actorStanding,
   assertMayAccessResidents,
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./residentAccess");
+const { savePeepForResident } = require("@adminServices/peep/peepRecordService");
+const { inTransaction } = require("@appServices/family/familyLinkActions");
+const { encryptPasscode, decryptPasscode } = require("./residentPasscodeCrypto");
 
 const PASSCODE_PATTERN = /^\d{4,32}$/;
 const QR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -62,8 +66,6 @@ const assertPasscodeShape = (value) => {
   return passcode;
 };
 
-const hashPasscode = (value) => bcrypt.hash(assertPasscodeShape(value), 10);
-
 const generateQrToken = async () => {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const token = Array.from(crypto.randomBytes(10))
@@ -87,7 +89,7 @@ const branchSummary = (branch) =>
 
 const toPublicResident = (doc, extras = {}) => {
   if (!doc) return doc;
-  const { visitorPasscodeHash, ...rest } = doc;
+  const { visitorPasscodeHash, visitorPasscodeEncrypted, ...rest } = doc;
   return {
     ...rest,
     hasVisitorPasscode: Boolean(
@@ -150,6 +152,21 @@ const attachPeep = async (resident) => {
   });
 };
 
+/** Null when none is set, or when it was saved before passcodes could be shown. */
+const readPasscode = (encrypted) => {
+  if (!encrypted) return null;
+  try {
+    return decryptPasscode(encrypted);
+  } catch {
+    return null;
+  }
+};
+
+const withPasscode = ({ visitorPasscodeEncrypted, ...resident }) => ({
+  ...resident,
+  visitorPasscode: readPasscode(visitorPasscodeEncrypted),
+});
+
 const listResidents = async ({
   actor,
   organizationId,
@@ -162,6 +179,9 @@ const listResidents = async ({
 }) => {
   const standing = await actorStanding(actor, organizationId);
   assertMayAccessResidents(standing, scopeBranchFilter(standing, branchId));
+
+  // Staff share this list but never receive the passcode.
+  const showPasscode = RESIDENT_HANDLER_ROLES.includes(standing.role);
 
   const scopedBranchId = scopeBranchFilter(standing, branchId);
   if (scopedBranchId) {
@@ -213,7 +233,13 @@ const listResidents = async ({
         },
       },
     },
-    { $project: { visitorPasscodeHash: 0, _branch: 0 } },
+    {
+      $project: {
+        visitorPasscodeHash: 0,
+        ...(showPasscode ? {} : { visitorPasscodeEncrypted: 0 }),
+        _branch: 0,
+      },
+    },
   ];
 
   const { data, meta, result } = await paginateWithFacet({
@@ -243,7 +269,7 @@ const listResidents = async ({
   });
 
   return {
-    data,
+    data: showPasscode ? data.map(withPasscode) : data,
     meta: {
       ...meta,
       admitted: facetCount(result.admittedCount),
@@ -270,13 +296,25 @@ const applyPasscodeFields = async (payload, visitorPasscode) => {
   if (visitorPasscode === null || String(visitorPasscode).trim() === "") {
     payload.visitorPasscodeRequired = false;
     payload.visitorPasscodeHash = null;
+    payload.visitorPasscodeEncrypted = null;
     payload.visitorPasscodeSetAt = null;
     return payload;
   }
-  payload.visitorPasscodeHash = await hashPasscode(visitorPasscode);
+  const passcode = assertPasscodeShape(visitorPasscode);
+  payload.visitorPasscodeHash = await bcrypt.hash(passcode, 10);
+  payload.visitorPasscodeEncrypted = encryptPasscode(passcode);
   payload.visitorPasscodeRequired = true;
   payload.visitorPasscodeSetAt = new Date();
   return payload;
+};
+
+/** Undefined when no PEEP was sent. */
+const parsePeepInput = (peep) => {
+  if (peep == null) return undefined;
+  if (typeof peep !== "object" || Array.isArray(peep)) {
+    throw new AppError("invalid_peep", 400);
+  }
+  return peep;
 };
 
 const createResident = async ({
@@ -292,8 +330,10 @@ const createResident = async ({
   admissionStatus,
   visitorPasscode,
   photographyConsent,
+  peep,
 }) => {
-  const { branch } = await loadBranch({
+  const peepInput = parsePeepInput(peep);
+  const { branch, standing } = await loadBranch({
     actor,
     organizationId,
     branchId,
@@ -334,9 +374,24 @@ const createResident = async ({
 
   await applyPasscodeFields(payload, visitorPasscode);
 
-  const resident = await Resident.create(payload);
+  let resident;
+  let savedPeep = null;
+  if (peepInput) {
+    await inTransaction(async (session) => {
+      [resident] = await Resident.create([payload], { session });
+      savedPeep = await savePeepForResident({
+        standing,
+        resident,
+        input: peepInput,
+        session,
+      });
+    });
+  } else {
+    resident = await Resident.create(payload);
+  }
+
   return toPublicResident(resident.toObject(), {
-    peep: null,
+    peep: savedPeep,
     branch: branchSummary(branch),
   });
 };
@@ -354,8 +409,10 @@ const updateResident = async ({
   admissionStatus,
   branchId,
   photographyConsent,
+  peep,
 }) => {
-  const { resident } = await requireResidentInOrg({
+  const peepInput = parsePeepInput(peep);
+  const { resident, standing } = await requireResidentInOrg({
     actor,
     organizationId,
     residentId,
@@ -404,19 +461,42 @@ const updateResident = async ({
     update.branchId = branch._id;
   }
 
-  if (!Object.keys(update).length) throw new AppError("nothing_to_update", 400);
+  if (!Object.keys(update).length && !peepInput) {
+    throw new AppError("nothing_to_update", 400);
+  }
 
-  const saved = await Resident.findOneAndUpdate(
-    { _id: residentId, organizationId },
-    { $set: update },
-    { new: true, runValidators: true },
-  ).lean();
-  if (!saved) throw new AppError("resident_not_found", 404);
+  const saveResident = async (session) => {
+    const doc = await Resident.findOneAndUpdate(
+      { _id: residentId, organizationId },
+      { $set: update },
+      { new: true, runValidators: true, session },
+    ).lean();
+    if (!doc) throw new AppError("resident_not_found", 404);
+    return doc;
+  };
+
+  let saved;
+  let savedPeep;
+  if (peepInput) {
+    await inTransaction(async (session) => {
+      saved = await saveResident(session);
+      savedPeep = await savePeepForResident({
+        standing,
+        resident: saved,
+        input: peepInput,
+        session,
+      });
+    });
+  } else {
+    saved = await saveResident();
+  }
 
   const branch = await Branch.findById(saved.branchId)
     .select("_id name code")
     .lean();
-  const withPeep = await attachPeep(saved);
+  const withPeep = savedPeep
+    ? toPublicResident(saved, { peep: savedPeep })
+    : await attachPeep(saved);
   return { ...withPeep, branch: branchSummary(branch) };
 };
 

@@ -9,6 +9,7 @@ const myDrills = async (req, res) => {
     const { data, meta } = await evacuationService.myDrills({
       actor: req.user,
       organizationId: req.orgId,
+      type: req.query.type,
       page,
       limit,
       skip,

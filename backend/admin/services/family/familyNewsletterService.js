@@ -14,7 +14,12 @@ const {
 
   MembershipRole,
 } = require("@models/domainEnums");
-const { paginateWithFacet, keywordOr, facetCount, allCountFacet } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  keywordOr,
+  facetCount,
+  allCountFacet,
+} = require("@utils/paginate");
 const { searchText } = require("@utils/familyQuery");
 const { NotificationExp } = require("@models/Notifications");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
@@ -195,10 +200,58 @@ const checkComingUp = (value) => {
 };
 
 const checkNotices = (value) =>
-  objectList(value, MAX_NOTICES).map((item) => ({
-    title: plainText(item.title, { max: MAX_TITLE, required: true }),
-    body: plainText(item.body, { max: MAX_NOTICE_BODY }),
-  }));
+  objectList(value, MAX_NOTICES).map((item) => {
+    if (item.mediaId && !isValidObjectId(String(item.mediaId)))
+      throw new AppError("newsletter_media_invalid", 400);
+    return {
+      title: plainText(item.title, { max: MAX_TITLE, required: true }),
+      body: plainText(item.body, { max: MAX_NOTICE_BODY }),
+      storyId: plainText(item.storyId, { max: MAX_CATEGORY }),
+      mediaId: item.mediaId ? toObjectId(String(item.mediaId)) : null,
+    };
+  });
+
+// A story photo is one the editor uploaded and has not used elsewhere, or one this newsletter already holds.
+const assertStoryMedia = async ({ userId, newsletterId, notices }) => {
+  const ids = [
+    ...new Set(
+      notices
+        .map((item) => item.mediaId)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
+  if (!ids.length) return;
+  const [found] = await FamilyMedia.aggregate([
+    {
+      $match: {
+        _id: { $in: ids.map(toObjectId) },
+        uploadId: null,
+        postId: null,
+        $or: [
+          { newsletterId: toObjectId(newsletterId) },
+          { newsletterId: null, uploadedBy: toObjectId(userId) },
+        ],
+      },
+    },
+    { $count: "count" },
+  ]);
+  if ((found?.count ?? 0) !== ids.length)
+    throw new AppError("newsletter_media_invalid", 400);
+};
+
+const holdStoryMedia = async ({ newsletterId, notices }) => {
+  const ids = notices.map((item) => item.mediaId).filter(Boolean);
+  await FamilyMedia.updateMany(
+    { newsletterId: toObjectId(newsletterId), _id: { $nin: ids } },
+    { $set: { newsletterId: null } },
+  );
+  if (ids.length)
+    await FamilyMedia.updateMany(
+      { _id: { $in: ids } },
+      { $set: { newsletterId: toObjectId(newsletterId) } },
+    );
+};
 
 const checkDelivery = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -404,6 +457,7 @@ const getNewsletter = async ({ organizationId, branchId, newsletterId }) => {
   const mediaIds = [
     ...newsletter.highlights.map((h) => h.mediaId),
     ...newsletter.gallery.map((g) => g.mediaId),
+    ...newsletter.notices.map((n) => n.mediaId),
   ].filter(Boolean);
   const media = mediaIds.length
     ? await FamilyMedia.aggregate([
@@ -430,6 +484,10 @@ const getNewsletter = async ({ organizationId, branchId, newsletterId }) => {
     highlights: newsletter.highlights.map((h) => ({
       ...h,
       photoUrl: photoUrl(h.mediaId),
+    })),
+    notices: newsletter.notices.map((n) => ({
+      ...n,
+      photoUrl: photoUrl(n.mediaId),
     })),
     gallery: newsletter.gallery.map((g) => ({
       ...g,
@@ -718,7 +776,14 @@ const updateDraft = async ({
     });
   if (patch.comingUp !== undefined)
     set.comingUp = checkComingUp(patch.comingUp);
-  if (patch.notices !== undefined) set.notices = checkNotices(patch.notices);
+  if (patch.notices !== undefined) {
+    set.notices = checkNotices(patch.notices);
+    await assertStoryMedia({
+      userId: actor._id,
+      newsletterId: draft._id,
+      notices: set.notices,
+    });
+  }
   if (patch.newResidentIds !== undefined)
     set.newResidents = await checkNewResidents({
       value: patch.newResidentIds,
@@ -740,6 +805,8 @@ const updateDraft = async ({
   );
   if (!updated.modifiedCount)
     throw new AppError("newsletter_not_editable", 409);
+  if (set.notices)
+    await holdStoryMedia({ newsletterId: draft._id, notices: set.notices });
 
   return getNewsletter({ organizationId, newsletterId });
 };
@@ -935,6 +1002,7 @@ const loadPhotos = async (newsletter) => {
       [
         ...newsletter.highlights.map((item) => item.mediaId),
         ...newsletter.gallery.map((item) => item.mediaId),
+        ...newsletter.notices.map((item) => item.mediaId),
       ]
         .filter(Boolean)
         .map(String),
@@ -1232,6 +1300,7 @@ const recoverStuckNewsletters = async ({
 };
 
 module.exports = {
+  highlightFromPost,
   createDraft,
   updateDraft,
   deleteDraft,

@@ -135,6 +135,52 @@ const nextGazette = async ({ link, now = new Date() }) => {
   };
 };
 
+/**
+ * The picture on each gazette's card: the same cover photo the gazette itself shows (the newest
+ * message with a photo), and re-checked on every read like the rest of it. A gazette with no such
+ * photo, or a resident whose photo sharing is off, gets none.
+ */
+const coverUrlsOf = async ({ residentId, rows }) => {
+  const shared = rows.filter((row) => row.photoConsent === true);
+  const uploadIds = shared.flatMap((row) => row.uploadIds ?? []);
+  if (!uploadIds.length) return new Map();
+
+  const uploads = await FamilyUpload.aggregate([
+    {
+      $match: {
+        _id: { $in: uploadIds },
+        residentId: toObjectId(residentId),
+        status: FamilyUploadStatus.APPROVED,
+        includeInGazette: true,
+      },
+    },
+    { $sort: { createdAt: 1, _id: 1 } },
+    { $project: { mediaIds: 1 } },
+  ]);
+  const covers = shared
+    .map((row) => {
+      const own = new Set((row.uploadIds ?? []).map(String));
+      const messages = uploads.filter((upload) => own.has(String(upload._id)));
+      return [String(row.gazetteId), adminGazettes.coverOf(messages)];
+    })
+    .filter(([, mediaId]) => mediaId);
+  if (!covers.length) return new Map();
+
+  const media = await FamilyMedia.aggregate([
+    { $match: { _id: { $in: covers.map(([, mediaId]) => mediaId) } } },
+    { $project: { url: 1, blurredUrl: 1 } },
+  ]);
+  const urlOf = new Map(
+    media.map((entry) => [String(entry._id), entry.blurredUrl || entry.url]),
+  );
+  return new Map(
+    covers.map(([gazetteId, mediaId]) => [
+      gazetteId,
+      urlOf.get(String(mediaId)) || "",
+    ]),
+  );
+};
+
 const listGazettes = async ({ link, page, limit, skip }) => {
   const match = {
     residentId: toObjectId(link.residentId),
@@ -178,6 +224,10 @@ const listGazettes = async ({ link, page, limit, skip }) => {
           periodStart: "$issue.periodStart",
           periodEnd: "$issue.periodEnd",
           residentName: { $ifNull: ["$resident.name", ""] },
+          residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
+          // both only used to choose the cover, and not sent to the app
+          photoConsent: "$resident.photographyConsent",
+          uploadIds: 1,
           messageCount: { $size: "$uploadIds" },
           pageCount: 1,
           printedAt: 1,
@@ -194,9 +244,12 @@ const listGazettes = async ({ link, page, limit, skip }) => {
   ]);
   const timezone = branch?.timezone || "Europe/London";
 
+  const covers = await coverUrlsOf({ residentId: link.residentId, rows: data });
+
   return {
-    data: data.map((row) => ({
+    data: data.map(({ uploadIds, photoConsent, ...row }) => ({
       ...row,
+      coverUrl: covers.get(String(row.gazetteId)) || "",
       title: gazetteTitle(row.residentName),
       periodLabel: row.periodStart
         ? periodLabel({

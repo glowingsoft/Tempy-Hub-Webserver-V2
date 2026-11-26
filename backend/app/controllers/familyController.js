@@ -1,4 +1,5 @@
-const { parsePaginationParams } = require("@utils/responseUtil");
+const { parsePaginationParams, generateMeta } = require("@utils/responseUtil");
+const { pipeline } = require("node:stream");
 const { respond, respondByAction } = require("@utils/controllerResponse");
 const { queryText } = require("@utils/familyQuery");
 const familyAccessService = require("@appServices/family/familyAccessService");
@@ -14,11 +15,34 @@ const familyVisitService = require("@appServices/family/familyVisitService");
 const familyHomeService = require("@appServices/family/familyHomeService");
 const familyVisitPassService = require("@appServices/family/familyVisitPassService");
 const familyWallService = require("@appServices/family/familyWallService");
+const familyPreferenceService = require("@appServices/family/familyPreferenceService");
+const familyInboxService = require("@appServices/family/familyInboxService");
+const familyUploadScreenService = require("@appServices/family/familyUploadScreenService");
+const familyHelpService = require("@appServices/family/familyHelpService");
+const familyDataExportService = require("@appServices/family/familyDataExportService");
 const familyNewsletterService = require("@appServices/family/familyNewsletterService");
 const familyGazetteService = require("@appServices/family/familyGazetteService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { sendPdf } = require("@utils/familyPdfResponse");
 const { FamilyMemberStatus } = require("@models/domainEnums");
+
+// A detail whose long list is split into pages only when page or limit is sent.
+const pagedDetail = (listKey, load) => {
+  const whole = respond(load);
+  const split = respond(
+    async (req) => {
+      const { page, limit, skip } = parsePaginationParams(req);
+      const detail = await load(req);
+      return {
+        data: { ...detail, [listKey]: detail[listKey].slice(skip, skip + limit) },
+        meta: generateMeta(page, limit, detail[listKey].length),
+      };
+    },
+    { paged: true },
+  );
+  return (req, res) =>
+    (req.query.page === undefined && req.query.limit === undefined ? whole : split)(req, res);
+};
 
 const listRelationships = respond(() =>
   familyAccessService.listRelationships(),
@@ -114,6 +138,7 @@ const listMembers = respond((req) =>
   familyMemberService.listMembers({
     userId: req.user._id,
     link: req.familyLink,
+    links: req.familyLinks,
   }),
 );
 
@@ -210,17 +235,40 @@ const uploadPhotos = respond(
   { statusCode: 201, translationKey: "photos_uploaded" },
 );
 
+// Form-data carries every field as text, so "false" and a single media id need reading as such.
+const uploadFields = (req) => {
+  const { mediaIds, includeInGazette } = req.body;
+  if (!req.is("multipart/form-data")) return { mediaIds, includeInGazette };
+  return {
+    mediaIds:
+      typeof mediaIds === "string"
+        ? mediaIds
+            .split(",")
+            .map((id) => id.trim())
+            .filter(Boolean)
+        : mediaIds,
+    includeInGazette: String(includeInGazette).toLowerCase() === "true",
+  };
+};
+
 const createUpload = respond(
   (req) =>
-    familyUploadService.createUpload({
+    familyUploadService.createUploadWithPhotos({
       userId: req.user._id,
       link: req.familyLink,
       message: req.body.message,
-      mediaIds: req.body.mediaIds,
-      includeInGazette: req.body.includeInGazette,
       clientId: req.body.clientId,
+      files: req.files,
+      ...uploadFields(req),
     }),
   { statusCode: 201, translationKey: "upload_sent_for_approval" },
+);
+
+const getNewUploadScreen = respond((req) =>
+  familyUploadScreenService.getNewUpload({
+    userId: req.user._id,
+    link: req.familyLink,
+  }),
 );
 
 const listMyUploads = respond(
@@ -384,9 +432,16 @@ const listTimeline = respond(
   { paged: true },
 );
 
-const getNextGazette = respond((req) =>
-  familyGazetteService.nextGazette({ link: req.familyLink }),
-);
+// The Gazette screen in one call: the next issue, and a page of the printed ones (?page, ?limit).
+const getNextGazette = respond(async (req) => {
+  const { page, limit, skip } = parsePaginationParams(req);
+  const link = req.familyLink;
+  const [next, past] = await Promise.all([
+    familyGazetteService.nextGazette({ link }),
+    familyGazetteService.listGazettes({ link, page, limit, skip }),
+  ]);
+  return { ...next, pastGazettes: { items: past.data, meta: past.meta } };
+});
 
 const listGazettes = respond(
   (req) => {
@@ -401,7 +456,7 @@ const listGazettes = respond(
   { paged: true },
 );
 
-const getGazette = respond((req) =>
+const getGazette = pagedDetail("messages", (req) =>
   familyGazetteService.getGazette({
     links: req.familyLinks,
     gazetteId: req.params.gazetteId,
@@ -438,7 +493,7 @@ const listNewsletters = respond(
   { paged: true },
 );
 
-const getNewsletter = respond((req) =>
+const getNewsletter = pagedDetail("highlights", (req) =>
   familyNewsletterService.getNewsletter({
     links: req.familyLinks,
     newsletterId: req.params.newsletterId,
@@ -555,7 +610,96 @@ const inviteRelative = respond(
   { statusCode: 201, translationKey: "invitation_sent_successfully" },
 );
 
+const getNotificationPreferences = respond((req) =>
+  familyPreferenceService.getPreferences({ userId: req.user._id }),
+);
+
+const updateNotificationPreferences = respond(
+  (req) =>
+    familyPreferenceService.updatePreferences({
+      userId: req.user._id,
+      body: req.body,
+    }),
+  { translationKey: "notification_preferences_saved" },
+);
+
+const getDataRequest = respond((req) =>
+  familyDataExportService.getState({ userId: req.user._id }),
+);
+
+const createDataRequest = respond(
+  (req) => familyDataExportService.requestExport({ userId: req.user._id }),
+  { statusCode: 201, translationKey: "data_request_created" },
+);
+
+const createDataDownload = respond((req) =>
+  familyDataExportService.createDownloadLink({
+    userId: req.user._id,
+    password: req.body?.password,
+    baseUrl: (
+      process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`
+    ).replace(/\/+$/, ""),
+  }),
+);
+
+const downloadDataFile = async (req, res) => {
+  try {
+    const file = await familyDataExportService.openFile({
+      token: req.params.token,
+    });
+    res.set({
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${file.fileName}"`,
+      "Content-Length": String(file.size),
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+    // a broken transfer closes the connection, so a partial file is never taken as complete
+    return pipeline(file.stream, res, (error) => {
+      if (error) console.error("family data download stopped", error.message);
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getHelp = respond((req) =>
+  familyHelpService.getHelp({ link: req.familyLink }),
+);
+
+const listInboxMessages = respond(
+  (req) => {
+    const { page, limit, skip } = parsePaginationParams(req);
+    return familyInboxService.listInbox({
+      userId: req.user._id,
+      links: req.familyLinks,
+      page,
+      limit,
+      skip,
+    });
+  },
+  { paged: true },
+);
+
+const getInboxMessage = respond((req) =>
+  familyInboxService.getMessage({
+    userId: req.user._id,
+    links: req.familyLinks,
+    messageId: req.params.messageId,
+  }),
+);
+
 module.exports = {
+  listInboxMessages,
+  getInboxMessage,
+  getNewUploadScreen,
+  getHelp,
+  getDataRequest,
+  createDataRequest,
+  createDataDownload,
+  downloadDataFile,
+  getNotificationPreferences,
+  updateNotificationPreferences,
   listRelationships,
   getNextGazette,
   listGazettes,

@@ -4,6 +4,7 @@ const {
   EvacuationStatus,
   FamilyAlertStatus,
   FamilyUpdatePreset,
+  DrillKind,
 } = require("./domainEnums");
 
 const familyUpdateSchema = new mongoose.Schema(
@@ -80,6 +81,14 @@ const evacuationEventSchema = new mongoose.Schema(
       default: EvacuationStatus.ACTIVE,
     },
     familyAlert: { type: familyAlertSchema, default: () => ({}) },
+    /** What the Fire Drills screen records about an evacuation. */
+    drillKind: { type: String, enum: [...Object.values(DrillKind), null], default: null },
+    area: { type: String, default: "", trim: true },
+    cause: { type: String, default: "", trim: true },
+    issues: { type: [String], default: [] },
+    residentsMoved: { type: Number, default: null, min: 0 },
+    notes: { type: String, default: "", trim: true },
+    loggedManually: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

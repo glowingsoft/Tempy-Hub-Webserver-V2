@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const { Branch } = require("@models/Branch");
+const { receptionChanges } = require("./branchReception");
 const { Organization } = require("@models/Organization");
 const { BranchActivationCode } = require("@models/BranchActivationCode");
 const { User } = require("@models/UserModel");
@@ -625,6 +626,7 @@ const updateBranch = async ({
   address,
   timezone,
   assemblyPoint,
+  reception,
   settings,
   emergencyPin,
   status,
@@ -632,6 +634,9 @@ const updateBranch = async ({
   manager,
 }) => {
   const update = {};
+  // checked first, so a bad value changes nothing
+  if (reception !== undefined)
+    Object.assign(update, receptionChanges(reception));
   if (name !== undefined) {
     await assertBranchNameFree(organizationId, name, branchId);
     update.name = name;

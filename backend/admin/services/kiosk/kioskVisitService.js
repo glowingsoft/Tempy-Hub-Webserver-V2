@@ -1,4 +1,5 @@
 const { ExternalPerson } = require("@models/ExternalPerson");
+const { recordKioskActivity } = require("./kioskActivityService");
 const { VisitSession } = require("@models/VisitSession");
 const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
@@ -14,6 +15,7 @@ const {
   InvitationStatus,
   BadgeType,
   KioskMode,
+  KioskActivityType,
 } = require("@models/domainEnums");
 const visitSessionService = require("@adminServices/visitors/visitSessionService");
 const {
@@ -472,6 +474,17 @@ const withSignOutReminder = async (visit) => ({
   ),
 });
 
+const recordVisitCheckIn = (visit, { kiosk, branchId }) => {
+  recordKioskActivity({
+    kioskId: kiosk?._id,
+    branchId,
+    type: KioskActivityType.CHECK_IN,
+    name: visit?.person?.name,
+    externalPersonId: visit?.person?._id,
+  });
+  return visit;
+};
+
 const checkInAtKiosk = async ({
   organizationId,
   branchId,
@@ -485,13 +498,16 @@ const checkInAtKiosk = async ({
   }
   if (method === VisitMethod.INVITATION || inviteCode) {
     return withSignOutReminder(
-      await checkInByInvitation({
-        organizationId,
-        branchId,
-        kiosk,
-        inviteCode,
-        photoUrl: walkIn.photoUrl,
-      }),
+      recordVisitCheckIn(
+        await checkInByInvitation({
+          organizationId,
+          branchId,
+          kiosk,
+          inviteCode,
+          photoUrl: walkIn.photoUrl,
+        }),
+        { kiosk, branchId },
+      ),
     );
   }
 
@@ -500,12 +516,15 @@ const checkInAtKiosk = async ({
   }
 
   return withSignOutReminder(
-    await checkInWalkIn({
-      organizationId,
-      branchId,
-      kiosk,
-      ...walkIn,
-    }),
+    recordVisitCheckIn(
+      await checkInWalkIn({
+        organizationId,
+        branchId,
+        kiosk,
+        ...walkIn,
+      }),
+      { kiosk, branchId },
+    ),
   );
 };
 
@@ -551,6 +570,12 @@ const checkOutAtKiosk = async ({
   session.status = VisitSessionStatus.CHECKED_OUT;
   session.checkOutAt = new Date();
   await session.save();
+  recordKioskActivity({
+    kioskId: kiosk?._id,
+    branchId,
+    type: KioskActivityType.CHECK_OUT,
+    externalPersonId: session.externalPersonId,
+  });
   return session.toObject();
 };
 

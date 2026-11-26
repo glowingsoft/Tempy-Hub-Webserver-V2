@@ -418,13 +418,20 @@ const getFaqs = async ({ page, limit, skip, keyword }) => {
   });
 };
 
-const createFaq = async ({ question, answer }) => {
-  const faq = new Faq({ question, answer });
+const assertFaqAudience = (audience) => {
+  if (audience !== undefined && !["general", "family"].includes(audience))
+    throw new AppError("invalid_faq_audience", 400);
+};
+
+const createFaq = async ({ question, answer, audience }) => {
+  assertFaqAudience(audience);
+  const faq = new Faq({ question, answer, audience });
   await faq.save();
   return faq;
 };
 
-const updateFaq = async ({ id, question, answer }) => {
+const updateFaq = async ({ id, question, answer, audience }) => {
+  assertFaqAudience(audience);
   const faq = await Faq.findById(id);
   if (!faq) {
     throw new AppError("Faq not found", 404);
@@ -432,6 +439,7 @@ const updateFaq = async ({ id, question, answer }) => {
 
   faq.question = question;
   faq.answer = answer;
+  if (audience !== undefined) faq.audience = audience;
   await faq.save();
   return faq;
 };

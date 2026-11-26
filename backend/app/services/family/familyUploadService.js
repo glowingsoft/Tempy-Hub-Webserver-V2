@@ -9,7 +9,11 @@ const {
   FamilyGazetteItemStatus,
   FamilyUploadStatus,
 } = require("@models/domainEnums");
-const { paginateWithFacet, facetCount, allCountFacet } = require("@utils/paginate");
+const {
+  paginateWithFacet,
+  facetCount,
+  allCountFacet,
+} = require("@utils/paginate");
 const { AppError } = require("@services/_errors/AppError");
 const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { prepareUpload } = require("./familyImage");
@@ -28,7 +32,12 @@ const isDuplicateKey = (error) => error?.code === 11000;
 const assertRoomForPhotos = async ({ userId, count }) => {
   const [waiting] = await FamilyMedia.aggregate([
     {
-      $match: { uploadedBy: toObjectId(userId), uploadId: null, postId: null },
+      $match: {
+        uploadedBy: toObjectId(userId),
+        uploadId: null,
+        postId: null,
+        newsletterId: null,
+      },
     },
     { $count: "count" },
   ]);
@@ -435,6 +444,7 @@ const createUpload = async ({
             _id: { $in: ids.map(toObjectId) },
             uploadedBy: userId,
             uploadId: null,
+            newsletterId: null,
           },
           { $set: { uploadId: created._id } },
           { session },
@@ -626,7 +636,9 @@ const deleteUpload = async ({ userId, links, uploadId }) => {
 
   await cleanUpAfterDelete({
     uploadId: current._id,
-    keys: photos.flatMap((photo) => [photo.storageKey, photo.blurredKey]).filter(Boolean),
+    keys: photos
+      .flatMap((photo) => [photo.storageKey, photo.blurredKey])
+      .filter(Boolean),
   });
   return { uploadId: current._id };
 };
@@ -634,7 +646,71 @@ const deleteUpload = async ({ userId, links, uploadId }) => {
 const rejectedDeleteAfter = (from = new Date()) =>
   new Date(from.getTime() + REJECTED_KEEP_DAYS * 24 * 60 * 60 * 1000);
 
+/** Removes photos stored for an upload that was then not created, so nothing is left behind. */
+const discardUnattached = async (mediaIds) => {
+  try {
+    const unused = await FamilyMedia.find({
+      _id: { $in: mediaIds },
+      uploadId: null,
+    })
+      .select("storageKey")
+      .lean();
+    for (const photo of unused) {
+      await uploadAwsService.deleteFiles(photo.storageKey);
+      await FamilyMedia.deleteOne({ _id: photo._id, uploadId: null });
+    }
+  } catch (error) {
+    console.error("unused family photos not removed", error.message);
+  }
+};
+
+/**
+ * New Upload in one request: the photo files are stored and the upload created together. What can
+ * be checked is checked before a file is stored. Without files this is createUpload.
+ */
+const createUploadWithPhotos = async ({ files, ...upload }) => {
+  if (!files?.length) return createUpload(upload);
+
+  const { userId, link, message, mediaIds = [], clientId } = upload;
+  if (clientId != null) {
+    // a resend of an upload that already arrived stores nothing again
+    const [existing] = await FamilyUpload.aggregate([
+      {
+        $match: {
+          authorId: toObjectId(userId),
+          clientId: String(clientId).slice(0, MAX_CLIENT_ID_LENGTH),
+        },
+      },
+      { $project: { _id: 1 } },
+    ]);
+    if (existing) return getMyUpload({ userId, uploadId: existing._id });
+  }
+
+  normaliseMessage(message);
+  const ids = normaliseMediaIds(mediaIds);
+  if (ids.length + files.length > MAX_PHOTOS)
+    throw new AppError("too_many_photos", 400);
+  await assertPhotosAllowed({
+    organizationId: link.organizationId,
+    residentId: link.residentId,
+  });
+  await assertMediaUsable({ userId, mediaIds: ids });
+
+  const { photos } = await uploadPhotos({ userId, files });
+  const stored = photos.map((photo) => photo.mediaId);
+  try {
+    return await createUpload({
+      ...upload,
+      mediaIds: [...ids, ...stored.map(String)],
+    });
+  } finally {
+    // attached photos are left alone, so after a success this removes nothing
+    await discardUnattached(stored);
+  }
+};
+
 module.exports = {
+  createUploadWithPhotos,
   uploadPhoto,
   uploadPhotos,
   listMyUploads,

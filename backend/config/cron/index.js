@@ -12,6 +12,7 @@ const {
   runFamilyGazetteSchedulerCron,
 } = require("./family/familyGazettes.cron");
 const { runStorageUsageCron, runStorageUsageCatchUp } = require("./billing/storageUsage.cron");
+const { runFamilyDataExportsCron } = require("./family/familyDataExports.cron");
 
 const envFlag = (key, fallback = true) => {
   const raw = process.env[key];
@@ -98,6 +99,14 @@ const startCrons = () => {
     ttlSec: 280,
     enabled: true,
     run: runFamilyGazetteRecoveryCron,
+  });
+
+  registerJob({
+    name: "family-data-exports",
+    schedule: "*/5 * * * *",
+    ttlSec: 280,
+    enabled: true,
+    run: runFamilyDataExportsCron,
   });
 
   registerJob({

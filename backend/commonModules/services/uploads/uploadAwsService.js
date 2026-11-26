@@ -81,6 +81,14 @@ const getObject = async (key) => {
   return Buffer.from(await Body.transformToByteArray());
 };
 
+/** The file as a stream, so a large one is passed on without being held in memory. */
+const getObjectStream = async (key) => {
+  const { Body } = await getClient().send(
+    new GetObjectCommand({ Bucket: requireBucket(), Key: key }),
+  );
+  return Body;
+};
+
 const SIGNED_URL_SECONDS = 300;
 
 // A link S3 itself stops honouring after a few minutes, so access lasts no longer than the check that issued it.
@@ -204,6 +212,7 @@ module.exports = {
   deleteFiles,
   putObject,
   getObject,
+  getObjectStream,
   headObject,
   signedDownloadUrl,
   createShortDownloadToken,

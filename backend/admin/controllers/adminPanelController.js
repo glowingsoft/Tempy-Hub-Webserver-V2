@@ -241,6 +241,7 @@ const createFaq = async (req, res) => {
     const data = await adminPanelService.createFaq({
       question: req.body.question,
       answer: req.body.answer,
+      audience: req.body.audience,
     });
     return sendResponse({
       res,
@@ -264,6 +265,7 @@ const updateFaq = async (req, res) => {
       id: req.params.id,
       question: req.body.question,
       answer: req.body.answer,
+      audience: req.body.audience,
     });
     return sendResponse({
       res,

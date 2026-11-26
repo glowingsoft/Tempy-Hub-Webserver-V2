@@ -21,6 +21,11 @@ const familyMediaSchema = new mongoose.Schema(
       ref: "FamilyUpload",
       default: null,
     },
+    newsletterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FamilyNewsletter",
+      default: null,
+    },
     storageKey: { type: String, required: true },
     url: { type: String, required: true },
     blurredKey: { type: String, default: "" },

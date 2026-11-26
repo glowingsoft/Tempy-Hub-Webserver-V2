@@ -3018,6 +3018,16 @@
                       "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
                     ]
                   }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const data = (pm.response.json() || {}).data || {};",
+                      "if (data._id) pm.collectionVariables.set(\"evacuationEventId\", data._id);"
+                    ]
+                  }
                 }
               ],
               "request": {
@@ -3042,9 +3052,32 @@
                     {
                       "key": "branchId",
                       "value": "{{branchId}}"
+                    },
+                    {
+                      "key": "status",
+                      "value": "missing",
+                      "disabled": true,
+                      "description": "Managers: unaccounted list filter missing, unknown or safe"
+                    },
+                    {
+                      "key": "personKind",
+                      "value": "staff",
+                      "disabled": true,
+                      "description": "Managers: staff, resident, visitor or contractor"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "disabled": true
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "disabled": true
                     }
                   ]
-                }
+                },
+                "description": "One call for the active evacuation and the whole Evacuation screen. Send x-org-id. Query: branchId (owner and super admin), type; and for the Not Yet Accounted For list only: status (missing, unknown or safe; 400 invalid_evac_check_status; default missing and unknown), personKind (staff, resident, visitor or contractor; 400 invalid_evac_person_kind), page, limit. Every signed-in member gets the active evacuation (_id, type, status, startedAt, branch, kiosk, kiosks, evacCheck, check), or {} when none is active. Site manager, owner and super admin also get, on the same response: rollcallStats {total, safe, missing, unknown, byKind {staff, resident, visitor}}, familyAlert {offsiteAlertsEnabled, familiesToNotify, status, alertedAt, familiesNotified, updates, allClearAt} and unaccounted [rows: _id, personKind, personId, status, markedAt, locationLabel, lastSeenLabel, lastSeenAt, name, email, employeeCode, roomNumber, jobTitle, signedInAt, visitPurpose], with meta for the unaccounted paging. A site manager sees their own site; another site is 403 outside_managed_branch. Staff and line managers get no roll call fields. Contractors are counted under visitor. The separate GET /app/evacuations/:id/rollcall call was removed. For the Evacuation screen it also returns banner {title, highlight, status, typeLabel, sourceLabel, declaredAt, elapsedMinutes, subtitle, elapsedLabel} for everyone; for managers also rollcallCard {safe, total, label (28 / 41 Safe), rows [{key, label, safe, total, percent}]}, familiesCard {status {key, label Not Sent}, canAlert, familiesToNotify}, notAccountedFor {title, count of missing and unknown} and, on each unaccounted row, title (with + N Guests from a family visit), subtitle (Staff - Nights - Last Seen Room 8; Resident - Room 12 - assistance; Visitor or Family Visit Pass - Signed In 09:20), guests and tag {key, label}."
               },
               "response": [
                 {
@@ -3546,43 +3579,6 @@
               ]
             },
             {
-              "name": "get roll call (evacuation)",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/rollcall",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "app",
-                    "evacuations",
-                    "{{evacuationEventId}}",
-                    "rollcall"
-                  ]
-                },
-                "description": "One call for the manager app Evacuation screen. Returns the evacuation (type, status, startedAt, kioskId, branch with assemblyPoint), rollcallStats { total, safe, missing, unknown, byKind }, familyAlert { offsiteAlertsEnabled, familiesToNotify, status notSent/alertSent/allClearSent, alertedAt, familiesNotified, updates, allClearAt } and unaccounted (Not Yet Accounted For rows: personKind, status, name, email, roomNumber, employeeCode, jobTitle, lastSeenLabel, lastSeenAt, signedInAt, visitPurpose). The unaccounted list is paged: meta has the totals. Query: status (missing, unknown or safe; default missing and unknown), personKind (staff, resident, visitor or contractor), page, limit. Site manager of the site, owner or super admin; send x-org-id."
-              },
-              "response": []
-            },
-            {
               "name": "alert families (evacuation)",
               "event": [
                 {
@@ -3703,6 +3699,235 @@
                   ]
                 },
                 "description": "Post All Clear. Tells the families the emergency is over and sets familyAlert.status = allClearSent with allClearAt. Families must have been alerted first (409 family_alert_not_sent); once only (409 family_all_clear_already_sent). Allowed while the evacuation is active or after it is closed."
+              },
+              "response": []
+            },
+            {
+              "name": "fire drills screen",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Query: page, limit, branchId (owner and super admin; required for them). Returns branch, isEvacuationActive (true while an evacuation or drill is running: show the Stop button), activeEvacuationId (its id for POST /app/evacuations/:id/close, else null), activeEvacuationType (real or mock for the running one, else null), progress {title (Lounge On Sun 26 Oct: the latest drill with an area), year, status {key onTrack or behind, label}, items [{key day, night or compartment, label, done, target (4 a year), percent, progressLabel (3/4), onTrack}]}, history [{_id, title (Night Drill - 2 Oct), subtitle (Evacuated in 4m 10s - 2 issues logged; Toaster, Kitchen - Cleared in 6 min; East Wing - 9 Residents Moved), tag {key drill, event or compartment, label}, type, kind, status, startedAt, closedAt, durationSeconds, area, cause, issues, residentsMoved, notes}] of ended evacuations, newest first, and meta. A drill raised without a kind counts as night when it started between 20:00 and 08:00 site time, else day. On Track means each kind has reached its share of the yearly target for the months so far."
+              },
+              "response": []
+            },
+            {
+              "name": "raise evacuation or drill",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations"
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Body: type, mock for Smoke Alarm / Drill or real for Real Fire (400 invalid_evacuation_type); drillKind (day, night or compartment, optional); branchId only for the owner. Starts the evacuation and fills the roll call (201). 409 evacuation_already_active. A real fire sends an in-app and push alert to every app user of the site and to the organisation owners, except the person who raised it; usersAlerted is how many. A drill alerts nobody. Families are told only with alert-families, never for a drill. Evacuations raised from the kiosk or the admin panel do not send this alert.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"mock\",\n  \"drillKind\": \"day\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const data = (pm.response.json() || {}).data || {};",
+                      "if (data._id) pm.collectionVariables.set(\"evacuationEventId\", data._id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "log a drill",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/log",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "log"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"compartment\",\n  \"startedAt\": \"2026-09-04T12:00:00.000Z\",\n  \"durationSeconds\": 360,\n  \"area\": \"East Wing\",\n  \"residentsMoved\": 9,\n  \"issues\": [],\n  \"notes\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Log A Drill. To record one that already happened: kind (day, night, compartment or falseAlarm), startedAt (ISO, not in the future), durationSeconds (up to 86400), and optionally area (80), cause (120), issues (up to 20 texts of 200), residentsMoved (0 to 1000), notes (1000), branchId (owner). To add details to an evacuation that has ended: evacuationEventId with any of kind, area, cause, issues, residentsMoved, notes (409 evacuation_still_active while it is running; 404 evacuation_event_not_found). 400 invalid_drill_log names the field. Returns the history row (201)."
+              },
+              "response": []
+            },
+            {
+              "name": "log a drill (details of an ended evacuation)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/log",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "log"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"evacuationEventId\": \"{{evacuationEventId}}\",\n  \"kind\": \"falseAlarm\",\n  \"cause\": \"Toaster\",\n  \"area\": \"Kitchen\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Log A Drill. To record one that already happened: kind (day, night, compartment or falseAlarm), startedAt (ISO, not in the future), durationSeconds (up to 86400), and optionally area (80), cause (120), issues (up to 20 texts of 200), residentsMoved (0 to 1000), notes (1000), branchId (owner). To add details to an evacuation that has ended: evacuationEventId with any of kind, area, cause, issues, residentsMoved, notes (409 evacuation_still_active while it is running; 404 evacuation_event_not_found). 400 invalid_drill_log names the field. Returns the history row (201)."
+              },
+              "response": []
+            },
+            {
+              "name": "mark person in roll call",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/checks",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "checks"
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. Body: personKind (staff, resident or visitor), personId (from the unaccounted row), status (safe, missing or unknown; safe when left out), locationLabel, lastSeenLabel (optional). 409 evacuation_not_active.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personKind\": \"resident\",\n  \"personId\": \"{{residentId}}\",\n  \"status\": \"safe\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "end evacuation",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/evacuations/{{evacuationEventId}}/close",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "{{evacuationEventId}}",
+                    "close"
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and evacuation module must be on. No body. Closes the active evacuation. Telling families all is clear is the separate all-clear call."
               },
               "response": []
             }
@@ -6984,18 +7209,36 @@
                   "request": {
                     "method": "POST",
                     "header": [
-                      { "key": "x-kiosk-token", "value": "{{kioskToken}}" },
-                      { "key": "Content-Type", "value": "application/json" }
+                      {
+                        "key": "x-kiosk-token",
+                        "value": "{{kioskToken}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
                     ],
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"answers\": [\n    { \"questionId\": \"{{expectedVisitQuestionId}}\", \"value\": \"Yes\" },\n    { \"questionId\": \"{{whoVisitedQuestionId}}\", \"value\": \"Margaret And Amy\" },\n    { \"questionId\": \"{{ratingQuestionId}}\", \"value\": 5 },\n    { \"questionId\": \"{{commentsQuestionId}}\", \"value\": \"Lovely afternoon, the lounge was warm and staff were so kind.\" }\n  ]\n}",
-                      "options": { "raw": { "language": "json" } }
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
                     },
                     "url": {
                       "raw": "{{url}}/app/kiosk/visits/{{visitSessionId}}/feedback",
-                      "host": [ "{{url}}" ],
-                      "path": [ "app", "kiosk", "visits", "{{visitSessionId}}", "feedback" ]
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "kiosk",
+                        "visits",
+                        "{{visitSessionId}}",
+                        "feedback"
+                      ]
                     },
                     "description": "Submit the visitor's answers after checkout. The checkout response contains the enabled flag, question IDs and prompts. The visitSessionId belongs to the completed kiosk checkout."
                   },
@@ -8564,7 +8807,7 @@
                             }
                           ]
                         },
-                        "description": "My Family: the people linked to the resident, with name, photo, relationship, Next Of Kin badge, status and isYou. The next of kin also sees people who asked to join (status pending, canReview true); everyone else sees active members only. canRemove and canReview say which buttons to show. Figma screen: My Family."
+                        "description": "My Family: residentName (and name) is the resident's name; members are the people linked to the resident, with name, photo, relationship, Next Of Kin badge, status and isYou. The next of kin also sees people who asked to join (status pending, canReview true); everyone else sees active members only. canRemove and canReview say which buttons to show. canManage is about the resident being viewed; isNextOfKinOfAnyFamily is true when you are next of kin for any resident you are linked to. Figma screen: My Family."
                       },
                       "response": []
                     },
@@ -9367,6 +9610,106 @@
               "description": "A family member's own uploads, from photo to approval.",
               "item": [
                 {
+                  "name": "new upload screen",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Screen fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.include.keys(\"resident\", \"photoSharing\", \"nextGazette\", \"limits\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/uploads/new?residentId={{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "uploads",
+                        "new"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        }
+                      ]
+                    },
+                    "description": "Everything the New Upload screen shows, in one call: resident {residentId, residentName, residentPhotoUrl, homeName}, photoSharing (false: text only), nextGazette (same as next gazette, without the past list) and limits {maxMessageLength, maxPhotos, maxPhotoSizeMb, maxTotalSizeMb}. Family token."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "send upload with photos",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Sent for approval\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "    pm.expect(pm.response.json().data).to.have.property(\"uploadId\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/uploads",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "uploads"
+                      ]
+                    },
+                    "description": "Send For Approval in one call: form-data with residentId, message, includeInGazette (true or false), clientId (optional, stops a resend creating a second upload) and files (up to 10 images, 10 MB each, 50 MB together; choose them in Postman). A message, files or both. If the upload is refused, no photo is kept.",
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "type": "text"
+                        },
+                        {
+                          "key": "message",
+                          "value": "Lily scored twice at her first football match!",
+                          "type": "text"
+                        },
+                        {
+                          "key": "includeInGazette",
+                          "value": "true",
+                          "type": "text"
+                        },
+                        {
+                          "key": "files",
+                          "type": "file",
+                          "src": []
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
                   "name": "upload photo",
                   "event": [
                     {
@@ -9668,7 +10011,7 @@
                     "method": "GET",
                     "header": [],
                     "url": {
-                      "raw": "{{url}}/app/family/gazettes/next?residentId={{residentId}}",
+                      "raw": "{{url}}/app/family/gazettes/next?residentId={{residentId}}&page=1&limit=10",
                       "host": [
                         "{{url}}"
                       ],
@@ -9682,10 +10025,18 @@
                         {
                           "key": "residentId",
                           "value": "{{residentId}}"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
                         }
                       ]
                     },
-                    "description": "The Gazette tab's top card: the gazette being collected now. Query: residentId (required). scheduled is false until the organization has saved a gazette schedule (then issue is null and there is nothing to show). Otherwise issue has number (No. 15), state (collecting, or notStarted before the first issue begins), periodStart, periodEnd, periodLabel (15 Oct – 28 Oct 2026) and closesAt (the Closes 28 Oct pill). messageCap is 30, messagesUsed is the 9 in '9 of 30 messages' (approved messages meant for the gazette; at most the cap), messagesSent is how many were sent in all, remaining, overflow (sent beyond the cap, which wait for the next gazette), isFull (the Gazette full screen) and percentFull for the progress bar. A message printed in an earlier gazette, or taken out by staff, does not count again."
+                    "description": "The Gazette tab's top card: the gazette being collected now. Query: residentId (required). scheduled is false until the organization has saved a gazette schedule (then issue is null and there is nothing to show). Otherwise issue has number (No. 15), state (collecting, or notStarted before the first issue begins), periodStart, periodEnd, periodLabel (15 Oct – 28 Oct 2026) and closesAt (the Closes 28 Oct pill). messageCap is 30, messagesUsed is the 9 in '9 of 30 messages' (approved messages meant for the gazette; at most the cap), messagesSent is how many were sent in all, remaining, overflow (sent beyond the cap, which wait for the next gazette), isFull (the Gazette full screen) and percentFull for the progress bar. A message printed in an earlier gazette, or taken out by staff, does not count again. Also returns pastGazettes {items, meta}: a page of the printed gazettes, newest first, in the same shape as printed gazettes. Optional query: page, limit (they page pastGazettes only)."
                   },
                   "response": []
                 },
@@ -9735,7 +10086,7 @@
                         }
                       ]
                     },
-                    "description": "Printed gazettes: the gazettes the home has printed for the resident, newest first. Query: residentId (required), page, limit. Each row has gazetteId, title (The Hughes Family Gazette), issueNumber (Gazette no. 14), periodLabel (1 Oct – 14 Oct 2026), messageCount, pageCount (the 6 pages), printedAt and givenAt (the 'Printed 15 Oct · given 15 Oct' line, with givenAt empty until the home records it) and latest, true on the newest one overall (the Latest pill and the card on the Gazette tab). Only printed gazettes are listed."
+                    "description": "Printed gazettes: the gazettes the home has printed for the resident, newest first. Query: residentId (required), page, limit. Each row has gazetteId, title (The Hughes Family Gazette), issueNumber (Gazette no. 14), periodLabel (1 Oct – 14 Oct 2026), messageCount, pageCount (the 6 pages), printedAt and givenAt (the 'Printed 15 Oct · given 15 Oct' line, with givenAt empty until the home records it) and latest, true on the newest one overall (the Latest pill and the card on the Gazette tab). Each row also has coverUrl (the gazette's cover photo, empty when it has none or the resident's photo sharing is off) and residentPhotoUrl (use it as the card picture when coverUrl is empty). Only printed gazettes are listed."
                   },
                   "response": []
                 },
@@ -9768,6 +10119,19 @@
                         "family",
                         "gazettes",
                         "{{gazetteId}}"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "disabled": true,
+                          "description": "Optional: send page or limit to page the long list"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "disabled": true
+                        }
                       ]
                     },
                     "description": "Read gazette: the printed gazette for the reader. gazetteId comes from printed gazettes. title, issueNumber, periodLabel (No. 14 · 1–14 Oct 2026), residentName (for Margaret), homeName, pageCount, printedAt and givenAt. cover is the best photo of the issue (the newest photo) with its message, headline, authorName and relationshipLabel, or null when there is no photo. messages are the family's messages oldest first: authorName, relationshipLabel (Daughter), message, photos and sentAt. life is Life at the home: title, text, photoUrl and postedAt. Photos are the blurred copy wherever one exists. Anything no longer allowed is left out on every read: a resident whose photo sharing is off has no photos, and a wall post that was removed is gone. 404 gazette_not_found for a gazette that is not printed, belongs to another resident, or is not yours."
@@ -10456,6 +10820,19 @@
                         "family",
                         "newsletters",
                         "{{newsletterId}}"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "disabled": true,
+                          "description": "Optional: send page or limit to page the long list"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "disabled": true
+                        }
                       ]
                     },
                     "description": "Newsletter screen: the whole issue for reading: title, homeName, periodLabel, issueNumber, sentAt, editedAt (the 'edited 1 Oct' line), the welcome note with signature, highlights (title, text, photoUrl, postedAt), coming up (date, time, title, description, category), notices, new residents, gallery and the footer. Only the sections the home switched on are returned. Posts removed, and residents whose photo sharing is now off, are left out on every read (BR-06). 404 newsletter_not_found for a draft, a scheduled one, one not sent into the app, or another home's. Send the family token; any of your linked homes works."
@@ -10826,6 +11203,481 @@
                   "response": []
                 }
               ]
+            },
+            {
+              "name": "Profile & Settings",
+              "item": [
+                {
+                  "name": "my notification settings",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Settings fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.include.keys(\"newGazette\", \"photoDecisions\", \"gazetteReminders\", \"visitChanges\", \"newsletters\", \"homeMessages\", \"alsoByEmail\", \"emergencyAlerts\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/notification-preferences",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "notification-preferences"
+                      ]
+                    },
+                    "description": "Profile & Settings screen of the signed-in family member: profile {name, email, profileIcon (full image address)} and the toggles. Defaults: all on except newsletters and alsoByEmail. emergencyAlerts is always true. These are saved settings only: notifications are not yet filtered by them. Family token."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "update notification settings",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Settings saved\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.include.keys(\"newGazette\", \"photoDecisions\", \"gazetteReminders\", \"visitChanges\", \"newsletters\", \"homeMessages\", \"alsoByEmail\", \"emergencyAlerts\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PUT",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/notification-preferences",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "notification-preferences"
+                      ]
+                    },
+                    "description": "Send only the toggles to change: newGazette, photoDecisions, gazetteReminders, visitChanges, newsletters, homeMessages, alsoByEmail (true or false). Returns all settings. 400 emergency_alerts_always_on for emergencyAlerts false, 400 invalid_notification_preference for an unknown name or a non-boolean, 400 nothing_to_update for an empty body.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"newsletters\": true,\n  \"alsoByEmail\": false\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Download My Data",
+              "item": [
+                {
+                  "name": "my data request",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"State fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data.status).to.be.oneOf([\"notRequested\", \"preparing\", \"ready\"]);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/data-request",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "data-request"
+                      ]
+                    },
+                    "description": "Download My Data screen. Returns status (notRequested, preparing, ready), email, requestedAt, preparedAt, expiresAt, fileName, fileSize (bytes), passwordRequired and failed (the last request could not be prepared). Family token; no resident link needed."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "request my data",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Request accepted\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/data-request",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "data-request"
+                      ]
+                    },
+                    "description": "Request My Data / Request A New Copy. The new file replaces the old one. It is built after the reply; the person is emailed and notified when it is ready, and it is kept for 7 days. 409 data_request_pending while one is being prepared."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "download my data link",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Link issued\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.collectionVariables.set(\"dataDownloadUrl\", pm.response.json().data.url);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/data-request/download",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "data-request",
+                        "download"
+                      ]
+                    },
+                    "description": "Download button. Send password when passwordRequired is true. Returns url (works for 5 minutes), expiresAt, fileName and fileSize. 400 data_export_password_required, 403 data_export_wrong_password, 404 data_export_not_ready.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"password\": \"{{password}}\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "download my data file",
+                  "request": {
+                    "auth": {
+                      "type": "noauth"
+                    },
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{dataDownloadUrl}}",
+                      "host": [
+                        "{{dataDownloadUrl}}"
+                      ]
+                    },
+                    "description": "Opens the url from download my data link: the zip itself, no token header. 410 data_export_link_expired after 5 minutes, or once the file is replaced or expired. Use Send and Download."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Help & Contact",
+              "item": [
+                {
+                  "name": "help and contact",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Help fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "    pm.expect(pm.response.json().data).to.include.keys(\"homeName\", \"contact\", \"faqs\");",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/help?residentId={{residentId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "help"
+                      ],
+                      "query": [
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}"
+                        }
+                      ]
+                    },
+                    "description": "Help & Contact screen for the resident's home. Returns homeName, contact {name, email, phone, opensAt, closesAt} and faqs [{id, question, answer}]. Contact fields are empty until the home sets them; name defaults to '<home> Reception'. faqs are the admin's family questions, or four built-in ones until there are any. Family token."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "report a problem with the app",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Report received\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/support",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "support"
+                      ]
+                    },
+                    "description": "Report A Problem With The App. All four fields are required; the app fills name and email from the profile. The existing support request, seen in the admin panel.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"name\": \"Sarah Hughes\",\n  \"email\": \"sarah@example.com\",\n  \"subject\": \"Problem with the family app\",\n  \"message\": \"My photos are not loading\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "set reception contact (owner or site manager)",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Reception saved\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "PATCH",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/admin/branches/{{branchId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "branches",
+                        "{{branchId}}"
+                      ]
+                    },
+                    "description": "Staff token. Sets what families see on Help & Contact. Send only the fields to change inside reception: name, email, phone, opensAt, closesAt (HH:MM). An empty string clears a field. 400 invalid_reception_details.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"reception\": {\n    \"email\": \"reception@florencehouse.com\",\n    \"phone\": \"+44 20 7946 0000\",\n    \"opensAt\": \"08:00\",\n    \"closesAt\": \"20:00\"\n  }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "add family question (platform admin)",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Question saved\", function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/admin/settings/faqs",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "admin",
+                        "settings",
+                        "faqs"
+                      ]
+                    },
+                    "description": "Platform admin token. audience family shows the question on the family Help & Contact screen. Once one family question exists, the four built-in questions are no longer shown.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"question\": \"Why hasn't my photo appeared?\",\n  \"answer\": \"The home checks every photo before it appears.\",\n  \"audience\": \"family\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Messages From Home",
+              "item": [
+                {
+                  "name": "messages list",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Messages listed\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "const rows = pm.response.json().data;",
+                          "if (rows.length) { pm.collectionVariables.set(\"messageId\", rows[0].messageId); }"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/messages?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "messages"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        }
+                      ]
+                    },
+                    "description": "Messages screen: one row per message the home sent you, newest first. Each has messageId, subject (the first line when sent without one), preview, homeName, senderName, senderRole (job title, otherwise role), sentAt and isRead. meta has unread, receivesMessages (false when you are nobody's next of kin: messages go to the next of kin only) and canReply (always false). Family token."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "message detail",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test(\"Message fetched\", function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{url}}/app/family/messages/{{messageId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family",
+                        "messages",
+                        "{{messageId}}"
+                      ]
+                    },
+                    "description": "One message; opening it marks it read. Returns subject, message, homeName, senderName, senderRole, to (the resident's family), residents [{residentId, residentName}] for Book A Visit, sentAt, isRead and canReply. 404 message_not_found for anyone else's. Attachments are not supported yet."
+                  },
+                  "response": []
+                }
+              ]
             }
           ]
         },
@@ -11105,7 +11957,7 @@
                 "description": "PUT with body {\"action\":\"pause\",\"branchId\":\"...\",\"reason\":\"...\"}. The Pause Visiting button: stops new requests at once, cancels every visit still to come at the site, withdraws the kiosk codes issued for them and notifies the families affected. cancelled is how many visits were cancelled. Sending it again cancels nothing more. branchId is needed for an owner; a site or line manager uses their own site. reason is optional (up to 200 characters) and is shown to the families. Needs the Family Engagement module (404 when it is off) and the matching permission: familyEngagement.view to read, .manage to change, .approve to decide join requests. Owners and super admins always have them; a site or line manager needs them granted.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"action\": \"pause\",\n  \"branchId\": \"{{branchId}}\",\n  \"reason\": \"Visiting is paused while we deal with a flu outbreak\"\n}",
+                  "raw": "{\n  \"action\": \"pause\",\n  \"branchId\": \"{{branchId}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -13111,8 +13963,14 @@
                       "value": "{{branchId}}",
                       "description": "Optional branch filter; site managers are scoped to their assigned branch."
                     },
-                    { "key": "page", "value": "1" },
-                    { "key": "limit", "value": "20" }
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
                   ]
                 },
                 "description": "Visitor Feedback screen: settings (switch and Send To Me By), thisMonth summary and the latest responses. Optional page and limit. Site manager sees their own site."
@@ -13154,6 +14012,1223 @@
                     }
                   }
                 }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Family Tab (Site Manager)",
+          "item": [
+            {
+              "name": "Overview",
+              "item": [
+                {
+                  "name": "family overview",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage"
+                      ],
+                      "query": [
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Returns site {branchId, name, families, label (Oakfield - 36 Families)}, cards {photosToCheck {count, oldestAt, label Oldest 26h}, joinRequests {count, escalated, label 1 Escalated (waiting 7 days or more)}, visitRequests {count, thisWeekend, label This Weekend or Next 3 Dec}, reportedPosts {count, oldestAt, label Today}}, gazette {scheduled, gazetteId (the id of the generated gazette for this period, null until it is generated), number, title, residentsLabel, counts {total, ready, noContent, overCap, noFamily}, countsLabel, closesAt, closesInDays}, newsletter {newsletterId, title, month, status, badge} or null, visiting {open, label, reason}. Pause or open visiting with PUT /app/family-visits/visiting; message a family with POST /chats/message."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Gazette",
+              "item": [
+                {
+                  "name": "gazette screen",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/gazette?page=1&limit=20",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "gazette"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "disabled": false
+                        },
+                        {
+                          "key": "limit",
+                          "value": "20",
+                          "disabled": false
+                        }
+                      ]
+                    },
+                    "description": "Query: page, limit, branchId (owner). Returns gazette (as on home), noContent {count, title} or null, residents [{residentId, name, displayName (Hughes, Margaret), roomNumber, messageCount, status ready, noContent, overCap or noFamily, subtitle, tag {key, label}}] sorted by surname, and meta. Worked out live for the current period, before any gazette is generated."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "gazette detail",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/gazettes/{{gazetteId}}?page=1&limit=20",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "gazettes",
+                        "{{gazetteId}}"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "20"
+                        }
+                      ]
+                    },
+                    "description": "Site manager of the site, owner or super admin; send x-org-id; the family module must be on. Query: page, limit (10 when left out). gazetteId is the id of a generated gazette (gazette.gazetteId on GET /app/family-manage). Returns gazette {gazetteId, branchId, homeName, number, status, periodStart, periodEnd, closesAt, generatedAt, messageCap, title, residentsLabel, counts {total, ready, noContent, overCap, noFamily, printed, building, failed}, countsLabel}, noContent {count, title} or null, residents [{itemId, residentId, name, displayName, roomNumber, messageCount, status, subtitle, tag {key, label}, hasPdf, printedAt}] sorted by surname, and meta. 404 gazette_not_found for an unknown id or another site's gazette. The open period that is not generated yet stays on GET /app/family-manage/gazette."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "generate all ready gazettes",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/gazette/generate",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "gazette",
+                        "generate"
+                      ]
+                    },
+                    "description": "Body: none for a site manager; the owner sends branchId. Starts building the site's gazettes (202). The same action as POST /admin/family/gazette-issues.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "invite family member",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/invitations",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "invitations"
+                      ]
+                    },
+                    "description": "Body: residentId, email (required), name, relationship, isNextOfKin. The same invitation as POST /admin/family-invitations.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"residentId\": \"{{residentId}}\",\n  \"email\": \"{{familyInviteEmail}}\",\n  \"name\": \"Jane Doe\",\n  \"relationship\": \"daughter\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "New Wall Post",
+              "item": [
+                {
+                  "name": "taggable residents",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts/taggable-residents",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts",
+                        "taggable-residents"
+                      ],
+                      "query": [
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Returns [{residentId, name, roomNumber, photoUrl, canTag, label}] for every admitted resident of the site. canTag false (label Arthur Bell - No Photo Consent) means the row is shown disabled; tagging them is refused."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "upload photo",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts/media",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts",
+                        "media"
+                      ]
+                    },
+                    "description": "Multipart form-data with the photo file. Returns the media id to send in mediaIds or as a story's mediaId.",
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "file",
+                          "type": "file",
+                          "src": []
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "upload photos",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts/media/batch",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts",
+                        "media",
+                        "batch"
+                      ]
+                    },
+                    "description": "Multipart form-data with the photo files. Returns the media ids to send in mediaIds.",
+                    "body": {
+                      "mode": "formdata",
+                      "formdata": [
+                        {
+                          "key": "files",
+                          "type": "file",
+                          "src": []
+                        }
+                      ]
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "publish wall post",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts"
+                      ]
+                    },
+                    "description": "Body: message and or mediaIds, audience (all, branch or tagged; all when left out), taggedResidentIds, isPinned, addToNewsletter, title, status, scheduledAt. With addToNewsletter true the response also has newsletter {added, newsletterId, reason}: added to the site's draft newsletter; not added with reason noDraft, postNotPublished or an error key. The post is published either way. 400 invalid_add_to_newsletter.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"message\": \"Pumpkin carving in the lounge on Friday at 14:00. Families welcome!\",\n  \"audience\": \"all\",\n  \"mediaIds\": [],\n  \"taggedResidentIds\": [],\n  \"isPinned\": false,\n  \"addToNewsletter\": false\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Community Wall",
+              "item": [
+                {
+                  "name": "list reported posts",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts?reported=true&page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts"
+                      ],
+                      "query": [
+                        {
+                          "key": "reported",
+                          "value": "true"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        }
+                      ]
+                    },
+                    "description": "Reported Posts screen: posts with open reports, each with reportCount and reports. Keep: PUT /app/family-manage/posts/:id/reports {action: dismiss}. Remove: DELETE /app/family-manage/posts/:id."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "community wall",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "disabled": false
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "disabled": false
+                        }
+                      ]
+                    },
+                    "description": "Query: page, limit and the same filters as the admin wall list. Meta includes the gazette card."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "update wall post",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts/{{postId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts",
+                        "{{postId}}"
+                      ]
+                    },
+                    "description": "Send only what changed: message, title, mediaIds, taggedResidentIds, audience, isPinned, status, scheduledAt.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"isPinned\": true\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "remove wall post",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts/{{postId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts",
+                        "{{postId}}"
+                      ]
+                    },
+                    "description": "Removes the post."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "dismiss post reports",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/posts/{{postId}}/reports",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "posts",
+                        "{{postId}}",
+                        "reports"
+                      ]
+                    },
+                    "description": "Body {action: dismiss}.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"dismiss\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Newsletter",
+              "item": [
+                {
+                  "name": "newsletter screen",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletter",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletter"
+                      ],
+                      "query": [
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Returns homeName and newsletter (null when the site has none) {newsletterId, title, month, status, badge, editable, coverPhotoUrl (the first story or gallery photo), storiesLabel (3 Stories - 2 From Wall Posts), stories [{storyId, type welcome, wallPost or story, headline, story, mediaId, photoUrl, subtitle}], recipients}. An empty photo field comes back as the noimage address, so use mediaId to tell whether a story has a photo."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "create newsletter draft",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters"
+                      ]
+                    },
+                    "description": "Body: month (YYYY-MM, the current month when left out), title. 409 newsletter_exists_for_month.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "preview newsletter",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/pdf?format=url",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "pdf"
+                      ],
+                      "query": [
+                        {
+                          "key": "format",
+                          "value": "url"
+                        },
+                        {
+                          "key": "download",
+                          "value": "true",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Site manager of the site, owner or super admin; send x-org-id. Newsletter screen: Preview. Query format=url returns {url, expiresAt, filename}: a short-lived link that opens the PDF without any header; without format the PDF itself is returned. A draft is drawn at the moment of the call; a sent newsletter gives the stored copy. download=true makes the link or file download."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "send newsletter",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/delivery",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "delivery"
+                      ]
+                    },
+                    "description": "Body {action: send} (schedule with sendAt, or cancel, also work). Send needs at least one channel: a new draft has none, so send delivery {inApp, email, pdf} with the action, else 400 newsletter_delivery_required. inApp notifies the families in the app, email mails them the PDF, pdf keeps a copy. 400 newsletter_empty, 409 newsletter_already_sent. A sent newsletter cannot be edited.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"action\": \"send\",\n  \"delivery\": {\n    \"inApp\": true,\n    \"email\": true,\n    \"pdf\": true\n  }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Add A Story",
+              "item": [
+                {
+                  "name": "wall posts to add",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/wall-posts?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "wall-posts"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1",
+                          "disabled": false
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10",
+                          "disabled": false
+                        }
+                      ]
+                    },
+                    "description": "Query: page, limit. Returns [{postId, headline, createdAt, reactionCount, photoUrl, subtitle (11 Oct - 12 Reactions)}], newest first. Posts only for tagged families are left out."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "add story",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/stories",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "stories"
+                      ]
+                    },
+                    "description": "Either {postId} (optional headline and story to override; story up to 1000 characters) or {headline, story, mediaId} (headline required, story up to 500 characters, mediaId from the photo upload). Returns the newsletter screen. 409 newsletter_story_exists or newsletter_stories_full (12 wall posts, 10 written stories); 400 newsletter_media_invalid. Draft only.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"headline\": \"Baking Club Is Back\",\n  \"story\": \"What happened, who took part, what's coming up.\",\n  \"mediaId\": null\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Edit Story",
+              "item": [
+                {
+                  "name": "get story",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/stories/{{storyId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "stories",
+                        "{{storyId}}"
+                      ]
+                    },
+                    "description": "storyId from the story list. Returns headline, story, mediaId, photoUrl, type. 404 newsletter_story_not_found."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "save story",
+                  "request": {
+                    "method": "PUT",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/stories/{{storyId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "stories",
+                        "{{storyId}}"
+                      ]
+                    },
+                    "description": "Send only what changed: headline, story, mediaId (null removes the photo; a wall post story only takes a photo of that post). The manager's message keeps its headline (400 newsletter_headline_fixed). Draft only.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"headline\": \"Message From The Manager\",\n  \"story\": \"A warm welcome to November.\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "response": []
+                },
+                {
+                  "name": "remove story",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/newsletters/{{newsletterId}}/stories/{{storyId}}",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "newsletters",
+                        "{{newsletterId}}",
+                        "stories",
+                        "{{storyId}}"
+                      ]
+                    },
+                    "description": "Removes the story. Removing the manager's message clears its text. Draft only."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Photo Approvals",
+              "item": [
+                {
+                  "name": "list photo approvals",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/uploads?status=pending&page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "uploads"
+                      ],
+                      "query": [
+                        {
+                          "key": "status",
+                          "value": "pending"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "disabled": true
+                        },
+                        {
+                          "key": "keyword",
+                          "value": "",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Site manager of the site, owner or super admin; send x-org-id; the family module must be on. A site manager always sees their own site; the owner may send branchId. The same list as the admin photo queue. Query: status (pending, approved or rejected; all when left out), residentId, keyword, page, limit. Returns uploads [{uploadId, residentId, branchId, residentName, roomNumber, residentPhotoUrl, residentHasPhotoConsent, authorId, authorName, authorEmail, authorPhotoUrl, authorRelationship, message, photos [{mediaId, url, blurredUrl, width, height}], status and decision fields}]; pending ones oldest first, otherwise newest first. meta has paging, counts per status and oldestPendingAt. Approve or reject with PUT /app/residents/:residentId/family/photos/:uploadId."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Join Requests",
+              "item": [
+                {
+                  "name": "list join requests",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-manage/join-requests?page=1&limit=10",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-manage",
+                        "join-requests"
+                      ],
+                      "query": [
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "10"
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Site manager of the site, owner or super admin; send x-org-id; the family module must be on. A site manager always sees their own site; the owner may send branchId. The same list as the admin join requests. Query: residentId, page, limit. Returns [{requestId, residentId, residentName, name, photoUrl, email, relationship, requestedAt}], the longest waiting first, with paging meta. Detail: GET /app/approvals/detail?type=familyLink&itemId=requestId. Approve or reject with PUT /app/approvals/join-requests/:requestId."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Visit Requests",
+              "item": [
+                {
+                  "name": "list visit requests",
+                  "request": {
+                    "method": "GET",
+                    "header": [
+                      {
+                        "key": "x-org-id",
+                        "value": "{{organizationId}}"
+                      }
+                    ],
+                    "url": {
+                      "raw": "{{url}}/app/family-visits?status=requested&range=upcoming&page=1&limit=20",
+                      "host": [
+                        "{{url}}"
+                      ],
+                      "path": [
+                        "app",
+                        "family-visits"
+                      ],
+                      "query": [
+                        {
+                          "key": "status",
+                          "value": "requested"
+                        },
+                        {
+                          "key": "range",
+                          "value": "upcoming"
+                        },
+                        {
+                          "key": "page",
+                          "value": "1"
+                        },
+                        {
+                          "key": "limit",
+                          "value": "20"
+                        },
+                        {
+                          "key": "source",
+                          "value": "family",
+                          "disabled": true
+                        },
+                        {
+                          "key": "residentId",
+                          "value": "{{residentId}}",
+                          "disabled": true
+                        },
+                        {
+                          "key": "branchId",
+                          "value": "{{branchId}}",
+                          "disabled": true
+                        }
+                      ]
+                    },
+                    "description": "Visit Requests screen. status requested, confirmed, declined, cancelled or invited; range upcoming or past. Left out, status is requested and range is upcoming. Approve or decline with PUT /app/family-visits/:id."
+                  },
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Reports (Site Manager)",
+          "item": [
+            {
+              "name": "reports screen",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/reports?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "reports"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; owner and super admin may send branchId (a site manager always sees their own site). Query: page, limit (today's visitor list). Returns attendance {title, subtitle (This week - 96% on time), from, to, checkIns, late, onTimePercent}, visitorCheckIns {title, subtitle (2 today), from, to, count}, staffHours {title, subtitle (Period: 01 - 28 Oct), from, to}, sicknessRate {title, subtitle (3.8% - Tap For People), from, to, rate, staffAffected}, lateCheckIns {title, subtitle (11 this month - Tap for people), from, to, count}, and visitorCheckInsToday {title, items [{_id, name, photoUrl, personType, checkInAt, time, reason, hostName, status}], meta}, newest first. Handover notes are not stored, so none are returned. The four attendance cards are null without the sign-in and attendance module; the visitor card and list are null without the sign-in and evacuation module. Worked out with the same calculations as the admin reports under /admin/organizations/:organizationId/reports."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Kiosks (Site Manager)",
+          "item": [
+            {
+              "name": "kiosks screen",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/kiosks?page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "kiosks"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the sign-in and attendance module must be on; a site manager sees their own site, the owner may send branchId. Query: page, limit. Returns [{_id, name (the location label), status {key online or offline, label}, lines (the two texts of the card: online Last Check-In 09:30 - A. Nwosu and Heartbeat 20s Ago - 41 Events Today; offline Last Seen 07:12 - 2h 29m ago and Last Check-In 07:04 - P. Nair), lastCheckIn {at, time, name} or null, lastHeartbeatAt, eventsToday, kioskMode, setupStatus, branch}] and meta (paging, total, online, offline, locked, pending, registered). Online means a heartbeat within the same window the admin kiosk list uses. Names and the event count come from check-ins and check-outs recorded on the kiosk from now on."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Rota (Site Manager)",
+          "item": [
+            {
+              "name": "rota screen (full rota tab)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/rota?tab=full",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "rota"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "full"
+                    },
+                    {
+                      "key": "date",
+                      "value": "2026-10-20",
+                      "disabled": true
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; owner and super admin also send branchId. Query: tab (full, the default, or whosIn; 400 invalid_rota_tab), date (YYYY-MM-DD, any day of the week to show; this week when left out), page and limit (whosIn people). full needs the rota module and whosIn the sign-in and attendance module (403 module_not_enabled). Both return tab, header {greeting, name, photoUrl, unreadNotifications}, branch and week {from, to, label Week of 20 Oct}. full: summary {title This Week, shifts, hours, open, label 160 Shifts - 1,312.5 h, status {published, All Published}} and days (Monday to Sunday) [{date, label Mon 20, filled, total, open, shiftsLabel 24 / 24 Shifts, status {covered Covered, open Fill 1 Open, or none No Shifts}}]. Cancelled shifts are left out. No cost is returned: pay rates are not stored. Shifts have no draft state, so a week with shifts reads All Published. whosIn: inNow {title, total, departments [{departmentId, name, count, percent of the largest}]}, people [{staffId, name, photoUrl, jobTitle, department, clockInAt, onBreak, since, subtitle Senior Care - Since 07:02, or Since 19:58 Yesterday}] and meta. Counts staff clocked in within the last 24 hours who have not clocked out, by their first department."
+              },
+              "response": []
+            },
+            {
+              "name": "rota screen (just who's in tab)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/rota?tab=whosIn&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "rota"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "whosIn"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; owner and super admin also send branchId. Query: tab (full, the default, or whosIn; 400 invalid_rota_tab), date (YYYY-MM-DD, any day of the week to show; this week when left out), page and limit (whosIn people). full needs the rota module and whosIn the sign-in and attendance module (403 module_not_enabled). Both return tab, header {greeting, name, photoUrl, unreadNotifications}, branch and week {from, to, label Week of 20 Oct}. full: summary {title This Week, shifts, hours, open, label 160 Shifts - 1,312.5 h, status {published, All Published}} and days (Monday to Sunday) [{date, label Mon 20, filled, total, open, shiftsLabel 24 / 24 Shifts, status {covered Covered, open Fill 1 Open, or none No Shifts}}]. Cancelled shifts are left out. No cost is returned: pay rates are not stored. Shifts have no draft state, so a week with shifts reads All Published. whosIn: inNow {title, total, departments [{departmentId, name, count, percent of the largest}]}, people [{staffId, name, photoUrl, jobTitle, department, clockInAt, onBreak, since, subtitle Senior Care - Since 07:02, or Since 19:58 Yesterday}] and meta. Counts staff clocked in within the last 24 hours who have not clocked out, by their first department."
               },
               "response": []
             }

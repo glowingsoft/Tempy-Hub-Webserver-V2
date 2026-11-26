@@ -8,6 +8,7 @@ const { LeaveRequest } = require("@models/LeaveRequest");
 const { AttendanceChangeRequest } = require("@models/AttendanceChangeRequest");
 const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
+const { signerMatch } = require("@adminServices/documents/documentSigners");
 const {
   ChangeRequestStatus,
   DocumentAudience,
@@ -149,6 +150,7 @@ const documentsToSign = async ({ organizationId, branchId, staffId }) => {
         requiresSignature: true,
         audiences: DocumentAudience.STAFF,
         $or: [{ branchId }, { branchId: null }],
+        $and: [signerMatch(staffId, branchId)],
       },
     },
     {

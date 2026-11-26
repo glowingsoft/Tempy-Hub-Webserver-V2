@@ -75,7 +75,6 @@ const attendanceCards = async ({ scope, now }) => {
 };
 
 const visitorsToday = async ({ scope, now, page, limit, skip }) => {
-  // The first call only tells the site's timezone, so "today" is the site's day.
   const month = await visitSessionService.visitorCheckInsReport({
     ...scope,
     page: 1,

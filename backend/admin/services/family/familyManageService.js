@@ -334,7 +334,6 @@ const getGazette = async ({
   };
 };
 
-// A generated gazette keeps its own result per resident, so printed, building and failed can show.
 const issuedRow = (item, resident, cap) => {
   const base = gazetteRow(
     {
@@ -473,7 +472,6 @@ const firstHighlightPhoto = (newsletter) =>
   newsletter.gallery.find((item) => item.url)?.url ||
   "";
 
-// Notices saved before stories had ids are addressed by their position.
 const noticeKey = (notice, index) => notice.storyId || `n${index}`;
 
 const storiesOf = (newsletter) => [
@@ -592,7 +590,6 @@ const createNewsletter = async ({
   return { homeName: site.name, newsletter: presentNewsletter(created) };
 };
 
-// A site-bound manager passes branchScope, so another site's newsletter reads as not found.
 const loadNewsletter = ({ organizationId, branchScope, newsletterId }) =>
   newsletterService.getNewsletter({
     organizationId,
@@ -912,7 +909,6 @@ const addPostToDraft = async ({ actor, organizationId, post }) => {
       postId: String(post.postId),
     });
   } catch (error) {
-    // The post is already published, so a newsletter that cannot take it is reported, not thrown.
     if (!(error instanceof AppError)) throw error;
     return {
       added: false,

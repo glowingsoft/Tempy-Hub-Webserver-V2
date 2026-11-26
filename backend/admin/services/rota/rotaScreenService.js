@@ -20,7 +20,6 @@ const DEFAULT_TZ = "Europe/London";
 const DAY = "YYYY-MM-DD";
 const TABS = ["full", "whosIn"];
 const COUNTED = [ShiftStatus.OPEN, ShiftStatus.SCHEDULED, ShiftStatus.COMPLETED];
-// A shift left open longer than this is a missed clock-out, not someone still in the building.
 const STILL_IN_HOURS = 24;
 
 const MODULE_OF_TAB = {
@@ -113,7 +112,6 @@ const fullRota = async ({ branchId, week, timezone }) => {
       hours,
       open: days.reduce((sum, day) => sum + day.open, 0),
       label: `${total} ${total === 1 ? "Shift" : "Shifts"} - ${hoursText(hours)} h`,
-      // Shifts have no draft state: each one is visible to staff as soon as it is saved.
       status: total
         ? { key: "published", label: "All Published" }
         : { key: "none", label: "No Shifts" },

@@ -57,7 +57,6 @@ const hourKind = (startedAt, timezone) => {
   return hour >= NIGHT_FROM || hour < NIGHT_UNTIL ? DrillKind.NIGHT : DrillKind.DAY;
 };
 
-// A drill raised from a phone or kiosk carries no kind, so its start time decides day or night.
 const kindOf = (event, timezone) => {
   if (event.drillKind) return event.drillKind;
   if (event.type === EvacuationType.MOCK) return hourKind(event.startedAt, timezone);
@@ -225,7 +224,6 @@ const assertKind = (kind, { required }) => {
   return kind;
 };
 
-/** Log A Drill: records one that already happened, or adds the details to an evacuation that has ended. */
 const logDrill = async ({ actor, organizationId, branchId, body = {}, now = new Date() }) => {
   if (body.evacuationEventId !== undefined) {
     if (!isValidObjectId(body.evacuationEventId))
@@ -282,7 +280,6 @@ const setDrillKind = async ({ evacuationEventId, kind }) => {
 
 const assertDrillKind = (kind) => assertKind(kind, { required: false });
 
-/** A real fire tells every app user of the site and the organisation's owners; a drill tells nobody. */
 const alertAppUsers = async ({ actor, organizationId, event }) => {
   if (event.type !== EvacuationType.REAL) return 0;
   try {
@@ -329,7 +326,6 @@ const alertAppUsers = async ({ actor, organizationId, event }) => {
     });
     return receivers.length;
   } catch (error) {
-    // The evacuation has started; a failed alert must not undo or hide that.
     console.error("evacuation alert failed", error.message);
     return 0;
   }
@@ -385,6 +381,8 @@ const familiesCardOf = (data) => {
       data.type === EvacuationType.REAL &&
       Boolean(alert.offsiteAlertsEnabled) &&
       status === FamilyAlertStatus.NOT_SENT,
+    isUpdateSent: Boolean(alert.updates?.length),
+    isAllClearSent: status === FamilyAlertStatus.ALL_CLEAR_SENT,
     familiesToNotify: alert.familiesToNotify ?? 0,
   };
 };
@@ -485,7 +483,6 @@ const presentRow = (row, details, timezone) => {
   };
 };
 
-/** Adds what the Evacuation screen prints to the active evacuation; nothing already there is changed. */
 const presentActive = async ({ data, now = new Date() }) => {
   const timezone = data.branch?.timezone || DEFAULT_TZ;
   const result = { ...data, banner: bannerOf(data, timezone, now) };

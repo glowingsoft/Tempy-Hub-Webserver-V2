@@ -17,6 +17,7 @@ const { LeaveEntitlement } = require("@models/LeaveEntitlement");
 const { LeaveRequest } = require("@models/LeaveRequest");
 const { Document } = require("@models/Document");
 const { DocumentSignature } = require("@models/DocumentSignature");
+const { signerMatch } = require("@adminServices/documents/documentSigners");
 const attendanceService = require("@adminServices/attendance/attendanceService");
 const staffDashboardSettingsService = require("@adminServices/organizations/staffDashboardSettingsService");
 const {
@@ -231,6 +232,7 @@ const documentsWaiting = async ({ organizationId, branchId, staffId }) => {
         requiresSignature: true,
         audiences: DocumentAudience.STAFF,
         $or: [{ branchId }, { branchId: null }],
+        $and: [signerMatch(staffId, branchId)],
       },
     },
     {

@@ -1,9 +1,12 @@
+const { isValidObjectId } = require("mongoose");
 const { sendResponse, validateParams, parsePaginationParams } = require("@utils/responseUtil");
 const { respond } = require("@utils/controllerResponse");
 const staffDocumentsService = require("../services/staff/staffDocumentsService");
 const documentService = require("@adminServices/documents/documentService");
-const { createDocumentCategory } = require("@adminServices/documents/documentCategoryService");
+const documentScreenService = require("@adminServices/documents/documentScreenService");
+const uploadAwsService = require("@commonServices/uploads/uploadAwsService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
+const { AppError } = require("@services/_errors/AppError");
 
 const listDocuments = async (req, res) => {
   try {
@@ -69,28 +72,67 @@ const signDocument = async (req, res) => {
   }
 };
 
-const listFolders = respond((req) =>
-  documentService.listSiteFolders({
+const listLibrary = respond(
+  (req) =>
+    documentScreenService.getDocumentsScreen({
+      actor: req.user,
+      organizationId: req.orgId,
+      branchId: req.query.branchId,
+      ...parsePaginationParams(req),
+    }),
+  { paged: true },
+);
+
+const getSignatureRequest = respond((req) =>
+  documentScreenService.getSignatureRequest({
     actor: req.user,
     organizationId: req.orgId,
+    documentId: req.params.documentId,
     branchId: req.query.branchId,
   }),
 );
 
-const createFolder = respond(
-  async (req) => {
-    const { _id, title } = await createDocumentCategory({
+const sendForSignature = respond(
+  (req) =>
+    documentScreenService.sendForSignature({
       actor: req.user,
       organizationId: req.orgId,
-      title: req.body?.title,
-    });
-    return { _id, title, files: 0, waitingSignature: 0 };
-  },
-  { statusCode: 201, translationKey: "document_category_created_successfully" },
+      documentId: req.params.documentId,
+      branchId: req.body?.branchId,
+      staffIds: req.body?.staffIds,
+      signBy: req.body?.signBy,
+    }),
+  { translationKey: "signature_request_sent" },
 );
 
+const deleteDocument = respond(
+  async (req) => {
+    if (!isValidObjectId(req.params.documentId)) {
+      throw new AppError("invalid_document_id", 400);
+    }
+    return documentService.deleteDocument({
+      actor: req.user,
+      organizationId: req.orgId,
+      documentId: req.params.documentId,
+    });
+  },
+  { translationKey: "document_deleted_successfully" },
+);
+
+const uploadedEntries = async (files) => {
+  const stored = await uploadAwsService.uploadFiles(files);
+  return stored.map((file) => ({
+    file: {
+      key: file.key,
+      originalName: file.filename,
+      mimeType: file.contentType,
+      sizeBytes: file.size,
+    },
+  }));
+};
+
 const bulkUpload = respond(
-  (req) =>
+  async (req) =>
     documentService.bulkCreateDocuments({
       actor: req.user,
       organizationId: req.orgId,
@@ -98,7 +140,9 @@ const bulkUpload = respond(
       categoryId: req.body?.categoryId,
       audiences: req.body?.audiences,
       requiresSignature: req.body?.requiresSignature,
-      files: req.body?.files,
+      files: req.files?.length
+        ? await uploadedEntries(req.files)
+        : req.body?.files,
     }),
   { statusCode: 201, translationKey: "documents_uploaded" },
 );
@@ -187,7 +231,9 @@ module.exports = {
   listDocuments,
   getDocument,
   signDocument,
-  listFolders,
-  createFolder,
+  listLibrary,
+  getSignatureRequest,
+  sendForSignature,
+  deleteDocument,
   bulkUpload,
 };

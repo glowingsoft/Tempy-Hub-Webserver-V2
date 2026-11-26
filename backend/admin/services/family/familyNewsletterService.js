@@ -211,7 +211,6 @@ const checkNotices = (value) =>
     };
   });
 
-// A story photo is one the editor uploaded and has not used elsewhere, or one this newsletter already holds.
 const assertStoryMedia = async ({ userId, newsletterId, notices }) => {
   const ids = [
     ...new Set(

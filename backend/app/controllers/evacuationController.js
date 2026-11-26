@@ -37,7 +37,7 @@ const myDrills = async (req, res) => {
   }
 };
 
-/** Active evacuation of a branch; managers also get the roll call, one page of unaccounted people at a time. */
+/** Staff: active evacuation for a branch (Alerts screens). */
 const getActiveEvacuation = async (req, res) => {
   try {
     const role = req.membership?.role;
@@ -47,7 +47,6 @@ const getActiveEvacuation = async (req, res) => {
       type: req.query.type,
       includeStats: false,
       selfUserId: req.user._id,
-      // a site manager sees their own site, the only one whose roll call they may open
       ...(role === MembershipRole.SITE_MANAGER ? { actor: req.user } : {}),
     });
 

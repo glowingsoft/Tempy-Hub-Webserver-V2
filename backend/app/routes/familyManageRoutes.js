@@ -37,7 +37,6 @@ const gazetteLimiter = createRateLimiter("family-manage-gazettes", 15, 60);
 const inviteLimiter = createRateLimiter("family-manage-invites", 15, 30);
 const sendLimiter = createRateLimiter("family-manage-newsletter-sends", 15, 20);
 
-// The Family tab of the site manager app.
 router.use(
   auth,
   requireMembership(),

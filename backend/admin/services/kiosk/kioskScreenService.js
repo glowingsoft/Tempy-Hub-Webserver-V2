@@ -16,7 +16,6 @@ const agoLabel = (value, now) => {
   return `${Math.floor(hours / 24)}d`;
 };
 
-// Today shows the time alone; an older moment also says which day.
 const timeLabel = (value, timezone, now) => {
   const when = moment(value).tz(timezone);
   return when.isSame(moment(now).tz(timezone), "day")
@@ -66,7 +65,6 @@ const activityByKiosk = async ({ kiosks, zoneOf, now }) => {
 const presentKiosk = ({ kiosk, last, eventsToday, timezone, now }) => {
   const online = kiosk.presence === "online";
   const heartbeatAt = kiosk.lastHeartbeatAt || null;
-  // Check-ins made before activity was recorded leave only the kiosk's own timestamp.
   const checkInAt = last?.occurredAt || kiosk.lastCheckInAt || null;
   const who = shortName(last?.name);
 

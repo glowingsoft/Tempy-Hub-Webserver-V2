@@ -15,6 +15,10 @@ const {
   shapeDocument,
   versionLookup,
 } = require("@adminServices/documents/documentService");
+const {
+  signerMatch,
+  mustSign,
+} = require("@adminServices/documents/documentSigners");
 
 const toOid = (value, key = "invalid_id") => {
   if (!value || !mongoose.Types.ObjectId.isValid(String(value))) {
@@ -83,12 +87,14 @@ const signatureLookup = (staffId) => [
   },
 ];
 
-const shapeStaffDocument = (row) => {
+const shapeStaffDocument = (row, staff) => {
   const base = shapeDocument(row);
   const signature = row._signature?.[0] || null;
   const uploadedBy = uploadedByOf(row);
   return {
     ...base,
+    requiresSignature:
+      base.requiresSignature && (Boolean(signature) || mustSign(row, staff)),
     uploadedBy,
     version: base.version ? { ...base.version, uploadedBy } : null,
     signed: Boolean(signature),
@@ -103,7 +109,7 @@ const parseSignedFilter = (value) => {
   throw new AppError("invalid_signed_filter", 400);
 };
 
-const signedMatch = (signed) => {
+const signedMatch = (signed, staff) => {
   if (signed === true) {
     return { $expr: { $gt: [{ $size: "$_signature" }, 0] } };
   }
@@ -111,6 +117,7 @@ const signedMatch = (signed) => {
     return {
       requiresSignature: { $ne: false },
       $expr: { $eq: [{ $size: "$_signature" }, 0] },
+      ...signerMatch(staff._id, staff.branchId),
     };
   }
   return null;
@@ -126,7 +133,7 @@ const listStaffDocuments = async ({
 }) => {
   const orgOid = toOid(organizationId, "invalid_organization_id");
   const staff = await loadStaff(actor, orgOid);
-  const filter = signedMatch(parseSignedFilter(signed));
+  const filter = signedMatch(parseSignedFilter(signed), staff);
   const pipeline = [
     { $match: visibleMatch(orgOid, staff.branchId) },
     ...signatureLookup(staff._id),
@@ -147,7 +154,7 @@ const listStaffDocuments = async ({
   const [result] = await Document.aggregate(pipeline);
   const totalRecords = facetCount(result?.totalCount);
   return {
-    data: (result?.data || []).map(shapeStaffDocument),
+    data: (result?.data || []).map((row) => shapeStaffDocument(row, staff)),
     meta: generateMeta(page, limit, totalRecords),
   };
 };
@@ -168,7 +175,7 @@ const getStaffDocument = async ({ actor, organizationId, documentId }) => {
     ...signatureLookup(staff._id),
   ]);
   if (!row) throw new AppError("document_not_found", 404);
-  return shapeStaffDocument(row);
+  return shapeStaffDocument(row, staff);
 };
 
 const signStaffDocument = async ({
@@ -188,10 +195,12 @@ const signStaffDocument = async ({
     _id: toOid(documentId, "invalid_document_id"),
     ...visibleMatch(orgOid, staff.branchId),
   })
-    .select("requiresSignature currentVersionId")
+    .select("requiresSignature currentVersionId signers signersOnly")
     .lean();
   if (!doc) throw new AppError("document_not_found", 404);
-  if (!doc.requiresSignature) throw new AppError("document_not_signable", 400);
+  if (!doc.requiresSignature || !mustSign(doc, staff)) {
+    throw new AppError("document_not_signable", 400);
+  }
   if (!doc.currentVersionId) throw new AppError("document_version_missing", 400);
 
   const exists = await DocumentSignature.exists({

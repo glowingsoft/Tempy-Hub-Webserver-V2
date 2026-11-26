@@ -15,7 +15,6 @@ const nameOf = async ({ name, userId, externalPersonId }) => {
   return "";
 };
 
-/** Never fails a check-in: the person has already been recorded by the time this runs. */
 const recordKioskActivity = async ({ kioskId, branchId, type, ...who }) => {
   if (!kioskId || !branchId) return;
   try {

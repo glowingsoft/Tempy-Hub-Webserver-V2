@@ -9,6 +9,7 @@ const {
 const { ModuleSlug, MembershipRole } = require("@models/domainEnums");
 const createRateLimiter = require("@utils/rateLimiter");
 const documentController = require("../controllers/documentController");
+const { receiveDocuments } = require("@middlewares/documentUploadMiddleware");
 const {
   DOCUMENTS_VIEW,
   DOCUMENTS_MANAGE,
@@ -34,9 +35,11 @@ const asManager = requireRoles([
   MembershipRole.SITE_MANAGER,
 ]);
 
-router.get("/folders", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listFolders);
-router.post("/folders", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.createFolder);
-router.post("/bulk-upload", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.bulkUpload);
+router.get("/library", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listLibrary);
+router.post("/bulk-upload", asManager, requirePermission(DOCUMENTS_MANAGE), receiveDocuments, documentController.bulkUpload);
+router.get("/:documentId/signature-request", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.getSignatureRequest);
+router.post("/:documentId/signature-request", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.sendForSignature);
+router.delete("/:documentId", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.deleteDocument);
 router.get("/visitor-library", asManager, requirePermission(DOCUMENTS_VIEW), documentController.listVisitorDocuments);
 router.post("/qr-code", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.createQrCode);
 router.post("/:documentId/qr-link/regenerate", asManager, requirePermission(DOCUMENTS_MANAGE), documentController.regenerateQrLink);

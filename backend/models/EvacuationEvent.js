@@ -81,7 +81,6 @@ const evacuationEventSchema = new mongoose.Schema(
       default: EvacuationStatus.ACTIVE,
     },
     familyAlert: { type: familyAlertSchema, default: () => ({}) },
-    /** What the Fire Drills screen records about an evacuation. */
     drillKind: { type: String, enum: [...Object.values(DrillKind), null], default: null },
     area: { type: String, default: "", trim: true },
     cause: { type: String, default: "", trim: true },

@@ -32,7 +32,6 @@ const SITE_MANAGERS = [
   MembershipRole.SITE_MANAGER,
 ];
 
-// A site manager raises for their own site, so the app does not have to send it.
 const ownSite = (req, res, next) => {
   const own = req.membership?.role === MembershipRole.SITE_MANAGER && req.membership.branchId;
   if (own && !req.body?.branchId) req.body = { ...req.body, branchId: String(own) };

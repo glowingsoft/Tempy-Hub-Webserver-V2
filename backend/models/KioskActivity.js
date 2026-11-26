@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const { KioskActivityType } = require("./domainEnums");
 
-/** One check-in or check-out made on a kiosk, for the Kiosks screen. */
 const kioskActivitySchema = new mongoose.Schema(
   {
     kioskId: {

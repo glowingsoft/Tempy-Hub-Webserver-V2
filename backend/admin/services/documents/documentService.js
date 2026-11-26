@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const { DocumentShareLink } = require("@models/DocumentShareLink");
 const { Document } = require("@models/Document");
 const { DocumentVersion } = require("@models/DocumentVersion");
-const { DocumentCategory } = require("@models/DocumentCategory");
 const { DocumentSignature } = require("@models/DocumentSignature");
 const { User } = require("@models/UserModel");
 const { StaffProfile } = require("@models/StaffProfile");
@@ -16,7 +15,6 @@ const {
   DocumentScope,
   DocumentAudience,
   MembershipRole,
-  StaffProfileStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -24,10 +22,7 @@ const {
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./documentAccess");
-const {
-  resolveCategoryId,
-  ensureDocumentCategories,
-} = require("./documentCategoryService");
+const { resolveCategoryId } = require("./documentCategoryService");
 
 const AUDIENCES = new Set(Object.values(DocumentAudience));
 const SCOPES = new Set(Object.values(DocumentScope));
@@ -527,99 +522,6 @@ const fileTitle = (name) =>
     .replace(/\.[^.]+$/, "")
     .trim();
 
-const listSiteFolders = async ({ actor, organizationId, branchId }) => {
-  const standing = await actorStanding(actor, organizationId);
-  const siteId = scopeBranchFilter(standing, branchId);
-  if (!siteId) throw new AppError("branch_scope_required", 400);
-  await assertBranchInOrganization(siteId, organizationId);
-  await ensureDocumentCategories(organizationId);
-
-  const orgId = toOid(organizationId);
-  const site = toOid(siteId);
-  const [folders, documents, staff] = await Promise.all([
-    DocumentCategory.aggregate([
-      { $match: { organizationId: orgId, active: { $ne: false } } },
-      { $sort: { title: 1 } },
-      { $project: { title: 1 } },
-    ]),
-    Document.aggregate([
-      {
-        $match: {
-          organizationId: orgId,
-          $or: [{ branchId: site }, { branchId: null }],
-        },
-      },
-      {
-        $project: {
-          categoryId: 1,
-          requiresSignature: 1,
-          audiences: 1,
-          currentVersionId: 1,
-        },
-      },
-    ]),
-    StaffProfile.aggregate([
-      {
-        $match: {
-          organizationId: orgId,
-          branchId: site,
-          status: StaffProfileStatus.ACTIVE,
-        },
-      },
-      { $project: { _id: 1 } },
-    ]),
-  ]);
-
-  const staffIds = staff.map((row) => row._id);
-  const needsSignature = (doc) =>
-    doc.requiresSignature !== false &&
-    Boolean(doc.currentVersionId) &&
-    (doc.audiences?.length ? doc.audiences : [DocumentAudience.STAFF]).includes(
-      DocumentAudience.STAFF,
-    );
-  const signable = documents.filter(needsSignature);
-  const signed =
-    staffIds.length && signable.length
-      ? await DocumentSignature.aggregate([
-          {
-            $match: {
-              documentVersionId: {
-                $in: signable.map((doc) => doc.currentVersionId),
-              },
-              signerStaffId: { $in: staffIds },
-            },
-          },
-          {
-            $group: {
-              _id: "$documentVersionId",
-              signers: { $addToSet: "$signerStaffId" },
-            },
-          },
-          { $project: { signed: { $size: "$signers" } } },
-        ])
-      : [];
-  const signedBy = new Map(signed.map((row) => [String(row._id), row.signed]));
-
-  return folders.map((folder) => {
-    const inFolder = documents.filter(
-      (doc) => String(doc.categoryId) === String(folder._id),
-    );
-    return {
-      _id: folder._id,
-      title: folder.title,
-      files: inFolder.length,
-      waitingSignature: staffIds.length
-        ? inFolder.filter(
-            (doc) =>
-              needsSignature(doc) &&
-              (signedBy.get(String(doc.currentVersionId)) || 0) <
-                staffIds.length,
-          ).length
-        : 0,
-    };
-  });
-};
-
 const bulkCreateDocuments = async ({
   actor,
   organizationId,
@@ -631,8 +533,7 @@ const bulkCreateDocuments = async ({
 }) => {
   if (!Array.isArray(files) || !files.length || files.length > MAX_BULK_FILES)
     throw new AppError("invalid_bulk_upload", 400, { max: MAX_BULK_FILES });
-  if (!categoryId) throw new AppError("document_category_required", 400);
-  await resolveCategoryId({ organizationId, categoryId });
+  if (categoryId) await resolveCategoryId({ organizationId, categoryId });
 
   const created = [];
   const failed = [];
@@ -647,7 +548,7 @@ const bulkCreateDocuments = async ({
         branchId,
         categoryId,
         audiences,
-        requiresSignature,
+        requiresSignature: [true, "true"].includes(requiresSignature),
         title,
         file: entry?.file,
       });
@@ -899,6 +800,22 @@ const revokeQrLink = async ({ actor, organizationId, documentId }) => {
   return { documentId: doc._id, qrActive: false };
 };
 
+const openFileUrl = async ({ file, title, expiresIn }) => {
+  if (!file) return null;
+  if (/^https?:\/\//i.test(file.key)) return file.key;
+  const { url } = await uploadAwsService.signedPdfUrl({
+    key: file.key,
+    filename:
+      String(file.originalName || title)
+        .replace(/[^\w.\- ]+/g, "_")
+        .slice(0, 120) || "document",
+    attachment: !INLINE_TYPES.test(file.mimeType),
+    contentType: file.mimeType || "application/octet-stream",
+    expiresIn,
+  });
+  return url;
+};
+
 const getSharedDocumentUrl = async ({ token }) => {
   const unavailable = new AppError("qr_link_unavailable", 404);
   const value = String(token || "");
@@ -917,17 +834,11 @@ const getSharedDocumentUrl = async ({ token }) => {
   const file = row && versionFile(row._version);
   if (!file || !isVisitorFacing(row.audiences)) throw unavailable;
 
-  const { url } = await uploadAwsService.signedPdfUrl({
-    key: file.key,
-    filename:
-      String(file.originalName || row.title)
-        .replace(/[^\w.\- ]+/g, "_")
-        .slice(0, 120) || "document",
-    attachment: !INLINE_TYPES.test(file.mimeType),
-    contentType: file.mimeType || "application/octet-stream",
+  return openFileUrl({
+    file,
+    title: row.title,
     expiresIn: SHARED_LINK_SECONDS,
   });
-  return url;
 };
 
 module.exports = {
@@ -936,8 +847,10 @@ module.exports = {
   revokeQrLink,
   getSharedDocumentUrl,
   listVisitorDocuments,
-  listSiteFolders,
   bulkCreateDocuments,
+  openFileUrl,
+  fileType,
+  isVisitorFacing,
   listDocuments,
   getDocument,
   createDocument,

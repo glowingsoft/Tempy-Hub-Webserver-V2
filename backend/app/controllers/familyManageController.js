@@ -129,7 +129,6 @@ const removeStory = respond(
   { translationKey: "newsletter_updated" },
 );
 
-// A draft preview is drawn on demand, so it is stored first when the app asks for a link instead of the file.
 const getNewsletterPdf = async (req, res) => {
   try {
     const { newsletterId } = req.params;

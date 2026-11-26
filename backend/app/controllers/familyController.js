@@ -26,7 +26,6 @@ const { handleServiceError } = require("@services/_errors/handleServiceError");
 const { sendPdf } = require("@utils/familyPdfResponse");
 const { FamilyMemberStatus } = require("@models/domainEnums");
 
-// A detail whose long list is split into pages only when page or limit is sent.
 const pagedDetail = (listKey, load) => {
   const whole = respond(load);
   const split = respond(

@@ -3077,7 +3077,7 @@
                     }
                   ]
                 },
-                "description": "One call for the active evacuation and the whole Evacuation screen. Send x-org-id. Query: branchId (owner and super admin), type; and for the Not Yet Accounted For list only: status (missing, unknown or safe; 400 invalid_evac_check_status; default missing and unknown), personKind (staff, resident, visitor or contractor; 400 invalid_evac_person_kind), page, limit. Every signed-in member gets the active evacuation (_id, type, status, startedAt, branch, kiosk, kiosks, evacCheck, check), or {} when none is active. Site manager, owner and super admin also get, on the same response: rollcallStats {total, safe, missing, unknown, byKind {staff, resident, visitor}}, familyAlert {offsiteAlertsEnabled, familiesToNotify, status, alertedAt, familiesNotified, updates, allClearAt} and unaccounted [rows: _id, personKind, personId, status, markedAt, locationLabel, lastSeenLabel, lastSeenAt, name, email, employeeCode, roomNumber, jobTitle, signedInAt, visitPurpose], with meta for the unaccounted paging. A site manager sees their own site; another site is 403 outside_managed_branch. Staff and line managers get no roll call fields. Contractors are counted under visitor. The separate GET /app/evacuations/:id/rollcall call was removed. For the Evacuation screen it also returns banner {title, highlight, status, typeLabel, sourceLabel, declaredAt, elapsedMinutes, subtitle, elapsedLabel} for everyone; for managers also rollcallCard {safe, total, label (28 / 41 Safe), rows [{key, label, safe, total, percent}]}, familiesCard {status {key, label Not Sent}, canAlert, familiesToNotify}, notAccountedFor {title, count of missing and unknown} and, on each unaccounted row, title (with + N Guests from a family visit), subtitle (Staff - Nights - Last Seen Room 8; Resident - Room 12 - assistance; Visitor or Family Visit Pass - Signed In 09:20), guests and tag {key, label}."
+                "description": "One call for the active evacuation and the whole Evacuation screen. Send x-org-id. Query: branchId (owner and super admin), type; and for the Not Yet Accounted For list only: status (missing, unknown or safe; 400 invalid_evac_check_status; default missing and unknown), personKind (staff, resident, visitor or contractor; 400 invalid_evac_person_kind), page, limit. Every signed-in member gets the active evacuation (_id, type, status, startedAt, branch, kiosk, kiosks, evacCheck, check), or {} when none is active. Site manager, owner and super admin also get, on the same response: rollcallStats {total, safe, missing, unknown, byKind {staff, resident, visitor}}, familyAlert {offsiteAlertsEnabled, familiesToNotify, status, alertedAt, familiesNotified, updates, allClearAt} and unaccounted [rows: _id, personKind, personId, status, markedAt, locationLabel, lastSeenLabel, lastSeenAt, name, email, employeeCode, roomNumber, jobTitle, signedInAt, visitPurpose], with meta for the unaccounted paging. A site manager sees their own site; another site is 403 outside_managed_branch. Staff and line managers get no roll call fields. Contractors are counted under visitor. The separate GET /app/evacuations/:id/rollcall call was removed. For the Evacuation screen it also returns banner {title, highlight, status, typeLabel, sourceLabel, declaredAt, elapsedMinutes, subtitle, elapsedLabel} for everyone; for managers also rollcallCard {safe, total, label (28 / 41 Safe), rows [{key, label, safe, total, percent}]}, familiesCard {status {key, label Not Sent}, canAlert, isUpdateSent (true once Send Update has been used), isAllClearSent (true once Post All Clear has been used), familiesToNotify}, notAccountedFor {title, count of missing and unknown} and, on each unaccounted row, title (with + N Guests from a family visit), subtitle (Staff - Nights - Last Seen Room 8; Resident - Room 12 - assistance; Visitor or Family Visit Pass - Signed In 09:20), guests and tag {key, label}."
               },
               "response": [
                 {
@@ -5033,7 +5033,7 @@
           "name": "Documents",
           "item": [
             {
-              "name": "list folders (documents screen)",
+              "name": "list documents (documents screen)",
               "event": [
                 {
                   "listen": "test",
@@ -5054,28 +5054,37 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{url}}/app/documents/folders?branchId={{branchId}}",
+                  "raw": "{{url}}/app/documents/library?page=1&limit=10",
                   "host": [
                     "{{url}}"
                   ],
                   "path": [
                     "app",
                     "documents",
-                    "folders"
+                    "library"
                   ],
                   "query": [
                     {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
                       "key": "branchId",
-                      "value": "{{branchId}}"
+                      "value": "{{branchId}}",
+                      "disabled": true
                     }
                   ]
                 },
-                "description": "Documents screen. Per folder: _id, title, files, waitingSignature. branchId: owner and super admin only."
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents view. Query: page, limit, branchId (owner and super admin only). Returns summary {total, waitingSignature} and documents [{_id, title, fileName, type, sizeBytes, createdAt, status {key signed, waiting or draft, label}, url}], newest first, with meta. draft: no staff of the site has been asked to sign. waiting: someone asked has not signed the current version. signed: all have. url opens the file for Preview and expires after 1 hour; reload the list for a fresh one."
               },
               "response": []
             },
             {
-              "name": "new folder",
+              "name": "upload documents",
               "event": [
                 {
                   "listen": "test",
@@ -5093,59 +5102,6 @@
                   {
                     "key": "x-org-id",
                     "value": "{{organizationId}}"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{url}}/app/documents/folders",
-                  "host": [
-                    "{{url}}"
-                  ],
-                  "path": [
-                    "app",
-                    "documents",
-                    "folders"
-                  ]
-                },
-                "description": "New Folder button. Returns {_id, title, files: 0, waitingSignature: 0}.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"title\": \"Policies\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "bulk upload",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "x-org-id",
-                    "value": "{{organizationId}}"
-                  },
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
                   }
                 ],
                 "url": {
@@ -5159,16 +5115,153 @@
                     "bulk-upload"
                   ]
                 },
-                "description": "Bulk Upload button. Upload the files first with POST /upload/s3 and use the returned keys. 1 to 20 files. Returns {created, failed}.",
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents manage. Send multipart/form-data with the field files (1 to 20 PDF, Word or image files, 20 MB each, 50 MB together); no folder is needed. Optional: branchId (owner and super admin), audiences. A new document is a Draft until staff are asked to sign. The JSON body with files [{title, file {key, originalName, mimeType, sizeBytes}}] still works. Returns {created [{_id, title}], failed}. 400 invalid_document_upload, document_too_large, documents_upload_too_large.",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "files",
+                      "type": "file",
+                      "src": []
+                    },
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "type": "text",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "assign to staff screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/{{documentId}}/signature-request",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "{{documentId}}",
+                    "signature-request"
+                  ],
+                  "query": [
+                    {
+                      "key": "branchId",
+                      "value": "{{branchId}}",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents manage. Query: branchId (owner and super admin, needed for an organisation-wide document). Returns document {_id, title, fileName, type, sizeBytes, createdAt}, signBy (the last date sent for this site, else null), departments [{_id, name}] and staff [{_id, name, photoUrl, jobTitle, department, departmentIds, assigned}], all active staff of the site. Filter the chips in the app with departmentIds. 400 visitor_document_not_assignable for a visitor or contractor document that needs no signature; 400 document_version_missing."
+              },
+              "response": []
+            },
+            {
+              "name": "send for signature",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/{{documentId}}/signature-request",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "{{documentId}}",
+                    "signature-request"
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents manage. Body: staffIds (one or more _id values from the GET), signBy (YYYY-MM-DD, today or later), branchId (owner and super admin, for an organisation-wide document). Adds to the staff already asked and updates their date; nobody is removed. Only the named staff of this site then have to sign. Returns {documentId, assigned, signBy}. 400 invalid_signature_staff, invalid_sign_by_date, visitor_document_not_assignable. No notification is sent.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": \"{{documentCategoryId}}\",\n  \"requiresSignature\": true,\n  \"branchId\": \"{{branchId}}\",\n  \"files\": [\n    {\n      \"file\": {\n        \"key\": \"documents/Visiting-Policy-Oct-2026.pdf\",\n        \"originalName\": \"Visiting-Policy-Oct-2026.pdf\",\n        \"mimeType\": \"application/pdf\",\n        \"sizeBytes\": 120000\n      }\n    },\n    {\n      \"title\": \"Fire Plan\",\n      \"file\": {\n        \"key\": \"documents/fire-plan.pdf\",\n        \"originalName\": \"fire-plan.pdf\",\n        \"mimeType\": \"application/pdf\",\n        \"sizeBytes\": 98000\n      }\n    }\n  ]\n}",
+                  "raw": "{\n  \"staffIds\": [\n    \"{{staffId}}\"\n  ],\n  \"signBy\": \"2026-12-15\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
                     }
                   }
                 }
+              },
+              "response": []
+            },
+            {
+              "name": "delete document",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/app/documents/{{documentId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "documents",
+                    "{{documentId}}"
+                  ]
+                },
+                "description": "Site manager of the site, owner or super admin; send x-org-id; the documents module must be on. Needs documents manage. Removes the document with its versions and signatures; this cannot be undone. A site manager can also delete an organisation-wide document, as on the admin side. Returns {_id}. 404 document_not_found, 403 outside_managed_branch."
               },
               "response": []
             },

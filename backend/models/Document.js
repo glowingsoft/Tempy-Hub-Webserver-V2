@@ -1,6 +1,29 @@
 const mongoose = require("mongoose");
 const { DocumentScope, DocumentAudience } = require("./domainEnums");
 
+const documentSignerSchema = new mongoose.Schema(
+  {
+    staffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "StaffProfile",
+      required: true,
+    },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+    },
+    signBy: { type: Date, required: true },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    assignedAt: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
 const documentSchema = new mongoose.Schema(
   {
     organizationId: {
@@ -46,6 +69,11 @@ const documentSchema = new mongoose.Schema(
      * sit in a reader's action list forever waiting on a signature.
      */
     requiresSignature: { type: Boolean, default: true, index: true },
+    signers: {
+      type: [documentSignerSchema],
+      default: undefined,
+    },
+    signersOnly: { type: Boolean, default: false },
     currentVersionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "DocumentVersion",

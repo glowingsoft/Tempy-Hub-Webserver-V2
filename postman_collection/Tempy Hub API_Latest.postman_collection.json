@@ -14155,6 +14155,177 @@
                 "description": "Mark safe on behalf of a team member. Active drills only (409 otherwise); member must be on the team (403 not_direct_report). Pressing again changes nothing. Updates the same roll call the site manager sees. Needs fireDrillEvacuation.manage."
               },
               "response": []
+            },
+            {
+              "name": "photo approvals (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Pending photos fetched\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "const first = pm.response.json().data?.[0];",
+                      "if (first?.uploadId) pm.collectionVariables.set(\"uploadId\", first.uploadId);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/organizations/{{organizationId}}/family-uploads?status=pending&page=1&limit=10",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "organizations",
+                    "{{organizationId}}",
+                    "family-uploads"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "pending"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Photo Approvals screen. status=pending lists the queue oldest first; meta.counts has totals per status. Card fields: residentName, roomNumber, photos[] (url, blurredUrl), authorName, authorRelationship, createdAt, message. residentHasPhotoConsent: false shows the No Consent card. uploadId is the id for approve/reject (saved to {{uploadId}} by the test script). Optional: residentId, keyword. Needs the Family module and family.view."
+              },
+              "response": []
+            },
+            {
+              "name": "approve photo (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Photo approved\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"approve\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/family/uploads/{{uploadId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "uploads",
+                    "{{uploadId}}"
+                  ]
+                },
+                "description": "Approve button. Optional blur: [...] areas to blur before sharing. Notifies the author. Needs family.approve."
+              },
+              "response": []
+            },
+            {
+              "name": "reject photo (line manager)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Photo rejected\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-org-id",
+                    "value": "{{organizationId}}"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"reject\",\n  \"reason\": \"Another resident is visible in the photo\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/family/uploads/{{uploadId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "family",
+                    "uploads",
+                    "{{uploadId}}"
+                  ]
+                },
+                "description": "Reject button. reason is required (400 reason_required without it). Notifies the author. Needs family.approve."
+              },
+              "response": []
             }
           ]
         },

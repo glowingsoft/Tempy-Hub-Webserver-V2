@@ -35,6 +35,7 @@ const { getAttention } = require("@adminServices/family/familyWallActivityServic
 const { supervisionStanding } = require("@adminServices/supervision/supervisionSchedule");
 const { effectiveIntervals } = require("@adminServices/appraisal/cycle");
 const { User } = require("@models/UserModel");
+const { sickFacet } = require("./lineHomeTodayService");
 
 const ROTA_WINDOW_DAYS = 14;
 
@@ -397,6 +398,7 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
     rota,
     restricted,
     ownShifts,
+    sickToday,
   ] =
     await Promise.all([
       loadTeamCounts({
@@ -424,6 +426,13 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
         restricted: true,
       }),
       ownShiftsOf({ actor, organizationId, tz, now }),
+      // Same count as the Today screen's Sick tab: team members off sick today.
+      sickFacet({
+        ids,
+        from: daily.from.toDate(),
+        to: daily.to.toDate(),
+        includeRows: false,
+      }),
     ]);
 
   return {
@@ -432,6 +441,7 @@ const getLineHome = async ({ actor, organizationId, now = new Date() }) => {
       checkedIn: today.checkedIn,
       late: today.late,
       onSite: today.onSite,
+      sick: sickToday.total,
     },
     thisMonth,
     activity: {

@@ -403,4 +403,4 @@ const getLineHomeToday = async ({
   };
 };
 
-module.exports = { getLineHomeToday, TABS };
+module.exports = { getLineHomeToday, sickFacet, TABS };

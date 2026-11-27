@@ -31,6 +31,7 @@ const {
   scopeBranchFilter,
   applyLineManagerStaffScope,
 } = require("./shiftAccess");
+const { withClaimHours } = require("./shiftClaimHours");
 
 const DEFAULT_EARLY_CLOCK_IN_MINUTES = 60;
 const DEFAULT_TZ = "Europe/London";
@@ -1061,7 +1062,7 @@ const listClaims = async ({
   });
 
   return {
-    data,
+    data: await withClaimHours(data),
     meta: { ...meta, counts: shiftClaimStatusCountsFromFacet(result) },
   };
 };
@@ -1090,7 +1091,8 @@ const getClaim = async ({ actor, organizationId, claimId }) => {
     ...claimDetailStages,
   ]);
   if (!claim) throw new AppError("shift_claim_not_found", 404);
-  return claim;
+  const [withHours] = await withClaimHours([claim]);
+  return withHours;
 };
 
 const approveClaim = async ({

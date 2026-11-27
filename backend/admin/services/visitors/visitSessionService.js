@@ -2,6 +2,8 @@ const { VisitSession } = require("@models/VisitSession");
 const { ExternalPerson } = require("@models/ExternalPerson");
 const { StaffProfile } = require("@models/StaffProfile");
 const { Branch } = require("@models/Branch");
+const { Resident } = require("@models/Resident");
+const mongoose = require("mongoose");
 const moment = require("moment-timezone");
 const {
   paginateWithFacet,
@@ -18,6 +20,7 @@ const {
   VisitMethod,
   VisitSessionStatus,
   ExternalPersonType,
+  AdmissionStatus,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -252,6 +255,19 @@ const assertNoOpenVisit = async ({ branchId, externalPersonId }) => {
   if (open) throw new AppError("visit_already_on_site", 409);
 };
 
+const assertVisitedResident = async ({ branchId, residentId }) => {
+  if (!residentId) return null;
+  const found =
+    mongoose.Types.ObjectId.isValid(residentId) &&
+    (await Resident.exists({
+      _id: residentId,
+      branchId,
+      admissionStatus: AdmissionStatus.ADMITTED,
+    }));
+  if (!found) throw new AppError("resident_not_found", 404);
+  return residentId;
+};
+
 const createVisitSession = async ({
   organizationId,
   branchId,
@@ -265,6 +281,7 @@ const createVisitSession = async ({
   invitationId,
   status = VisitSessionStatus.ON_SITE,
   policiesSigned,
+  residentId,
 }) => {
   if (!branchId) throw new AppError("branch_required", 400);
   if (!externalPersonId) throw new AppError("external_person_id_required", 400);
@@ -296,6 +313,7 @@ const createVisitSession = async ({
     method: parseMethod(method),
     hostStaffId: hostStaffId || null,
     hostName: hostName || "",
+    residentId: residentId || null,
     purposeOfVisit: purposeOfVisit || "",
     kioskId: kioskId || null,
     status: resolvedStatus,
@@ -318,6 +336,7 @@ const checkIn = async ({
   hostStaffId,
   hostName,
   kioskId,
+  residentId,
 }) => {
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, branchId);
@@ -332,6 +351,7 @@ const checkIn = async ({
     hostStaffId,
     hostName,
     kioskId,
+    residentId: await assertVisitedResident({ branchId, residentId }),
     status: VisitSessionStatus.ON_SITE,
   });
 };
@@ -865,6 +885,7 @@ const visitorCheckInsReport = async ({
 module.exports = {
   parseMethod,
   createVisitSession,
+  assertVisitedResident,
   checkIn,
   registerAndCheckIn,
   checkOut,

@@ -7247,7 +7247,7 @@
                         "value": "{{kioskToken}}"
                       }
                     ],
-                    "description": "6 check-in invitation",
+                    "description": "6 check-in invitation Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"method\": \"invitation\",\n  \"inviteCode\": \"{{visitorInviteCode}}\",\n  \"image\": \"{{imageUrl}}\"\n}",
@@ -7299,7 +7299,7 @@
                         "value": "{{kioskToken}}"
                       }
                     ],
-                    "description": "7 check-in walk-in first visit",
+                    "description": "7 check-in walk-in first visit Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"method\": \"walkIn\",\n  \"type\": \"visitor\",\n  \"name\": \"John Doe\",\n  \"phone\": \"+447700900001\",\n  \"purposeOfVisit\": \"Family visit\",\n  \"hostName\": \"Reception\",\n  \"categoryId\": \"{{personCategoryId}}\",\n  \"image\": \"{{imageUrl}}\",\n  \"signatures\": [\n    {\n      \"documentId\": \"{{documentId}}\",\n      \"signatureUrl\": \"https://placehold.co/400x150.png?text=Signature\"\n    }\n  ]\n}",
@@ -7351,7 +7351,7 @@
                         "value": "{{kioskToken}}"
                       }
                     ],
-                    "description": "8 check-in walk-in recurring",
+                    "description": "8 check-in walk-in recurring Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"method\": \"walkIn\",\n  \"externalPersonId\": \"{{externalPersonId}}\",\n  \"purposeOfVisit\": \"Family visit\",\n  \"image\": \"{{imageUrl}}\"\n}",
@@ -7403,7 +7403,7 @@
                         "value": "{{kioskToken}}"
                       }
                     ],
-                    "description": "9 check-in contractor",
+                    "description": "9 check-in contractor Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"method\": \"walkIn\",\n  \"type\": \"contractor\",\n  \"name\": \"Site Contractor\",\n  \"purposeOfVisit\": \"Maintenance\",\n  \"signatures\": [],\n  \"image\": \"{{imageUrl}}\"\n}",
@@ -15505,6 +15505,256 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "Resident App",
+          "item": [
+            {
+              "name": "my family screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/family",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "family"
+                  ]
+                },
+                "description": "Resident app Family tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, family { count, members, note } with active members and the next of kin first, gazette { gazetteId, issueNumber, messageCount } for the latest printed gazette or null, and photos { newCount }: photos from family uploads approved since the resident last opened My Photos. Family and gazette are empty when Family Engagement is off; newCount is 0 without photo consent. 403 wrong_token_audience for a non-resident token, resident_profile_not_found when the resident is discharged or unlinked."
+              },
+              "response": []
+            },
+            {
+              "name": "my photos screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.data && jsonData.data.photos && jsonData.data.photos.length) {",
+                      "    pm.collectionVariables.set(\"residentPhotoId\", jsonData.data.photos[0].mediaId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/photos?tab=all&page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "photos"
+                  ],
+                  "query": [
+                    {
+                      "key": "tab",
+                      "value": "all"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Resident app My Photos screen in one call. Run Login Resident first. Query: tab (all, family or home; default all), page, limit. Returns subtitle, photoSharing, tab, tabs (home is labelled with the branch name) and photos { mediaId, url, width, height, source, title, fromName, sharedAt, isLatest }, newest first, with pagination in meta. family is approved family uploads; home is published wall posts that tag the resident. Loading page 1 marks the photos as seen, which resets newCount on the family screen. photos is empty without photo consent or with Family Engagement off. 400 invalid_gallery_tab."
+              },
+              "response": []
+            },
+            {
+              "name": "photo screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.data && jsonData.data.nextMediaId) {",
+                      "    pm.collectionVariables.set(\"residentPhotoId\", jsonData.data.nextMediaId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/photos/{{residentPhotoId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "photos",
+                    "{{residentPhotoId}}"
+                  ]
+                },
+                "description": "Resident app single photo screen. Run my photos screen first; it saves residentPhotoId. Query: tab (all, family or home; default all), the same tab the photo was opened from. Returns tab, photo { mediaId, url, width, height, source, title, fromName, sharedAt }, position, total, previousMediaId (newer photo) and nextMediaId (older photo), each null at the ends. Sending again moves to the next photo. 404 resident_media_not_found when the photo is not shared with this resident or is not in the tab; 400 invalid_gallery_tab."
+              },
+              "response": []
+            },
+            {
+              "name": "my gazette screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/gazette",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "gazette"
+                  ]
+                },
+                "description": "Resident app My Gazette screen: the latest printed gazette, with the same response as the family app's get gazette (GET /app/family/gazettes/:gazetteId): gazetteId, title, issueNumber, periodStart, periodEnd, periodLabel, residentName, homeName, pageCount, printedAt, givenAt, cover, messages and life. Optional page and limit slice messages and add meta, as there. 404 gazette_not_found when nothing is printed or Family Engagement is off."
+              },
+              "response": []
+            },
+            {
+              "name": "visitors screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/visitors",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "visitors"
+                  ]
+                },
+                "description": "Resident app Visitors tab in one call. Query: page, limit for recent visitors. Returns resident { name, photoUrl, homeName }, hereNow { count, visitors } (signed in and not signed out, earliest arrival first) and recentVisitors (signed out, one row per person, latest first), with meta paging recentVisitors. Each visitor uses the Site Manager people row fields (_id (the visit), personKind, personId, branchId, name, photoUrl, category, method, visitPurpose, hostName, signedInAt) plus role (family relationship, else visitor category, else visitor type), isFamily and subtitle; recentVisitors adds signedOutAt. Lists visits recorded against this resident, visits checked in from an invitation for this resident, and visits by the resident's active family members at the home unless recorded against another resident. Nurses, contractors and other non-family visitors appear when residentId is sent on kiosk walk-in check-in, admin check-in or admin visitor invitation."
+              },
+              "response": []
+            },
+            {
+              "name": "past gazettes screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "const jsonData = pm.response.json();",
+                      "if (jsonData.data && jsonData.data.length) {",
+                      "    pm.collectionVariables.set(\"residentGazetteId\", jsonData.data[0].gazetteId);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/gazettes",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "gazettes"
+                  ]
+                },
+                "description": "Resident app past gazettes list, with the same response as the family app's list (GET /app/family/gazettes): gazetteId, issueNumber, periodStart, periodEnd, periodLabel, title, residentName, residentPhotoUrl, coverUrl, messageCount, pageCount, printedAt, givenAt and latest, printed gazettes newest first, with meta. Query: page, limit. Empty when Family Engagement is off. Saves residentGazetteId."
+              },
+              "response": []
+            },
+            {
+              "name": "gazette detail screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/gazettes/{{residentGazetteId}}",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "gazettes",
+                    "{{residentGazetteId}}"
+                  ]
+                },
+                "description": "Resident app gazette detail, with the same response as the family app's get gazette. Run past gazettes screen first. Optional page and limit slice messages and add meta. 404 gazette_not_found when it is not this resident's printed gazette or Family Engagement is off."
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -21815,7 +22065,8 @@
                     "visit-sessions",
                     "check-in"
                   ]
-                }
+                },
+                "description": "Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in."
               },
               "response": []
             },
@@ -23017,7 +23268,8 @@
                     "{{organizationId}}",
                     "visitor-invitations"
                   ]
-                }
+                },
+                "description": "Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in."
               },
               "response": [
                 {
@@ -32492,7 +32744,7 @@
                     "value": "Bearer {{token}}"
                   }
                 ],
-                "description": "1 create visitor invitation",
+                "description": "1 create visitor invitation Optional residentId records which resident is being visited, so the visit shows on that resident's Visitors screen; the resident must be admitted at this branch (404 resident_not_found). On an invitation it carries through to check-in.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"branchId\": \"{{branchId}}\",\n  \"visitorName\": \"John Doe\",\n  \"visitorEmail\": \"visitor.postman@example.com\",\n  \"arrivalAt\": \"2026-10-01T09:00:00.000Z\",\n  \"visitingUntil\": \"2026-10-01T18:00:00.000Z\",\n  \"hostName\": \"Reception\"\n}",
@@ -36252,6 +36504,16 @@
     },
     {
       "key": "residentAccountInviteToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "residentPhotoId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "residentGazetteId",
       "value": "",
       "type": "string"
     }

@@ -28,6 +28,7 @@ const createVisitorInvitation = async (req, res) => {
       visitingUntil: req.body.visitingUntil,
       badgeType: req.body.badgeType,
       instructions: req.body.instructions,
+      residentId: req.body.residentId,
     });
 
     return sendResponse({
@@ -44,15 +45,16 @@ const createVisitorInvitation = async (req, res) => {
 const listVisitorInvitations = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);
-    const { data, meta } = await visitorInvitationService.listVisitorInvitations({
-      actor: req.user,
-      organizationId: req.orgId,
-      page,
-      limit,
-      skip,
-      branchId: req.query.branchId,
-      status: req.query.status,
-    });
+    const { data, meta } =
+      await visitorInvitationService.listVisitorInvitations({
+        actor: req.user,
+        organizationId: req.orgId,
+        page,
+        limit,
+        skip,
+        branchId: req.query.branchId,
+        status: req.query.status,
+      });
 
     return sendResponse({
       res,

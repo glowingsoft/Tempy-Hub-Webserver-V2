@@ -5,10 +5,7 @@ const {
 } = require("@utils/responseUtil");
 const visitSessionService = require("@adminServices/visitors/visitSessionService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
-const {
-  ExternalPersonType,
-  VisitMethod,
-} = require("@models/domainEnums");
+const { ExternalPersonType, VisitMethod } = require("@models/domainEnums");
 
 const checkIn = async (req, res) => {
   if (
@@ -30,6 +27,7 @@ const checkIn = async (req, res) => {
       hostStaffId: req.body.hostStaffId,
       hostName: req.body.hostName,
       kioskId: req.body.kioskId,
+      residentId: req.body.residentId,
     });
 
     return sendResponse({
@@ -49,9 +47,7 @@ const registerAndCheckIn = async (req, res) => {
       formFields: ["branchId", "type", "name"],
       enumFields: {
         type: Object.values(ExternalPersonType),
-        ...(req.body.method
-          ? { method: Object.values(VisitMethod) }
-          : {}),
+        ...(req.body.method ? { method: Object.values(VisitMethod) } : {}),
       },
     })
   ) {
@@ -243,28 +239,21 @@ const getVisitAnalytics = async (req, res) => {
 const visitorCheckInsReport = async (req, res) => {
   try {
     const { page, limit, skip } = parsePaginationParams(req);
-    const {
-      from,
-      to,
-      timezone,
-      branchId,
-      kpis,
-      rows,
-      meta,
-    } = await visitSessionService.visitorCheckInsReport({
-      actor: req.user,
-      organizationId: req.orgId,
-      page,
-      limit,
-      skip,
-      branchId: req.query.branchId,
-      departmentId: req.query.departmentId,
-      personType: req.query.personType || req.query.type,
-      status: req.query.status,
-      keyword: req.query.keyword,
-      from: req.query.from,
-      to: req.query.to,
-    });
+    const { from, to, timezone, branchId, kpis, rows, meta } =
+      await visitSessionService.visitorCheckInsReport({
+        actor: req.user,
+        organizationId: req.orgId,
+        page,
+        limit,
+        skip,
+        branchId: req.query.branchId,
+        departmentId: req.query.departmentId,
+        personType: req.query.personType || req.query.type,
+        status: req.query.status,
+        keyword: req.query.keyword,
+        from: req.query.from,
+        to: req.query.to,
+      });
 
     return sendResponse({
       res,

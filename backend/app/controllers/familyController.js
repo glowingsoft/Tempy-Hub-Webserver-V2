@@ -686,6 +686,7 @@ const getInboxMessage = respond((req) =>
 );
 
 module.exports = {
+  pagedDetail,
   listInboxMessages,
   getInboxMessage,
   getNewUploadScreen,

@@ -115,6 +115,7 @@ const checkIn = async (req, res) => {
       purposeOfVisit: req.body.purposeOfVisit,
       categoryId: req.body.categoryId,
       signatures: req.body.signatures,
+      residentId: req.body.residentId,
     });
     return sendResponse({
       res,

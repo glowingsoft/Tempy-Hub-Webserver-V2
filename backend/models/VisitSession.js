@@ -11,7 +11,7 @@ const policySignedSchema = new mongoose.Schema(
     signedAt: { type: Date, required: true },
     signatureUrl: { type: String, default: "" },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const visitSessionSchema = new mongoose.Schema(
@@ -84,7 +84,7 @@ const visitSessionSchema = new mongoose.Schema(
     residentPasscodeVerifiedAt: { type: Date, default: null },
     policiesSigned: { type: [policySignedSchema], default: [] },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 visitSessionSchema.index({ branchId: 1, status: 1, checkOutAt: 1 });
@@ -96,6 +96,8 @@ visitSessionSchema.index({
   status: 1,
   checkOutAt: 1,
 });
+
+visitSessionSchema.index({ invitationId: 1 });
 
 const VisitSession =
   mongoose.models.VisitSession ||

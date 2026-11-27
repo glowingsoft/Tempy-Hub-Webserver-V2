@@ -18,6 +18,7 @@ const {
   BadgeType,
   ExternalPersonType,
 } = require("@models/domainEnums");
+const { assertVisitedResident } = require("./visitSessionService");
 const {
   actorStanding,
   assertMayManageStaff,
@@ -184,6 +185,7 @@ const createVisitorInvitation = async ({
   visitingUntil,
   badgeType,
   instructions,
+  residentId,
 }) => {
   if (!branchId) throw new AppError("branch_required", 400);
   if (!arrivalAt || !visitingUntil) {
@@ -196,6 +198,11 @@ const createVisitorInvitation = async ({
 
   const branch = await Branch.findById(branchId).select("name").lean();
   if (!branch) throw new AppError("branch_not_found", 404);
+
+  const visitedResidentId = await assertVisitedResident({
+    branchId,
+    residentId,
+  });
 
   let person;
   const resolvedBadge =
@@ -239,6 +246,7 @@ const createVisitorInvitation = async ({
     visitorName: personObj.name,
     visitorEmail: normalizeVisitorEmail(personObj.email),
     hostStaffId: hostStaffId || null,
+    residentId: visitedResidentId,
     badgeType:
       resolvedBadge || badgeFromPersonType(personObj.type) || BadgeType.GUEST,
     arrivalAt: new Date(arrivalAt),

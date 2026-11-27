@@ -323,6 +323,7 @@ const checkInByInvitation = async ({
     hostName: "",
     kioskId: kiosk._id,
     invitationId: invitation._id,
+    residentId: invitation.residentId,
     status: VisitSessionStatus.ON_SITE,
   });
 
@@ -377,6 +378,7 @@ const confirmContractorQrCheckIn = async ({
     hostName: "",
     kioskId,
     invitationId: invitation._id,
+    residentId: invitation.residentId,
     status: VisitSessionStatus.ON_SITE,
   });
 
@@ -405,7 +407,12 @@ const checkInWalkIn = async ({
   purposeOfVisit,
   categoryId,
   signatures,
+  residentId,
 }) => {
+  const visitedResidentId = await visitSessionService.assertVisitedResident({
+    branchId,
+    residentId,
+  });
   let person;
   let firstVisit = false;
 
@@ -458,6 +465,7 @@ const checkInWalkIn = async ({
     hostStaffId,
     hostName,
     kioskId: kiosk._id,
+    residentId: visitedResidentId,
     status: firstVisit
       ? VisitSessionStatus.AWAITING_APPROVAL
       : VisitSessionStatus.ON_SITE,

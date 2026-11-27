@@ -2,6 +2,7 @@ const { sendResponse, parsePaginationParams } = require("@utils/responseUtil");
 const { respondByAction } = require("@utils/controllerResponse");
 const residentService = require("@adminServices/residents/residentService");
 const residentScreenService = require("@adminServices/residents/residentScreenService");
+const residentAccountService = require("@adminServices/residents/residentAccountService");
 const peepRecordService = require("@adminServices/peep/peepRecordService");
 const familyStaffService = require("@adminServices/family/familyStaffService");
 const familyModerationService = require("@adminServices/family/familyModerationService");
@@ -46,7 +47,9 @@ const getResident = respond("data_fetched_successfully", (req) =>
 );
 
 const getResidentScreen = respond("data_fetched_successfully", async (req) => {
-  const tab = String(req.query.tab || "profile").trim().toLowerCase();
+  const tab = String(req.query.tab || "profile")
+    .trim()
+    .toLowerCase();
   const residentScope = scope(req);
   const resident = await residentService.getManagerResident(residentScope);
 
@@ -64,6 +67,7 @@ const getResidentScreen = respond("data_fetched_successfully", async (req) => {
         restrictedContacts: resident.restriction?.active ?? false,
       },
       ...(await residentScreenService.profileScreen({ resident })),
+      account: await residentAccountService.getAccountState(resident._id),
     };
   }
 
@@ -107,6 +111,17 @@ const deactivateResident = respond("resident_deactivated", (req) =>
     reason: req.body.reason,
     message: req.body.message,
   }),
+);
+
+const sendAccountInvitation = respond("invitation_sent_successfully", (req) =>
+  residentAccountService.sendAccountInvitation({
+    ...scope(req),
+    email: req.body?.email,
+  }),
+);
+
+const removeAccount = respond("resident_account_removed", (req) =>
+  residentAccountService.removeAccount(scope(req)),
 );
 
 const getFamily = respond("data_fetched_successfully", async (req) => {
@@ -189,6 +204,8 @@ module.exports = {
   getResidentScreen,
   getPeepRecord,
   deactivateResident,
+  sendAccountInvitation,
+  removeAccount,
   getFamily,
   setNextOfKin,
   removeFamilyMember,

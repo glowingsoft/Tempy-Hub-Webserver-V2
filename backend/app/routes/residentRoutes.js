@@ -38,10 +38,17 @@ router.get(
   controller.getPeepRecord,
 );
 router.post("/:residentId/deactivate", controller.deactivateResident);
+router.post(
+  "/:residentId/account-invitation",
+  controller.sendAccountInvitation,
+);
+router.delete("/:residentId/account", controller.removeAccount);
 
 const family = [requireFamilyModule];
 const screenTabAccess = (req, res, next) => {
-  const tab = String(req.query.tab || "profile").trim().toLowerCase();
+  const tab = String(req.query.tab || "profile")
+    .trim()
+    .toLowerCase();
   const gates =
     tab === "peep"
       ? [
@@ -60,13 +67,52 @@ const screenTabAccess = (req, res, next) => {
   return run(0);
 };
 
-router.get("/:residentId/screen", screenTabAccess, controller.getResidentScreen);
-router.get("/:residentId/family", ...family, requirePermission(FAMILY_VIEW), controller.getFamily);
-router.put("/:residentId/family/next-of-kin", ...family, requirePermission(FAMILY_MANAGE), controller.setNextOfKin);
-router.delete("/:residentId/family/members/:memberId", ...family, requirePermission(FAMILY_MANAGE), controller.removeFamilyMember);
-router.get("/:residentId/family/code", ...family, requirePermission(FAMILY_VIEW), controller.getFamilyCode);
-router.post("/:residentId/family/code", ...family, requirePermission(FAMILY_MANAGE), controller.createFamilyCode);
-router.put("/:residentId/family/visiting-password", ...family, requirePermission(FAMILY_MANAGE), controller.setVisitingPassword);
-router.put("/:residentId/family/photos/:uploadId", ...family, requirePermission(FAMILY_APPROVE), controller.updateFamilyPhoto);
+router.get(
+  "/:residentId/screen",
+  screenTabAccess,
+  controller.getResidentScreen,
+);
+router.get(
+  "/:residentId/family",
+  ...family,
+  requirePermission(FAMILY_VIEW),
+  controller.getFamily,
+);
+router.put(
+  "/:residentId/family/next-of-kin",
+  ...family,
+  requirePermission(FAMILY_MANAGE),
+  controller.setNextOfKin,
+);
+router.delete(
+  "/:residentId/family/members/:memberId",
+  ...family,
+  requirePermission(FAMILY_MANAGE),
+  controller.removeFamilyMember,
+);
+router.get(
+  "/:residentId/family/code",
+  ...family,
+  requirePermission(FAMILY_VIEW),
+  controller.getFamilyCode,
+);
+router.post(
+  "/:residentId/family/code",
+  ...family,
+  requirePermission(FAMILY_MANAGE),
+  controller.createFamilyCode,
+);
+router.put(
+  "/:residentId/family/visiting-password",
+  ...family,
+  requirePermission(FAMILY_MANAGE),
+  controller.setVisitingPassword,
+);
+router.put(
+  "/:residentId/family/photos/:uploadId",
+  ...family,
+  requirePermission(FAMILY_APPROVE),
+  controller.updateFamilyPhoto,
+);
 
 module.exports = router;

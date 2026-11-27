@@ -4,19 +4,20 @@ const {
   parsePaginationParams,
 } = require("@utils/responseUtil");
 const residentService = require("@adminServices/residents/residentService");
+const residentAccountService = require("@adminServices/residents/residentAccountService");
 const { handleServiceError } = require("@services/_errors/handleServiceError");
 
 const createResident = async (req, res) => {
   if (
     !validateParams(req, res, {
-      formFields: ["name", "roomNumber", "branchId"],
+      formFields: ["name", "roomNumber", "branchId", "email"],
     })
   ) {
     return;
   }
 
   try {
-    const data = await residentService.createResident({
+    const data = await residentAccountService.addResident({
       actor: req.user,
       organizationId: req.orgId,
       branchId: req.body.branchId,

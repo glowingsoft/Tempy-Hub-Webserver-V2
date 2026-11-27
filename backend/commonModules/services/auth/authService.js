@@ -22,6 +22,9 @@ const {
   listFamilyMemberships,
   resolveAccessState,
 } = require("@appServices/family/familyAccessService");
+const {
+  findResidentAccount,
+} = require("@appServices/residents/residentAccessService");
 const { ModuleDefinition } = require("@models/ModuleDefinition");
 const {
   effectivePermissions,
@@ -324,7 +327,7 @@ const assertAudienceAccess = async (user, audience) => {
   }
 
   if (audience === AuthAudience.RESIDENT) {
-    const resident = await Resident.exists({ userId });
+    const resident = await findResidentAccount(userId);
     if (!resident) {
       throw new AppError("resident_profile_not_found", 403);
     }
@@ -334,6 +337,7 @@ const assertAudienceAccess = async (user, audience) => {
       highestRole: null,
       defaultSurface: "residentApp",
       ...emptyStaffAccessFields(),
+      resident,
     };
   }
 
@@ -661,6 +665,8 @@ const deleteAccount = async ({ userId, email }) => {
     { new: true },
   );
 
+  await Resident.updateMany({ userId }, { $set: { userId: null } });
+
   await Devices.updateOne({ userId: userId }, { $set: { devices: [] } });
 };
 
@@ -768,6 +774,21 @@ const me = async ({
       user: profile,
       audience,
       access: await resolveFamilyAccess(user),
+    };
+  }
+
+  if (audience === AuthAudience.RESIDENT) {
+    const resident = await findResidentAccount(userId);
+    return {
+      user: profile,
+      audience,
+      access: {
+        isPlatformAdmin: false,
+        modules: [],
+        organizationId: resident?.organizationId || null,
+        branchId: resident?.branchId || null,
+        resident,
+      },
     };
   }
 

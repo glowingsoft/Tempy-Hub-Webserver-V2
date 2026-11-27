@@ -246,11 +246,33 @@ async function ensureAttendanceDayIndexes() {
     }
 }
 
+async function ensureResidentIndexes() {
+    const { Resident } = require("@models/Resident");
+    try {
+        const indexes = await Resident.collection.indexes();
+        const userIdx = indexes.find((idx) => idx.name === "userId_1");
+        if (userIdx && !userIdx.unique) {
+            await Resident.collection.dropIndex("userId_1");
+            console.log("✅ dropped non-unique Resident.userId_1");
+        }
+    } catch (dropErr) {
+        if (dropErr?.codeName !== "NamespaceNotFound" && dropErr?.code !== 26) {
+            console.warn("⚠️ Resident index drop:", dropErr.message);
+        }
+    }
+    try {
+        await Resident.createIndexes();
+    } catch (indexErr) {
+        console.warn("⚠️ Resident index sync:", indexErr.message);
+    }
+}
+
 async function runDBBootstrap() {
     try {
         await enforceOneMembershipPerOrg();
         await ensureModuleCatalogue();
         await ensureAttendanceDayIndexes();
+        await ensureResidentIndexes();
 
         const existing = await Bootstrap.findOne();
         if (existing?.version >= BOOTSTRAP_VERSION) {

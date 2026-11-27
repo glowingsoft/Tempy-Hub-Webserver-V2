@@ -98,7 +98,10 @@ const residentSchema = new mongoose.Schema(
 );
 
 residentSchema.index({ qrToken: 1 }, { unique: true, sparse: true });
-residentSchema.index({ userId: 1 }, { sparse: true });
+residentSchema.index(
+  { userId: 1 },
+  { unique: true, partialFilterExpression: { userId: { $type: "objectId" } } },
+);
 residentSchema.index({ organizationId: 1, branchId: 1, createdAt: -1 });
 residentSchema.index({ branchId: 1, restricted: 1 });
 residentSchema.index({ branchId: 1, isOut: 1 });

@@ -297,8 +297,8 @@ const staffInvitationEmailTemplate = ({
           <p>Hello${inviteeName ? ` ${inviteeName}` : ""},</p>
           <p>
             You have been invited to join <strong>${organizationName}</strong>${
-  branchName ? ` at <strong>${branchName}</strong>` : ""
-} as <strong>${roleLabel}</strong>.
+              branchName ? ` at <strong>${branchName}</strong>` : ""
+            } as <strong>${roleLabel}</strong>.
           </p>
           <p>Set your password to activate your account:</p>
           <p><a class="cta" href="${acceptUrl}">Accept invitation</a></p>
@@ -373,8 +373,8 @@ const familyInvitationEmailTemplate = ({
           <p>Hello${inviteeName ? ` ${inviteeName}` : ""},</p>
           <p>
             <strong>${organizationName}</strong>${
-  branchName ? ` (${branchName})` : ""
-} has invited you to stay connected with <strong>${residentName}</strong>.
+              branchName ? ` (${branchName})` : ""
+            } has invited you to stay connected with <strong>${residentName}</strong>.
           </p>
           <p>Set your password to activate your family account:</p>
           <p><a class="cta" href="${acceptUrl}">Accept invitation</a></p>
@@ -418,7 +418,7 @@ const visitorAccountInvitationEmailTemplate = ({
           <p>Hello${name ? ` ${name}` : ""},</p>
           <p>
             <strong>${organizationName}</strong> invited you to sign in to the
-            visitor and contractor app${branchName ? ` for <strong>${branchName}</strong>` : ""}.
+            ${personType === "resident" ? "resident app" : "visitor and contractor app"}${branchName ? ` for <strong>${branchName}</strong>` : ""}.
           </p>
           <p><a class="cta" href="${acceptUrl}">Set your password</a></p>
           <p>Or paste this link into your browser: ${acceptUrl}</p>
@@ -456,8 +456,8 @@ const visitorInvitationEmailTemplate = ({
           <p>Hello${visitorName ? ` ${visitorName}` : ""},</p>
           <p>
             You have been invited to visit <strong>${organizationName}</strong>${
-  branchName ? ` at <strong>${branchName}</strong>` : ""
-}.
+              branchName ? ` at <strong>${branchName}</strong>` : ""
+            }.
           </p>
           <p>Enter this code on the reception kiosk:</p>
           <p class="otp"><strong>${inviteCode}</strong></p>

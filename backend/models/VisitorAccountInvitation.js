@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const validator = require("validator");
 const {
+  AuthAudience,
   ExternalPersonType,
   VisitorAccountInvitationStatus,
 } = require("./domainEnums");
@@ -9,6 +10,8 @@ const ACCOUNT_TYPES = [
   ExternalPersonType.VISITOR,
   ExternalPersonType.CONTRACTOR,
 ];
+
+const RESIDENT_ACCOUNT_TYPE = AuthAudience.RESIDENT;
 
 /**
  * An invitation to create a visitor-app login.
@@ -41,8 +44,12 @@ const visitorAccountInvitationSchema = new mongoose.Schema(
     name: { type: String, default: "" },
     personType: {
       type: String,
-      enum: ACCOUNT_TYPES,
+      enum: [...ACCOUNT_TYPES, RESIDENT_ACCOUNT_TYPE],
       required: true,
+    },
+    residentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Resident",
     },
     tokenHash: { type: String, required: true, select: false },
     status: {
@@ -76,7 +83,7 @@ const visitorAccountInvitationSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 visitorAccountInvitationSchema.index(
@@ -84,12 +91,26 @@ visitorAccountInvitationSchema.index(
   {
     unique: true,
     partialFilterExpression: { status: VisitorAccountInvitationStatus.PENDING },
-  }
+  },
 );
 visitorAccountInvitationSchema.index({ tokenHash: 1 }, { unique: true });
+visitorAccountInvitationSchema.index(
+  { residentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      personType: RESIDENT_ACCOUNT_TYPE,
+      status: VisitorAccountInvitationStatus.PENDING,
+    },
+  },
+);
 
 const VisitorAccountInvitation =
   mongoose.models.VisitorAccountInvitation ||
   mongoose.model("VisitorAccountInvitation", visitorAccountInvitationSchema);
 
-module.exports = { VisitorAccountInvitation, ACCOUNT_TYPES };
+module.exports = {
+  VisitorAccountInvitation,
+  ACCOUNT_TYPES,
+  RESIDENT_ACCOUNT_TYPE,
+};

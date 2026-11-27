@@ -1,4 +1,3 @@
-const crypto = require("crypto");
 const { frontendLink } = require("@utils/frontendUrl");
 const mongoose = require("mongoose");
 const validator = require("validator");
@@ -6,9 +5,22 @@ const { User } = require("@models/UserModel");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
 const { ExternalPerson } = require("@models/ExternalPerson");
-const { VisitorAccountInvitation } = require("@models/VisitorAccountInvitation");
+const {
+  VisitorAccountInvitation,
+  RESIDENT_ACCOUNT_TYPE,
+} = require("@models/VisitorAccountInvitation");
+const {
+  INVITE_TTL_DAYS,
+  hashToken,
+  issueToken,
+} = require("./accountInvitationToken");
+const {
+  acceptResidentInvitation,
+} = require("@adminServices/residents/residentAccountService");
 const { sendTransactionalEmail } = require("@utils/mailer");
-const { visitorAccountInvitationEmailTemplate } = require("@utils/emailTemplates");
+const {
+  visitorAccountInvitationEmailTemplate,
+} = require("@utils/emailTemplates");
 const { AppError } = require("@services/_errors/AppError");
 const {
   ExternalPersonType,
@@ -35,16 +47,15 @@ const {
   resolveExternalPersonAtBranch,
 } = require("./externalPersonService");
 
-const INVITE_TTL_DAYS = Number(process.env.VISITOR_ACCOUNT_INVITE_TTL_DAYS || 7);
-const ACCOUNT_TYPES = [ExternalPersonType.VISITOR, ExternalPersonType.CONTRACTOR];
-
-const hashToken = (token) =>
-  crypto.createHash("sha256").update(String(token)).digest("hex");
+const ACCOUNT_TYPES = [
+  ExternalPersonType.VISITOR,
+  ExternalPersonType.CONTRACTOR,
+];
 
 const buildAcceptUrl = (token) => {
   const base = frontendLink(
     "VISITOR_ACCOUNT_INVITE_ACCEPT_URL",
-    "/visitor-account-invite"
+    "/visitor-account-invite",
   );
   return `${base}/${token}`;
 };
@@ -63,7 +74,12 @@ const parseAccountType = (type) => {
   return value;
 };
 
-const sendInviteEmail = async ({ invitation, token, organizationName, branchName }) => {
+const sendInviteEmail = async ({
+  invitation,
+  token,
+  organizationName,
+  branchName,
+}) => {
   const acceptUrl = buildAcceptUrl(token);
   await sendTransactionalEmail({
     to: invitation.email,
@@ -90,8 +106,11 @@ const createVisitorAccountInvitation = async ({
   type,
 }) => {
   if (!branchId) throw new AppError("branch_required", 400);
-  const normalisedEmail = String(email || "").trim().toLowerCase();
-  if (!validator.isEmail(normalisedEmail)) throw new AppError("email_invalid", 400);
+  const normalisedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  if (!validator.isEmail(normalisedEmail))
+    throw new AppError("email_invalid", 400);
   const personType = parseAccountType(type);
 
   const standing = await actorStanding(actor, organizationId);
@@ -112,6 +131,16 @@ const createVisitorAccountInvitation = async ({
     throw new AppError("email_used_by_staff", 409);
   }
 
+  if (
+    await VisitorAccountInvitation.exists({
+      branchId,
+      email: normalisedEmail,
+      status: VisitorAccountInvitationStatus.PENDING,
+    })
+  ) {
+    throw new AppError("invitation_already_pending", 409);
+  }
+
   let person = await findPersonByBranchEmail({
     branchId,
     email: normalisedEmail,
@@ -127,17 +156,7 @@ const createVisitorAccountInvitation = async ({
     person = resolved.person;
   }
 
-  if (
-    await VisitorAccountInvitation.exists({
-      branchId,
-      email: normalisedEmail,
-      status: VisitorAccountInvitationStatus.PENDING,
-    })
-  ) {
-    throw new AppError("invitation_already_pending", 409);
-  }
-
-  const token = crypto.randomBytes(32).toString("hex");
+  const { token, ...tokenFields } = issueToken();
   let invitation;
   try {
     invitation = await VisitorAccountInvitation.create({
@@ -145,15 +164,17 @@ const createVisitorAccountInvitation = async ({
       branchId,
       email: normalisedEmail,
       name: name ? String(name).trim() : person?.name || "",
-      personType: person?.type && ACCOUNT_TYPES.includes(person.type) ? person.type : personType,
-      tokenHash: hashToken(token),
-      expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000),
+      personType:
+        person?.type && ACCOUNT_TYPES.includes(person.type)
+          ? person.type
+          : personType,
+      ...tokenFields,
       invitedByUserId: actor._id,
       externalPersonId: person?._id || null,
-      lastSentAt: new Date(),
     });
   } catch (error) {
-    if (error.code === 11000) throw new AppError("invitation_already_pending", 409);
+    if (error.code === 11000)
+      throw new AppError("invitation_already_pending", 409);
     throw error;
   }
 
@@ -171,6 +192,7 @@ const loadOrgAccountInvitation = async ({ invitationId, organizationId }) => {
   const invitation = await VisitorAccountInvitation.findOne({
     _id: invitationId,
     organizationId,
+    personType: { $in: ACCOUNT_TYPES },
   }).select("+tokenHash");
   if (!invitation) throw new AppError("invitation_not_found", 404);
   return invitation;
@@ -196,12 +218,8 @@ const resendVisitorAccountInvitation = async ({
   const standing = await actorStanding(actor, organizationId);
   assertMayManageStaff(standing, invitation.branchId);
 
-  const token = crypto.randomBytes(32).toString("hex");
-  invitation.tokenHash = hashToken(token);
-  invitation.expiresAt = new Date(
-    Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000
-  );
-  invitation.lastSentAt = new Date();
+  const { token, ...tokenFields } = issueToken();
+  invitation.set(tokenFields);
   await invitation.save({ validateModifiedOnly: true });
 
   const [organization, branch] = await Promise.all([
@@ -251,7 +269,7 @@ const parseAccountInvitationStatus = (status) => {
 };
 
 const ACCOUNT_INVITATION_STATUSES = Object.values(
-  VisitorAccountInvitationStatus
+  VisitorAccountInvitationStatus,
 );
 
 const accountInvitationStatusCountFacets = (countMatch) =>
@@ -306,7 +324,10 @@ const listVisitorAccountInvitations = async ({
     await assertBranchInOrganization(scopedBranchId, organizationId);
   }
 
-  const match = { organizationId: toObjectId(organizationId) };
+  const match = {
+    organizationId: toObjectId(organizationId),
+    personType: { $in: ACCOUNT_TYPES },
+  };
   if (scopedBranchId) match.branchId = toObjectId(scopedBranchId);
   if (type) match.personType = parseAccountType(type);
 
@@ -368,12 +389,22 @@ const previewVisitorAccountInvitation = async ({ token }) => {
     branchName: branch?.name || "",
     organizationName: organization?.name || "",
     expiresAt: invitation.expiresAt,
+    ...(invitation.residentId ? { residentId: invitation.residentId } : {}),
   };
 };
 
-const acceptVisitorAccountInvitation = async ({ token, name, password, timezone }) => {
+const acceptVisitorAccountInvitation = async ({
+  token,
+  name,
+  password,
+  timezone,
+}) => {
   const invitation = await loadPendingByToken(token);
-  if (!validator.isEmail(invitation.email)) throw new AppError("email_invalid", 400);
+  if (!validator.isEmail(invitation.email))
+    throw new AppError("email_invalid", 400);
+  if (invitation.personType === RESIDENT_ACCOUNT_TYPE) {
+    return acceptResidentInvitation({ invitation, name, password, timezone });
+  }
 
   let user = await User.findOne({ email: invitation.email });
   if (user && (await isStaffAccount(user))) {
@@ -383,7 +414,9 @@ const acceptVisitorAccountInvitation = async ({ token, name, password, timezone 
 
   let resolvedTimezone = timezone;
   if (!user && !resolvedTimezone) {
-    const branch = await Branch.findById(invitation.branchId).select("timezone").lean();
+    const branch = await Branch.findById(invitation.branchId)
+      .select("timezone")
+      .lean();
     resolvedTimezone = branch?.timezone || "Europe/London";
   }
 
@@ -403,7 +436,7 @@ const acceptVisitorAccountInvitation = async ({ token, name, password, timezone 
               verificationStatus: { email: "verified" },
             },
           ],
-          { session: dbSession }
+          { session: dbSession },
         );
         user = created;
       }
@@ -441,7 +474,8 @@ const acceptVisitorAccountInvitation = async ({ token, name, password, timezone 
       personType: person.type,
     };
   } catch (error) {
-    if (error.code === 11000) throw new AppError("visitor_account_already_linked", 409);
+    if (error.code === 11000)
+      throw new AppError("visitor_account_already_linked", 409);
     throw error;
   } finally {
     await dbSession.endSession();

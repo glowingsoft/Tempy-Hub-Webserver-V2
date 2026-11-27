@@ -27,6 +27,9 @@ const {
   assertBranchInOrganization,
   scopeBranchFilter,
 } = require("./residentAccess");
+const {
+  revokeResidentInvitations,
+} = require("@adminServices/visitors/accountInvitationToken");
 
 const PASSCODE_PATTERN = /^\d{4,32}$/;
 const QR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -542,7 +545,9 @@ const loadPeepByResident = async (residents) => {
   const records = await PeepRecord.find({
     residentId: { $in: residents.map((resident) => resident._id) },
   })
-    .select("residentId peepLevel mobilityNotes equipmentRequired assistanceRequired")
+    .select(
+      "residentId peepLevel mobilityNotes equipmentRequired assistanceRequired",
+    )
     .lean();
   return new Map(records.map((record) => [String(record.residentId), record]));
 };
@@ -825,6 +830,10 @@ const deactivateResident = async ({
   if (moved.modifiedCount !== 1) {
     throw new AppError("resident_not_admitted", 409);
   }
+  await revokeResidentInvitations({
+    residentId: resident._id,
+    actorId: actor._id,
+  });
 
   const cancelled = await FamilyVisit.updateMany(
     {
@@ -875,4 +884,5 @@ module.exports = {
   updateResident,
   setVisitorPasscode,
   verifyVisitorPasscode,
+  parseAdmissionStatus,
 };

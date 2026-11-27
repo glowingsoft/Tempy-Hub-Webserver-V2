@@ -1,8 +1,16 @@
 const { Resident } = require("@models/Resident");
 const { Branch } = require("@models/Branch");
 const { Organization } = require("@models/Organization");
-const { AdmissionStatus } = require("@models/domainEnums");
+const { User } = require("@models/UserModel");
+const { FamilyMember } = require("@models/FamilyMember");
+const {
+  AdmissionStatus,
+  FamilyMemberStatus,
+} = require("@models/domainEnums");
 const { toObjectId, joinOne } = require("@appServices/family/familyPipeline");
+const {
+  moduleActiveStage,
+} = require("@appServices/family/familyAccessService");
 
 const findResidentAccount = async (userId) => {
   const [resident] = await Resident.aggregate([
@@ -42,4 +50,27 @@ const findResidentAccount = async (userId) => {
   return resident || null;
 };
 
-module.exports = { findResidentAccount };
+const findNextOfKinName = async (residentId) => {
+  const [contact] = await FamilyMember.aggregate([
+    {
+      $match: {
+        residentId: toObjectId(residentId),
+        status: FamilyMemberStatus.ACTIVE,
+        isNextOfKin: true,
+      },
+    },
+    ...joinOne({
+      from: Organization,
+      localField: "organizationId",
+      as: "organization",
+    }),
+    moduleActiveStage(new Date()),
+    { $sort: { createdAt: 1, _id: 1 } },
+    { $limit: 1 },
+    ...joinOne({ from: User, localField: "userId", as: "user" }),
+    { $project: { _id: 0, name: "$user.name" } },
+  ]);
+  return contact?.name || null;
+};
+
+module.exports = { findResidentAccount, findNextOfKinName };

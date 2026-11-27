@@ -110,6 +110,7 @@ const getUserProfile = async (req, res, next, fieldsToPopulate = []) => {
       userId: req.user._id,
       fieldsToPopulate,
       organizationId: req.orgId || req.header("x-org-id"),
+      audience: req.audience,
     });
     return sendResponse({
       res,

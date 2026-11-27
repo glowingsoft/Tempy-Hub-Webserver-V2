@@ -16,7 +16,12 @@ const {
   StaffProfileStatus,
   ActiveInactiveStatus,
   FamilyMemberStatus,
+  AuthAudience,
 } = require("@models/domainEnums");
+const {
+  findResidentAccount,
+  findNextOfKinName,
+} = require("@appServices/residents/residentAccessService");
 const { formatUserResponse } = require("@utils/userResponseUtil");
 const { getFullImageUrl } = require("@utils/imageHelper");
 const { userCache } = require("@config/nodeCache");
@@ -408,10 +413,20 @@ const withStaffCard = async (payload, userId, organizationId) => {
   return payload;
 };
 
+const withResidentHome = async (payload, userId) => {
+  const home = await findResidentAccount(userId);
+  if (!home) return payload;
+  payload.organizationName = home.organizationName || null;
+  payload.branchName = home.branchName || null;
+  payload.familyContact = await findNextOfKinName(home.residentId);
+  return payload;
+};
+
 const getUserProfile = async ({
   userId,
   fieldsToPopulate = [],
   organizationId,
+  audience,
 }) => {
   let query = User.findById(userId);
   if (fieldsToPopulate.length > 0) {
@@ -430,7 +445,11 @@ const getUserProfile = async ({
 
   const payload = formatUserResponse(user, null, [], ["resetToken"]);
   payload.lastPasswordChangeAt = user.passwordChangedAt || null;
-  return withStaffCard(payload, userId, organizationId);
+  await withStaffCard(payload, userId, organizationId);
+  if (audience === AuthAudience.RESIDENT) {
+    return withResidentHome(payload, userId);
+  }
+  return payload;
 };
 
 const getOtherUserProfile = async ({ userId }) => {

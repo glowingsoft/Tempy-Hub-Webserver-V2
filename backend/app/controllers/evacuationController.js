@@ -106,6 +106,25 @@ const markMyself = async (req, res) => {
   }
 };
 
+const markResident = async (req, res) => {
+  try {
+    const data = await evacuationService.markResidentResponse({
+      resident: req.resident,
+      userId: req.user._id,
+      status: req.body?.status,
+    });
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "evac_check_saved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 const familyMessage = (action, translationKey) => async (req, res) => {
   try {
     const data = await evacuationService[action]({
@@ -177,6 +196,7 @@ module.exports = {
   myDrills,
   getActiveEvacuation,
   markMyself,
+  markResident,
   alertFamilies,
   updateFamilies,
   allClearFamilies,

@@ -12,6 +12,7 @@ const {
   EvacuationType,
   EvacuationStatus,
   EvacPersonKind,
+  ResidentEvacResponse,
   FamilyAlertStatus,
   ActiveInactiveStatus,
   MembershipRole,
@@ -440,6 +441,11 @@ const rowDetails = async ({ rows, branchId, startedAt }) => {
   };
 };
 
+const RESIDENT_RESPONSE_LABELS = {
+  [ResidentEvacResponse.OK]: "Says OK",
+  [ResidentEvacResponse.NEED_HELP]: "Needs Help",
+};
+
 const presentRow = (row, details, timezone) => {
   const id = String(row.personId);
   let title = row.name;
@@ -458,6 +464,7 @@ const presentRow = (row, details, timezone) => {
     parts = [
       "Resident",
       row.roomNumber ? `Room ${row.roomNumber}` : "",
+      RESIDENT_RESPONSE_LABELS[row.residentResponse],
       details.assistanceOf.get(id),
     ];
   } else {

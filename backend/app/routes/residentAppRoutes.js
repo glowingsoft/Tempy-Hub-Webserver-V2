@@ -13,6 +13,7 @@ router.use(
   requireResidentAccess,
 );
 
+router.get("/home", controller.getHomeScreen);
 router.get("/family", controller.getFamilyScreen);
 router.get("/photos", controller.getPhotosScreen);
 router.get("/photos/:mediaId", controller.getPhotoScreen);

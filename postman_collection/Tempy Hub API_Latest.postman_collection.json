@@ -15753,6 +15753,129 @@
                 "description": "Resident app gazette detail, with the same response as the family app's get gazette. Run past gazettes screen first. Optional page and limit slice messages and add meta. 404 gazette_not_found when it is not this resident's printed gazette or Family Engagement is off."
               },
               "response": []
+            },
+            {
+              "name": "evacuation I am OK",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"safe\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/evacuations/me/check",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "me",
+                    "check"
+                  ]
+                },
+                "description": "Resident app fire drill button. Same URL as the staff self check; run Login Resident first. Records residentResponse ok on the resident's own roll call entry. status stays as staff set it, so the resident stays unaccounted until staff confirm. 404 no_active_evacuation, 403 module_not_enabled, 400 invalid_evac_check_status."
+              },
+              "response": []
+            },
+            {
+              "name": "evacuation I need help",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"needHelp\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/app/evacuations/me/check",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "evacuations",
+                    "me",
+                    "check"
+                  ]
+                },
+                "description": "Resident app fire drill button. Records residentResponse needHelp, leaves status unchanged and alerts all active staff at the home plus owners. The same answer repeated within a minute is ignored."
+              },
+              "response": []
+            },
+            {
+              "name": "home screen",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"OK\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/app/resident/home",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "app",
+                    "resident",
+                    "home"
+                  ]
+                },
+                "description": "Resident app Home tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, status { isOut, label, destination, since, expectedReturnAt }, photos { newCount }, newsletter { newsletterId, title, month, issueNumber, sentAt, subtitle, isNew } for the home's latest in-app newsletter or null, and evacuation { evacuationEventId, type (mock or real), title, startedAt, assemblyPoint, checkStatus, residentResponse, residentRespondedAt } while a drill or fire is active at the home, otherwise null. Answer it with POST /app/evacuations/me/check. Photos and newsletter are empty when Family Engagement is off; evacuation is null when that module is off."
+              },
+              "response": []
             }
           ]
         }

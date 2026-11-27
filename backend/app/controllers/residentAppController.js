@@ -4,6 +4,7 @@ const residentFamilyService = require("@appServices/residents/residentFamilyServ
 const residentPhotoService = require("@appServices/residents/residentPhotoService");
 const residentGazetteService = require("@appServices/residents/residentGazetteService");
 const residentVisitorService = require("@appServices/residents/residentVisitorService");
+const residentHomeService = require("@appServices/residents/residentHomeService");
 const { pagedDetail } = require("./familyController");
 
 const getFamilyScreen = async (req, res) => {
@@ -106,7 +107,24 @@ const getGazette = pagedDetail("messages", (req) =>
   }),
 );
 
+const getHomeScreen = async (req, res) => {
+  try {
+    const data = await residentHomeService.getHomeScreen({
+      resident: req.resident,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
+  getHomeScreen,
   listGazettes,
   getGazette,
   getVisitorsScreen,

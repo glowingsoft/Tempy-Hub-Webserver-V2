@@ -24,6 +24,8 @@ const {
   AdmissionStatus,
   StaffProfileStatus,
   MembershipRole,
+  ResidentEvacResponse,
+  ModuleSlug,
 } = require("@models/domainEnums");
 const {
   actorStanding,
@@ -34,7 +36,12 @@ const {
 } = require("./evacuationAccess");
 const { Organization } = require("@models/Organization");
 const { Kiosk } = require("@models/Kiosk");
-const { sendFamilyMessage, countFamilies } = require("./evacuationNotify");
+const {
+  sendFamilyMessage,
+  countFamilies,
+  alertResidentsOfEvacuation,
+  alertStaffResidentNeedsHelp,
+} = require("./evacuationNotify");
 
 const ON_SITE_PRESENCE = [PresenceStatus.ON_SITE, PresenceStatus.ON_BREAK];
 
@@ -883,6 +890,7 @@ const startEvacuation = async ({
   });
 
   await seedRollcallChecks(event);
+  await alertResidentsOfEvacuation({ event });
 
   return loadEventWithBranchAndStats({
     match: { _id: event._id },
@@ -1352,6 +1360,8 @@ const listUnaccounted = async ({
           locationLabel: 1,
           lastSeenLabel: 1,
           lastSeenAt: 1,
+          residentResponse: 1,
+          residentRespondedAt: 1,
           name: { $ifNull: ["$person.name", ""] },
           email: { $ifNull: ["$person.email", ""] },
           employeeCode: { $ifNull: ["$person.employeeCode", ""] },
@@ -1831,6 +1841,124 @@ const markSelfCheck = async ({
   });
 };
 
+const REPEAT_RESPONSE_WINDOW_MS = 60 * 1000;
+
+const RESIDENT_ANSWERS = {
+  [EvacCheckStatus.SAFE]: ResidentEvacResponse.OK,
+  [ResidentEvacResponse.NEED_HELP]: ResidentEvacResponse.NEED_HELP,
+};
+
+const isEvacuationLicensed = ({ organizationId, now }) =>
+  Organization.exists({
+    _id: organizationId,
+    moduleAccess: {
+      $elemMatch: {
+        moduleSlug: ModuleSlug.FIRE_DRILL_EVACUATION,
+        enabled: true,
+        $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+      },
+    },
+  });
+
+const findActiveForBranch = (branchId) =>
+  EvacuationEvent.findOne({
+    branchId,
+    status: EvacuationStatus.ACTIVE,
+  })
+    .select("_id branchId type startedAt")
+    .lean();
+
+const getResidentEvacuation = async ({ resident, now = new Date() }) => {
+  const licensed = await isEvacuationLicensed({
+    organizationId: resident.organizationId,
+    now,
+  });
+  if (!licensed) return null;
+
+  const event = await findActiveForBranch(resident.branchId);
+  if (!event) return null;
+
+  const [check, branch] = await Promise.all([
+    EvacCheck.findOne({
+      evacuationEventId: event._id,
+      personKind: EvacPersonKind.RESIDENT,
+      personId: resident.residentId,
+    })
+      .select("status residentResponse residentRespondedAt")
+      .lean(),
+    Branch.findById(resident.branchId).select("assemblyPoint").lean(),
+  ]);
+
+  return {
+    evacuationEventId: event._id,
+    type: event.type,
+    title:
+      event.type === EvacuationType.REAL ? "Fire Emergency" : "Fire Drill",
+    startedAt: event.startedAt,
+    assemblyPoint: branch?.assemblyPoint || "",
+    checkStatus: check?.status || EvacCheckStatus.UNKNOWN,
+    residentResponse: check?.residentResponse || null,
+    residentRespondedAt: check?.residentRespondedAt || null,
+  };
+};
+
+const markResidentResponse = async ({
+  resident,
+  userId,
+  status,
+  now = new Date(),
+}) => {
+  const response = Object.hasOwn(RESIDENT_ANSWERS, String(status))
+    ? RESIDENT_ANSWERS[status]
+    : null;
+  if (!response) throw new AppError("invalid_evac_check_status", 400);
+
+  const licensed = await isEvacuationLicensed({
+    organizationId: resident.organizationId,
+    now,
+  });
+  if (!licensed) {
+    throw new AppError("module_not_enabled", 403, {
+      module: ModuleSlug.FIRE_DRILL_EVACUATION,
+    });
+  }
+
+  const event = await findActiveForBranch(resident.branchId);
+  if (!event) throw new AppError("no_active_evacuation", 404);
+
+  const key = {
+    evacuationEventId: event._id,
+    personKind: EvacPersonKind.RESIDENT,
+    personId: resident.residentId,
+  };
+  const previous = await EvacCheck.findOne(key)
+    .select("_id residentResponse residentRespondedAt")
+    .lean();
+  const repeated =
+    previous?.residentResponse === response &&
+    now - previous.residentRespondedAt < REPEAT_RESPONSE_WINDOW_MS;
+  if (repeated) return enrichSingleCheck(previous._id);
+
+  const check = await EvacCheck.findOneAndUpdate(
+    key,
+    {
+      $set: { residentResponse: response, residentRespondedAt: now },
+      $setOnInsert: {
+        ...key,
+        status: EvacCheckStatus.UNKNOWN,
+        markedAt: now,
+      },
+    },
+    { new: true, upsert: true, runValidators: true },
+  ).lean();
+
+  if (response === ResidentEvacResponse.NEED_HELP) {
+    await alertStaffResidentNeedsHelp({ event, resident, userId });
+  }
+
+  return enrichSingleCheck(check._id);
+};
+
 const drillScoreMeta = (expected, done) => ({
   percent:
     expected === 0 ? null : Math.min(100, Math.round((done / expected) * 100)),
@@ -2033,5 +2161,7 @@ module.exports = {
   upsertEvacCheck,
   listEvacChecks,
   markSelfCheck,
+  markResidentResponse,
+  getResidentEvacuation,
   myDrills,
 };

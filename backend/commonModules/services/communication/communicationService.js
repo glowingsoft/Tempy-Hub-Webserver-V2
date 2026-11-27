@@ -218,7 +218,7 @@ const sendUserNotifications = async ({
             body,
             data: {
               ...data,
-              subjectId: sender ? sender.toString() : null,
+              ...(sender ? { subjectId: sender.toString() } : {}),
               objectId: objectId.toString(),
             },
           });

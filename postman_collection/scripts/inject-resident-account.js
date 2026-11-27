@@ -300,6 +300,32 @@ const addResidentIdNote = (items) => {
 };
 addResidentIdNote(collection.item);
 
+const evacuationAnswer = (name, status, description) =>
+  req(name, "POST", ["app", "evacuations", "me", "check"], {
+    body: { status },
+    description,
+  });
+
+upsert(residentApp, [
+  evacuationAnswer(
+    "evacuation I am OK",
+    "safe",
+    "Resident app fire drill button. Same URL as the staff self check; run Login Resident first. Records residentResponse ok on the resident's own roll call entry. status stays as staff set it, so the resident stays unaccounted until staff confirm. 404 no_active_evacuation, 403 module_not_enabled, 400 invalid_evac_check_status.",
+  ),
+  evacuationAnswer(
+    "evacuation I need help",
+    "needHelp",
+    "Resident app fire drill button. Records residentResponse needHelp, leaves status unchanged and alerts all active staff at the home plus owners. The same answer repeated within a minute is ignored.",
+  ),
+]);
+
+upsert(residentApp, [
+  req("home screen", "GET", ["app", "resident", "home"], {
+    description:
+      "Resident app Home tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, status { isOut, label, destination, since, expectedReturnAt }, photos { newCount }, newsletter { newsletterId, title, month, issueNumber, sentAt, subtitle, isNew } for the home's latest in-app newsletter or null, and evacuation { evacuationEventId, type (mock or real), title, startedAt, assemblyPoint, checkStatus, residentResponse, residentRespondedAt } while a drill or fire is active at the home, otherwise null. Answer it with POST /app/evacuations/me/check. Photos and newsletter are empty when Family Engagement is off; evacuation is null when that module is off.",
+  }),
+]);
+
 const vars = collection.variable || [];
 for (const [key, value] of [
   ["residentAccountEmail", "resident.postman@example.com"],

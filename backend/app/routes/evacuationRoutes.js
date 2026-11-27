@@ -6,7 +6,12 @@ const {
   requireRoles,
   requirePermission,
 } = require("@middlewares/membershipMiddleware");
-const { ModuleSlug, MembershipRole } = require("@models/domainEnums");
+const {
+  ModuleSlug,
+  MembershipRole,
+  AuthAudience,
+} = require("@models/domainEnums");
+const { requireResidentAccess } = require("@middlewares/residentMiddleware");
 const evacuationController = require("../controllers/evacuationController");
 const adminEvacuationController = require("../../admin/controllers/evacuationController");
 const {
@@ -15,6 +20,17 @@ const {
 } = require("@adminServices/evacuation/evacuationAccess");
 
 const router = express.Router();
+
+const residentsOnly = (req, res, next) =>
+  req.audience === AuthAudience.RESIDENT ? next() : next("route");
+
+router.post(
+  "/me/check",
+  auth,
+  residentsOnly,
+  requireResidentAccess,
+  evacuationController.markResident,
+);
 
 router.use(
   auth,

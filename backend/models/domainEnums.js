@@ -445,6 +445,11 @@ const EvacCheckStatus = {
   OFF_SITE: "offSite",
 };
 
+const ResidentEvacResponse = {
+  OK: "ok",
+  NEED_HELP: "needHelp",
+};
+
 const DocumentScope = {
   ORG: "org",
   BRANCH: "branch",
@@ -642,6 +647,7 @@ module.exports = {
   FamilyUpdatePreset,
   EvacPersonKind,
   EvacCheckStatus,
+  ResidentEvacResponse,
   DocumentScope,
   DocumentCategory,
   DocumentAudience,

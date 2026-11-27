@@ -1,5 +1,9 @@
 const mongoose = require("mongoose");
-const { EvacPersonKind, EvacCheckStatus } = require("./domainEnums");
+const {
+  EvacPersonKind,
+  EvacCheckStatus,
+  ResidentEvacResponse,
+} = require("./domainEnums");
 
 const evacCheckSchema = new mongoose.Schema(
   {
@@ -40,6 +44,11 @@ const evacCheckSchema = new mongoose.Schema(
     lastSeenLabel: { type: String, default: "" },
     lastSeenAt: { type: Date, default: null },
     clientEventId: { type: String, default: undefined },
+    residentResponse: {
+      type: String,
+      enum: Object.values(ResidentEvacResponse),
+    },
+    residentRespondedAt: { type: Date },
   },
   { timestamps: true }
 );

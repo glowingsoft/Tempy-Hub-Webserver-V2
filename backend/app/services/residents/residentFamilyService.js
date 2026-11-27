@@ -157,4 +157,4 @@ const getFamilyScreen = async ({ resident }) => {
   };
 };
 
-module.exports = { getFamilyScreen, loadSharing, latestPrintedGazette };
+module.exports = { countNewPhotos, getFamilyScreen, loadSharing, latestPrintedGazette };

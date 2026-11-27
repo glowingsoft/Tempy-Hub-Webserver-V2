@@ -193,7 +193,7 @@ if (!residentApp) {
 upsert(residentApp, [
   req("my family screen", "GET", ["app", "resident", "family"], {
     description:
-      "Resident app Family tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, family { count, members, note } with active members and the next of kin first, gazette { gazetteId, issueNumber, messageCount } for the latest printed gazette or null, and photos { newCount }: photos from family uploads approved since the resident last opened My Photos. Family and gazette are empty when Family Engagement is off; newCount is 0 without photo consent. 403 wrong_token_audience for a non-resident token, resident_profile_not_found when the resident is discharged or unlinked.",
+      "Resident app Family tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, family { count, members, note } with active members and the next of kin first, gazette { gazetteId, issueNumber, messageCount } for the latest printed gazette or null, and photos { newCount }: photos from family uploads approved since the resident last opened My Photos. Family and gazette are empty when Family Engagement is off; newCount counts only photos shared while consent was on. 403 wrong_token_audience for a non-resident token, resident_profile_not_found when the resident is discharged or unlinked.",
   }),
 ]);
 
@@ -201,7 +201,7 @@ upsert(residentApp, [
   {
     ...req("my photos screen", "GET", ["app", "resident", "photos"], {
       description:
-        "Resident app My Photos screen in one call. Run Login Resident first. Query: tab (all, family or home; default all), page, limit. Returns subtitle, photoSharing, tab, tabs (home is labelled with the branch name) and photos { mediaId, url, width, height, source, title, fromName, sharedAt, isLatest }, newest first, with pagination in meta. family is approved family uploads; home is published wall posts that tag the resident. Loading page 1 marks the photos as seen, which resets newCount on the family screen. photos is empty without photo consent or with Family Engagement off. 400 invalid_gallery_tab.",
+        "Resident app My Photos screen in one call. Run Login Resident first. Query: tab (all, family or home; default all), page, limit. Returns subtitle, photoSharing, tab, tabs (home is labelled with the branch name) and photos { mediaId, url, width, height, source, title, fromName, sharedAt, isLatest }, newest first, with pagination in meta. family is approved family uploads; home is published wall posts that tag the resident. Loading page 1 marks the photos as seen, which resets newCount on the family screen. photoSharing says whether sharing is on; when it is off, photos shared before it was turned off are still listed. photos is empty if the resident never shared or Family Engagement is off. 400 invalid_gallery_tab.",
     }),
   },
 ]);
@@ -323,6 +323,49 @@ upsert(residentApp, [
   req("home screen", "GET", ["app", "resident", "home"], {
     description:
       "Resident app Home tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, status { isOut, label, destination, since, expectedReturnAt }, photos { newCount }, newsletter { newsletterId, title, month, issueNumber, sentAt, subtitle, isNew } for the home's latest in-app newsletter or null, and evacuation { evacuationEventId, type (mock or real), title, startedAt, assemblyPoint, checkStatus, residentResponse, residentRespondedAt } while a drill or fire is active at the home, otherwise null. Answer it with POST /app/evacuations/me/check. Photos and newsletter are empty when Family Engagement is off; evacuation is null when that module is off.",
+  }),
+]);
+
+upsert(residentApp, [
+  req("newsletter screen", "GET", ["app", "resident", "newsletter"], {
+    description:
+      "Resident app newsletter screen: the home's latest in-app newsletter, with the same response as the family app's get newsletter (GET /app/family/newsletters/:newsletterId): newsletterId, homeName, title, month, periodLabel, issueNumber, sentAt, editedAt, welcome, highlights, comingUp, notices, newResidents, gallery and footer; sections switched off are empty. Optional page and limit slice highlights and add meta. Opening it marks the newsletter as read, so isNew on the home screen turns false. 404 newsletter_not_found when none has been sent or Family Engagement is off.",
+  }),
+]);
+
+upsert(residentApp, [
+  {
+    ...req("community wall screen", "GET", ["app", "resident", "wall"], {
+      description:
+        "Resident app Community Wall, with the same response as the family app's wall (GET /app/family/wall): published posts { postId, branchId, homeName, authorName, authorPhotoUrl, title, message, photos [{ mediaId, url }], taggedResidents, audience, isPinned, isPinnedByMe, reactionCount, reactedByMe, createdAt }, pinned first then newest, with meta. Query: page, limit. Shows the home's posts, posts for everyone and posts that tag this resident; only this resident is named in taggedResidents. Empty when Family Engagement is off.",
+    }),
+  },
+]);
+const wallRequest = residentApp.item.find((r) => r.name === "community wall screen");
+wallRequest.request.url = {
+  raw: "{{url}}/app/resident/wall?page=1&limit=10",
+  host: ["{{url}}"],
+  path: ["app", "resident", "wall"],
+  query: [
+    { key: "page", value: "1" },
+    { key: "limit", value: "10" },
+  ],
+};
+
+upsert(residentApp, [
+  req("my profile screen", "GET", ["app", "resident", "profile"], {
+    description:
+      "Resident app My Profile. Returns resident { residentId, name, photoUrl, homeName, roomNumber, subtitle }, details { familyContact { memberId, name, photoUrl, relationship, label } } and settings { largeText, soundAlerts, sharePhotos }. familyContact is the active next of kin, null when there is none or Family Engagement is off.",
+  }),
+  req("my profile settings", "PATCH", ["app", "resident", "profile"], {
+    body: { largeText: false, soundAlerts: true, sharePhotos: true },
+    description:
+      "Saves one or more settings; send only what changed. Each must be true or false. sharePhotos is the resident's photography consent, recorded with the time and the resident as recorder; turning it off stops new photos being shared, and photos shared before then stay visible. Returns the same body as my profile screen. 400 invalid_resident_setting or nothing_to_update. Sign out uses POST /auth/logout with deviceId.",
+  }),
+  req("resident sign out", "POST", ["auth", "logout"], {
+    body: { deviceId: "1234" },
+    description:
+      "Shared logout. Removes this device from push notifications for the account. The app must also discard the token.",
   }),
 ]);
 

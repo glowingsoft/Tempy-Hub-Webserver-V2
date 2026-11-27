@@ -1,12 +1,10 @@
-const moment = require("moment-timezone");
 const { Resident } = require("@models/Resident");
-const { FamilyNewsletter } = require("@models/FamilyNewsletter");
-const { FamilyNewsletterStatus } = require("@models/domainEnums");
-const { toObjectId } = require("@appServices/family/familyPipeline");
+const { hasSharedPhotos } = require("@utils/photoSharing");
 const {
   isFamilyModuleActive,
 } = require("@appServices/family/familyAccessService");
 const evacuationService = require("@adminServices/evacuation/evacuationService");
+const { latestNewsletter } = require("./residentNewsletterService");
 const {
   loadSharing,
   countNewPhotos,
@@ -23,34 +21,6 @@ const homeStatus = (resident) => {
   };
 };
 
-const latestNewsletter = async ({ organizationId, branchId, seenAt }) => {
-  const [newsletter] = await FamilyNewsletter.aggregate([
-    {
-      $match: {
-        organizationId: toObjectId(organizationId),
-        branchId: toObjectId(branchId),
-        status: FamilyNewsletterStatus.SENT,
-        "delivery.inApp": true,
-      },
-    },
-    { $sort: { sentAt: -1, _id: -1 } },
-    { $limit: 1 },
-    { $project: { title: 1, month: 1, issueNumber: 1, sentAt: 1 } },
-  ]);
-  if (!newsletter) return null;
-
-  const month = moment.utc(`${newsletter.month}-01`).format("MMMM");
-  return {
-    newsletterId: newsletter._id,
-    title: newsletter.title,
-    month: newsletter.month,
-    issueNumber: newsletter.issueNumber,
-    sentAt: newsletter.sentAt,
-    subtitle: [newsletter.title, month].filter(Boolean).join(" · "),
-    isNew: !seenAt || newsletter.sentAt > seenAt,
-  };
-};
-
 const getHomeScreen = async ({ resident }) => {
   const [sharing, record, evacuation] = await Promise.all([
     loadSharing(resident.residentId),
@@ -60,14 +30,14 @@ const getHomeScreen = async ({ resident }) => {
     evacuationService.getResidentEvacuation({ resident }),
   ]);
   const familyActive = isFamilyModuleActive(sharing.organization);
-  const photoSharing = familyActive && sharing.photographyConsent === true;
+  const photosVisible = familyActive && hasSharedPhotos(sharing);
 
   const [newCount, newsletter] = await Promise.all([
-    photoSharing
+    photosVisible
       ? countNewPhotos({
           residentId: resident.residentId,
           organizationId: sharing.organizationId,
-          seenAt: sharing.photosSeenAt,
+          sharing,
         })
       : 0,
     familyActive

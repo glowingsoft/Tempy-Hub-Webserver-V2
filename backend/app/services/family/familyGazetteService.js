@@ -1,4 +1,8 @@
 const { Branch } = require("@models/Branch");
+const {
+  hasSharedPhotos,
+  sharedPhotoMatch,
+} = require("@utils/photoSharing");
 const { Resident } = require("@models/Resident");
 const { FamilyMedia } = require("@models/FamilyMedia");
 const { FamilyUpload } = require("@models/FamilyUpload");
@@ -136,7 +140,11 @@ const nextGazette = async ({ link, now = new Date() }) => {
 };
 
 const coverUrlsOf = async ({ residentId, rows }) => {
-  const shared = rows.filter((row) => row.photoConsent === true);
+  const sharingOf = (row) => ({
+    photographyConsent: row.photoConsent,
+    photoSharingStoppedAt: row.photoSharingStoppedAt,
+  });
+  const shared = rows.filter((row) => hasSharedPhotos(sharingOf(row)));
   const uploadIds = shared.flatMap((row) => row.uploadIds ?? []);
   if (!uploadIds.length) return new Map();
 
@@ -147,6 +155,7 @@ const coverUrlsOf = async ({ residentId, rows }) => {
         residentId: toObjectId(residentId),
         status: FamilyUploadStatus.APPROVED,
         includeInGazette: true,
+        ...sharedPhotoMatch(sharingOf(shared[0]), "decidedAt"),
       },
     },
     { $sort: { createdAt: 1, _id: 1 } },
@@ -221,6 +230,7 @@ const listGazettes = async ({ link, page, limit, skip }) => {
           residentName: { $ifNull: ["$resident.name", ""] },
           residentPhotoUrl: { $ifNull: ["$resident.photoUrl", ""] },
           photoConsent: "$resident.photographyConsent",
+          photoSharingStoppedAt: "$resident.photoSharingStoppedAt",
           uploadIds: 1,
           messageCount: { $size: "$uploadIds" },
           pageCount: 1,
@@ -241,7 +251,7 @@ const listGazettes = async ({ link, page, limit, skip }) => {
   const covers = await coverUrlsOf({ residentId: link.residentId, rows: data });
 
   return {
-    data: data.map(({ uploadIds, photoConsent, ...row }) => ({
+    data: data.map(({ uploadIds, photoConsent, photoSharingStoppedAt, ...row }) => ({
       ...row,
       coverUrl: covers.get(String(row.gazetteId)) || "",
       title: gazetteTitle(row.residentName),

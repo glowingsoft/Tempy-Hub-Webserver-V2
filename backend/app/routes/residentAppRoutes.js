@@ -14,6 +14,10 @@ router.use(
 );
 
 router.get("/home", controller.getHomeScreen);
+router.get("/newsletter", controller.getNewsletterScreen);
+router.get("/wall", controller.listWall);
+router.get("/profile", controller.getProfileScreen);
+router.patch("/profile", controller.updateProfileSettings);
 router.get("/family", controller.getFamilyScreen);
 router.get("/photos", controller.getPhotosScreen);
 router.get("/photos/:mediaId", controller.getPhotoScreen);

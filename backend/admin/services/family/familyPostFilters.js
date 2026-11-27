@@ -3,18 +3,27 @@ const { FamilyPostStatus } = require("@models/domainEnums");
 const { toObjectId } = require("@appServices/family/familyPipeline");
 
 /** BR-06: a resident with photo sharing off never appears in a newsletter or gazette, even if a post tagged them before. */
-const everyTaggedResidentConsents = {
-  $expr: {
-    $allElementsTrue: [
-      {
-        $map: {
-          input: "$tagged",
-          as: "resident",
-          in: { $eq: ["$$resident.photographyConsent", true] },
-        },
-      },
+const everyTaggedResidentConsents = (sharedAsOf) => {
+  const consents = { $eq: ["$$resident.photographyConsent", true] };
+  const sharedBeforeStop = {
+    $and: [
+      { $eq: [{ $type: "$$resident.photoSharingStoppedAt" }, "date"] },
+      { $lte: [sharedAsOf, "$$resident.photoSharingStoppedAt"] },
     ],
-  },
+  };
+  return {
+    $expr: {
+      $allElementsTrue: [
+        {
+          $map: {
+            input: "$tagged",
+            as: "resident",
+            in: sharedAsOf ? { $or: [consents, sharedBeforeStop] } : consents,
+          },
+        },
+      ],
+    },
+  };
 };
 
 /** The live posts of one site that are safe to reuse in a printed or sent document. */
@@ -22,6 +31,7 @@ const publishedPostsOfSite = ({
   organizationId,
   branchId,
   includeTagged = false,
+  sharedAsOf = null,
 }) => [
   {
     $match: {
@@ -40,7 +50,7 @@ const publishedPostsOfSite = ({
       as: "tagged",
     },
   },
-  { $match: everyTaggedResidentConsents },
+  { $match: everyTaggedResidentConsents(sharedAsOf) },
 ];
 
 module.exports = { everyTaggedResidentConsents, publishedPostsOfSite };

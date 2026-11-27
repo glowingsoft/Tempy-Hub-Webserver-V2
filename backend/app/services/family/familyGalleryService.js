@@ -1,4 +1,9 @@
 const moment = require("moment-timezone");
+const {
+  isSharing,
+  hasSharedPhotos,
+  sharedPhotoMatch,
+} = require("@utils/photoSharing");
 const { Branch } = require("@models/Branch");
 const { Resident } = require("@models/Resident");
 const { FamilyUpload } = require("@models/FamilyUpload");
@@ -95,11 +100,17 @@ const listGallery = async ({
       as: "branch",
       optional: true,
     }),
-    { $project: { photographyConsent: 1, timezone: "$branch.timezone" } },
+    {
+      $project: {
+        photographyConsent: 1,
+        photoSharingStoppedAt: 1,
+        timezone: "$branch.timezone",
+      },
+    },
   ]);
   if (!resident) throw new AppError("resident_not_found", 404);
 
-  if (resident.photographyConsent !== true) {
+  if (!hasSharedPhotos(resident)) {
     return {
       data: [],
       meta: {
@@ -154,6 +165,7 @@ const listGallery = async ({
         ],
       },
     },
+    { $match: sharedPhotoMatch(resident, "sortAt") },
     ...tileStages({ userId }),
     {
       $facet: {
@@ -186,7 +198,7 @@ const listGallery = async ({
         thisMonth: facetCount(result.thisMonth),
         fromMe: facetCount(result.fromMe),
       },
-      photoSharing: true,
+      photoSharing: isSharing(resident),
     },
   };
 };

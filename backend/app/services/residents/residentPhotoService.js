@@ -1,4 +1,9 @@
 const { Resident } = require("@models/Resident");
+const {
+  isSharing,
+  hasSharedPhotos,
+  sharedPhotoMatch,
+} = require("@utils/photoSharing");
 const { User } = require("@models/UserModel");
 const { FamilyUpload } = require("@models/FamilyUpload");
 const { FamilyPost } = require("@models/FamilyPost");
@@ -82,7 +87,7 @@ const homePhotoStages = ({ residentId, organizationId }) => [
   },
 ];
 
-const photoStages = ({ scope, tab }) => [
+const photoStages = ({ scope, sharing, tab }) => [
   ...familyPhotoStages(scope),
   {
     $unionWith: {
@@ -90,6 +95,7 @@ const photoStages = ({ scope, tab }) => [
       pipeline: homePhotoStages(scope),
     },
   },
+  { $match: sharedPhotoMatch(sharing, "sortAt") },
   ...(tab === PhotoTab.ALL ? [] : [{ $match: { source: tab } }]),
   { $unwind: "$mediaIds" },
   {
@@ -140,10 +146,11 @@ const toPhoto = ({ authorName, ...photo }, resident) => ({
 
 const loadPhotoAccess = async (resident) => {
   const sharing = await loadSharing(resident.residentId);
+  const familyActive = isFamilyModuleActive(sharing.organization);
   return {
-    photoSharing:
-      isFamilyModuleActive(sharing.organization) &&
-      sharing.photographyConsent === true,
+    photoSharing: familyActive && isSharing(sharing),
+    visible: familyActive && hasSharedPhotos(sharing),
+    sharing,
     scope: {
       residentId: toObjectId(resident.residentId),
       organizationId: toObjectId(sharing.organizationId),
@@ -151,9 +158,9 @@ const loadPhotoAccess = async (resident) => {
   };
 };
 
-const listPhotos = async ({ scope, tab, page, limit, skip }) => {
+const listPhotos = async ({ scope, sharing, tab, page, limit, skip }) => {
   const [result] = await FamilyUpload.aggregate([
-    ...photoStages({ scope, tab }),
+    ...photoStages({ scope, sharing, tab }),
     {
       $facet: {
         data: [newestFirst, { $skip: skip }, { $limit: limit }, ...tileStages],
@@ -179,13 +186,14 @@ const getPhotosScreen = async ({
   now = new Date(),
 }) => {
   const tab = parseTab(requestedTab);
-  const { photoSharing, scope } = await loadPhotoAccess(resident);
+  const { photoSharing, visible, sharing, scope } =
+    await loadPhotoAccess(resident);
 
-  const { photos, total } = photoSharing
-    ? await listPhotos({ scope, tab, page, limit, skip })
+  const { photos, total } = visible
+    ? await listPhotos({ scope, sharing, tab, page, limit, skip })
     : { photos: [], total: 0 };
 
-  if (photoSharing && page === 1) {
+  if (visible && page === 1) {
     await Resident.updateOne(
       { _id: resident.residentId },
       { $set: { photosSeenAt: now } },
@@ -217,11 +225,11 @@ const getPhotoScreen = async ({ resident, mediaId, tab: requestedTab }) => {
   const notFound = () => new AppError("resident_media_not_found", 404);
   if (!isValidObjectId(mediaId)) throw notFound();
 
-  const { photoSharing, scope } = await loadPhotoAccess(resident);
-  if (!photoSharing) throw notFound();
+  const { visible, sharing, scope } = await loadPhotoAccess(resident);
+  if (!visible) throw notFound();
 
   const [result] = await FamilyUpload.aggregate([
-    ...photoStages({ scope, tab }),
+    ...photoStages({ scope, sharing, tab }),
     {
       $facet: {
         order: [newestFirst, { $project: { _id: 0, mediaId: "$media._id" } }],

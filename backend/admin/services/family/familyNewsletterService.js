@@ -903,8 +903,12 @@ const pruneForSend = async (newsletter) => {
     organizationId: newsletter.organizationId,
     branchId: newsletter.branchId,
   };
+  const sharedAsOf =
+    newsletter.status === FamilyNewsletterStatus.SENT
+      ? newsletter.sentAt
+      : null;
   const live = await FamilyPost.aggregate([
-    ...publishedPostsOfSite(site),
+    ...publishedPostsOfSite({ ...site, sharedAsOf }),
     { $project: { mediaIds: 1 } },
   ]);
   const livePosts = new Set(live.map((post) => String(post._id)));
@@ -924,7 +928,12 @@ const pruneForSend = async (newsletter) => {
             _id: {
               $in: newsletter.newResidents.map((item) => item.residentId),
             },
-            photographyConsent: true,
+            $or: [
+              { photographyConsent: true },
+              ...(sharedAsOf
+                ? [{ photoSharingStoppedAt: { $gte: sharedAsOf } }]
+                : []),
+            ],
             admissionStatus: AdmissionStatus.ADMITTED,
           },
         },

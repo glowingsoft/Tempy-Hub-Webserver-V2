@@ -224,6 +224,8 @@
   "resident_account_already_linked": "This resident already has an account",
   "resident_account_not_found": "This resident has no account or pending invitation",
   "resident_account_removed": "Resident account access removed",
+  "invalid_resident_setting": "{field} must be true or false",
+  "resident_settings_saved": "Settings saved",
   "family_link_exists": "You are already part of this family",
   "join_request_pending": "You already have a join request waiting for approval",
   "join_request_not_found": "Join request not found",

@@ -1,4 +1,5 @@
 const moment = require("moment-timezone");
+const { canShowPhoto } = require("@utils/photoSharing");
 const { Resident } = require("@models/Resident");
 const { Branch } = require("@models/Branch");
 const { User } = require("@models/UserModel");
@@ -105,7 +106,12 @@ const loadInput = async ({ item }) => {
     single(
       Resident,
       { _id: item.residentId },
-      { name: 1, roomNumber: 1, photographyConsent: 1 },
+      {
+        name: 1,
+        roomNumber: 1,
+        photographyConsent: 1,
+        photoSharingStoppedAt: 1,
+      },
     ),
     getGazetteRules({ organizationId: item.organizationId }),
   ]);
@@ -139,6 +145,7 @@ const loadInput = async ({ item }) => {
             mediaIds: 1,
             authorId: 1,
             createdAt: 1,
+            decidedAt: 1,
             authorName: { $ifNull: ["$author.name", ""] },
           },
         },
@@ -171,7 +178,6 @@ const loadInput = async ({ item }) => {
     links.map((link) => [String(link._id), link.isNextOfKin]),
   );
 
-  const mayShowPhotos = resident?.photographyConsent === true;
   const messages = uploads.map((upload) => ({
     authorKey: String(upload.authorId),
     authorName: upload.authorName,
@@ -179,7 +185,9 @@ const loadInput = async ({ item }) => {
       labels.get(linkOf.get(String(upload.authorId))?.relationship) || "",
     createdAt: upload.createdAt,
     message: upload.message,
-    mediaIds: mayShowPhotos ? upload.mediaIds.slice(0, PHOTOS_PER_MESSAGE) : [],
+    mediaIds: canShowPhoto(resident, upload.decidedAt)
+      ? upload.mediaIds.slice(0, PHOTOS_PER_MESSAGE)
+      : [],
   }));
 
   const posts = item.postIds.length
@@ -188,6 +196,7 @@ const loadInput = async ({ item }) => {
           organizationId: item.organizationId,
           branchId: item.branchId,
           includeTagged: true,
+          sharedAsOf: "$createdAt",
         }),
         {
           $match: {

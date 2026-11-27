@@ -40,8 +40,13 @@ const residentSchema = new mongoose.Schema(
     },
     roomNumber: { type: String, default: "" },
     admittedAt: { type: Date, default: null },
+    photoSharingStoppedAt: { type: Date },
     photosSeenAt: { type: Date },
     newsletterSeenAt: { type: Date },
+    appSettings: {
+      largeText: { type: Boolean },
+      soundAlerts: { type: Boolean },
+    },
     /** Static QR, unlike the rotating tokens issued to visitors and contractors. */
     qrToken: { type: String, default: null },
     photographyConsent: { type: Boolean, default: false },

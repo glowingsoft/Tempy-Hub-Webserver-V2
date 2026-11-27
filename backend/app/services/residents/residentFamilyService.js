@@ -1,4 +1,8 @@
 const { Resident } = require("@models/Resident");
+const {
+  hasSharedPhotos,
+  sharedPhotoMatch,
+} = require("@utils/photoSharing");
 const { Organization } = require("@models/Organization");
 const { User } = require("@models/UserModel");
 const { FamilyMember } = require("@models/FamilyMember");
@@ -33,6 +37,7 @@ const loadSharing = async (residentId) => {
       $project: {
         organizationId: 1,
         photographyConsent: 1,
+        photoSharingStoppedAt: 1,
         photosSeenAt: 1,
         "organization.moduleAccess": 1,
       },
@@ -92,14 +97,18 @@ const latestPrintedGazette = async ({ residentId, organizationId }) => {
   return gazette || null;
 };
 
-const countNewPhotos = async ({ residentId, organizationId, seenAt }) => {
+const countNewPhotos = async ({ residentId, organizationId, sharing }) => {
+  const seenAt = sharing.photosSeenAt;
   const [result] = await FamilyUpload.aggregate([
     {
       $match: {
         residentId: toObjectId(residentId),
         organizationId: toObjectId(organizationId),
         status: FamilyUploadStatus.APPROVED,
-        ...(seenAt ? { decidedAt: { $gt: seenAt } } : {}),
+        $and: [
+          sharedPhotoMatch(sharing, "decidedAt"),
+          seenAt ? { decidedAt: { $gt: seenAt } } : {},
+        ],
       },
     },
     {
@@ -127,7 +136,7 @@ const familyNote = ({ members, photoSharing }) => {
 const getFamilyScreen = async ({ resident }) => {
   const sharing = await loadSharing(resident.residentId);
   const familyActive = isFamilyModuleActive(sharing.organization);
-  const photoSharing = familyActive && sharing.photographyConsent === true;
+  const photoSharing = familyActive && hasSharedPhotos(sharing);
   const scope = {
     residentId: resident.residentId,
     organizationId: sharing.organizationId,
@@ -137,7 +146,7 @@ const getFamilyScreen = async ({ resident }) => {
     familyActive ? listFamilyMembers(resident.residentId) : [],
     familyActive ? latestPrintedGazette(scope) : null,
     photoSharing
-      ? countNewPhotos({ ...scope, seenAt: sharing.photosSeenAt })
+      ? countNewPhotos({ ...scope, sharing })
       : 0,
   ]);
 

@@ -387,6 +387,11 @@ const updateResident = async ({
     update.photographyConsent = parsePhotographyConsent(photographyConsent);
     update.photographyConsentCheckedAt = new Date();
     update.photographyConsentRecordedBy = actor?._id || null;
+    if (update.photographyConsent) {
+      update.photoSharingStoppedAt = null;
+    } else if (resident.photographyConsent === true) {
+      update.photoSharingStoppedAt = update.photographyConsentCheckedAt;
+    }
   }
   if (admissionStatus !== undefined) {
     update.admissionStatus = parseAdmissionStatus(admissionStatus);

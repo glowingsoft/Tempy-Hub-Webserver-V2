@@ -363,6 +363,16 @@ const saveBlurredCopies = async ({ upload, areas }) => {
 const approveUpload = async ({ actor, organizationId, uploadId, residentId, blur }) => {
   const upload = await loadWaitingUpload({ actor, organizationId, uploadId, residentId });
 
+  if (
+    upload.mediaIds?.length &&
+    !(await Resident.exists({
+      _id: upload.residentId,
+      photographyConsent: true,
+    }))
+  ) {
+    throw new AppError("photos_cannot_be_shared", 400);
+  }
+
   await saveBlurredCopies({ upload, areas: blur });
   const decidedAt = await settle({
     upload,

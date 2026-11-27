@@ -5,6 +5,9 @@ const residentPhotoService = require("@appServices/residents/residentPhotoServic
 const residentGazetteService = require("@appServices/residents/residentGazetteService");
 const residentVisitorService = require("@appServices/residents/residentVisitorService");
 const residentHomeService = require("@appServices/residents/residentHomeService");
+const residentNewsletterService = require("@appServices/residents/residentNewsletterService");
+const residentWallService = require("@appServices/residents/residentWallService");
+const residentProfileService = require("@appServices/residents/residentProfileService");
 const { pagedDetail } = require("./familyController");
 
 const getFamilyScreen = async (req, res) => {
@@ -123,7 +126,68 @@ const getHomeScreen = async (req, res) => {
   }
 };
 
+const getNewsletterScreen = pagedDetail("highlights", (req) =>
+  residentNewsletterService.getNewsletterScreen({ resident: req.resident }),
+);
+
+const listWall = async (req, res) => {
+  try {
+    const { data, meta } = await residentWallService.listWall({
+      resident: req.resident,
+      userId: req.user._id,
+      ...parsePaginationParams(req),
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+      meta,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const getProfileScreen = async (req, res) => {
+  try {
+    const data = await residentProfileService.getProfileScreen({
+      resident: req.resident,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "data_fetched_successfully",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
+const updateProfileSettings = async (req, res) => {
+  try {
+    const data = await residentProfileService.updateProfileSettings({
+      resident: req.resident,
+      userId: req.user._id,
+      settings: req.body,
+    });
+    return sendResponse({
+      res,
+      statusCode: 200,
+      translationKey: "resident_settings_saved",
+      data,
+    });
+  } catch (error) {
+    return handleServiceError(res, error, "some_thing_went_wrong");
+  }
+};
+
 module.exports = {
+  getProfileScreen,
+  updateProfileSettings,
+  listWall,
+  getNewsletterScreen,
   getHomeScreen,
   listGazettes,
   getGazette,

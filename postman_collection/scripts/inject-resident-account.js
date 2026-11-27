@@ -193,7 +193,7 @@ if (!residentApp) {
 upsert(residentApp, [
   req("my family screen", "GET", ["app", "resident", "family"], {
     description:
-      "Resident app Family tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, family { count, members, note } with active members and the next of kin first, gazette { gazetteId, issueNumber, messageCount } for the latest printed gazette or null, and photos { newCount }: photos from family uploads approved since the resident last opened My Photos. Family and gazette are empty when Family Engagement is off; newCount counts only photos shared while consent was on. 403 wrong_token_audience for a non-resident token, resident_profile_not_found when the resident is discharged or unlinked.",
+      "Resident app Family tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, family { count, members } with active members and the next of kin first, gazette { gazetteId, issueNumber, messageCount } for the latest printed gazette or null, and photos { newCount }: photos from family uploads approved since the resident last opened My Photos. Family and gazette are empty when Family Engagement is off; newCount counts only photos shared while consent was on. 403 wrong_token_audience for a non-resident token, resident_profile_not_found when the resident is discharged or unlinked.",
   }),
 ]);
 
@@ -322,7 +322,7 @@ upsert(residentApp, [
 upsert(residentApp, [
   req("home screen", "GET", ["app", "resident", "home"], {
     description:
-      "Resident app Home tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, status { isOut, label, destination, since, expectedReturnAt }, photos { newCount }, newsletter { newsletterId, title, month, issueNumber, sentAt, subtitle, isNew } for the home's latest in-app newsletter or null, and evacuation { evacuationEventId, type (mock or real), title, startedAt, assemblyPoint, checkStatus, residentResponse, residentRespondedAt } while a drill or fire is active at the home, otherwise null. Answer it with POST /app/evacuations/me/check. Photos and newsletter are empty when Family Engagement is off; evacuation is null when that module is off.",
+      "Resident app Home tab in one call. Run Login Resident first. Returns resident { name, photoUrl, homeName }, status { isOut, label, destination, since, expectedReturnAt }, photos { newCount }, gazette { gazetteId, issueNumber, messageCount, printedAt, subtitle, isNew } for the latest printed gazette or null (isNew turns false once the resident opens it), newsletter { newsletterId, title, month, issueNumber, sentAt, subtitle, isNew } for the home's latest in-app newsletter or null, and evacuation { evacuationEventId, type (mock or real), title, startedAt, assemblyPoint, checkStatus, residentResponse, residentRespondedAt } while a drill or fire is active at the home, otherwise null. Answer it with POST /app/evacuations/me/check. Photos and newsletter are empty when Family Engagement is off; evacuation is null when that module is off.",
   }),
 ]);
 
@@ -352,20 +352,18 @@ wallRequest.request.url = {
   ],
 };
 
+residentApp.item = residentApp.item.filter(
+  (r) => !["my profile screen", "my profile settings"].includes(r.name),
+);
 upsert(residentApp, [
-  req("my profile screen", "GET", ["app", "resident", "profile"], {
+  req("get my settings", "GET", ["app", "resident", "settings"], {
     description:
-      "Resident app My Profile. Returns resident { residentId, name, photoUrl, homeName, roomNumber, subtitle }, details { familyContact { memberId, name, photoUrl, relationship, label } } and settings { largeText, soundAlerts, sharePhotos }. familyContact is the active next of kin, null when there is none or Family Engagement is off.",
+      "Settings on the resident app's My Profile screen: { largeText, soundAlerts, sharePhotos }. The rest of the screen comes from the common profile APIs.",
   }),
-  req("my profile settings", "PATCH", ["app", "resident", "profile"], {
+  req("update my settings", "PUT", ["app", "resident", "settings"], {
     body: { largeText: false, soundAlerts: true, sharePhotos: true },
     description:
-      "Saves one or more settings; send only what changed. Each must be true or false. sharePhotos is the resident's photography consent, recorded with the time and the resident as recorder; turning it off stops new photos being shared, and photos shared before then stay visible. Returns the same body as my profile screen. 400 invalid_resident_setting or nothing_to_update. Sign out uses POST /auth/logout with deviceId.",
-  }),
-  req("resident sign out", "POST", ["auth", "logout"], {
-    body: { deviceId: "1234" },
-    description:
-      "Shared logout. Removes this device from push notifications for the account. The app must also discard the token.",
+      "Saves one or more settings; settings left out keep their value. Each must be true or false. sharePhotos is the resident's photography consent, recorded with the time and the resident as recorder; turning it off stops new photos being shared, and photos shared before then stay visible. Returns { largeText, soundAlerts, sharePhotos }. 400 invalid_resident_setting or nothing_to_update.",
   }),
 ]);
 

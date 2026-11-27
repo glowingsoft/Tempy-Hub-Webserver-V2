@@ -1,4 +1,5 @@
 const { FamilyGazetteItem } = require("@models/FamilyGazetteItem");
+const { Resident } = require("@models/Resident");
 const { AppError } = require("@services/_errors/AppError");
 const { generateMeta } = require("@utils/responseUtil");
 const {
@@ -47,7 +48,7 @@ const getGazette = async ({ resident, sharing, gazetteId }) => {
   ]);
   if (!item) throw new AppError("gazette_not_found", 404);
 
-  return familyGazettes.getGazette({
+  const detail = await familyGazettes.getGazette({
     links: [
       {
         residentId: resident.residentId,
@@ -57,6 +58,16 @@ const getGazette = async ({ resident, sharing, gazetteId }) => {
     ],
     gazetteId: String(gazetteId),
   });
+
+  if (detail.printedAt) {
+    await Resident.updateOne(
+      { _id: resident.residentId },
+      { $max: { gazetteSeenAt: detail.printedAt } },
+      { timestamps: false },
+    );
+  }
+
+  return detail;
 };
 
 const getGazetteById = async ({ resident, gazetteId }) => {

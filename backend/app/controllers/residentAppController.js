@@ -7,7 +7,7 @@ const residentVisitorService = require("@appServices/residents/residentVisitorSe
 const residentHomeService = require("@appServices/residents/residentHomeService");
 const residentNewsletterService = require("@appServices/residents/residentNewsletterService");
 const residentWallService = require("@appServices/residents/residentWallService");
-const residentProfileService = require("@appServices/residents/residentProfileService");
+const residentSettingsService = require("@appServices/residents/residentSettingsService");
 const { pagedDetail } = require("./familyController");
 
 const getFamilyScreen = async (req, res) => {
@@ -149,9 +149,9 @@ const listWall = async (req, res) => {
   }
 };
 
-const getProfileScreen = async (req, res) => {
+const getSettings = async (req, res) => {
   try {
-    const data = await residentProfileService.getProfileScreen({
+    const data = await residentSettingsService.getSettings({
       resident: req.resident,
     });
     return sendResponse({
@@ -165,9 +165,9 @@ const getProfileScreen = async (req, res) => {
   }
 };
 
-const updateProfileSettings = async (req, res) => {
+const updateSettings = async (req, res) => {
   try {
-    const data = await residentProfileService.updateProfileSettings({
+    const data = await residentSettingsService.updateSettings({
       resident: req.resident,
       userId: req.user._id,
       settings: req.body,
@@ -184,8 +184,8 @@ const updateProfileSettings = async (req, res) => {
 };
 
 module.exports = {
-  getProfileScreen,
-  updateProfileSettings,
+  getSettings,
+  updateSettings,
   listWall,
   getNewsletterScreen,
   getHomeScreen,

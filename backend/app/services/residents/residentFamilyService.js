@@ -91,6 +91,7 @@ const latestPrintedGazette = async ({ residentId, organizationId }) => {
         gazetteId: "$_id",
         issueNumber: { $ifNull: ["$issue.number", 0] },
         messageCount: { $size: { $ifNull: ["$uploadIds", []] } },
+        printedAt: 1,
       },
     },
   ]);
@@ -121,18 +122,6 @@ const countNewPhotos = async ({ residentId, organizationId, sharing }) => {
   return result?.count || 0;
 };
 
-const familyNote = ({ members, photoSharing }) => {
-  const kinName = String(
-    members.find((member) => member.isNextOfKin)?.name || "",
-  )
-    .trim()
-    .split(/\s+/)[0];
-  const ask = `To add someone, ask a member of staff${kinName ? ` or ${kinName}` : ""}.`;
-  if (!members.length) return ask;
-  const shared = photoSharing ? "your photos and gazette" : "your gazette";
-  return `These people can see ${shared}. ${ask}`;
-};
-
 const getFamilyScreen = async ({ resident }) => {
   const sharing = await loadSharing(resident.residentId);
   const familyActive = isFamilyModuleActive(sharing.organization);
@@ -159,7 +148,6 @@ const getFamilyScreen = async ({ resident }) => {
     family: {
       count: members.length,
       members,
-      note: familyNote({ members, photoSharing }),
     },
     gazette,
     photos: { newCount },

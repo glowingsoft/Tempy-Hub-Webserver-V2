@@ -42,6 +42,7 @@ const residentSchema = new mongoose.Schema(
     admittedAt: { type: Date, default: null },
     photoSharingStoppedAt: { type: Date },
     photosSeenAt: { type: Date },
+    gazetteSeenAt: { type: Date },
     newsletterSeenAt: { type: Date },
     appSettings: {
       largeText: { type: Boolean },
